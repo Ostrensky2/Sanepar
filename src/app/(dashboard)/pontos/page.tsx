@@ -141,9 +141,9 @@ function MetricCard({
 
 function comparePoints(left: CampaignMapPoint, right: CampaignMapPoint) {
   return (
-    left.campaign.localeCompare(right.campaign, "pt-BR", { numeric: true }) ||
-    left.day.localeCompare(right.day, "pt-BR", { numeric: true }) ||
-    left.code.localeCompare(right.code, "pt-BR", { numeric: true })
+    textValue(left.campaign).localeCompare(textValue(right.campaign), "pt-BR", { numeric: true }) ||
+    textValue(left.day).localeCompare(textValue(right.day), "pt-BR", { numeric: true }) ||
+    textValue(left.code).localeCompare(textValue(right.code), "pt-BR", { numeric: true })
   );
 }
 
@@ -153,6 +153,10 @@ function formatCoordinate(value?: number) {
     : "Não informado";
 }
 
-function safeText(value: string) {
-  return value.trim() || "Não informado";
+function safeText(value: string | undefined) {
+  return textValue(value) || "Não informado";
+}
+
+function textValue(value: string | undefined) {
+  return typeof value === "string" ? value.trim() : "";
 }
