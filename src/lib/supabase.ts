@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 
+export const POINT_ACTIONS_SNAPSHOT_FILE_NAME = "__point_actions__";
+
 const supabaseUrl = sanitizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const supabaseAnonKey = sanitizeEnvValue(
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
@@ -51,6 +53,7 @@ export async function getLatestPublishedCampaignImport() {
   const { data, error } = await supabase
     .from("campaign_imports")
     .select("*")
+    .neq("file_name", POINT_ACTIONS_SNAPSHOT_FILE_NAME)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle<CampaignImportRow>();
