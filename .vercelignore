@@ -1,0 +1,13 @@
+.env*
+.vercel/
+.next/
+node_modules/
+output/
+*.log
+*.err
+.codex-*.log
+.codex-*.err
+next-dev.*.log
+tsconfig.tsbuildinfo
+supabase/.branches/
+supabase/.temp/
