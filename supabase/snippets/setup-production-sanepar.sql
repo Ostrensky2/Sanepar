@@ -72,3 +72,40 @@ using (true);
 
 create index if not exists point_actions_updated_at_idx
 on public.point_actions (updated_at desc);
+
+insert into public.point_actions (
+  id,
+  event_name,
+  objectives,
+  document,
+  created_at_label,
+  points,
+  updated_at
+)
+values (
+  'acao-pontual-coleta-mosquito-fantasma',
+  'Coleta de mosquito-fantasma',
+  'Amostrar larvas de Chaoboridae no Reservatório Passaúna para identificar a espécie causadora do surto, avaliar os riscos operacionais à captação e tratamento da SANEPAR e validar as sequências de DNA obtidas por metabarcoding como padrão-ouro para futuras detecções.',
+  null,
+  '06/05/2026',
+  '[
+    {
+      "id": "ponto-reservatorio-passauna-mosquito-fantasma",
+      "waterBody": "Reservatório do Passaúna",
+      "dates": "30/03/2026",
+      "municipality": "Curitiba",
+      "effectiveLat": -25.47817,
+      "effectiveLon": -49.38035,
+      "results": "A coleta no Reservatório Passaúna resultou apenas em exúvias de pupas, inviabilizando a identificação em nível de espécie pelo especialista da UFSC; a campanha será repetida para captura de adultos, que permitirão a identificação taxonômica refinada e a validação molecular das sequências de metabarcoding.",
+      "photos": []
+    }
+  ]'::jsonb,
+  now()
+)
+on conflict (id) do update set
+  event_name = excluded.event_name,
+  objectives = excluded.objectives,
+  document = excluded.document,
+  created_at_label = excluded.created_at_label,
+  points = excluded.points,
+  updated_at = now();
