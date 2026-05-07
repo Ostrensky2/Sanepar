@@ -1,0 +1,1577 @@
+[
+  {
+    "id": "1-770-2",
+    "code": "SIA-0770",
+    "campaign": "1",
+    "date": "09/02/2026",
+    "waterBody": "120 - Captação ETA Iguaçu (Canal Água Limpa)",
+    "municipality": "Curitiba",
+    "original": {
+      "lat": -25.4833,
+      "lon": -49.1897
+    },
+    "effective": {
+      "lat": -25.481933,
+      "lon": -49.192517
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Nublado Pós Chuva",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/11tovDPY4jvQrZM-y867nffEuUqdQpncl?usp=drive_link"
+  },
+  {
+    "id": "1-771-3",
+    "code": "SIA-0771",
+    "campaign": "1",
+    "date": "09/02/2026",
+    "waterBody": "117- Rio Pequeno",
+    "municipality": "São José dos Pinhais",
+    "original": {
+      "lat": -25.4853,
+      "lon": -49.1762
+    },
+    "effective": {
+      "lat": -25.4852,
+      "lon": -49.176417
+    },
+    "accessibility": "Moderado",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol - Pos chuva",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1WOgL7piZVCGRSPuluDC4etdrazOxT8iY?usp=drive_link"
+  },
+  {
+    "id": "1-782-4",
+    "code": "SIA-0782",
+    "campaign": "1",
+    "date": "09/02/2026",
+    "waterBody": "106- Rio Piraquara",
+    "municipality": "Piraquara",
+    "original": {
+      "lat": -25.4511,
+      "lon": -49.1218
+    },
+    "effective": {
+      "lat": -25.45105,
+      "lon": -49.121667
+    },
+    "accessibility": "Difícil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Nublado Pós-chuva",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1tmvKBSO654s4bzZnzKBBO7-nYd17oR7Y?usp=drive_link"
+  },
+  {
+    "id": "1-561-5",
+    "code": "SIA-0561",
+    "campaign": "1",
+    "date": "09/02/2026",
+    "waterBody": "112 - Rio Piraquara - Saída PI",
+    "municipality": "Piraquara",
+    "original": {
+      "lat": -25.508,
+      "lon": -49.0288
+    },
+    "effective": {
+      "lat": -25.507467,
+      "lon": -49.028683
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarelada",
+    "weatherConditions": "Nublado",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1bJ3nlmigKNdUHoDzsChtIaK1kn_pWvMs?usp=drive_link"
+  },
+  {
+    "id": "1-562-6",
+    "code": "SIA-0562",
+    "campaign": "1",
+    "date": "10/02/2026",
+    "waterBody": "300 - S - Res. PII - Tulipa",
+    "municipality": "Piraquara",
+    "original": {
+      "lat": -25.4869,
+      "lon": -49.0914
+    },
+    "effective": {
+      "lat": -25.4869,
+      "lon": -49.090833
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Incolor / transparente",
+    "weatherConditions": "Sol - Pos chuva",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1bEICJaNAgsU8Q-cy33V5esuAFcHuJqgc?usp=drive_link"
+  },
+  {
+    "id": "1-233-7",
+    "code": "SIA-0233",
+    "campaign": "1",
+    "date": "10/02/2026",
+    "waterBody": "Ponto02 - Rio Cotia SJP - Audi",
+    "municipality": "São José dos Pinhais",
+    "original": {
+      "lat": -25.6557,
+      "lon": -49.2085
+    },
+    "effective": {
+      "lat": -25.655317,
+      "lon": -49.208483
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Acinzentada",
+    "weatherConditions": "Nublado / Neblina",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1mAf7gZOlSAOQpzOgkr68wgaqmh38TRHB?usp=drive_link"
+  },
+  {
+    "id": "1-870-8",
+    "code": "SIA-0870",
+    "campaign": "1",
+    "date": "10/02/2026",
+    "waterBody": "Ponto 04 - Rio Despique",
+    "municipality": "Fazenda Rio Grande",
+    "original": {
+      "lat": -25.6468,
+      "lon": -49.2588
+    },
+    "effective": {
+      "lat": -25.646933,
+      "lon": -49.2591
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.goM8:M23ogle.com/drive/folders/1bZwOw32lbQKiTFe-31hU7fET7xPKruy1?usp=drive_link"
+  },
+  {
+    "id": "1-384-9",
+    "code": "SIA-0384",
+    "campaign": "1",
+    "date": "10/02/2026",
+    "waterBody": "96 - Rio Faxinal",
+    "municipality": "Fazenda Rio Grande",
+    "original": {
+      "lat": -25.6579,
+      "lon": -49.3797
+    },
+    "effective": {
+      "lat": -25.65795,
+      "lon": -49.379717
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1MI8j8NSg2JOUZIsv0LXWCQxVtIrun8RY?usp=drive_link"
+  },
+  {
+    "id": "1-187-10",
+    "code": "SIA-0187",
+    "campaign": "1",
+    "date": "12/02/2026",
+    "waterBody": "Rio Pitangui",
+    "municipality": "Ponta Grossa",
+    "original": {
+      "lat": -25.0348,
+      "lon": -50.1275
+    },
+    "effective": {
+      "lat": -25.035417,
+      "lon": -50.1282
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Esverdeada",
+    "weatherConditions": "Chuvoso",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1qIUsqv0gLA95vBV9yY5OkB-Kbwnh8AJu?usp=drive_link"
+  },
+  {
+    "id": "1-188-11",
+    "code": "SIA-0188",
+    "campaign": "1",
+    "date": "12/02/2026",
+    "waterBody": "Represa de Alagados",
+    "municipality": "Ponta Grossa",
+    "original": {
+      "lat": -25.0194,
+      "lon": -50.0624
+    },
+    "effective": {
+      "lat": -25.0194,
+      "lon": -50.0624
+    },
+    "accessibility": "Difícil",
+    "waterAspect": "Esverdeada",
+    "weatherConditions": "Ensolarado",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1uVf9ERjxEHrlfHtNp-hfm_hSt2R9Y3Hu?usp=drive_link"
+  },
+  {
+    "id": "1-482-12",
+    "code": "SIA-0482",
+    "campaign": "1",
+    "date": "18/02/2026",
+    "waterBody": "262-Maurício",
+    "municipality": "Fazenda Rio Grande",
+    "original": {
+      "lat": -25.7217,
+      "lon": -49.3142
+    },
+    "effective": {
+      "lat": -25.721517,
+      "lon": -49.31395
+    },
+    "accessibility": "Moderado",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1E7BJ7DGqFbxtKZ3RRa_c_-HFJa7RVPQT?usp=drive_link"
+  },
+  {
+    "id": "1-404-13",
+    "code": "SIA-0404",
+    "campaign": "1",
+    "date": "18/02/2026",
+    "waterBody": "328- Baixo Várzea",
+    "municipality": "Lapa",
+    "original": {
+      "lat": -25.8821,
+      "lon": -49.4967
+    },
+    "effective": {
+      "lat": -25.87955,
+      "lon": -49.493067
+    },
+    "accessibility": "Difícil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1N78xK4V-lBOaNfevmrmWK29kAcio5i4F?usp=drive_link"
+  },
+  {
+    "id": "1-209-14",
+    "code": "SIA-0209",
+    "campaign": "1",
+    "date": "18/02/2026",
+    "waterBody": "Rio Negro",
+    "municipality": "Rio Negro",
+    "original": {
+      "lat": -26.1027,
+      "lon": -49.79
+    },
+    "effective": {
+      "lat": -26.1095,
+      "lon": -49.777867
+    },
+    "accessibility": "Moderado",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1m8IMXUeqjc0C6eQ-u-MQC5pQG2Z4qW0s?usp=drive_link"
+  },
+  {
+    "id": "1-257-15",
+    "code": "SIA-0257",
+    "campaign": "1",
+    "date": "19/02/2026",
+    "waterBody": "Rio Iguaçu",
+    "municipality": "União da Vitória",
+    "original": {
+      "lat": -26.2416,
+      "lon": -51.0488
+    },
+    "effective": {
+      "lat": -26.2416,
+      "lon": -51.0488
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Esverdeada",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/14NQrwdmKnc95aCpUTnmKUcAEJMrUNOX0?usp=drive_link"
+  },
+  {
+    "id": "1-235-16",
+    "code": "SIA-0235",
+    "campaign": "1",
+    "date": "19/02/2026",
+    "waterBody": "Rio Taquaral",
+    "municipality": "São Mateus do Sul",
+    "original": {
+      "lat": -25.8718,
+      "lon": -50.376
+    },
+    "effective": {
+      "lat": -25.870833,
+      "lon": -50.375883
+    },
+    "accessibility": "Moderado",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1-xY1fjiF2Zbcz7Ap12MnAIUxQYTAq4WG?usp=drive_link"
+  },
+  {
+    "id": "1-168-17",
+    "code": "SIA-0168",
+    "campaign": "1",
+    "date": "19/02/2026",
+    "waterBody": "Rio Pugas",
+    "municipality": "Palmeira",
+    "original": {
+      "lat": -25.4256,
+      "lon": -49.9781
+    },
+    "effective": {
+      "lat": -25.4256,
+      "lon": -49.9781
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Esverdeada",
+    "weatherConditions": "Chuva",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1_JfDP1pYusQqh5MGfiz8ujozpCxzbN9N?usp=drive_link"
+  },
+  {
+    "id": "1-305/1037*-18",
+    "code": "SIA-305/1037*",
+    "campaign": "1",
+    "date": "20/02/2026",
+    "waterBody": "Ribeirão Jaú (redef. p/ SAI 1037 - Fernandes Pinheiro)",
+    "municipality": "Irati / Fernandes Pinheiro",
+    "original": {
+      "lat": -25.4968,
+      "lon": -50.6012
+    },
+    "effective": {
+      "lat": -25.411367,
+      "lon": -50.542317
+    },
+    "accessibility": "Moderado",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Garoando",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1PfYi8XBfujxGSlb6-PblTFTwmVTagqHe?usp=drive_link"
+  },
+  {
+    "id": "1-109-19",
+    "code": "SIA-0109",
+    "campaign": "1",
+    "date": "20/02/2026",
+    "waterBody": "Rio Ribeira",
+    "municipality": "Imbituva",
+    "original": {
+      "lat": -25.2424,
+      "lon": -50.6311
+    },
+    "effective": {
+      "lat": -25.243133,
+      "lon": -50.6315
+    },
+    "accessibility": "Fácil/Moderado",
+    "waterAspect": "Levemente amarelada",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1oFT3q45WfRQ3XerZJnUoVg_9ximmvneV?usp=drive_link"
+  },
+  {
+    "id": "1-192-20",
+    "code": "SIA-0192",
+    "campaign": "1",
+    "date": "20/02/2026",
+    "waterBody": "Rio dos Patos",
+    "municipality": "Prudentópolis",
+    "original": {
+      "lat": -25.2374,
+      "lon": -50.9612
+    },
+    "effective": {
+      "lat": -25.2374,
+      "lon": -50.9612
+    },
+    "accessibility": "Dificil",
+    "waterAspect": "Levemente amarelada",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/184aVIAhuLIfwN04FkGLFg4FaDgXX0KG8?usp=drive_link"
+  },
+  {
+    "id": "1-102-21",
+    "code": "SIA-0102",
+    "campaign": "1",
+    "date": "20/02/2026",
+    "waterBody": "Rio das Pedras",
+    "municipality": "Guarapuava",
+    "original": {
+      "lat": -25.3998,
+      "lon": -51.4366
+    },
+    "effective": {
+      "lat": -25.3998,
+      "lon": -51.4366
+    },
+    "accessibility": "Dificil",
+    "waterAspect": "Incolor / transparente",
+    "weatherConditions": "Nublado com chuva",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/16-Z3LivpYpgCq6tj43QY9bVRoh_lZFgA?usp=drive_link"
+  },
+  {
+    "id": "1-43-22",
+    "code": "SIA-0043",
+    "campaign": "1",
+    "date": "21/02/2026",
+    "waterBody": "Rio Lajeado Grande",
+    "municipality": "Pinhão",
+    "original": {
+      "lat": -25.8261,
+      "lon": -51.5907
+    },
+    "effective": {
+      "lat": -25.826083,
+      "lon": -51.59075
+    },
+    "accessibility": "Moderado",
+    "waterAspect": "Levemente amarelada",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1I19u0Px6PfCky1JACXJkL59XPSwELqDn?usp=drive_link"
+  },
+  {
+    "id": "1-167-23",
+    "code": "SIA-0167",
+    "campaign": "1",
+    "date": "21/02/2026",
+    "waterBody": "Rio Caldeira",
+    "municipality": "Palmas",
+    "original": {
+      "lat": -26.5014,
+      "lon": -51.9791
+    },
+    "effective": {
+      "lat": -26.49785,
+      "lon": -51.977567
+    },
+    "accessibility": "Dificil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Garoando",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1lCUcI7y1z8lXSwRNNOV9AXfEMfTn7MGE?usp=drive_link"
+  },
+  {
+    "id": "1-174-24",
+    "code": "SIA-0174",
+    "campaign": "1",
+    "date": "21/02/2026",
+    "waterBody": "Rio Pato Branco",
+    "municipality": "Pato Branco",
+    "original": {
+      "lat": -26.2843,
+      "lon": -52.5887
+    },
+    "effective": {
+      "lat": -26.2843,
+      "lon": -52.5887
+    },
+    "accessibility": "Moderado",
+    "waterAspect": "Levemente amarelada",
+    "weatherConditions": "Chuva",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1e6PaHrRUod-IRsZ3lESf2waJn5mxVSP_?usp=drive_link"
+  },
+  {
+    "id": "1-72-25",
+    "code": "SIA-0072",
+    "campaign": "1",
+    "date": "22/02/2026",
+    "waterBody": "Rio Barro Preto",
+    "municipality": "Coronel Vivida",
+    "original": {
+      "lat": -25.9795,
+      "lon": -52.5554
+    },
+    "effective": {
+      "lat": -25.979383,
+      "lon": -52.555367
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Levemente amarelada",
+    "weatherConditions": "Nublado/ ameaça de chuva",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1XJObXzTUH8pDGeRsCH69GnxbUegT1u2g?usp=drive_link"
+  },
+  {
+    "id": "1-93-26",
+    "code": "SIA-0093",
+    "campaign": "1",
+    "date": "22/02/2026",
+    "waterBody": "Rio Marrecas",
+    "municipality": "Francisco Beltrão",
+    "original": {
+      "lat": -26.0815,
+      "lon": -53.075
+    },
+    "effective": {
+      "lat": -26.081433,
+      "lon": -53.07515
+    },
+    "accessibility": "Dificil",
+    "waterAspect": "Levemente amarelada",
+    "weatherConditions": "Nublado",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1k7j2KZH8568RTnJK_ZhVLx1GYNcHDLNQ?usp=drive_link"
+  },
+  {
+    "id": "1-82-27",
+    "code": "SIA-0082",
+    "campaign": "1",
+    "date": "22/02/2026",
+    "waterBody": "Rio Girau Alto",
+    "municipality": "Dois Vizinhos",
+    "original": {
+      "lat": -25.7513,
+      "lon": -53.0785
+    },
+    "effective": {
+      "lat": -25.75145,
+      "lon": -53.078783
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Levemente amarelada",
+    "weatherConditions": "Nublado",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1c3oyUOfc4swbTDr13rT-Z7LkFe5T9cNk?usp=drive_link"
+  },
+  {
+    "id": "1-196-28",
+    "code": "SIA-0196",
+    "campaign": "1",
+    "date": "23/02/2026",
+    "waterBody": "Rio Campo Novo",
+    "municipality": "Quedas do Iguaçu",
+    "original": {
+      "lat": -25.4425,
+      "lon": -52.8947
+    },
+    "effective": {
+      "lat": -25.44305,
+      "lon": -52.8943
+    },
+    "accessibility": "Difícil",
+    "waterAspect": "Levemente amarelada",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1O-0psjcSTNfWSithGbEfP5SVqt8Qfwjq?usp=drive_link"
+  },
+  {
+    "id": "1-132-29",
+    "code": "SIA-0132",
+    "campaign": "1",
+    "date": "23/02/2026",
+    "waterBody": "Rio do Leão",
+    "municipality": "Laranjeiras do Sul",
+    "original": {
+      "lat": -25.4264,
+      "lon": -52.4621
+    },
+    "effective": {
+      "lat": -25.42665,
+      "lon": -52.461533
+    },
+    "accessibility": "Moderado",
+    "waterAspect": "Levemente amarelada",
+    "weatherConditions": "Nublado/ ameaça de chuva",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1MOxdSaZ-srhTxNw-UBuLwVSnQM0gvMJK?usp=drive_link"
+  },
+  {
+    "id": "1-458-30",
+    "code": "SIA-0458",
+    "campaign": "1",
+    "date": "23/02/2026",
+    "waterBody": "Rio São José - Ponto A",
+    "municipality": "Cascavel",
+    "original": {
+      "lat": -25.1121,
+      "lon": -53.3925
+    },
+    "effective": {
+      "lat": -25.1121,
+      "lon": -53.3925
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Levemente amarelada",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/19-bVIsA9BFseye5nDjUhQ25jCPSliHF1?usp=drive_link"
+  },
+  {
+    "id": "1-53-31",
+    "code": "SIA-0053",
+    "campaign": "1",
+    "date": "24/02/2026",
+    "waterBody": "Rio Cascavel",
+    "municipality": "Cascavel",
+    "original": {
+      "lat": -25.0299,
+      "lon": -53.4655
+    },
+    "effective": {
+      "lat": -25.0299,
+      "lon": -53.4655
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1knKy2OYHdqd5M5mBjrivW9WtwTWqvLzP?usp=drive_link"
+  },
+  {
+    "id": "1-54-32",
+    "code": "SIA-0054",
+    "campaign": "1",
+    "date": "24/02/2026",
+    "waterBody": "Rio Saltinho",
+    "municipality": "Cascavel",
+    "original": {
+      "lat": -25.075,
+      "lon": -53.4744
+    },
+    "effective": {
+      "lat": -25.07485,
+      "lon": -53.474433
+    },
+    "accessibility": "Moderado",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Chuva",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1mQ-jkCkN7FyPwmgcxLqkNpOwmmNkhNit?usp=drive_link"
+  },
+  {
+    "id": "1-153-33",
+    "code": "SIA-0153",
+    "campaign": "1",
+    "date": "24/02/2026",
+    "waterBody": "Rio Alegria",
+    "municipality": "Medianeira",
+    "original": {
+      "lat": -25.2911,
+      "lon": -54.0799
+    },
+    "effective": {
+      "lat": -25.2911,
+      "lon": -54.0799
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Nublado",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1LOCVPGEwUtVpHwNNYO5wHakTnbzw1GUP?usp=drive_link"
+  },
+  {
+    "id": "1-220-34",
+    "code": "SIA-0220",
+    "campaign": "1",
+    "date": "25/02/2026",
+    "waterBody": "Rio Paraná (Lago de Itaipu)",
+    "municipality": "Sta. Terezinha de Itaipu",
+    "original": {
+      "lat": -25.4201,
+      "lon": -54.3881
+    },
+    "effective": {
+      "lat": -25.42035,
+      "lon": -54.387933
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Incolor / transparente",
+    "weatherConditions": "Sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1ehJM4OtyjA33G-8Cj_-aGBUfyhyEGvCO?usp=drive_link"
+  },
+  {
+    "id": "1-377-35",
+    "code": "SIA-0377",
+    "campaign": "1",
+    "date": "25/02/2026",
+    "waterBody": "Rio Paraná - Lago de Itaipu",
+    "municipality": "Foz do Iguaçu",
+    "original": {
+      "lat": -25.4451,
+      "lon": -54.5501
+    },
+    "effective": {
+      "lat": -25.4451,
+      "lon": -54.5501
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Incolor / transparente",
+    "weatherConditions": "Sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1jRSiZUQDeZ_e2w5DPp5tfsAFnlQs9y7X?usp=drive_link"
+  },
+  {
+    "id": "1-91-36",
+    "code": "SIA-0091",
+    "campaign": "1",
+    "date": "25/02/2026",
+    "waterBody": "Rio Tamanduá (Ponto 2)",
+    "municipality": "Foz do Iguaçu",
+    "original": {
+      "lat": -25.5692,
+      "lon": -54.5185
+    },
+    "effective": {
+      "lat": -25.551683,
+      "lon": -54.4995
+    },
+    "accessibility": "Moderado",
+    "waterAspect": "Incolor / transparente",
+    "weatherConditions": "Sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1g56E6i2_3BNos8BT6-8a75cwaCRp9tCI?usp=drive_link"
+  },
+  {
+    "id": "1-248-37",
+    "code": "SIA-0248",
+    "campaign": "1",
+    "date": "26/02/2026",
+    "waterBody": "Rio Toledo",
+    "municipality": "Toledo",
+    "original": {
+      "lat": -24.7312,
+      "lon": -53.6998
+    },
+    "effective": {
+      "lat": -24.730367,
+      "lon": -53.7085
+    },
+    "accessibility": "Moderado",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1lQXGEr0XSZzionHDP_H_b8VHbi2_7h0N?usp=drive_link"
+  },
+  {
+    "id": "1-17-38",
+    "code": "SIA-0017",
+    "campaign": "1",
+    "date": "26/02/2026",
+    "waterBody": "Rio Alívio",
+    "municipality": "Assis Chateaubriand",
+    "original": {
+      "lat": -24.4174,
+      "lon": -53.4952
+    },
+    "effective": {
+      "lat": -24.417,
+      "lon": -53.4948
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/18bn4WtoQiDi4pAcpmK1uCaXOBuwciV91?usp=drive_link"
+  },
+  {
+    "id": "1-255-39",
+    "code": "SIA-0255",
+    "campaign": "1",
+    "date": "26/02/2026",
+    "waterBody": "Rio Água Grande",
+    "municipality": "Ubiratã",
+    "original": {
+      "lat": -24.4985,
+      "lon": -52.9986
+    },
+    "effective": {
+      "lat": -24.498467,
+      "lon": -52.997933
+    },
+    "accessibility": "Moderado",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/16LW73Un5BloA4hKwBr-N-lKfXE_OOkl3?usp=drive_link"
+  },
+  {
+    "id": "1-121-40",
+    "code": "SIA-0121",
+    "campaign": "1",
+    "date": "27/02/2026",
+    "waterBody": "Rio Pindaúva",
+    "municipality": "Ivaiporã",
+    "original": {
+      "lat": -24.245,
+      "lon": -51.695
+    },
+    "effective": {
+      "lat": -24.26435,
+      "lon": -51.675183
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1EXPYPaKWN_ijC0JyPYD26Y-QW77-lfxF?usp=drive_link"
+  },
+  {
+    "id": "1-184-41",
+    "code": "SIA-0184",
+    "campaign": "1",
+    "date": "27/02/2026",
+    "waterBody": "Rio Ernesto",
+    "municipality": "Pitanga",
+    "original": {
+      "lat": -24.7686,
+      "lon": -51.772
+    },
+    "effective": {
+      "lat": -24.768617,
+      "lon": -51.77195
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Levemente amarelada",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1UMzl9i3RQ-0uN3bxMUtlgvoNQ_Gx3nEb?usp=drive_link"
+  },
+  {
+    "id": "1-40-42",
+    "code": "SIA-0040",
+    "campaign": "1",
+    "date": "27/02/2026",
+    "waterBody": "Rio do Campo",
+    "municipality": "Campo Mourão",
+    "original": {
+      "lat": -24.0674,
+      "lon": -52.4235
+    },
+    "effective": {
+      "lat": -24.06065,
+      "lon": -52.409933
+    },
+    "accessibility": "Moderado",
+    "waterAspect": "Levemente amarelada",
+    "weatherConditions": "Garoando",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1_7XYxtAymQY6JpBVwM98-6Ylg7Tf-wWY?usp=drive_link"
+  },
+  {
+    "id": "1-63-43",
+    "code": "SIA-0063",
+    "campaign": "1",
+    "date": "28/02/2026",
+    "waterBody": "Ribeirão Bolívar",
+    "municipality": "Cianorte",
+    "original": {
+      "lat": -23.6468,
+      "lon": -52.6638
+    },
+    "effective": {
+      "lat": -23.65565,
+      "lon": -52.663167
+    },
+    "accessibility": "Difícil",
+    "waterAspect": "Esverdeada",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1xOcOU3Hvl6wFYlZZvO9uf4S6tKLwJLgb?usp=drive_link"
+  },
+  {
+    "id": "1-256-44",
+    "code": "SIA-0256",
+    "campaign": "1",
+    "date": "28/02/2026",
+    "waterBody": "Rio Piava",
+    "municipality": "Umuarama",
+    "original": {
+      "lat": -23.6915,
+      "lon": -53.2843
+    },
+    "effective": {
+      "lat": -23.6915,
+      "lon": -53.2843
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Esverdeada",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/17e7Z6JCe8T_YAARgcNlGIebXUWLD2qow?usp=drive_link"
+  },
+  {
+    "id": "1-173-45",
+    "code": "SIA-0173",
+    "campaign": "1",
+    "date": "01/03/2026",
+    "waterBody": "Ribeirão Araras",
+    "municipality": "Paranavaí",
+    "original": {
+      "lat": -23.0631,
+      "lon": -52.5135
+    },
+    "effective": {
+      "lat": -23.0631,
+      "lon": -52.5135
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/163waW-96VvU517enNPVyiBHAKDFbWiXx?usp=drive_link"
+  },
+  {
+    "id": "1-158-46",
+    "code": "SIA-0158",
+    "campaign": "1",
+    "date": "01/03/2026",
+    "waterBody": "Ribeirão Paracatú",
+    "municipality": "Nova Esperança",
+    "original": {
+      "lat": -23.1868,
+      "lon": -52.1517
+    },
+    "effective": {
+      "lat": -23.1868,
+      "lon": -52.1517
+    },
+    "accessibility": "Difícil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/18G_VPZLtEZ4s4cLbROppuqXquR-eUplq?usp=drive_link"
+  },
+  {
+    "id": "1-146-47",
+    "code": "SIA-0146",
+    "campaign": "1",
+    "date": "02/03/2026",
+    "waterBody": "Rio Pirapó",
+    "municipality": "Maringá",
+    "original": {
+      "lat": -23.1234,
+      "lon": -51.2345
+    },
+    "effective": null,
+    "accessibility": "Moderado",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1TLh1AZObnrkl8v8kGK94BscPcK_DmaJU?usp=drive_link"
+  },
+  {
+    "id": "1-18-48",
+    "code": "SIA-0018",
+    "campaign": "1",
+    "date": "02/03/2026",
+    "waterBody": "Ribeirão do Notimbo",
+    "municipality": "Astorga",
+    "original": {
+      "lat": -23.2357,
+      "lon": -51.6247
+    },
+    "effective": {
+      "lat": -23.2357,
+      "lon": -51.6247
+    },
+    "accessibility": "Moderado",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1mn5IGrIQZXBlYEpG-nQMioWdNZhI6ihN?usp=drive_link"
+  },
+  {
+    "id": "1-141-49",
+    "code": "SIA-0141",
+    "campaign": "1",
+    "date": "02/03/2026",
+    "waterBody": "Ribeirão Benjoim",
+    "municipality": "Mandaguari",
+    "original": null,
+    "effective": {
+      "lat": -23.521,
+      "lon": -51.6226
+    },
+    "accessibility": "Moderado",
+    "waterAspect": "Esverdeada",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1cOGpgwhD8HLb1xe4gvJx8IXPt7TckebQ?usp=drive_link"
+  },
+  {
+    "id": "1-125-50",
+    "code": "SIA-0125",
+    "campaign": "1",
+    "date": "03/03/2026",
+    "waterBody": "Rio Marumbi",
+    "municipality": "Jandaia do Sul",
+    "original": null,
+    "effective": {
+      "lat": -23.55822,
+      "lon": -51.710547
+    },
+    "accessibility": "Moderado",
+    "waterAspect": "Esverdeada",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1UOSPcgCNicujJyBw-4fCbxr6tKnrLZ4x?usp=sharing"
+  },
+  {
+    "id": "1-11-51",
+    "code": "SIA-0011",
+    "campaign": "1",
+    "date": "04/03/2026",
+    "waterBody": "Ribeirão dos Apertados",
+    "municipality": "Arapongas",
+    "original": {
+      "lat": -23.4663,
+      "lon": -51.3086
+    },
+    "effective": {
+      "lat": -23.463294,
+      "lon": -51.308257
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/14EZ_zb-SaZi1Ilo0gSsG5hVBCqVD8I5w?usp=drive_link"
+  },
+  {
+    "id": "1-210-52",
+    "code": "SIA-0210",
+    "campaign": "1",
+    "date": "04/03/2026",
+    "waterBody": "Ribeirão Ema",
+    "municipality": "Rolândia",
+    "original": {
+      "lat": -23.3081,
+      "lon": -51.4183
+    },
+    "effective": {
+      "lat": -23.308382,
+      "lon": -51.418505
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol entre nuvens",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1FDARh68f5AoFHEwvH409NnqYgT76qN7D?usp=drive_link"
+  },
+  {
+    "id": "1-135-53",
+    "code": "SIA-0135",
+    "campaign": "1",
+    "date": "05/03/2026",
+    "waterBody": "Ribeirão Cafezal",
+    "municipality": "Londrina",
+    "original": {
+      "lat": -23.3579,
+      "lon": -51.1939
+    },
+    "effective": {
+      "lat": -23.3579,
+      "lon": -51.1939
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1b8D0dv46Gp_AWW3bIQmsg70gnvY7g1gu?usp=drive_link"
+  },
+  {
+    "id": "1-136-54",
+    "code": "SIA-0136",
+    "campaign": "1",
+    "date": "05/03/2026",
+    "waterBody": "Rio Tibagi",
+    "municipality": "Londrina",
+    "original": {
+      "lat": -23.3736,
+      "lon": -51.0005
+    },
+    "effective": {
+      "lat": -23.3736,
+      "lon": -51.0005
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Incolor / transparente",
+    "weatherConditions": "sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1NCKu0afD_h3cHR475rzIxpUivFkoATnr?usp=drive_link"
+  },
+  {
+    "id": "1-71-55",
+    "code": "SIA-0071",
+    "campaign": "1",
+    "date": "05/03/2026",
+    "waterBody": "Rio Congonhas",
+    "municipality": "Cornélio Procópio",
+    "original": {
+      "lat": -23.2321,
+      "lon": -50.7335
+    },
+    "effective": {
+      "lat": -23.241186,
+      "lon": -50.727395
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Levemente amarelada",
+    "weatherConditions": "sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1JNNJWbkhPDgRfC4Vi7kisb3z2T5p2oCR?usp=drive_link"
+  },
+  {
+    "id": "1-31-56",
+    "code": "SIA-0031",
+    "campaign": "1",
+    "date": "05/03/2026",
+    "waterBody": "Córrego Alambari",
+    "municipality": "Cambará",
+    "original": {
+      "lat": -23.0446,
+      "lon": -50.0677
+    },
+    "effective": {
+      "lat": -23.0445,
+      "lon": -50.067333
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Levemente amarelada",
+    "weatherConditions": "sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1VSMrcW9TPTrhx6qcSfoLQMju4WlJ4e9g?usp=drive_link"
+  },
+  {
+    "id": "1-124-57",
+    "code": "SIA-0124",
+    "campaign": "1",
+    "date": "05/03/2026",
+    "waterBody": "Rio Jacarezinho",
+    "municipality": "Jacarezinho",
+    "original": {
+      "lat": -23.2158,
+      "lon": -50.0102
+    },
+    "effective": {
+      "lat": -23.13071,
+      "lon": -50.00456
+    },
+    "accessibility": "Difícil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/138lM7RUOR9BnMK15K27hL-UJrKG19Iy1?usp=drive_link"
+  },
+  {
+    "id": "1-223-58",
+    "code": "SIA-0223",
+    "campaign": "1",
+    "date": "05/03/2026",
+    "waterBody": "Ribeirão das Bicas",
+    "municipality": "Sto. Antônio da Platina",
+    "original": {
+      "lat": -23.3189,
+      "lon": -50.0711
+    },
+    "effective": {
+      "lat": -23.19145,
+      "lon": -50.04254
+    },
+    "accessibility": "Difícil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1YSL-3c8z70ZKyLfwjBW62z4TnH1vFtJ9?usp=drive_link"
+  },
+  {
+    "id": "1-241-59",
+    "code": "SIA-0241",
+    "campaign": "1",
+    "date": "06/03/2026",
+    "waterBody": "Ribeirão Água Fria",
+    "municipality": "Siqueira Campos",
+    "original": {
+      "lat": -23.6538,
+      "lon": -49.7996
+    },
+    "effective": null,
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Nublado",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1mZMx42oLZ8SMpcbNIk1yVFG3zKaVpmP4?usp=drive_link"
+  },
+  {
+    "id": "1-106-60",
+    "code": "SIA-0106",
+    "campaign": "1",
+    "date": "06/03/2026",
+    "waterBody": "Ribeirão Grande",
+    "municipality": "Ibaiti",
+    "original": {
+      "lat": -23.8792,
+      "lon": -50.1723
+    },
+    "effective": null,
+    "accessibility": "Fácil",
+    "waterAspect": "Levemente amarelada",
+    "weatherConditions": "Nublado",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1LjpfA4dzPb5_KbawyFQcqHrXbzYiTfXk?usp=drive_link"
+  },
+  {
+    "id": "1-435-61",
+    "code": "SIA-0435",
+    "campaign": "1",
+    "date": "06/03/2026",
+    "waterBody": "Rio Barreiros - Ponto 2",
+    "municipality": "Ortigueira",
+    "original": {
+      "lat": -24.142,
+      "lon": -51.0291
+    },
+    "effective": {
+      "lat": -24.142,
+      "lon": -51.0291
+    },
+    "accessibility": "Difícil",
+    "waterAspect": "Nao informado",
+    "weatherConditions": "Nao informado",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1MTg8nHfPW77kBpGl4CZCt95im8i5-EpG?usp=drive_link"
+  },
+  {
+    "id": "1-244-62",
+    "code": "SIA-0244",
+    "campaign": "1",
+    "date": "07/03/2026",
+    "waterBody": "Rio Tibagi",
+    "municipality": "Telêmaco Borba",
+    "original": {
+      "lat": -24.3373,
+      "lon": -50.6019
+    },
+    "effective": null,
+    "accessibility": "Moderado",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1DDzoF19_H3wf_JGQZK8E0RKf9nN_2f8J?usp=drive_link"
+  },
+  {
+    "id": "1-204-63",
+    "code": "SIA-0204",
+    "campaign": "1",
+    "date": "07/03/2026",
+    "waterBody": "Rio Maromba",
+    "municipality": "Reserva",
+    "original": {
+      "lat": -24.6445,
+      "lon": -50.8618
+    },
+    "effective": {
+      "lat": -24.6445,
+      "lon": -50.8618
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1QIAXa8v71gVa-KVHwlWfqV3tPlr_kFkv?usp=drive_link"
+  },
+  {
+    "id": "1-245-64",
+    "code": "SIA-0245",
+    "campaign": "1",
+    "date": "07/03/2026",
+    "waterBody": "Rio Tibagi",
+    "municipality": "Tibagi",
+    "original": null,
+    "effective": {
+      "lat": -24.518733,
+      "lon": -50.402867
+    },
+    "accessibility": "Difícil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1yvoq4S0Z1KwAXwmAEuh3B6Wy5BUAZZNA?usp=drive_link"
+  },
+  {
+    "id": "1-181-65",
+    "code": "SIA-0181",
+    "campaign": "1",
+    "date": "08/03/2026",
+    "waterBody": "Rio Piraizinho",
+    "municipality": "Piraí do Sul",
+    "original": {
+      "lat": -24.5399,
+      "lon": -49.9087
+    },
+    "effective": {
+      "lat": -24.5399,
+      "lon": -49.9087
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Nublado/ Garoa",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1rfZeq8srxgVi5I6ksGskrmUhLE_E9in6?usp=drive_link"
+  },
+  {
+    "id": "1-57-66",
+    "code": "SIA-0057",
+    "campaign": "1",
+    "date": "08/03/2026",
+    "waterBody": "Rio Iapó",
+    "municipality": "Castro",
+    "original": {
+      "lat": -24.7776,
+      "lon": -50.0019
+    },
+    "effective": {
+      "lat": -24.7776,
+      "lon": -50.0019
+    },
+    "accessibility": "Moderado",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Nublado/ Garoa",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1OLG9G1l68ewuBb1r9pw067Y0pJCJ4pzk?usp=drive_link"
+  },
+  {
+    "id": "1-48-67",
+    "code": "SIA-0048",
+    "campaign": "1",
+    "date": "08/03/2026",
+    "waterBody": "Rio São João",
+    "municipality": "Carambeí",
+    "original": {
+      "lat": -24.9088,
+      "lon": -50.144
+    },
+    "effective": {
+      "lat": -24.908683,
+      "lon": -50.143717
+    },
+    "accessibility": "Difícil",
+    "waterAspect": "Levemente amarelada",
+    "weatherConditions": "Garoa",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1MVgIo3WR_f6TnEAqOsUBC200boDA6y0b?usp=drive_link"
+  },
+  {
+    "id": "1-431-68",
+    "code": "SIA-0431",
+    "campaign": "1",
+    "date": "09/03/2026",
+    "waterBody": "Ponto07 - Cerro Azul",
+    "municipality": "Cerro Azul",
+    "original": {
+      "lat": -24.8345,
+      "lon": -49.2648
+    },
+    "effective": {
+      "lat": -24.854483,
+      "lon": -49.239117
+    },
+    "accessibility": "Difícil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Chuva",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1ykSQVNrAF3OazPfKfQ4NECZmrXUQ4R_5?usp=drive_link"
+  },
+  {
+    "id": "1-406-69",
+    "code": "SIA-0406",
+    "campaign": "1",
+    "date": "09/03/2026",
+    "waterBody": "Rio Capivari Captação",
+    "municipality": "Colombo",
+    "original": {
+      "lat": -25.2666,
+      "lon": -49.1411
+    },
+    "effective": {
+      "lat": -25.2666,
+      "lon": -49.1411
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Chuva",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1NXrtQjTABpcKdkaOe5w_439TjYV3MeKu?usp=drive_link"
+  },
+  {
+    "id": "1-343-70",
+    "code": "SIA-0343",
+    "campaign": "1",
+    "date": "09/03/2026",
+    "waterBody": "Ponto09 - Rio Palmital - São Dimas/Colombo",
+    "municipality": "Colombo",
+    "original": {
+      "lat": -25.3363,
+      "lon": -49.1644
+    },
+    "effective": {
+      "lat": -25.3363,
+      "lon": -49.1644
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Nublado/ Garoa",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1gE945qPeJ05zML-D5rUFG7XQpyWS6ivE?usp=drive_link"
+  },
+  {
+    "id": "1-429-71",
+    "code": "SIA-0429",
+    "campaign": "1",
+    "date": "10/03/2026",
+    "waterBody": "16 - Rio Açungui",
+    "municipality": "Campo Largo",
+    "original": {
+      "lat": -25.2348,
+      "lon": -49.5998
+    },
+    "effective": {
+      "lat": -25.2348,
+      "lon": -49.5998
+    },
+    "accessibility": "Difícil",
+    "waterAspect": "Nao informado",
+    "weatherConditions": "Nao informado",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1lEL6qk8_dcTw9FMFrbNv8644RIFxBhgA?usp=drive_link"
+  },
+  {
+    "id": "1-590-72",
+    "code": "SIA-0590",
+    "campaign": "1",
+    "date": "10/03/2026",
+    "waterBody": "63 - Reservatório Rio Verde",
+    "municipality": "Campo Largo",
+    "original": {
+      "lat": -25.5001,
+      "lon": -49.4921
+    },
+    "effective": {
+      "lat": -25.5001,
+      "lon": -49.4921
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Nublado",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1e2jqW1InPpvY9SVppsrKl-fy1F743x5-?usp=drive_link"
+  },
+  {
+    "id": "1-559-73",
+    "code": "SIA-0559",
+    "campaign": "1",
+    "date": "10/03/2026",
+    "waterBody": "208-S - Reserv. Passaúna Captação",
+    "municipality": "Curitiba",
+    "original": {
+      "lat": -25.5125,
+      "lon": -49.3696
+    },
+    "effective": {
+      "lat": -25.5125,
+      "lon": -49.3696
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Nublado",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1-9r63kJtn69_jr6u4S7ImayejpfyYk0I?usp=drive_link"
+  },
+  {
+    "id": "1-760-74",
+    "code": "SIA-0760",
+    "campaign": "1",
+    "date": "10/03/2026",
+    "waterBody": "3 - ETA Passaúna",
+    "municipality": "Curitiba",
+    "original": {
+      "lat": -25.5134,
+      "lon": -49.3527
+    },
+    "effective": {
+      "lat": -25.5134,
+      "lon": -49.3527
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Nublado",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1fFNjg7VxSIyuu9iw_AZMXBTIlNxeWXmh?usp=drive_link"
+  },
+  {
+    "id": "1-342-75",
+    "code": "SIA-0342",
+    "campaign": "1",
+    "date": "12/03/2026",
+    "waterBody": "Ponto05 - Rio Barigui - Alm. Tamandaré",
+    "municipality": "Almirante Tamandaré",
+    "original": {
+      "lat": -25.3051,
+      "lon": -49.2917
+    },
+    "effective": {
+      "lat": -25.3051,
+      "lon": -49.2917
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Esverdeada",
+    "weatherConditions": "Nublado",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/14gCJYvssGxJ7on90VJzkbuQi6kkadnif?usp=drive_link"
+  },
+  {
+    "id": "1-78-76",
+    "code": "SIA-0078",
+    "campaign": "1",
+    "date": "12/03/2026",
+    "waterBody": "502 - Tulipa Reservatório Iraí",
+    "municipality": "Quatro Barras",
+    "original": {
+      "lat": -25.4252,
+      "lon": -49.1129
+    },
+    "effective": {
+      "lat": -25.4252,
+      "lon": -49.1129
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Amarronzada / Turva",
+    "weatherConditions": "Sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1J9X6eowoXbFNpNSc36j3JH9UwyhkEDHK?usp=drive_link"
+  },
+  {
+    "id": "1-780-77",
+    "code": "SIA-0780",
+    "campaign": "1",
+    "date": "12/03/2026",
+    "waterBody": "116 - Captação ETA Iraí",
+    "municipality": "Pinhais",
+    "original": {
+      "lat": -25.444,
+      "lon": -49.1521
+    },
+    "effective": {
+      "lat": -25.444,
+      "lon": -49.1521
+    },
+    "accessibility": "Fácil",
+    "waterAspect": "Esverdeada",
+    "weatherConditions": "Sol",
+    "problems": "Nao informado",
+    "photoUrl": "https://drive.google.com/drive/folders/1PdYLzvaOi0ilwoOmx4ZDl-lRg5PQLjsk?usp=drive_link"
+  }
+]
