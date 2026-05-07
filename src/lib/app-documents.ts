@@ -56,15 +56,32 @@ export function readStoredDocumentsFromStorage() {
 
     const parsedDocuments = JSON.parse(rawDocuments);
 
-    return Array.isArray(parsedDocuments)
+    const normalizedDocuments = Array.isArray(parsedDocuments)
       ? parsedDocuments
           .map(normalizeStoredDocument)
           .filter((document): document is StoredDocument => document !== null)
           .filter(isDocumentAllowedInRepository)
       : [];
+
+    return dedupeDocuments(normalizedDocuments);
   } catch {
     return [];
   }
+}
+
+function dedupeDocuments(documents: StoredDocument[]) {
+  const seen = new Set<string>();
+
+  return documents.filter((document) => {
+    const key = `${document.id}|${document.dropboxUrl}|${document.title}`.toLowerCase();
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
 }
 
 function normalizeStoredDocument(value: unknown): StoredDocument | null {

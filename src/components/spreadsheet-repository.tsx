@@ -305,7 +305,7 @@ export function SpreadsheetRepository() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-5 px-2 py-2 lg:px-4">
+    <div className="mx-auto w-full max-w-6xl space-y-4 px-2 py-2 lg:px-3">
       <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="heading-font mb-1 text-2xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
@@ -342,13 +342,13 @@ export function SpreadsheetRepository() {
         </div>
       </section>
 
-      <section className="glass-panel rounded-[24px] p-4">
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+      <section className="glass-panel rounded-[22px] p-3">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
             <span className="mb-3 inline-block rounded-full bg-[var(--brand-green-soft)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--brand-navy-strong)]">
               Carga manual
             </span>
-            <h3 className="heading-font text-xl font-extrabold text-[var(--brand-navy-strong)]">
+            <h3 className="heading-font text-lg font-extrabold text-[var(--brand-navy-strong)]">
               Nova planilha da campanha
             </h3>
             <p className="mt-1 max-w-2xl text-justify text-xs leading-5 text-slate-500">

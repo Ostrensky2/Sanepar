@@ -25,15 +25,19 @@ const actionMapLayers: CampaignMapLayerVisibility = {
 
 export function PointActionsPageContent() {
   const [actions, setActions] = useState<PointActionEvent[]>([]);
+  const [isLoadingActions, setIsLoadingActions] = useState(true);
   const [selectedActionId, setSelectedActionId] = useState<string | undefined>();
   const [selectedPointId, setSelectedPointId] = useState<string | undefined>();
 
   useEffect(() => {
     function syncActions() {
+      setIsLoadingActions(true);
       void readPointActions().then((storedActions) => {
         setActions(storedActions);
         setSelectedActionId((current) => current ?? storedActions[0]?.id);
         setSelectedPointId((current) => current ?? storedActions[0]?.points[0]?.id);
+      }).finally(() => {
+        setIsLoadingActions(false);
       });
     }
 
@@ -66,6 +70,23 @@ export function PointActionsPageContent() {
     (total, point) => total + point.photos.length,
     0,
   ) ?? 0;
+
+  if (isLoadingActions) {
+    return (
+      <div className="space-y-6">
+        <HeaderBlock />
+        <div className="flex min-h-[calc(100vh-14rem)] flex-col items-center justify-center rounded-[30px] border border-dashed border-slate-300 bg-[var(--surface-soft)] p-8 text-center">
+          <FileSpreadsheet className="mb-4 h-10 w-10 animate-pulse text-slate-400" />
+          <p className="heading-font text-xl font-bold text-[var(--brand-navy-strong)]">
+            Carregando ações pontuais
+          </p>
+          <p className="mt-2 max-w-lg text-justify text-sm leading-6 text-slate-500">
+            Consultando os registros compartilhados na nuvem para exibir os eventos cadastrados.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!actions.length) {
     return (

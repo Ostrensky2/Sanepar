@@ -289,14 +289,14 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
   }
 
   return (
-    <section className="glass-panel rounded-[24px] p-4">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+    <section className="glass-panel rounded-[22px] p-3">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <span className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-[var(--brand-blue-soft)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--brand-navy-strong)]">
+          <span className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-[var(--brand-blue-soft)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--brand-navy-strong)]">
             <Target className="h-3.5 w-3.5" />
             Ações pontuais
           </span>
-          <h3 className="heading-font text-2xl font-extrabold text-[var(--brand-navy-strong)]">
+          <h3 className="heading-font text-xl font-extrabold text-[var(--brand-navy-strong)]">
             Novo registro de ação pontual
           </h3>
           <p className="mt-1 max-w-3xl text-justify text-xs leading-5 text-slate-500">
@@ -304,7 +304,7 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
             Cada evento pode conter um ou mais pontos de coleta, resultados, fotos e legendas.
           </p>
         </div>
-        <div className="grid grid-cols-4 gap-2 text-center text-xs">
+        <div className="grid grid-cols-4 gap-1.5 text-center text-xs">
           <MiniMetric label="Eventos" value={metrics.events} />
           <MiniMetric label="Pontos" value={metrics.points} />
           <MiniMetric label="Fotos" value={metrics.photos} />
@@ -312,8 +312,8 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.55fr)]">
-        <form className="space-y-3" onSubmit={savePointAction}>
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.45fr)_minmax(260px,0.55fr)]">
+        <form className="space-y-2" onSubmit={savePointAction}>
           <div className="rounded-[18px] border border-[var(--line-ghost)] bg-white p-3">
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[var(--brand-navy-strong)]">
