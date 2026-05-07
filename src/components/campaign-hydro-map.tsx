@@ -458,7 +458,7 @@ function fitCoordinatesToView(
   if (coordinates.length === 1) {
     return {
       center: coordinates[0],
-      zoom: Math.min(11, maxZoom),
+      zoom: maxZoom,
     };
   }
 
