@@ -291,15 +291,17 @@ function PointActionCard({
           href={document.dropboxUrl}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center justify-between gap-3 rounded-[18px] border border-[var(--line-ghost)] bg-white p-4 text-sm font-bold text-[var(--brand-navy-strong)] transition-colors hover:bg-[var(--surface-soft)]"
+          className="flex items-center justify-between gap-3 rounded-[18px] border border-blue-100 bg-white p-4 text-sm font-bold text-blue-700 transition-colors hover:border-blue-200 hover:bg-blue-50"
         >
           <span className="min-w-0">
             <span className="block text-[10px] uppercase tracking-[0.18em] text-slate-400">
               Documento do evento
             </span>
-            <span className="mt-1 block truncate">{document.title}</span>
+            <span className="mt-1 block truncate underline decoration-blue-300 underline-offset-4">
+              {document.title}
+            </span>
           </span>
-          <ExternalLink className="h-4 w-4 shrink-0" />
+          <ExternalLink className="h-4 w-4 shrink-0 text-blue-600" />
         </a>
       ) : (
         <p className="rounded-[18px] bg-[var(--surface-soft)] p-4 text-xs font-semibold text-slate-500">

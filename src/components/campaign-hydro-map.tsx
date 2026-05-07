@@ -73,7 +73,7 @@ export type CampaignMapLayerVisibility = {
 
 const tileSize = 256;
 const minZoom = 7;
-const maxZoom = 11;
+const maxZoom = 16;
 const basinColors = [
   "rgba(0, 142, 156, 0.30)",
   "rgba(0, 87, 159, 0.24)",
@@ -115,6 +115,7 @@ export function CampaignHydroMap({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{ x: number; y: number; center: Coordinate } | null>(null);
+  const fittedPointsKeyRef = useRef<string | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [center, setCenter] = useState<Coordinate>({ lat: -24.75, lon: -51.45 });
   const [zoom, setZoom] = useState(8);
@@ -219,6 +220,32 @@ export function CampaignHydroMap({
       markerMode,
     );
   }, [basins, center, layers, markerMode, points, roadRoutes, selectedPointId, size, zoom]);
+
+  useEffect(() => {
+    if (!size.width || !size.height) {
+      return;
+    }
+
+    const coordinates = points
+      .map((point) => mapCoordinate(point, layers))
+      .filter((coordinate): coordinate is Coordinate => coordinate !== null);
+    const fitKey = coordinates
+      .map((coordinate) => `${coordinate.lat.toFixed(5)},${coordinate.lon.toFixed(5)}`)
+      .join("|");
+
+    if (!coordinates.length || fittedPointsKeyRef.current === fitKey) {
+      return;
+    }
+
+    fittedPointsKeyRef.current = fitKey;
+    const nextView = fitCoordinatesToView(coordinates, size);
+    const frame = window.requestAnimationFrame(() => {
+      setCenter(nextView.center);
+      setZoom(nextView.zoom);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [layers, points, size]);
 
   function zoomBy(delta: number) {
     setZoom((current) => Math.max(minZoom, Math.min(maxZoom, current + delta)));
@@ -337,7 +364,11 @@ export function CampaignHydroMap({
           type="button"
           aria-label="Aproximar mapa"
           className="flex h-9 w-9 items-center justify-center text-[var(--brand-navy-strong)] transition-colors hover:bg-slate-100"
-          onClick={() => zoomBy(1)}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            zoomBy(1);
+          }}
         >
           <Plus className="h-4 w-4" />
         </button>
@@ -345,7 +376,11 @@ export function CampaignHydroMap({
           type="button"
           aria-label="Afastar mapa"
           className="flex h-9 w-9 items-center justify-center border-t border-slate-100 text-[var(--brand-navy-strong)] transition-colors hover:bg-slate-100"
-          onClick={() => zoomBy(-1)}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            zoomBy(-1);
+          }}
         >
           <Minus className="h-4 w-4" />
         </button>
@@ -398,6 +433,13 @@ function tooltipCoordinate(
   point: CampaignHydroMapPoint,
   layers: CampaignMapLayerVisibility,
 ) {
+  return mapCoordinate(point, layers);
+}
+
+function mapCoordinate(
+  point: CampaignHydroMapPoint,
+  layers: CampaignMapLayerVisibility,
+) {
   if (layers.effective && point.effective) {
     return point.effective;
   }
@@ -407,6 +449,49 @@ function tooltipCoordinate(
   }
 
   return point.effective ?? point.original;
+}
+
+function fitCoordinatesToView(
+  coordinates: Coordinate[],
+  size: { width: number; height: number },
+) {
+  if (coordinates.length === 1) {
+    return {
+      center: coordinates[0],
+      zoom: Math.min(11, maxZoom),
+    };
+  }
+
+  const minLat = Math.min(...coordinates.map((coordinate) => coordinate.lat));
+  const maxLat = Math.max(...coordinates.map((coordinate) => coordinate.lat));
+  const minLon = Math.min(...coordinates.map((coordinate) => coordinate.lon));
+  const maxLon = Math.max(...coordinates.map((coordinate) => coordinate.lon));
+  const center = {
+    lat: (minLat + maxLat) / 2,
+    lon: (minLon + maxLon) / 2,
+  };
+  const padding = 80;
+  const availableWidth = Math.max(size.width - padding * 2, 160);
+  const availableHeight = Math.max(size.height - padding * 2, 140);
+
+  for (let nextZoom = maxZoom; nextZoom >= minZoom; nextZoom -= 1) {
+    const northWest = lonLatToWorld(minLon, maxLat, nextZoom);
+    const southEast = lonLatToWorld(maxLon, minLat, nextZoom);
+    const boundsWidth = Math.abs(southEast.x - northWest.x);
+    const boundsHeight = Math.abs(southEast.y - northWest.y);
+
+    if (boundsWidth <= availableWidth && boundsHeight <= availableHeight) {
+      return {
+        center,
+        zoom: nextZoom,
+      };
+    }
+  }
+
+  return {
+    center,
+    zoom: minZoom,
+  };
 }
 
 function buildTiles(center: Coordinate, zoom: number, width: number, height: number): Tile[] {
