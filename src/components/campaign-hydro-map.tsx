@@ -72,8 +72,9 @@ export type CampaignMapLayerVisibility = {
 };
 
 const tileSize = 256;
-const minZoom = 7;
+const minZoom = 3;
 const maxZoom = 16;
+const singlePointZoom = 13;
 const basinColors = [
   "rgba(0, 142, 156, 0.30)",
   "rgba(0, 87, 159, 0.24)",
@@ -102,6 +103,7 @@ export function CampaignHydroMap({
   showBaseTiles = true,
   markerMode = "campaign",
   showPointTooltip = false,
+  effectivePointColor,
 }: {
   points: CampaignHydroMapPoint[];
   selectedPointId?: string;
@@ -111,11 +113,13 @@ export function CampaignHydroMap({
   showBaseTiles?: boolean;
   markerMode?: "campaign" | "risk" | "pointAction";
   showPointTooltip?: boolean;
+  effectivePointColor?: string;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{ x: number; y: number; center: Coordinate } | null>(null);
   const fittedPointsKeyRef = useRef<string | null>(null);
+  const routeRequestStatusRef = useRef<Set<string>>(new Set());
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [center, setCenter] = useState<Coordinate>({ lat: -24.75, lon: -51.45 });
   const [zoom, setZoom] = useState(8);
@@ -187,19 +191,43 @@ export function CampaignHydroMap({
 
   useEffect(() => {
     let cancelled = false;
+    const queue = routeRequests.filter(
+      (request) => !routeRequestStatusRef.current.has(request.id),
+    );
 
-    routeRequests.forEach((request, index) => {
-      fetchRoadRoute(request.waypoints).then((coordinates) => {
-        if (cancelled || coordinates === null) {
+    async function resolveNextRoute() {
+      while (true) {
+        const request = queue.shift();
+
+        if (!request) {
           return;
         }
 
-        setResolvedRoadRoutes((current) => ({
-          ...current,
-          [request.id || String(index)]: coordinates,
-        }));
-      });
-    });
+        routeRequestStatusRef.current.add(request.id);
+
+        const coordinates = await fetchRoadRoute(request.waypoints).catch(
+          () => null,
+        );
+
+        if (coordinates) {
+          const resolved = coordinates;
+          setResolvedRoadRoutes((current) =>
+            current[request.id] ? current : { ...current, [request.id]: resolved },
+          );
+        } else {
+          routeRequestStatusRef.current.delete(request.id);
+        }
+
+        if (cancelled) {
+          return;
+        }
+      }
+    }
+
+    const workerCount = Math.min(3, queue.length);
+    void Promise.all(
+      Array.from({ length: workerCount }, () => resolveNextRoute()),
+    );
 
     return () => {
       cancelled = true;
@@ -218,8 +246,9 @@ export function CampaignHydroMap({
       layers,
       selectedPointId,
       markerMode,
+      effectivePointColor,
     );
-  }, [basins, center, layers, markerMode, points, roadRoutes, selectedPointId, size, zoom]);
+  }, [basins, center, effectivePointColor, layers, markerMode, points, roadRoutes, selectedPointId, size, zoom]);
 
   useEffect(() => {
     if (!size.width || !size.height) {
@@ -458,7 +487,7 @@ function fitCoordinatesToView(
   if (coordinates.length === 1) {
     return {
       center: coordinates[0],
-      zoom: maxZoom,
+      zoom: singlePointZoom,
     };
   }
 
@@ -538,6 +567,7 @@ function drawMapOverlay(
   layers: CampaignMapLayerVisibility,
   selectedPointId?: string,
   markerMode: "campaign" | "risk" | "pointAction" = "campaign",
+  effectivePointColor?: string,
 ) {
   if (!canvas || !size.width || !size.height) {
     return;
@@ -561,7 +591,17 @@ function drawMapOverlay(
 
   drawRoadRoutes(context, roadRoutes, center, zoom, size, layers);
 
-  drawPoints(context, points, center, zoom, size, layers, selectedPointId, markerMode);
+  drawPoints(
+    context,
+    points,
+    center,
+    zoom,
+    size,
+    layers,
+    selectedPointId,
+    markerMode,
+    effectivePointColor,
+  );
 }
 
 function drawBasins(
@@ -624,6 +664,7 @@ function drawPoints(
   layers: CampaignMapLayerVisibility,
   selectedPointId?: string,
   markerMode: "campaign" | "risk" | "pointAction" = "campaign",
+  effectivePointColor?: string,
 ) {
   context.lineCap = "round";
 
@@ -659,6 +700,7 @@ function drawPoints(
         point.id === selectedPointId,
         markerMode === "risk" ? point.riskLevel : undefined,
         markerMode === "pointAction",
+        effectivePointColor,
       );
     }
   }
@@ -735,7 +777,7 @@ function drawRoadRoutes(
 }
 
 function buildRoadRouteRequests(points: CampaignHydroMapPoint[]) {
-  const groups = new Map<string, { label: string; points: CampaignHydroMapPoint[] }>();
+  const groups = new Map<string, { key: string; label: string; points: CampaignHydroMapPoint[] }>();
   const inferredDayLabels = new Map<string, string>();
 
   for (const point of points) {
@@ -753,14 +795,18 @@ function buildRoadRouteRequests(points: CampaignHydroMapPoint[]) {
       group.points.push(point);
     } else {
       groups.set(key, {
+        key,
         label,
         points: [point],
       });
     }
   }
 
-  const orderedGroups = [...groups.values()];
-  const requests: Array<Omit<RoadRouteSegment, "coordinates" | "isFallback">> = [];
+  const orderedGroups = [...groups.values()].sort(
+    (a, b) => dayLabelNumber(a.label) - dayLabelNumber(b.label),
+  );
+  const dailyRequests: Array<Omit<RoadRouteSegment, "coordinates">> = [];
+  const transitionRequests: Array<Omit<RoadRouteSegment, "coordinates">> = [];
 
   orderedGroups.forEach((group, groupIndex) => {
     const color = dailyRouteColors[groupIndex % dailyRouteColors.length];
@@ -769,8 +815,8 @@ function buildRoadRouteRequests(points: CampaignHydroMapPoint[]) {
       .filter((coordinate): coordinate is Coordinate => coordinate !== null);
 
     if (waypoints.length > 1) {
-      requests.push({
-        id: `daily-${group.label}`,
+      dailyRequests.push({
+        id: `daily-${group.key}`,
         kind: "daily",
         label: group.label,
         color,
@@ -785,8 +831,8 @@ function buildRoadRouteRequests(points: CampaignHydroMapPoint[]) {
       const to = routeCoordinate(nextGroup.points[0]);
 
       if (from && to) {
-        requests.push({
-          id: `transition-${group.label}-${nextGroup.label}`,
+        transitionRequests.push({
+          id: `transition-${group.key}-${nextGroup.key}`,
           kind: "transition",
           label: `${group.label} > ${nextGroup.label}`,
           color: "#334155",
@@ -796,7 +842,12 @@ function buildRoadRouteRequests(points: CampaignHydroMapPoint[]) {
     }
   });
 
-  return requests;
+  return [...dailyRequests, ...transitionRequests];
+}
+
+function dayLabelNumber(label: string) {
+  const match = label.match(/\d+/);
+  return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER;
 }
 
 function routeCoordinate(point?: CampaignHydroMapPoint) {
@@ -823,7 +874,7 @@ async function fetchRoadRoute(waypoints: Coordinate[]) {
   }
 
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  const timeout = window.setTimeout(() => controller.abort(), 180000);
 
   try {
     const response = await fetch("/api/roads/route", {
@@ -890,6 +941,7 @@ function drawMarkerAt(
   selected = false,
   riskLevel?: CampaignHydroMapPoint["riskLevel"],
   isPointAction = false,
+  effectivePointColor?: string,
 ) {
   if (selected) {
     context.beginPath();
@@ -914,14 +966,23 @@ function drawMarkerAt(
     return;
   }
 
+  const hasOverride = type === "effective" && Boolean(effectivePointColor);
   context.beginPath();
-  context.arc(x, y, type === "original" ? 5 : riskLevel ? 7 : 5.2, 0, Math.PI * 2);
+  context.arc(
+    x,
+    y,
+    type === "original" ? 5 : hasOverride || riskLevel ? 7 : 5.2,
+    0,
+    Math.PI * 2,
+  );
   context.fillStyle =
     type === "original"
       ? "#eaff00"
-      : riskLevel
-        ? riskColor(riskLevel)
-        : "#050505";
+      : hasOverride
+        ? (effectivePointColor as string)
+        : riskLevel
+          ? riskColor(riskLevel)
+          : "#050505";
   context.strokeStyle = type === "original" ? "#111827" : "#ffffff";
   context.lineWidth = selected ? 2.6 : 1.8;
   context.fill();

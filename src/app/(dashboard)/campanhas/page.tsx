@@ -1,10 +1,5 @@
-import { CampaignsPageContent } from "@/components/campaigns-page-content";
-import { loadDashboardData } from "@/lib/dashboard-data";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function CampanhasPage() {
-  const { campaignPoints } = await loadDashboardData();
-
-  return <CampaignsPageContent campaignPoints={campaignPoints} />;
+export default function CampanhasIndexPage() {
+  redirect("/campanhas/campo");
 }

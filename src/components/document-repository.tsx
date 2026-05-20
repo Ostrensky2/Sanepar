@@ -17,12 +17,17 @@ import {
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
+  APP_DOCUMENTS_CLOUD_MIGRATION_KEY,
   APP_DOCUMENTS_STORAGE_KEY,
   filterTabs,
+  mergeStoredDocuments,
+  normalizeStoredDocuments,
   readStoredDocumentsFromStorage,
   type DocumentType,
   type StoredDocument,
 } from "@/lib/app-documents";
+import { recordActivity } from "@/lib/activity-log";
+import { getStoredSession } from "@/lib/auth-users";
 
 type DocumentSortMode =
   | "numeric-asc"
@@ -40,6 +45,8 @@ const documentSortOptions: Array<{ label: string; value: DocumentSortMode }> = [
 export function DocumentRepository() {
   const [documents, setDocuments] = useState<StoredDocument[]>([]);
   const [hasLoadedDocuments, setHasLoadedDocuments] = useState(false);
+  const [persistenceMode, setPersistenceMode] = useState<"browser" | "cloud">("browser");
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<DocumentType>("Plano de trabalho");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortMode, setSortMode] = useState<DocumentSortMode>("numeric-asc");
@@ -56,12 +63,62 @@ export function DocumentRepository() {
   });
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      setDocuments(readStoredDocumentsFromStorage());
-      setHasLoadedDocuments(true);
-    }, 0);
+    let isMounted = true;
 
-    return () => window.clearTimeout(timeout);
+    async function loadDocuments() {
+      const localDocuments = readStoredDocumentsFromStorage();
+
+      try {
+        const response = await fetch("/api/documents", { cache: "no-store" });
+        const payload = (await response.json()) as {
+          documents?: unknown;
+          persistence?: "browser" | "cloud";
+        };
+
+        if (!response.ok || payload.persistence !== "cloud") {
+          throw new Error("Documentos em modo local.");
+        }
+
+        const cloudDocuments = normalizeStoredDocuments(payload.documents);
+        const alreadyMigrated =
+          window.localStorage.getItem(APP_DOCUMENTS_CLOUD_MIGRATION_KEY) === "true";
+        const nextDocuments = alreadyMigrated
+          ? cloudDocuments
+          : mergeStoredDocuments(cloudDocuments, localDocuments);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setDocuments(nextDocuments);
+        setPersistenceMode("cloud");
+        setSyncNotice("Documentos sincronizados na nuvem.");
+        setHasLoadedDocuments(true);
+
+        if (!alreadyMigrated && localDocuments.length) {
+          const migrated = await saveDocumentsToCloud(nextDocuments);
+
+          if (migrated) {
+            window.localStorage.setItem(APP_DOCUMENTS_CLOUD_MIGRATION_KEY, "true");
+          }
+        }
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setDocuments(localDocuments);
+        setPersistenceMode("browser");
+        setSyncNotice("Documentos em modo local; a nuvem não está disponível neste ambiente.");
+        setHasLoadedDocuments(true);
+      }
+    }
+
+    loadDocuments();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -71,7 +128,13 @@ export function DocumentRepository() {
 
     window.localStorage.setItem(APP_DOCUMENTS_STORAGE_KEY, JSON.stringify(documents));
     window.dispatchEvent(new Event("yvae:documents-updated"));
-  }, [documents, hasLoadedDocuments]);
+
+    if (persistenceMode === "cloud") {
+      saveDocumentsToCloud(documents).catch(() => {
+        setSyncNotice("A lista local foi atualizada, mas a nuvem não confirmou a gravação.");
+      });
+    }
+  }, [documents, hasLoadedDocuments, persistenceMode]);
 
   const visibleDocuments = useMemo(() => {
     const normalizedSearch = normalize(searchTerm);
@@ -114,6 +177,7 @@ export function DocumentRepository() {
       month: "short",
       year: "numeric",
     }).format(new Date());
+    const now = new Date().toISOString();
 
     const newDocument: StoredDocument = {
       id: `${trimmedUrl}-${crypto.randomUUID()}`,
@@ -122,12 +186,14 @@ export function DocumentRepository() {
       campaign: formState.campaign.trim() || "Documento inserido",
       point: formState.point.trim() || "Repositório oficial",
       date: today,
+      updatedAt: now,
       type: formState.type,
       status: "INSERIDO",
       source: "link",
     };
 
     setDocuments((current) => [newDocument, ...current]);
+    recordActivity(getStoredSession(), "document.change", newDocument.title, "Documento adicionado");
     setActiveTab(newDocument.type);
     setIsInsertOpen(false);
     setFormState({
@@ -149,6 +215,7 @@ export function DocumentRepository() {
     }
 
     setDocuments((current) => current.filter((item) => item.id !== document.id));
+    recordActivity(getStoredSession(), "document.change", document.title, "Documento removido");
   }
 
   function toggleDocumentSelection(documentId: string) {
@@ -265,10 +332,6 @@ export function DocumentRepository() {
           <h2 className="heading-font mb-1 text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
             Repositório Oficial de Documentos
           </h2>
-          <p className="max-w-2xl text-sm leading-relaxed text-slate-500">
-            Links do Dropbox vinculados ao monitoramento Yva&apos;e são acessados,
-            inseridos, compartilhados, baixados e removidos neste repositório.
-          </p>
         </div>
         <div className="flex gap-4">
           <button
@@ -302,10 +365,6 @@ export function DocumentRepository() {
               <h4 className="heading-font mb-2 text-2xl font-extrabold leading-tight text-[var(--brand-navy-strong)]">
                 Biblioteca Técnica Yva&apos;e
               </h4>
-              <p className="max-w-md text-xs text-slate-500">
-                Os links inseridos nesta tela apontam para documentos no Dropbox e podem
-                ser abertos, baixados, compartilhados ou removidos pelos comandos da tabela.
-              </p>
             </div>
 
             <div className="relative z-10 flex gap-3">
@@ -471,6 +530,12 @@ export function DocumentRepository() {
           </div>
         ) : null}
 
+        {syncNotice ? (
+          <div className="rounded-lg border border-[var(--line-ghost)] bg-white px-4 py-3 text-xs font-semibold text-[var(--brand-navy-strong)]">
+            {syncNotice}
+          </div>
+        ) : null}
+
         {selectedDocuments.length > 0 ? (
           <div className="flex flex-col gap-3 rounded-[20px] border border-[var(--line-ghost)] bg-white px-4 py-3 shadow-[0_20px_60px_-42px_rgba(0,66,98,0.28)] lg:flex-row lg:items-center lg:justify-between">
             <p className="text-xs font-bold text-[var(--brand-navy-strong)]">
@@ -586,6 +651,16 @@ export function DocumentRepository() {
       </section>
     </div>
   );
+}
+
+async function saveDocumentsToCloud(documents: StoredDocument[]) {
+  const response = await fetch("/api/documents", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ documents }),
+  });
+
+  return response.ok;
 }
 
 function DocumentRow({

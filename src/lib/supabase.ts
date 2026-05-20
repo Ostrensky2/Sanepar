@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 
 export const POINT_ACTIONS_SNAPSHOT_FILE_NAME = "__point_actions__";
+export const APP_DOCUMENTS_SNAPSHOT_FILE_NAME = "__app_documents__";
 
 const supabaseUrl = sanitizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const supabaseAnonKey = sanitizeEnvValue(
@@ -54,6 +55,7 @@ export async function getLatestPublishedCampaignImport() {
     .from("campaign_imports")
     .select("*")
     .neq("file_name", POINT_ACTIONS_SNAPSHOT_FILE_NAME)
+    .neq("file_name", APP_DOCUMENTS_SNAPSHOT_FILE_NAME)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle<CampaignImportRow>();
@@ -66,5 +68,14 @@ export async function getLatestPublishedCampaignImport() {
 }
 
 function sanitizeEnvValue(value: string | undefined) {
-  return value?.replace(/\\r\\n|\\n|\\r/g, "").trim();
+  const sanitized = value
+    ?.replace(/\\r\\n|\\n|\\r/g, "")
+    .replace(/[\r\n]/g, "")
+    .trim();
+
+  if (!sanitized) {
+    return sanitized;
+  }
+
+  return sanitized.replace(/^["']|["']$/g, "");
 }

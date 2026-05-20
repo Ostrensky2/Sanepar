@@ -1,5 +1,6 @@
 import {
   Activity,
+  Info,
   MapPinned,
 } from "lucide-react";
 import { AppDocumentHighlights, AppDocumentMetric } from "@/components/app-document-home";
@@ -55,6 +56,26 @@ export default async function DashboardPage() {
 
         <AppDocumentMetric />
       </section>
+
+      <aside
+        role="note"
+        className="flex items-start gap-3 rounded-[22px] border-l-4 border-amber-500 bg-amber-50/80 p-4 shadow-[0_10px_30px_-22px_rgba(180,83,9,0.45)]"
+      >
+        <span className="mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-amber-200 text-amber-800">
+          <Info className="h-4 w-4" />
+        </span>
+        <div className="space-y-1">
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-700">
+            Visualização representativa
+          </p>
+          <p className="text-sm leading-6 text-amber-900">
+            As análises da <strong className="font-bold">primeira campanha ainda não foram finalizadas</strong>.
+            O mapa e os indicadores abaixo utilizam <strong className="font-bold">dados fictícios</strong> apenas
+            para <strong className="font-bold">ilustrar</strong> como os resultados serão apresentados visualmente
+            quando os <strong className="font-bold">laudos laboratoriais</strong> estiverem disponíveis.
+          </p>
+        </div>
+      </aside>
 
       <HomeRiskMapSection points={laboratoryRiskPoints} />
 

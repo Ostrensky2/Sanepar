@@ -18,11 +18,13 @@ import {
 export function CampaignMapSection({
   points,
   compact = false,
+  useLocalImportCache = true,
 }: {
   points: CampaignHydroMapPoint[];
   compact?: boolean;
+  useLocalImportCache?: boolean;
 }) {
-  const [activePoints, setActivePoints] = useState(points);
+  const [cachedPoints, setCachedPoints] = useState<CampaignHydroMapPoint[] | null>(null);
   const [selectedPointId, setSelectedPointId] = useState(points[0]?.id);
   const [isDetailsPanelOpen, setIsDetailsPanelOpen] = useState(true);
   const [localImportLabel, setLocalImportLabel] = useState<string | null>(null);
@@ -37,6 +39,10 @@ export function CampaignMapSection({
     effective: true,
     displacement: true,
   });
+  const activePoints = useMemo(
+    () => (useLocalImportCache && cachedPoints?.length ? cachedPoints : points),
+    [cachedPoints, points, useLocalImportCache],
+  );
   const selectedPoint = useMemo(
     () =>
       activePoints.find((point) => point.id === selectedPointId) ?? activePoints[0],
@@ -58,6 +64,12 @@ export function CampaignMapSection({
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      if (!useLocalImportCache) {
+        setCachedPoints(null);
+        setLocalImportLabel(null);
+        return;
+      }
+
       const storedPoints = window.localStorage.getItem("yvae:campaign-map-points");
 
       if (storedPoints) {
@@ -65,7 +77,7 @@ export function CampaignMapSection({
           const parsed = JSON.parse(storedPoints) as CampaignHydroMapPoint[];
 
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setActivePoints(parsed);
+            setCachedPoints(parsed);
             setSelectedPointId(parsed[0].id);
           }
         } catch {
@@ -94,7 +106,7 @@ export function CampaignMapSection({
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [useLocalImportCache]);
 
   return (
     <section
@@ -164,7 +176,7 @@ export function CampaignMapSection({
             <div className="space-y-1">
               {routeLegend.map((item) => (
                 <div
-                  key={item.label}
+                  key={item.key}
                   className="flex items-center gap-2 text-[9px] font-semibold text-slate-600"
                 >
                   <span
@@ -292,7 +304,7 @@ const routeLegendColors = [
 ];
 
 function buildRouteLegend(points: CampaignHydroMapPoint[]) {
-  const labels: string[] = [];
+  const items: Array<{ key: string; label: string }> = [];
   const knownLabels = new Set<string>();
   const inferredDayLabels = new Map<string, string>();
 
@@ -306,12 +318,13 @@ function buildRouteLegend(points: CampaignHydroMapPoint[]) {
 
     if (!knownLabels.has(key)) {
       knownLabels.add(key);
-      labels.push(label);
+      items.push({ key, label });
     }
   }
 
-  return labels.map((label, index) => ({
-    label,
+  return items.map((item, index) => ({
+    key: item.key,
+    label: item.label,
     color: routeLegendColors[index % routeLegendColors.length],
   }));
 }

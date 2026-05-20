@@ -16,14 +16,13 @@ import path from "node:path";
 export const BACKUP_ROOT = String.raw`D:\Dropbox\Aplicativos\Yva´e-backup`;
 export const APP_BACKUP_TARGET_ROOT = path.join(BACKUP_ROOT, "APP");
 export const DB_BACKUP_TARGET_ROOT = path.join(BACKUP_ROOT, "Backups");
-export const DAILY_BACKUP_TARGET_ROOT = path.join(BACKUP_ROOT, "Backups");
+export const DAILY_BACKUP_TARGET_ROOT = path.join(BACKUP_ROOT, "Backups", "Diarios");
 export const MONTHLY_BACKUP_TARGET_ROOT = path.join(BACKUP_ROOT, "Backups", "Mensais");
 export const BACKUP_LOG_ROOT = path.join(BACKUP_ROOT, "Logs");
 export const BACKUP_LOG_FILE = path.join(BACKUP_LOG_ROOT, "operacoes.jsonl");
 
-const DAILY_BACKUP_HOUR = 19;
-const DAILY_BACKUP_MINUTE = 0;
-const MAX_DAILY_BACKUP_AGE_DAYS = 30;
+const DAILY_BACKUP_HOUR = 12;
+const DAILY_BACKUP_MINUTE = 15;
 
 const EXCLUDED_DIRECTORIES = new Set([
   ".git",
@@ -239,10 +238,8 @@ export async function enforceRetentionPolicy(now = new Date()) {
 
     for (const backup of dailyFolders) {
       const monthKey = `${backup.date.getFullYear()}-${String(backup.date.getMonth() + 1).padStart(2, "0")}`;
-      const ageMs = now.getTime() - backup.date.getTime();
-      const olderThanLimit = ageMs > MAX_DAILY_BACKUP_AGE_DAYS * 24 * 60 * 60 * 1000;
 
-      if (monthKey !== currentMonth || olderThanLimit) {
+      if (monthKey !== currentMonth) {
         const monthBackups = previousMonths.get(monthKey) ?? [];
         monthBackups.push(backup);
         previousMonths.set(monthKey, monthBackups);
@@ -251,19 +248,17 @@ export async function enforceRetentionPolicy(now = new Date()) {
 
     for (const [monthKey, backups] of previousMonths) {
       backups.sort((a, b) => a.date.getTime() - b.date.getTime());
-      const keep = backups.at(-1);
+      const keepBackups = backups.filter((backup) => [1, 15].includes(backup.date.getDate()));
 
-      if (keep) {
-        const monthlyTarget = path.join(
-          MONTHLY_BACKUP_TARGET_ROOT,
-          `Backup_Mensal_${monthKey}`,
-        );
+      for (const backup of keepBackups) {
+        const day = String(backup.date.getDate()).padStart(2, "0");
+        const monthlyTarget = path.join(MONTHLY_BACKUP_TARGET_ROOT, `Backup_Mensal_${monthKey}-${day}`);
         await rm(monthlyTarget, { recursive: true, force: true });
-        await rename(keep.path, monthlyTarget);
+        await rename(backup.path, monthlyTarget);
         archived += 1;
       }
 
-      for (const backup of backups.slice(0, -1)) {
+      for (const backup of backups.filter((backup) => ![1, 15].includes(backup.date.getDate()))) {
         await rm(backup.path, { recursive: true, force: true });
         removed += 1;
       }
@@ -271,7 +266,7 @@ export async function enforceRetentionPolicy(now = new Date()) {
 
     return {
       ok: true,
-      message: `Limpeza concluída. Mensais mantidos: ${archived}. Diários removidos: ${removed}.`,
+      message: `Limpeza concluída. Backups dos dias 01 e 15 arquivados: ${archived}. Diários removidos: ${removed}.`,
       type: "mensal",
       generatedAt: new Date().toISOString(),
       destinationRoot: MONTHLY_BACKUP_TARGET_ROOT,

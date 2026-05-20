@@ -1,13 +1,14 @@
 "use client";
 
 import { Camera, CheckCircle2, ExternalLink, FileSpreadsheet, FlaskConical, Link2, MapPinned, Target, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CampaignHydroMap,
   type CampaignHydroMapPoint,
   type CampaignMapLayerVisibility,
 } from "@/components/campaign-hydro-map";
 import {
+  POINT_ACTIONS_STORAGE_KEY,
   readPointActions,
   type PointActionEvent,
   type PointActionSamplePoint,
@@ -28,15 +29,24 @@ export function PointActionsPageContent() {
   const [isLoadingActions, setIsLoadingActions] = useState(true);
   const [selectedActionId, setSelectedActionId] = useState<string | undefined>();
   const [selectedPointId, setSelectedPointId] = useState<string | undefined>();
+  const hasLoadedActions = useRef(false);
 
   useEffect(() => {
-    function syncActions() {
-      setIsLoadingActions(true);
+    function syncActions(event?: Event) {
+      if (event instanceof StorageEvent && event.key !== POINT_ACTIONS_STORAGE_KEY) {
+        return;
+      }
+
+      if (!hasLoadedActions.current) {
+        setIsLoadingActions(true);
+      }
+
       void readPointActions().then((storedActions) => {
         setActions(storedActions);
         setSelectedActionId((current) => current ?? storedActions[0]?.id);
         setSelectedPointId((current) => current ?? storedActions[0]?.points[0]?.id);
       }).finally(() => {
+        hasLoadedActions.current = true;
         setIsLoadingActions(false);
       });
     }
@@ -75,7 +85,7 @@ export function PointActionsPageContent() {
     return (
       <div className="space-y-6">
         <HeaderBlock />
-        <div className="flex min-h-[calc(100vh-14rem)] flex-col items-center justify-center rounded-[30px] border border-dashed border-slate-300 bg-[var(--surface-soft)] p-8 text-center">
+        <div className="flex min-h-80 flex-col items-center justify-center rounded-[30px] border border-dashed border-slate-300 bg-[var(--surface-soft)] p-8 text-center">
           <FileSpreadsheet className="mb-4 h-10 w-10 animate-pulse text-slate-400" />
           <p className="heading-font text-xl font-bold text-[var(--brand-navy-strong)]">
             Carregando ações pontuais
@@ -92,7 +102,7 @@ export function PointActionsPageContent() {
     return (
       <div className="space-y-6">
         <HeaderBlock />
-        <div className="flex min-h-[calc(100vh-14rem)] flex-col items-center justify-center rounded-[30px] border border-dashed border-slate-300 bg-[var(--surface-soft)] p-8 text-center">
+        <div className="flex min-h-80 flex-col items-center justify-center rounded-[30px] border border-dashed border-slate-300 bg-[var(--surface-soft)] p-8 text-center">
           <FileSpreadsheet className="mb-4 h-10 w-10 text-slate-400" />
           <p className="heading-font text-xl font-bold text-[var(--brand-navy-strong)]">
             Nenhuma ação pontual registrada
@@ -116,9 +126,6 @@ export function PointActionsPageContent() {
           <h2 className="heading-font text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
             {selectedAction.eventName}
           </h2>
-          <p className="mt-2 max-w-3xl text-justify text-sm leading-6 text-[var(--ink-soft)]">
-            {selectedAction.objectives}
-          </p>
           {selectedAction.document ? (
             <a
               href={selectedAction.document.dropboxUrl}
@@ -212,10 +219,6 @@ function HeaderBlock() {
       <h2 className="heading-font text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
         Ações Pontuais Sanepar
       </h2>
-      <p className="mt-2 max-w-3xl text-justify text-sm leading-6 text-[var(--ink-soft)]">
-        Resultados de campanhas pontuais realizadas sob demanda serão exibidos após
-        registro manual no módulo Dados.
-      </p>
     </section>
   );
 }
@@ -259,7 +262,7 @@ function PointActionCard({
   const [expandedPhoto, setExpandedPhoto] = useState<PointActionSamplePoint["photos"][number] | null>(null);
 
   return (
-      <div className="space-y-4">
+    <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2 text-xs xl:grid-cols-4">
         <Info label="Data" value={point.dates} />
         <Info label="Município" value={point.municipality} />
@@ -342,7 +345,12 @@ function PointActionCard({
       </div>
 
       {expandedPhoto ? (
-        <PhotoDialog photo={expandedPhoto} onClose={() => setExpandedPhoto(null)} />
+        <PhotoDialog
+          photo={expandedPhoto}
+          photos={point.photos}
+          onClose={() => setExpandedPhoto(null)}
+          onNavigate={setExpandedPhoto}
+        />
       ) : null}
     </div>
   );
@@ -375,28 +383,79 @@ function PhotoThumb({ photoUrl, alt }: { photoUrl: string; alt: string }) {
 
 function PhotoDialog({
   photo,
+  photos,
   onClose,
+  onNavigate,
 }: {
   photo: PointActionSamplePoint["photos"][number];
+  photos: PointActionSamplePoint["photos"];
   onClose: () => void;
+  onNavigate: (photo: PointActionSamplePoint["photos"][number]) => void;
 }) {
+  const currentIndex = photos.indexOf(photo);
+
+  useEffect(() => {
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+      if (event.key === "ArrowRight" && currentIndex < photos.length - 1) {
+        onNavigate(photos[currentIndex + 1]);
+      }
+      if (event.key === "ArrowLeft" && currentIndex > 0) {
+        onNavigate(photos[currentIndex - 1]);
+      }
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onClose, onNavigate, currentIndex, photos]);
+
   const previewUrl = toDropboxPreviewUrl(photo.url);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
       <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[24px] bg-white shadow-[0_28px_90px_-24px_rgba(0,0,0,0.5)]">
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-            Foto da ação pontual
-          </p>
-          <button
-            type="button"
-            className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100"
-            onClick={onClose}
-            aria-label="Fechar foto"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-3">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+              Foto da ação pontual
+            </p>
+            {photos.length > 1 && (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">
+                {currentIndex + 1} / {photos.length}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            {photos.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  disabled={currentIndex === 0}
+                  onClick={() => onNavigate(photos[currentIndex - 1])}
+                  aria-label="Foto anterior"
+                  className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 disabled:opacity-30"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  disabled={currentIndex === photos.length - 1}
+                  onClick={() => onNavigate(photos[currentIndex + 1])}
+                  aria-label="Próxima foto"
+                  className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 disabled:opacity-30"
+                >
+                  ›
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100"
+              onClick={onClose}
+              aria-label="Fechar foto (Esc)"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-950/95 p-3">
           {previewUrl ? (

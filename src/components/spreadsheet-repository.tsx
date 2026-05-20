@@ -15,13 +15,70 @@ import {
   normalizeUserCategory,
   type UserCategory,
 } from "@/lib/access-control";
-import { PointActionEntryPanel } from "@/components/point-action-entry-panel";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 import type { SpreadsheetPreview } from "@/lib/types";
 
 type SpreadsheetKind = "Campo" | "Laboratório";
 type CampaignScope = "Ordinária" | "Extraordinária";
 type SheetStatus = "CARREGADA" | "PUBLICADA" | "PREVIEW" | "ERRO";
+
+export type DataEntryView = "campo" | "resultados";
+
+const VIEW_CONFIG: Record<
+  DataEntryView,
+  {
+    kind: SpreadsheetKind;
+    title: string;
+    description: string;
+    template?: {
+      href: string;
+      title: string;
+      description: string;
+    };
+    formHeading: string;
+    formDescription: string;
+    submitLabel: string;
+    metricsLabel: string;
+    metricTotalLabel: string;
+    showFieldMapToggle: boolean;
+    emptyTableLabel: string;
+  }
+> = {
+  campo: {
+    kind: "Campo",
+    title: "Entrada de Planilhas de Campo",
+    description:
+      "Planilha-síntese de campanhas agregada manualmente. O app usa essa fonte para mapas, pontos, rotas, fotos e figuras da campanha.",
+    template: {
+      href: "/template-planilha-de-campo.xlsx",
+      title: "Modelo da planilha-síntese de campanhas",
+      description:
+        "Estrutura esperada: aba Campanhas com SIA, ponto, dia, data, manancial, município, coordenadas, condições e links.",
+    },
+    formHeading: "Nova planilha de Campo",
+    formDescription:
+      "Importe a planilha-síntese da campanha. A publicação atualiza imediatamente mapas, rotas, painel do ponto e figuras.",
+    submitLabel: "Carregar planilha",
+    metricsLabel: "Campo",
+    metricTotalLabel: "Planilhas de Campo",
+    showFieldMapToggle: true,
+    emptyTableLabel: "Nenhuma planilha-síntese de Campo carregada para o filtro atual.",
+  },
+  resultados: {
+    kind: "Laboratório",
+    title: "Entrada de Planilhas de Resultados",
+    description:
+      "Planilhas laboratoriais agregadas manualmente. Estes dados alimentam as análises da aba Resultados Analíticos das Campanhas.",
+    formHeading: "Nova planilha de Resultados",
+    formDescription:
+      "Importe a planilha laboratorial da campanha. O registro fica disponível como preview até a publicação consolidada.",
+    submitLabel: "Carregar planilha",
+    metricsLabel: "Resultados",
+    metricTotalLabel: "Planilhas de Resultados",
+    showFieldMapToggle: false,
+    emptyTableLabel: "Nenhuma planilha de Resultados carregada para o filtro atual.",
+  },
+};
 
 type StoredSpreadsheet = {
   id: string;
@@ -65,9 +122,10 @@ const campaigns = [
   "8ª Campanha - Primavera 2027",
   "9ª Campanha - Verão 2028",
 ];
-const filters = ["Todos", "Ordinárias", "Extraordinárias", "Campo", "Laboratório"] as const;
+const filters = ["Todos", "Ordinárias", "Extraordinárias"] as const;
 
-export function SpreadsheetRepository() {
+export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView } = {}) {
+  const config = VIEW_CONFIG[view];
   const [spreadsheets, setSpreadsheets] = useState<StoredSpreadsheet[]>([]);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [activeFilter, setActiveFilter] = useState<(typeof filters)[number]>("Todos");
@@ -76,15 +134,23 @@ export function SpreadsheetRepository() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<UserCategory>("Administradores");
+  const [activeCategory, setActiveCategory] = useState<UserCategory>("Admin");
   const [formState, setFormState] = useState({
     campaign: campaigns[0],
     scope: "Ordinária" as CampaignScope,
-    kind: "Campo" as SpreadsheetKind,
+    kind: config.kind,
     extraordinaryName: "",
     note: "",
-    publishFieldMap: true,
+    publishFieldMap: view === "campo",
   });
+
+  useEffect(() => {
+    setFormState((current) => ({
+      ...current,
+      kind: config.kind,
+      publishFieldMap: view === "campo" ? current.publishFieldMap : false,
+    }));
+  }, [config.kind, view]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -121,35 +187,39 @@ export function SpreadsheetRepository() {
   const canImportSpreadsheets = hasPrivilege(activeCategory, "data.import");
   const canDeleteSpreadsheets = hasPrivilege(activeCategory, "data.delete");
 
+  const viewSpreadsheets = useMemo(
+    () => spreadsheets.filter((sheet) => sheet.kind === config.kind),
+    [config.kind, spreadsheets],
+  );
+
   const metrics = useMemo(() => {
     const ordinaryCampaigns = new Set(
-      spreadsheets
+      viewSpreadsheets
         .filter((sheet) => sheet.scope === "Ordinária")
         .map((sheet) => sheet.campaign),
     );
 
     return {
-      total: spreadsheets.length,
+      total: viewSpreadsheets.length,
       ordinary: ordinaryCampaigns.size,
-      extraordinary: spreadsheets.filter((sheet) => sheet.scope === "Extraordinária").length,
-      published: spreadsheets.filter((sheet) => sheet.status === "PUBLICADA").length,
+      extraordinary: viewSpreadsheets.filter((sheet) => sheet.scope === "Extraordinária").length,
+      published: viewSpreadsheets.filter((sheet) => sheet.status === "PUBLICADA").length,
     };
-  }, [spreadsheets]);
+  }, [viewSpreadsheets]);
 
   const visibleSpreadsheets = useMemo(() => {
     const normalizedSearch = normalize(searchTerm);
 
-    return spreadsheets.filter((sheet) => {
+    return viewSpreadsheets.filter((sheet) => {
       const matchesFilter =
         activeFilter === "Todos" ||
         (activeFilter === "Ordinárias" && sheet.scope === "Ordinária") ||
-        (activeFilter === "Extraordinárias" && sheet.scope === "Extraordinária") ||
-        sheet.kind === activeFilter;
+        (activeFilter === "Extraordinárias" && sheet.scope === "Extraordinária");
       const searchable = normalize(`${sheet.fileName} ${sheet.campaign} ${sheet.kind} ${sheet.status}`);
 
       return matchesFilter && searchable.includes(normalizedSearch);
     });
-  }, [activeFilter, searchTerm, spreadsheets]);
+  }, [activeFilter, searchTerm, viewSpreadsheets]);
 
   async function addSpreadsheet(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -288,7 +358,7 @@ export function SpreadsheetRepository() {
 
   function deleteSpreadsheet(sheet: StoredSpreadsheet) {
     if (!canDeleteSpreadsheets) {
-      setError("Apenas Administradores podem excluir planilhas do módulo Dados.");
+      setError("Apenas Admin pode excluir planilhas do módulo Dados.");
       return;
     }
 
@@ -309,12 +379,10 @@ export function SpreadsheetRepository() {
       <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="heading-font mb-1 text-2xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
-            Repositório de Planilhas de Dados
+            {config.title}
           </h2>
           <p className="max-w-3xl text-justify text-xs leading-5 text-slate-500">
-            As planilhas de Campo e Laboratório das 9 campanhas ordinárias e das
-            campanhas extraordinárias são agregadas manualmente. O app passa a ser
-            operado a partir desses arquivos curados.
+            {config.description}
           </p>
           <p className="mt-2 text-xs font-semibold text-slate-500">
             Categoria ativa:{" "}
@@ -330,12 +398,12 @@ export function SpreadsheetRepository() {
             Controle de importação
           </h3>
           <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
-            {spreadsheets.length} planilhas no painel
+            {viewSpreadsheets.length} planilhas de {config.metricsLabel} no painel
           </span>
         </div>
 
         <div className="grid gap-3 md:grid-cols-4">
-          <MetricTile label="Planilhas" value={metrics.total} />
+          <MetricTile label={config.metricTotalLabel} value={metrics.total} />
           <MetricTile label="Campanhas ordinárias" value={`${metrics.ordinary}/9`} />
           <MetricTile label="Extraordinárias" value={metrics.extraordinary} />
           <MetricTile label="Publicadas" value={metrics.published} />
@@ -349,15 +417,14 @@ export function SpreadsheetRepository() {
               Carga manual
             </span>
             <h3 className="heading-font text-lg font-extrabold text-[var(--brand-navy-strong)]">
-              Nova planilha da campanha
+              {config.formHeading}
             </h3>
             <p className="mt-1 max-w-2xl text-justify text-xs leading-5 text-slate-500">
-              Este registro é usado para planilhas de Campo e Laboratório. O mapa da
-              campanha pode ser atualizado imediatamente por planilhas de Campo.
+              {config.formDescription}
             </p>
             {!canImportSpreadsheets ? (
               <p className="mt-3 rounded-lg bg-[rgba(197,122,0,0.08)] px-3 py-2 text-xs font-semibold text-[var(--brand-amber)]">
-                Importação bloqueada para a categoria ativa. Altere para Administradores ou Sanepar em Configurações.
+                Importação bloqueada para a categoria ativa. Altere para Admin ou Sanepar em Configurações.
               </p>
             ) : null}
           </div>
@@ -366,9 +433,35 @@ export function SpreadsheetRepository() {
           </div>
         </div>
 
+        {config.template ? (
+          <div className="mb-3 flex flex-col gap-3 rounded-2xl bg-[var(--surface-soft)] p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="rounded-xl bg-white p-2 text-[var(--brand-blue)]">
+                <FileSpreadsheet className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-[var(--brand-navy-strong)]">
+                  {config.template.title}
+                </p>
+                <p className="text-xs leading-5 text-slate-500">
+                  {config.template.description}
+                </p>
+              </div>
+            </div>
+            <a
+              href={config.template.href}
+              download
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[var(--brand-navy-strong)] px-4 py-2 text-xs font-bold text-white transition hover:bg-[var(--brand-navy)]"
+            >
+              <Download className="h-4 w-4" />
+              Baixar template
+            </a>
+          </div>
+        ) : null}
+
         <form className="grid gap-2 lg:grid-cols-6" onSubmit={addSpreadsheet}>
           <select
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
+            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs lg:col-span-1"
             value={formState.scope}
             disabled={!canImportSpreadsheets || isPending}
             onChange={(event) =>
@@ -383,7 +476,7 @@ export function SpreadsheetRepository() {
           </select>
           {formState.scope === "Ordinária" ? (
             <select
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs lg:col-span-2"
+              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs lg:col-span-2"
               value={formState.campaign}
               disabled={!canImportSpreadsheets || isPending}
               onChange={(event) =>
@@ -398,7 +491,7 @@ export function SpreadsheetRepository() {
             </select>
           ) : (
             <input
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs lg:col-span-2"
+              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs lg:col-span-2"
               placeholder="Nome da campanha extraordinária"
               value={formState.extraordinaryName}
               disabled={!canImportSpreadsheets || isPending}
@@ -410,23 +503,21 @@ export function SpreadsheetRepository() {
               }
             />
           )}
-          <select
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
-            value={formState.kind}
+          <div className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[var(--brand-navy-strong)] lg:col-span-1">
+            Tipo: <span className="font-bold">{config.kind}</span>
+          </div>
+          <input
+            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs lg:col-span-2"
+            placeholder="Observação operacional"
+            value={formState.note}
             disabled={!canImportSpreadsheets || isPending}
             onChange={(event) =>
-              setFormState((current) => ({
-                ...current,
-                kind: event.target.value as SpreadsheetKind,
-              }))
+              setFormState((current) => ({ ...current, note: event.target.value }))
             }
-          >
-            <option value="Campo">Campo</option>
-            <option value="Laboratório">Laboratório</option>
-          </select>
-          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs lg:col-span-2">
-            <UploadCloud className="h-4 w-4 text-[var(--brand-navy)]" />
-            <span className="min-w-0 flex-1 truncate">
+          />
+          <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[var(--brand-navy)]/40 bg-[var(--surface-soft)] px-3 text-xs font-bold text-[var(--brand-navy-strong)] transition hover:border-[var(--brand-navy)] hover:bg-[var(--brand-blue-soft)] lg:col-span-2">
+            <UploadCloud className="h-4 w-4 shrink-0 text-[var(--brand-navy)]" />
+            <span className="min-w-0 flex-1 truncate text-center">
               {selectedFileName ?? "Selecionar planilha"}
             </span>
             <input
@@ -440,36 +531,30 @@ export function SpreadsheetRepository() {
               }
             />
           </label>
-          <input
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs lg:col-span-4"
-            placeholder="Observação operacional"
-            value={formState.note}
-            disabled={!canImportSpreadsheets || isPending}
-            onChange={(event) =>
-              setFormState((current) => ({ ...current, note: event.target.value }))
-            }
-          />
-          <label className="flex items-center gap-2 rounded-lg bg-[var(--surface-soft)] px-3 py-2 text-xs font-semibold text-[var(--brand-navy-strong)]">
-            <input
-              type="checkbox"
-              checked={formState.publishFieldMap}
-              disabled={!canImportSpreadsheets || isPending || formState.kind !== "Campo"}
-              onChange={(event) =>
-                setFormState((current) => ({
-                  ...current,
-                  publishFieldMap: event.target.checked,
-                }))
-              }
-              className="h-4 w-4 rounded border-slate-300 text-[var(--brand-navy-strong)]"
-            />
-            Mapa será atualizado
-          </label>
+          {config.showFieldMapToggle ? (
+            <label className="flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[var(--brand-navy-strong)] lg:col-span-2">
+              <input
+                type="checkbox"
+                checked={formState.publishFieldMap}
+                disabled={!canImportSpreadsheets || isPending}
+                onChange={(event) =>
+                  setFormState((current) => ({
+                    ...current,
+                    publishFieldMap: event.target.checked,
+                  }))
+                }
+                className="h-4 w-4 shrink-0 rounded border-slate-300 text-[var(--brand-navy-strong)]"
+              />
+              Mapa será atualizado
+            </label>
+          ) : null}
           <button
             type="submit"
             disabled={isPending || !canImportSpreadsheets}
-            className="rounded-lg bg-[var(--brand-navy-strong)] px-4 py-2 text-xs font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex h-10 items-center justify-center gap-2 rounded-lg bg-[var(--brand-navy-strong)] px-4 text-xs font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 lg:col-span-2"
           >
-            {isPending ? "Carregando..." : "Planilha será agregada"}
+            <UploadCloud className="h-4 w-4" />
+            {isPending ? "Carregando..." : config.submitLabel}
           </button>
         </form>
 
@@ -484,8 +569,6 @@ export function SpreadsheetRepository() {
           </p>
         ) : null}
       </section>
-
-      <PointActionEntryPanel canImport={canImportSpreadsheets} />
 
       <section className="space-y-6">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
@@ -604,7 +687,7 @@ export function SpreadsheetRepository() {
 
           {!visibleSpreadsheets.length ? (
             <div className="px-6 py-10 text-center text-sm text-slate-500">
-              Nenhuma planilha encontrada para o filtro atual.
+              {config.emptyTableLabel}
             </div>
           ) : null}
         </div>

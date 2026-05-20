@@ -1,5 +1,5 @@
-import { SpreadsheetRepository } from "@/components/spreadsheet-repository";
+import { redirect } from "next/navigation";
 
-export default function DadosPage() {
-  return <SpreadsheetRepository />;
+export default function DadosIndexPage() {
+  redirect("/dados/campo");
 }

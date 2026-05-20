@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useDeferredValue, useState } from "react";
+import { startTransition, useDeferredValue, useRef, useState } from "react";
 import Link from "next/link";
 import {
   CheckCircle2,
@@ -55,8 +55,35 @@ export function ImportPreviewForm({ kind = "field" }: ImportPreviewFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [isPending, setIsPending] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const deferredPreview = useDeferredValue(preview);
+
+  function applyFile(file: File) {
+    setSelectedFileName(file.name);
+    if (fileInputRef.current) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      fileInputRef.current.files = dt.files;
+    }
+  }
+
+  function handleDragOver(event: React.DragEvent) {
+    event.preventDefault();
+    setIsDragging(true);
+  }
+
+  function handleDragLeave() {
+    setIsDragging(false);
+  }
+
+  function handleDrop(event: React.DragEvent) {
+    event.preventDefault();
+    setIsDragging(false);
+    const file = event.dataTransfer.files[0];
+    if (file) applyFile(file);
+  }
   const copy = importCopy[kind];
   const inputId = `import-file-${kind}`;
 
@@ -144,8 +171,15 @@ export function ImportPreviewForm({ kind = "field" }: ImportPreviewFormProps) {
     <div className="space-y-5">
       <form className="space-y-4" onSubmit={handleSubmit}>
         <label
-          className="block rounded-[24px] border border-[var(--line-ghost)] bg-[var(--surface-soft)] p-5 text-sm text-[var(--ink-soft)]"
+          className={`block rounded-[24px] border-2 p-5 text-sm text-[var(--ink-soft)] transition-colors ${
+            isDragging
+              ? "border-[var(--brand-blue)] bg-[var(--brand-blue-soft)]"
+              : "border-dashed border-[var(--line-strong)] bg-[var(--surface-soft)]"
+          }`}
           htmlFor={inputId}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
         >
           <span className="mb-2 block font-semibold text-[var(--brand-navy-strong)]">
             {copy.title}
@@ -156,21 +190,23 @@ export function ImportPreviewForm({ kind = "field" }: ImportPreviewFormProps) {
           <span className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-white p-3 shadow-[0_18px_40px_-34px_rgba(0,66,98,0.18)]">
             <span className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-navy-strong)] px-5 py-3 text-sm font-bold text-white transition hover:brightness-105">
               <UploadCloud className="h-4 w-4" />
-              Planilha será selecionada
+              {isDragging ? "Solte aqui" : "Selecionar planilha"}
             </span>
             <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--ink-soft)]">
-            {selectedFileName ?? "Nenhuma planilha selecionada"}
+              {selectedFileName ?? "Arraste um arquivo .xlsx ou clique para selecionar"}
             </span>
           </span>
           <input
+            ref={fileInputRef}
             id={inputId}
             name="file"
             type="file"
             accept=".xlsx,.xlsm"
             className="sr-only"
-            onChange={(event) =>
-              setSelectedFileName(event.currentTarget.files?.[0]?.name ?? null)
-            }
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              if (file) setSelectedFileName(file.name);
+            }}
           />
         </label>
 

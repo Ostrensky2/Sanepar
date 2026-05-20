@@ -18,9 +18,6 @@ export default async function PontosPage() {
           <h2 className="heading-font text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
             Tabela da planilha de campo
           </h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--ink-soft)]">
-            Os registros abaixo vêm da última planilha de Campo publicada no módulo Dados.
-          </p>
         </div>
 
         <div className="rounded-[18px] border border-[var(--line-ghost)] bg-white px-4 py-3 text-xs font-semibold text-slate-500 shadow-[0_18px_46px_-38px_rgba(0,66,98,0.38)]">

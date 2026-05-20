@@ -1,4 +1,5 @@
 export const APP_DOCUMENTS_STORAGE_KEY = "yvae:attached-documents";
+export const APP_DOCUMENTS_CLOUD_MIGRATION_KEY = "yvae:attached-documents-cloud-migrated";
 
 export type DocumentType =
   | "Plano de trabalho"
@@ -15,6 +16,7 @@ export type StoredDocument = {
   campaign: string;
   point: string;
   date: string;
+  updatedAt?: string;
   type: DocumentType;
   status: string;
   source: "link";
@@ -84,7 +86,7 @@ function dedupeDocuments(documents: StoredDocument[]) {
   });
 }
 
-function normalizeStoredDocument(value: unknown): StoredDocument | null {
+export function normalizeStoredDocument(value: unknown): StoredDocument | null {
   if (!value || typeof value !== "object") {
     return null;
   }
@@ -106,10 +108,29 @@ function normalizeStoredDocument(value: unknown): StoredDocument | null {
     campaign: String(candidate.campaign ?? "Documento inserido"),
     point: String(candidate.point ?? "Repositório oficial"),
     date: String(candidate.date ?? ""),
+    updatedAt: String(candidate.updatedAt ?? candidate.date ?? ""),
     type: filterTabs.includes(candidate.type as DocumentType)
       ? (candidate.type as DocumentType)
       : "Relatórios",
     status,
     source: "link",
   };
+}
+
+export function normalizeStoredDocuments(value: unknown) {
+  return Array.isArray(value)
+    ? dedupeDocuments(
+        value
+          .map(normalizeStoredDocument)
+          .filter((document): document is StoredDocument => document !== null)
+          .filter(isDocumentAllowedInRepository),
+      )
+    : [];
+}
+
+export function mergeStoredDocuments(
+  primaryDocuments: StoredDocument[],
+  secondaryDocuments: StoredDocument[],
+) {
+  return dedupeDocuments([...primaryDocuments, ...secondaryDocuments]);
 }

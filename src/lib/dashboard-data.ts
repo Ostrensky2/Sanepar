@@ -1,6 +1,12 @@
 import bundledCampaignMapPoints from "@/data/campaign-map-points.json";
-import { type CampaignMapPoint } from "@/lib/imports/campaigns";
+import {
+  readCampaignWorkbookFromPath,
+  type CampaignMapPoint,
+} from "@/lib/imports/campaigns";
 import { getLatestPublishedCampaignImport } from "@/lib/supabase";
+
+const CAMPAIGN_SYNTHESIS_WORKBOOK_PATH =
+  "D:/Dropbox/Sanepar_única/Campo/Campanhas/Campanhas_ Planilha sintese.xlsx";
 
 export type DashboardData = {
   campaignPoints: CampaignMapPoint[];
@@ -144,6 +150,19 @@ async function loadCampaignImport() {
       points: publishedImport.points,
       rowCount: publishedImport.row_count,
       source: `Supabase / ${publishedImport.file_name}`,
+    };
+  }
+
+  const synthesisImport = await readCampaignWorkbookFromPath(
+    CAMPAIGN_SYNTHESIS_WORKBOOK_PATH,
+    "Campanhas_ Planilha sintese.xlsx",
+  ).catch(() => null);
+
+  if (synthesisImport?.points.length) {
+    return {
+      points: synthesisImport.points,
+      rowCount: synthesisImport.rowCount,
+      source: CAMPAIGN_SYNTHESIS_WORKBOOK_PATH,
     };
   }
 

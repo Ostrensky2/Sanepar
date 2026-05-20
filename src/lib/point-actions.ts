@@ -82,7 +82,7 @@ export async function readPointActions() {
     }
 
     if (localActions.length) {
-      await writePointActions(localActions);
+      await writePointActionsToCloud(localActions);
       return localActions;
     }
 
@@ -98,7 +98,10 @@ function cachePointActionsInStorage(actions: PointActionEvent[]) {
 
 export async function writePointActions(actions: PointActionEvent[]) {
   writePointActionsToStorage(actions);
+  return writePointActionsToCloud(actions);
+}
 
+async function writePointActionsToCloud(actions: PointActionEvent[]) {
   try {
     const response = await fetch("/api/point-actions", {
       method: "PUT",

@@ -40,12 +40,22 @@ type BackupHistoryItem = {
   downloadable: boolean;
 };
 
+const CLOUD_RESTORE_REQUESTS_STORAGE_KEY = "yvae:cloud-restore-requests";
+
 type OperationLogEntry = {
   timestamp: string;
   operation: string;
   status: "ok" | "erro";
   message: string;
   error?: string;
+};
+
+type CloudRestoreRequest = {
+  id: string;
+  createdAt: string;
+  backupLabel: string;
+  backupPath: string;
+  status: "pendente";
 };
 
 type BackupResponse = {
@@ -86,6 +96,9 @@ export function LocalBackupPanel({
   const [result, setResult] = useState<BackupResponse | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [modalInput, setModalInput] = useState("");
+  const [cloudRestoreRequests, setCloudRestoreRequests] = useState<CloudRestoreRequest[]>(() =>
+    readCloudRestoreRequests(),
+  );
 
   const refreshHistory = useCallback(async () => {
     if (!enabled) {
@@ -124,6 +137,22 @@ export function LocalBackupPanel({
 
   const manualDbBackups = useMemo(
     () => backups.filter((backup) => backup.type === "manual-db"),
+    [backups],
+  );
+  const latestAppBackup = useMemo(
+    () => backups.find((backup) => backup.type === "manual-app"),
+    [backups],
+  );
+  const latestDailyBackup = useMemo(
+    () => backups.find((backup) => backup.type === "diario"),
+    [backups],
+  );
+  const latestCloudRestoreSource = useMemo(
+    () => backups.find((backup) => backup.type === "diario") ?? backups.find((backup) => backup.type === "mensal"),
+    [backups],
+  );
+  const retainedMonthlyCount = useMemo(
+    () => backups.filter((backup) => backup.type === "mensal").length,
     [backups],
   );
   const latestDailyBackups = useMemo(
@@ -222,9 +251,27 @@ export function LocalBackupPanel({
     }
   }
 
+  async function createCloudRestoreRequest(backup: BackupHistoryItem | undefined) {
+    if (!backup) {
+      throw new Error("Nenhum backup local disponível para solicitar restauração na nuvem.");
+    }
+
+    const request: CloudRestoreRequest = {
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      backupLabel: backup.label,
+      backupPath: backup.path,
+      status: "pendente",
+    };
+    const nextRequests = [request, ...cloudRestoreRequests].slice(0, 20);
+
+    setCloudRestoreRequests(nextRequests);
+    writeCloudRestoreRequests(nextRequests);
+  }
+
   if (mode === "settings") {
     return (
-      <div className="space-y-5">
+      <div className="space-y-4">
         {!enabled ? (
           <StatusMessage
             tone="error"
@@ -232,59 +279,161 @@ export function LocalBackupPanel({
           />
         ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <ActionCard
+        <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-4">
+          <BackupOverviewCard
             icon={CloudUpload}
-            title="Backup local do app"
-            description="Salva manualmente a versão atual do aplicativo no computador local."
-            detail={`Destino: ${targetRoot}`}
-            disabled={!enabled || isPending}
-            buttonLabel="Salvar app"
-            onClick={() =>
-              confirmAction({
-                title: "Salvar app",
-                message: `A versão atual do aplicativo será salva em ${targetRoot}.`,
-                confirmLabel: "Salvar app",
-                run: () => postBackupAction("app"),
-              })
-            }
+            title="Backup manual do app"
+            badge="Manual"
+            stats={[
+              ["Último backup", latestAppBackup ? formatDateTime(latestAppBackup.date) : "Nunca"],
+              ["Status", "Gerenciado no localhost"],
+              ["Tamanho", latestAppBackup ? formatBytes(latestAppBackup.sizeBytes) : "---"],
+              ["Backups retidos", String(backups.filter((backup) => backup.type === "manual-app").length)],
+            ]}
+            details={[
+              `Local: ${targetRoot}`,
+              "Arquivo atual: versão em execução",
+              "Política: acionamento sempre manual a partir do localhost.",
+            ]}
+            actions={[
+              {
+                label: "Gerar backup do app",
+                disabled: !enabled || isPending,
+                onClick: () =>
+                  confirmAction({
+                    title: "Salvar app",
+                    message: `A versão atual do aplicativo será salva em ${targetRoot}.`,
+                    confirmLabel: "Salvar app",
+                    run: () => postBackupAction("app"),
+                  }),
+              },
+            ]}
           />
 
-          <ActionCard
+          <BackupOverviewCard
             icon={FileArchive}
-            title="Backup automático do BD"
-            description="Rotina diária do banco de dados sincronizada pela pasta do Dropbox."
-            detail={`Destino: ${dailyRoot}`}
-            disabled={!enabled || isPending}
-            buttonLabel="Executar agora"
-            onClick={() =>
-              confirmAction({
-                title: "Executar auto backup",
-                message: `A rotina automática diária do banco de dados será executada agora em ${dailyRoot}.`,
-                confirmLabel: "Executar",
-                run: () => postBackupAction("daily"),
-              })
-            }
+            title="Backup do BD a partir da nuvem"
+            badge="Automático"
+            stats={[
+              ["Último backup", latestDailyBackup ? formatDateTime(latestDailyBackup.date) : "Nunca"],
+              ["Horário", "12:15"],
+              ["Retenção", "Dias 01 e 15"],
+              ["Mensais retidos", String(retainedMonthlyCount)],
+            ]}
+            details={[
+              `Diários: ${dailyRoot}`,
+              `Mensais: ${monthlyRoot}`,
+              "Política: ao final do mês, apenas os dias 01 e 15 são movidos para Mensais; os demais são apagados.",
+            ]}
+            actions={[
+              {
+                label: "Rodar backup do BD",
+                disabled: !enabled || isPending,
+                onClick: () =>
+                  confirmAction({
+                    title: "Executar auto backup",
+                    message: `A rotina automática diária do banco de dados será executada agora em ${dailyRoot}.`,
+                    confirmLabel: "Executar",
+                    run: () => postBackupAction("daily"),
+                  }),
+              },
+            ]}
           />
 
-          <ActionCard
-            icon={ShieldCheck}
-            title="Retenção"
-            description="Arquiva mensais e remove diários antigos."
-            detail={`Mensais: ${monthlyRoot}`}
-            disabled={!enabled || isPending}
-            buttonLabel="Aplicar retenção"
-            onClick={() =>
-              confirmAction({
-                title: "Aplicar retenção",
-                message: "Backups diários antigos serão organizados pela política mensal.",
-                confirmLabel: "Aplicar",
+          <BackupOverviewCard
+            icon={RotateCcw}
+            title="Restauração do BD na nuvem"
+            badge="Request"
+            tone="danger"
+            stats={[
+              ["Origem local", latestCloudRestoreSource?.label ?? "Sem backup"],
+              ["Requests", String(cloudRestoreRequests.length)],
+              ["Status", cloudRestoreRequests[0]?.status ?? "---"],
+              ["Última request", cloudRestoreRequests[0] ? formatDateTime(cloudRestoreRequests[0].createdAt) : "Nenhuma"],
+            ]}
+            details={[
+              "Cria request explícita para restauração cloud.",
+              "Exige validação prévia do dump local.",
+              latestCloudRestoreSource ? `Backup selecionado: ${latestCloudRestoreSource.path}` : "Nenhum backup diário/mensal encontrado.",
+            ]}
+            actions={[
+              {
+                label: "Criar request de restauração",
+                disabled: !enabled || isPending || !latestCloudRestoreSource,
                 danger: true,
-                run: () => postBackupAction("cleanup"),
-              })
-            }
+                onClick: () =>
+                  confirmAction({
+                    title: "Criar request de restauração na nuvem",
+                    message:
+                      "Esta ação registra uma solicitação de restauração do BD na nuvem a partir do backup local mais recente. Digite RESTAURAR NUVEM para confirmar.",
+                    inputLabel: "Confirmação",
+                    requiredInput: "RESTAURAR NUVEM",
+                    confirmLabel: "Criar request",
+                    danger: true,
+                    run: () => createCloudRestoreRequest(latestCloudRestoreSource),
+                  }),
+              },
+            ]}
+          />
+
+          <BackupOverviewCard
+            icon={ShieldCheck}
+            title="Retenção dos backups"
+            badge="Mensal"
+            stats={[
+              ["Política", "Dias 01 e 15"],
+              ["Mensais", String(retainedMonthlyCount)],
+              ["Diários", String(latestDailyBackups.length)],
+              ["Destino", "Mensais"],
+            ]}
+            details={[
+              `Origem: ${dailyRoot}`,
+              `Destino: ${monthlyRoot}`,
+              "Ao fechar o mês, os dias 01 e 15 são movidos para Mensais; os demais backups diários são apagados.",
+            ]}
+            actions={[
+              {
+                label: "Aplicar retenção",
+                disabled: !enabled || isPending,
+                danger: true,
+                onClick: () =>
+                  confirmAction({
+                    title: "Aplicar retenção",
+                    message:
+                      "Backups diários de meses fechados serão organizados: dias 01 e 15 vão para Mensais; os demais serão apagados.",
+                    confirmLabel: "Aplicar",
+                    danger: true,
+                    run: () => postBackupAction("cleanup"),
+                  }),
+              },
+            ]}
           />
         </div>
+
+        <section className="rounded-xl border border-[var(--line-ghost)] bg-white/70 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-black text-[var(--brand-navy-strong)]">
+                Automação do backup
+              </p>
+              <p className="mt-1 text-xs text-[var(--ink-soft)]">
+                Rotina diária do BD e retenção mensal.
+              </p>
+            </div>
+            <span className="rounded-lg bg-[var(--surface-soft)] px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[var(--brand-navy-strong)]">
+              {enabled ? "Host operacional" : "Somente leitura"}
+            </span>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            <MiniStat label="Status da automação" value={enabled ? "Ativa no localhost" : "Bloqueada"} />
+            <MiniStat label="Modo de execução" value="Host local" />
+            <MiniStat label="Tarefa diária" value="12:15" />
+            <MiniStat label="Retenção mensal" value="Dias 01 e 15" />
+          </div>
+          <div className="mt-4 rounded-xl border border-[var(--line-ghost)] bg-white p-3 text-xs leading-5 text-[var(--ink-soft)]">
+            O app agenda o backup automático do BD uma vez ao dia às 12:15. O backup do APP permanece manual e só é executado pelo localhost.
+          </div>
+        </section>
 
         {isPending ? (
           <StatusMessage tone="info" message="Operação em andamento..." />
@@ -297,10 +446,10 @@ export function LocalBackupPanel({
           />
         ) : null}
 
-        <section className="rounded-[24px] bg-[var(--surface-soft)] p-5">
+        <section className="rounded-xl bg-[var(--surface-soft)] p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="heading-font text-base font-bold text-[var(--brand-navy-strong)]">
+              <p className="text-sm font-black text-[var(--brand-navy-strong)]">
                 Últimos 5 auto backups do BD
               </p>
               <p className="mt-1 text-xs text-[var(--ink-soft)]">
@@ -310,7 +459,7 @@ export function LocalBackupPanel({
             <button
               type="button"
               onClick={() => void refreshHistory()}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--line-strong)] bg-white text-[var(--brand-navy-strong)]"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--line-strong)] bg-white text-[var(--brand-navy-strong)]"
               aria-label="Atualizar histórico"
               title="Atualizar histórico"
             >
@@ -690,6 +839,98 @@ type ActionCardProps = {
   onClick: () => void;
 };
 
+type BackupOverviewCardProps = {
+  icon: LucideIcon;
+  title: string;
+  badge: string;
+  tone?: "default" | "danger";
+  stats: Array<[string, string]>;
+  details: string[];
+  actions: Array<{
+    label: string;
+    disabled: boolean;
+    danger?: boolean;
+    onClick: () => void;
+  }>;
+};
+
+function BackupOverviewCard({
+  icon: Icon,
+  title,
+  badge,
+  tone = "default",
+  stats,
+  details,
+  actions,
+}: BackupOverviewCardProps) {
+  return (
+    <article className="rounded-xl border border-[var(--line-ghost)] bg-white/76 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className={
+            tone === "danger"
+              ? "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-[var(--brand-danger)]"
+              : "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[rgba(255,105,0,0.1)] text-[#e25f00]"
+          }>
+            <Icon className="h-4 w-4" />
+          </div>
+          <h3 className="text-sm font-black leading-5 text-[var(--brand-navy-strong)]">
+            {title}
+          </h3>
+        </div>
+        <span className={
+          tone === "danger"
+            ? "rounded-lg bg-red-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-[var(--brand-danger)]"
+            : "rounded-lg bg-[var(--brand-navy-strong)] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-white"
+        }>
+          {badge}
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        {stats.map(([label, value]) => (
+          <MiniStat key={label} label={label} value={value} />
+        ))}
+      </div>
+
+      <div className="mt-3 space-y-1 text-xs leading-5 text-[var(--ink-soft)]">
+        {details.map((detail) => (
+          <p key={detail} className="truncate">{detail}</p>
+        ))}
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {actions.map((action) => (
+          <button
+            key={action.label}
+            type="button"
+            disabled={action.disabled}
+            onClick={action.onClick}
+            className={
+              action.danger
+                ? "h-9 rounded-xl border border-[var(--line-strong)] bg-white px-3 text-xs font-bold text-[var(--brand-danger)] disabled:cursor-not-allowed disabled:opacity-50"
+                : "h-9 rounded-xl bg-[var(--brand-teal)] px-3 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            }
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-[var(--line-ghost)] bg-white/78 px-3 py-2">
+      <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[var(--ink-soft)]">
+        {label}
+      </p>
+      <p className="mt-1 truncate text-sm font-black text-[var(--brand-navy-strong)]">{value}</p>
+    </div>
+  );
+}
+
 function ActionCard({
   icon: Icon,
   title,
@@ -825,10 +1066,16 @@ function backupTypeLabel(type: BackupType) {
 }
 
 function formatDateTime(value: string) {
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return value || "---";
+  }
+
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
     timeStyle: "short",
-  }).format(new Date(value));
+  }).format(parsed);
 }
 
 function formatBytes(value: number) {
@@ -841,4 +1088,32 @@ function formatBytes(value: number) {
   const amount = value / 1024 ** index;
 
   return `${amount.toFixed(amount >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+function readCloudRestoreRequests() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(CLOUD_RESTORE_REQUESTS_STORAGE_KEY) ?? "[]");
+
+    return Array.isArray(parsed) ? parsed.filter(isCloudRestoreRequest) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCloudRestoreRequests(requests: CloudRestoreRequest[]) {
+  window.localStorage.setItem(CLOUD_RESTORE_REQUESTS_STORAGE_KEY, JSON.stringify(requests));
+}
+
+function isCloudRestoreRequest(value: unknown): value is CloudRestoreRequest {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<CloudRestoreRequest>;
+
+  return Boolean(candidate.id && candidate.createdAt && candidate.backupLabel && candidate.backupPath);
 }

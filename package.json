@@ -1,9 +1,12 @@
 {
   "name": "yvae-monitoramento",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
+    "sync:version": "node scripts/update-app-version.mjs",
+    "predev": "npm run sync:version",
     "dev": "next dev",
+    "prebuild": "npm run sync:version",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

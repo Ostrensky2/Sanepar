@@ -12,8 +12,14 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { AccessManagementPanel } from "@/components/access-management-panel";
+import { BuildSyncDiagnostics } from "@/components/build-sync-diagnostics";
 import { LocalBackupPanel } from "@/components/local-backup-panel";
+import { MemberActivityPanel } from "@/components/member-activity-panel";
 import { StatusChip } from "@/components/status-chip";
+import { SystemDiagnosticsPanel } from "@/components/system-diagnostics-panel";
+import { APP_VERSION_LABEL } from "@/lib/app-version";
+import { getServerAccessContext } from "@/lib/access-control-server";
+import { loadDashboardData } from "@/lib/dashboard-data";
 import {
   APP_BACKUP_TARGET_ROOT,
   DAILY_BACKUP_TARGET_ROOT,
@@ -23,86 +29,120 @@ import {
 import { getCloudRuntimeMode } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
-export default function GovernancaPage() {
+export default async function GovernancaPage() {
+  const access = await getServerAccessContext();
+
+  if (!access.can("settings.manage")) {
+    return null;
+  }
+
   const cloudMode = getCloudRuntimeMode();
   const backupEnabled = isLocalBackupUiAvailable();
+  const { campaignSummary, pointSummary } = await loadDashboardData();
+  const canViewUsers = access.can("users.manage");
+  const canViewBackups = access.can("backups.manage");
+  const canViewBuildSync = access.can("settings.buildSync");
+  const canViewActivity = access.can("settings.activity");
+  const canViewPermissions = access.can("permissions.manage");
+  const canViewRules = access.can("settings.rules");
+  const canViewDiagnostics = access.can("settings.diagnostics");
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-5">
+    <div className="mx-auto max-w-[1600px] space-y-5">
+      <header className="rounded-2xl border border-[var(--line-ghost)] bg-white/90 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="heading-font text-2xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
+              <h1 className="heading-font text-xl font-black tracking-tight text-[var(--brand-navy-strong)]">
               Configurações do Sistema
             </h1>
-            <span className="rounded-full border border-[rgba(186,26,26,0.2)] bg-[rgba(186,26,26,0.08)] px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-[var(--brand-danger)]">
+              <span className="rounded-full border border-[rgba(186,26,26,0.2)] bg-[rgba(186,26,26,0.08)] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[var(--brand-danger)]">
               Master
             </span>
           </div>
-          <p className="mt-2 text-sm text-[var(--ink-soft)]">
-            Manutenção, segurança, backups e auditoria local.
+            <p className="mt-1 text-xs text-[var(--ink-soft)]">
+              Operação, acesso, backups e diagnóstico do ambiente.
           </p>
         </div>
-        <button className="inline-flex items-center gap-2 rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-sm font-bold text-[var(--brand-navy-strong)] shadow-sm">
+          <button className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--line-strong)] bg-white px-4 text-sm font-bold text-[var(--brand-navy-strong)] shadow-sm">
           <RefreshCw className="h-4 w-4" />
           Atualizar
         </button>
+        </div>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <ControlStat
-          label="Backup local"
-          value={backupEnabled ? "Ativo" : "Host local"}
-          icon={HardDrive}
-          tone="teal"
-        />
-        <ControlStat label="Auto backup BD" value="Diário" icon={TimerReset} tone="blue" />
-        <ControlStat label="Acesso" value="Gerenciado" icon={ShieldCheck} tone="violet" />
-        <ControlStat
-          label="Runtime"
-          value={cloudMode === "nuvem pronta" ? "Nuvem pronta" : "Local"}
-          icon={CloudCog}
-          tone="amber"
-        />
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {canViewBackups ? (
+          <>
+            <ControlStat
+              label="Backup local"
+              value={backupEnabled ? "Ativo" : "Host local"}
+              icon={HardDrive}
+              tone="teal"
+            />
+            <ControlStat label="Auto backup BD" value="Diário" icon={TimerReset} tone="blue" />
+          </>
+        ) : null}
+        {canViewPermissions || canViewUsers ? (
+          <ControlStat label="Acesso" value="Gerenciado" icon={ShieldCheck} tone="violet" />
+        ) : null}
+        {canViewBuildSync || canViewDiagnostics ? (
+          <ControlStat
+            label="Runtime"
+            value={cloudMode === "nuvem pronta" ? "Nuvem pronta" : "Local"}
+            icon={CloudCog}
+            tone="amber"
+          />
+        ) : null}
       </div>
 
-      <SettingsPanel
-        icon={DatabaseBackup}
-        tone="orange"
-        title="Painel de backups"
-        description="Visão operacional do aplicativo e do banco de dados."
-        aside={
-          <div className="flex flex-wrap gap-2">
-            <StatusChip label={backupEnabled ? "localhost liberado" : "somente leitura"} tone={backupEnabled ? "success" : "warning"} />
-            <StatusChip label="BD automático" tone="primary" />
-          </div>
-        }
-      >
-        <LocalBackupPanel
-          enabled={backupEnabled}
-          targetRoot={APP_BACKUP_TARGET_ROOT}
-          dailyRoot={DAILY_BACKUP_TARGET_ROOT}
-          monthlyRoot={MONTHLY_BACKUP_TARGET_ROOT}
-          mode="settings"
-        />
-      </SettingsPanel>
+      {canViewUsers ? <AccessManagementPanel sections={["people"]} /> : null}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
+      {canViewBackups ? (
+        <SettingsPanel
+          icon={DatabaseBackup}
+          tone="orange"
+          title="Backups"
+          description="App manual, BD automático, retenção e restauração."
+          aside={
+            <div className="flex flex-wrap gap-2">
+              <StatusChip label={backupEnabled ? "localhost liberado" : "somente leitura"} tone={backupEnabled ? "success" : "warning"} />
+              <StatusChip label="BD automático" tone="primary" />
+            </div>
+          }
+        >
+          <LocalBackupPanel
+            enabled={backupEnabled}
+            targetRoot={APP_BACKUP_TARGET_ROOT}
+            dailyRoot={DAILY_BACKUP_TARGET_ROOT}
+            monthlyRoot={MONTHLY_BACKUP_TARGET_ROOT}
+            mode="settings"
+          />
+        </SettingsPanel>
+      ) : null}
+
+      {canViewBuildSync ? <BuildSyncDiagnostics cloudMode={cloudMode} localEnabled={backupEnabled} /> : null}
+
+      {canViewActivity ? <MemberActivityPanel /> : null}
+
+      {canViewPermissions ? (
         <SettingsPanel
           icon={LockKeyhole}
           tone="violet"
-          title="Gerenciamento de acesso"
-          description="Controle quem pode entrar e o que cada perfil pode operar."
+          title="Perfis e permissões"
+          description="Matriz funcional por categoria e auditoria de acesso."
           aside={<StatusChip label="funcional" tone="primary" />}
         >
-          <AccessManagementPanel />
+          <AccessManagementPanel sections={["stats", "privileges", "audit"]} />
         </SettingsPanel>
+      ) : null}
 
+      {canViewRules ? (
         <SettingsPanel
           icon={SlidersHorizontal}
           tone="teal"
-          title="Lógica e regras"
-          description="Parâmetros operacionais do sistema."
+          title="Regras operacionais"
+          description="Parâmetros administrativos essenciais."
         >
           <div className="grid gap-3">
             <RuleRow
@@ -112,40 +152,34 @@ export default function GovernancaPage() {
             />
             <RuleRow
               title="Versionamento do app"
-              description="Versão atual 0.1.0 com deploy controlado."
+              description={`${APP_VERSION_LABEL}. Deploy controlado.`}
               action="Ver regra"
             />
             <RuleRow
               title="Retenção"
-              description="Diários do mês corrente e um mensal arquivado."
+              description="Dias 01 e 15 preservados em Mensais."
               action="Editar"
             />
           </div>
         </SettingsPanel>
-      </div>
+      ) : null}
 
-      <SettingsPanel
-        icon={Activity}
-        tone="amber"
-        title="Diagnóstico do sistema"
-        description="Verifique se os dados essenciais do app estão configurados."
-        compact
-      >
-        <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
-          <div className="rounded-2xl border border-[rgba(197,122,0,0.28)] bg-[rgba(197,122,0,0.05)] p-5">
-            <p className="heading-font text-lg font-bold text-[var(--brand-navy-strong)]">
-              Diagnóstico de dados
-            </p>
-            <p className="mt-2 text-sm text-[var(--ink-soft)]">
-              Conta pontos, campanhas, documentos e últimos backups registrados.
-            </p>
-          </div>
-          <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--brand-amber)] px-8 py-4 text-sm font-black text-white shadow-sm">
-            Verificar
-            <Activity className="h-4 w-4" />
-          </button>
-        </div>
-      </SettingsPanel>
+      {canViewDiagnostics ? (
+        <SettingsPanel
+          icon={Activity}
+          tone="amber"
+          title="Diagnóstico"
+          description="Verificação rápida dos dados e serviços."
+          compact
+        >
+          <SystemDiagnosticsPanel
+            pointTotal={pointSummary.total}
+            campaignTotal={campaignSummary.totalCampaigns}
+            backupEnabled={backupEnabled}
+            cloudMode={cloudMode}
+          />
+        </SettingsPanel>
+      ) : null}
     </div>
   );
 }
@@ -166,16 +200,16 @@ const statToneClasses: Record<ControlStatProps["tone"], string> = {
 
 function ControlStat({ label, value, icon: Icon, tone }: ControlStatProps) {
   return (
-    <article className="glass-panel rounded-2xl p-4">
+    <article className="rounded-2xl border border-[var(--line-ghost)] bg-white/86 p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--ink-soft)]">
+          <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
             {label}
           </p>
-          <p className="mt-2 font-black text-[var(--brand-navy-strong)]">{value}</p>
+          <p className="mt-1 text-base font-black text-[var(--brand-navy-strong)]">{value}</p>
         </div>
-        <div className={cn("rounded-xl p-3", statToneClasses[tone])}>
-          <Icon className="h-5 w-5" />
+        <div className={cn("rounded-xl p-2.5", statToneClasses[tone])}>
+          <Icon className="h-4 w-4" />
         </div>
       </div>
     </article>
@@ -210,22 +244,22 @@ function SettingsPanel({
   children,
 }: SettingsPanelProps) {
   return (
-    <section className={cn("glass-panel rounded-2xl p-5 sm:p-6", compact && "border-l-4 border-l-[var(--brand-amber)]")}>
+    <section className={cn("rounded-2xl border border-[var(--line-ghost)] bg-white/90 p-4 shadow-[0_18px_50px_-44px_rgba(0,66,98,0.28)] sm:p-5", compact && "border-l-4 border-l-[var(--brand-amber)]")}>
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-4">
-          <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", panelToneClasses[tone])}>
-            <Icon className="h-5 w-5" />
+          <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", panelToneClasses[tone])}>
+            <Icon className="h-4 w-4" />
           </div>
           <div>
-            <h2 className="heading-font text-xl font-black text-[var(--brand-navy-strong)]">
+            <h2 className="heading-font text-lg font-black text-[var(--brand-navy-strong)]">
               {title}
             </h2>
-            <p className="mt-1 text-sm text-[var(--ink-soft)]">{description}</p>
+            <p className="mt-1 text-xs text-[var(--ink-soft)]">{description}</p>
           </div>
         </div>
         {aside}
       </header>
-      <div className="mt-6">{children}</div>
+      <div className="mt-4">{children}</div>
     </section>
   );
 }
@@ -240,12 +274,12 @@ function RuleRow({
   action: string;
 }) {
   return (
-    <article className="grid gap-4 rounded-2xl border border-[var(--line-ghost)] bg-white/70 p-5 sm:grid-cols-[1fr_auto] sm:items-center">
+    <article className="grid gap-3 rounded-xl border border-[var(--line-ghost)] bg-white/70 p-4 sm:grid-cols-[1fr_auto] sm:items-center">
       <div>
-        <p className="heading-font text-base font-bold text-[var(--brand-navy-strong)]">{title}</p>
-        <p className="mt-1 text-sm text-[var(--ink-soft)]">{description}</p>
+        <p className="text-sm font-black text-[var(--brand-navy-strong)]">{title}</p>
+        <p className="mt-1 text-xs text-[var(--ink-soft)]">{description}</p>
       </div>
-      <button className="rounded-xl border border-[var(--line-strong)] bg-white px-5 py-3 text-sm font-black text-[var(--brand-navy-strong)] shadow-sm">
+      <button className="h-9 rounded-xl border border-[var(--line-strong)] bg-white px-4 text-xs font-black text-[var(--brand-navy-strong)] shadow-sm">
         {action}
       </button>
     </article>
