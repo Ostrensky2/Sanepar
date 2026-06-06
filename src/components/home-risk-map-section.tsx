@@ -139,9 +139,22 @@ export function HomeRiskMapSection({ points }: { points: LaboratoryRiskPoint[] }
           <Metric label="Críticos" value={summary.alto} />
         </div>
 
-        <div className="mt-5 flex-1 rounded-[22px] border border-[var(--line-ghost)] bg-white p-4">
+        <div className="mt-5 flex-1 rounded-[22px] border-2 border-[var(--line-strong)] bg-white p-4">
           {selectedPoint ? (
             <div className="space-y-4">
+              {selectedPoint.photoUrl ? (
+                <div className="overflow-hidden rounded-[16px] border border-[var(--line-ghost)] bg-[var(--surface-soft)]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={selectedPoint.photoUrl}
+                    alt={`Foto do ponto ${selectedPoint.code}`}
+                    className="h-36 w-full object-cover"
+                    onError={(event) => {
+                      (event.currentTarget.parentElement as HTMLElement).style.display = "none";
+                    }}
+                  />
+                </div>
+              ) : null}
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">
@@ -165,11 +178,11 @@ export function HomeRiskMapSection({ points }: { points: LaboratoryRiskPoint[] }
                 <Info label="Sinal eDNA" value={selectedPoint.ednaSignal} />
                 <Info label="Status" value="Aguardando planilha" />
                 <Info
-                  label="Latitude efetiva"
+                  label="Latitude"
                   value={selectedPoint.effective?.lat.toFixed(5)}
                 />
                 <Info
-                  label="Longitude efetiva"
+                  label="Longitude"
                   value={selectedPoint.effective?.lon.toFixed(5)}
                 />
               </div>

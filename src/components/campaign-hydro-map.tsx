@@ -72,9 +72,8 @@ export type CampaignMapLayerVisibility = {
 };
 
 const tileSize = 256;
-const minZoom = 3;
+const minZoom = 7;
 const maxZoom = 16;
-const singlePointZoom = 13;
 const basinColors = [
   "rgba(0, 142, 156, 0.30)",
   "rgba(0, 87, 159, 0.24)",
@@ -487,7 +486,7 @@ function fitCoordinatesToView(
   if (coordinates.length === 1) {
     return {
       center: coordinates[0],
-      zoom: singlePointZoom,
+      zoom: maxZoom,
     };
   }
 
