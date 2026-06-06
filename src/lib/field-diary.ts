@@ -346,3 +346,26 @@ function normalizeEntryDate(value: unknown) {
   const date = String(value ?? todayIsoDate()).slice(0, 10);
   return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayIsoDate();
 }
+
+export function validateEntry(entry: FieldDiaryPayload): string {
+  if (!entry.campaignName.trim()) return "Informe a campanha.";
+  if (!entry.campaignDay || entry.campaignDay < 1) return "Informe um dia de campanha válido.";
+  if (!entry.entryDate) return "Informe a data.";
+  const hasOperationalData =
+    [
+      entry.locationName,
+      entry.sia,
+      entry.latitude,
+      entry.longitude,
+      entry.municipality,
+      entry.dailySummary,
+      entry.occurrenceType,
+      entry.occurrenceDescription,
+      entry.followUpNotes,
+    ].some((value) => String(value ?? "").trim()) ||
+    entry.activities.length > 0 ||
+    entry.waterVisualConditions.length > 0;
+
+  if (!hasOperationalData) return "Informe ao menos um dado operacional do registro.";
+  return "";
+}

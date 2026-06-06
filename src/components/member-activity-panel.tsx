@@ -5,6 +5,8 @@ import { FileClock, LogIn, MousePointerClick, Search, TrendingUp, UsersRound } f
 import { readStoredDocumentsFromStorage } from "@/lib/app-documents";
 import { readActivityLog, type ActivityLogEntry } from "@/lib/activity-log";
 import { loadAuthUsers, type AppUser } from "@/lib/auth-users";
+import { usePagination } from "@/lib/hooks/use-pagination";
+import { Pagination } from "@/components/ui/pagination";
 
 type Period = "day" | "month" | "year";
 
@@ -45,6 +47,7 @@ export function MemberActivityPanel() {
   );
   const ranking = useMemo(() => buildRanking(users, scopedActivities, filter), [filter, scopedActivities, users]);
   const selectedMember = ranking[0];
+  const rankingPage = usePagination(ranking, 10);
 
   return (
     <section className="overflow-hidden rounded-2xl border border-[var(--line-ghost)] bg-white/90">
@@ -115,7 +118,7 @@ export function MemberActivityPanel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--line-ghost)]">
-                {ranking.map((member) => (
+                {rankingPage.items.map((member) => (
                   <tr key={member.user.id}>
                     <td className="px-4 py-3">
                       <p className="font-black text-[var(--brand-navy-strong)]">{member.user.name}</p>
@@ -133,6 +136,18 @@ export function MemberActivityPanel() {
               </tbody>
             </table>
           </div>
+          <Pagination
+            page={rankingPage.page}
+            pageCount={rankingPage.pageCount}
+            totalItems={rankingPage.totalItems}
+            startIndex={rankingPage.startIndex}
+            endIndex={rankingPage.endIndex}
+            canPrevious={rankingPage.canPrevious}
+            canNext={rankingPage.canNext}
+            onPrevious={rankingPage.previous}
+            onNext={rankingPage.next}
+            itemLabel="membros"
+          />
         </section>
 
         <section className="rounded-xl border border-[var(--line-ghost)] bg-white/70 p-4">

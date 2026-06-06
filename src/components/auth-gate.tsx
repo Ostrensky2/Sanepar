@@ -23,6 +23,9 @@ import {
   type AppUser,
   type AuthSession,
 } from "@/lib/auth-users";
+import { useFormField } from "@/lib/hooks/use-form-field";
+import { email as emailValidator, equalTo, notEqualTo, passwordPolicy, required } from "@/lib/validation";
+import { FieldError } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 
 type AuthGateProps = {
@@ -34,10 +37,16 @@ export function AuthGate({ children }: AuthGateProps) {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [session, setSession] = useState<AuthSession | null>(null);
   const [pendingUser, setPendingUser] = useState<AppUser | null>(null);
-  const [email, setEmail] = useState("");
+  const emailField = useFormField("", [required("Informe seu e-mail."), emailValidator()]);
   const [password, setPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const newPasswordField = useFormField("", [
+    ...passwordPolicy(),
+    notEqualTo(INITIAL_PASSWORD, "Escolha uma senha diferente da provisória GIA26."),
+  ]);
+  const confirmPasswordField = useFormField("", [
+    required("Confirme a nova senha."),
+    equalTo(newPasswordField.value, "A confirmação da senha não confere."),
+  ]);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
@@ -72,7 +81,7 @@ export function AuthGate({ children }: AuthGateProps) {
   );
 
   function signIn() {
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = emailField.value.trim().toLowerCase();
     const user = users.find((item) => item.email.toLowerCase() === normalizedEmail);
 
     if (!user || user.password !== password) {
@@ -99,20 +108,15 @@ export function AuthGate({ children }: AuthGateProps) {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setError("A nova senha deve ter pelo menos 6 caracteres.");
+    newPasswordField.markTouched();
+    confirmPasswordField.markTouched();
+
+    if (!newPasswordField.isValid || !confirmPasswordField.isValid) {
+      setError("Corrija os campos destacados antes de continuar.");
       return;
     }
 
-    if (newPassword === INITIAL_PASSWORD) {
-      setError("Escolha uma senha diferente da senha provisoria GIA26.");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setError("A confirmacao da senha nao confere.");
-      return;
-    }
+    const newPassword = newPasswordField.value;
 
     const updatedUsers = users.map((user) =>
       user.id === pendingUser.id
@@ -135,8 +139,8 @@ export function AuthGate({ children }: AuthGateProps) {
     persistAuthUsers(updatedUsers);
     setUsers(updatedUsers);
     setPendingUser(null);
-    setNewPassword("");
-    setConfirmPassword("");
+    newPasswordField.reset();
+    confirmPasswordField.reset();
     completeSignIn(updatedUser, updatedUsers);
   }
 
@@ -212,15 +216,22 @@ export function AuthGate({ children }: AuthGateProps) {
             <div className="grid gap-4">
               <PasswordField
                 label="Nova senha"
-                value={newPassword}
-                onChange={setNewPassword}
+                value={newPasswordField.value}
+                onChange={newPasswordField.setValue}
+                onBlur={newPasswordField.markTouched}
+                error={newPasswordField.visibleError}
+                describedById="new-password-error"
+                hint="Mínimo de 8 caracteres, com ao menos uma letra e um número."
                 show={showPassword}
                 onToggleShow={() => setShowPassword((current) => !current)}
               />
               <PasswordField
                 label="Confirmar senha"
-                value={confirmPassword}
-                onChange={setConfirmPassword}
+                value={confirmPasswordField.value}
+                onChange={confirmPasswordField.setValue}
+                onBlur={confirmPasswordField.markTouched}
+                error={confirmPasswordField.visibleError}
+                describedById="confirm-password-error"
                 show={showPassword}
                 onToggleShow={() => setShowPassword((current) => !current)}
               />
@@ -239,6 +250,8 @@ export function AuthGate({ children }: AuthGateProps) {
                   onClick={() => {
                     setPendingUser(null);
                     setPassword("");
+                    newPasswordField.reset();
+                    confirmPasswordField.reset();
                     setError("");
                   }}
                   className="h-12 rounded-xl border border-[var(--line-strong)] bg-white px-5 text-sm font-bold text-[var(--brand-navy-strong)]"
@@ -257,17 +270,26 @@ export function AuthGate({ children }: AuthGateProps) {
             >
               <label className="grid gap-2 text-sm font-bold text-[var(--brand-navy-strong)]">
                 Email
-                <span className="flex h-12 items-center gap-3 rounded-xl border border-[var(--line-strong)] bg-white px-4">
+                <span
+                  className={cn(
+                    "flex h-12 items-center gap-3 rounded-xl border bg-white px-4",
+                    emailField.visibleError ? "border-[var(--brand-danger)]" : "border-[var(--line-strong)]",
+                  )}
+                >
                   <Mail className="h-4 w-4 text-[var(--ink-soft)]" />
                   <input
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
+                    value={emailField.value}
+                    onChange={(event) => emailField.setValue(event.target.value)}
+                    onBlur={emailField.markTouched}
                     type="email"
                     autoComplete="email"
+                    aria-invalid={emailField.visibleError ? true : undefined}
+                    aria-describedby={emailField.visibleError ? "login-email-error" : undefined}
                     className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none"
                     placeholder="nome@instituicao.com.br"
                   />
                 </span>
+                <FieldError id="login-email-error" message={emailField.visibleError} />
               </label>
               <PasswordField
                 label="Senha"
@@ -280,7 +302,7 @@ export function AuthGate({ children }: AuthGateProps) {
               <button
                 type="submit"
                 className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[var(--brand-navy-strong)] px-5 text-sm font-black text-white shadow-sm disabled:opacity-50"
-                disabled={!email.trim() || !password}
+                disabled={!emailField.isValid || !password}
               >
                 <LockKeyhole className="h-4 w-4" />
                 Entrar
@@ -308,23 +330,41 @@ function PasswordField({
   onChange,
   show,
   onToggleShow,
+  onBlur,
+  error,
+  describedById,
+  hint,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   show: boolean;
   onToggleShow: () => void;
+  onBlur?: () => void;
+  error?: string | null;
+  describedById?: string;
+  hint?: string;
 }) {
+  const hintId = describedById ? `${describedById}-hint` : undefined;
+
   return (
     <label className="grid gap-2 text-sm font-bold text-[var(--brand-navy-strong)]">
       {label}
-      <span className="flex h-12 items-center gap-3 rounded-xl border border-[var(--line-strong)] bg-white px-4">
+      <span
+        className={cn(
+          "flex h-12 items-center gap-3 rounded-xl border bg-white px-4",
+          error ? "border-[var(--brand-danger)]" : "border-[var(--line-strong)]",
+        )}
+      >
         <LockKeyhole className="h-4 w-4 text-[var(--ink-soft)]" />
         <input
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
           type={show ? "text" : "password"}
           autoComplete="current-password"
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error && describedById ? describedById : hint ? hintId : undefined}
           className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none"
           placeholder="Digite a senha"
         />
@@ -338,6 +378,13 @@ function PasswordField({
           {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </button>
       </span>
+      {error ? (
+        <FieldError id={describedById ?? "password-error"} message={error} />
+      ) : hint ? (
+        <span id={hintId} className="text-xs font-medium text-[var(--ink-soft)]">
+          {hint}
+        </span>
+      ) : null}
     </label>
   );
 }

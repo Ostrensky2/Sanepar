@@ -28,6 +28,8 @@ import {
 } from "@/lib/app-documents";
 import { recordActivity } from "@/lib/activity-log";
 import { getStoredSession } from "@/lib/auth-users";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 type DocumentSortMode =
   | "numeric-asc"
@@ -43,6 +45,8 @@ const documentSortOptions: Array<{ label: string; value: DocumentSortMode }> = [
 ];
 
 export function DocumentRepository() {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [documents, setDocuments] = useState<StoredDocument[]>([]);
   const [hasLoadedDocuments, setHasLoadedDocuments] = useState(false);
   const [persistenceMode, setPersistenceMode] = useState<"browser" | "cloud">("browser");
@@ -205,10 +209,13 @@ export function DocumentRepository() {
     });
   }
 
-  function deleteDocument(document: StoredDocument) {
-    const confirmed = window.confirm(
-      `"${document.title}" será apagado da lista de documentos deste painel. Esta ação remove o item da sessão atual.`,
-    );
+  async function deleteDocument(document: StoredDocument) {
+    const confirmed = await confirm({
+      title: "Remover documento",
+      description: `"${document.title}" será apagado da lista de documentos deste painel. Esta ação remove o item da sessão atual.`,
+      confirmLabel: "Remover",
+      tone: "danger",
+    });
 
     if (!confirmed) {
       return;
@@ -216,6 +223,7 @@ export function DocumentRepository() {
 
     setDocuments((current) => current.filter((item) => item.id !== document.id));
     recordActivity(getStoredSession(), "document.change", document.title, "Documento removido");
+    toast.success("Documento removido", document.title);
   }
 
   function toggleDocumentSelection(documentId: string) {
@@ -283,14 +291,18 @@ export function DocumentRepository() {
     });
   }
 
-  function deleteSelectedDocuments() {
+  async function deleteSelectedDocuments() {
     if (!selectedDocuments.length) {
       return;
     }
 
-    const confirmed = window.confirm(
-      `${selectedDocuments.length} documentos selecionados serão apagados da lista deste painel. Esta ação remove os itens da sessão atual.`,
-    );
+    const total = selectedDocuments.length;
+    const confirmed = await confirm({
+      title: `Remover ${total} documento${total > 1 ? "s" : ""}`,
+      description: `${total} documento${total > 1 ? "s selecionados serão apagados" : " selecionado será apagado"} da lista deste painel. Esta ação remove os itens da sessão atual.`,
+      confirmLabel: "Remover",
+      tone: "danger",
+    });
 
     if (!confirmed) {
       return;
@@ -299,6 +311,7 @@ export function DocumentRepository() {
     const selectedIds = new Set(selectedDocuments.map((document) => document.id));
     setDocuments((current) => current.filter((document) => !selectedIds.has(document.id)));
     setSelectedDocumentIds([]);
+    toast.success(`${total} documento${total > 1 ? "s removidos" : " removido"}`);
   }
 
   async function shareDocument(document: StoredDocument) {
