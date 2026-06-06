@@ -7,7 +7,8 @@ export const APP_DOCUMENTS_SNAPSHOT_FILE_NAME = "__app_documents__";
 export const CAMPAIGN_MANAGEMENT_SNAPSHOT_FILE_NAME = "__campaign_management__";
 export const LAB_RISK_RESULTS_SNAPSHOT_FILE_NAME = "__lab_risk_results__";
 
-const isDbDisabled = sanitizeEnvValue(process.env.NEXT_PUBLIC_DISABLE_DB) === "true";
+const isVercelRuntime = sanitizeEnvValue(process.env.VERCEL) === "1";
+const isDbDisabled = !isVercelRuntime && sanitizeEnvValue(process.env.NEXT_PUBLIC_DISABLE_DB) === "true";
 
 const supabaseUrl = isDbDisabled ? "" : sanitizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const supabaseAnonKey = isDbDisabled
