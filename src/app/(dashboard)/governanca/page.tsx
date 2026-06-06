@@ -16,6 +16,7 @@ import { BuildSyncDiagnostics } from "@/components/build-sync-diagnostics";
 import { LocalBackupPanel } from "@/components/local-backup-panel";
 import { MemberActivityPanel } from "@/components/member-activity-panel";
 import { StatusChip } from "@/components/status-chip";
+import { SyncStatusPanel } from "@/components/sync-status-panel";
 import { SystemDiagnosticsPanel } from "@/components/system-diagnostics-panel";
 import { APP_VERSION_LABEL } from "@/lib/app-version";
 import { getServerAccessContext } from "@/lib/access-control-server";
@@ -32,13 +33,6 @@ import { cn } from "@/lib/utils";
 export default async function GovernancaPage() {
   const access = await getServerAccessContext();
 
-  if (!access.can("settings.manage")) {
-    return null;
-  }
-
-  const cloudMode = getCloudRuntimeMode();
-  const backupEnabled = isLocalBackupUiAvailable();
-  const { campaignSummary, pointSummary } = await loadDashboardData();
   const canViewUsers = access.can("users.manage");
   const canViewBackups = access.can("backups.manage");
   const canViewBuildSync = access.can("settings.buildSync");
@@ -47,13 +41,33 @@ export default async function GovernancaPage() {
   const canViewRules = access.can("settings.rules");
   const canViewDiagnostics = access.can("settings.diagnostics");
 
+  // A página abre para quem tiver acesso a qualquer painel; cada painel respeita
+  // seu próprio privilégio, permitindo acesso isolado (ex.: só Pessoas autorizadas).
+  const canAccessSettings =
+    access.can("settings.manage") ||
+    canViewUsers ||
+    canViewBackups ||
+    canViewBuildSync ||
+    canViewActivity ||
+    canViewPermissions ||
+    canViewRules ||
+    canViewDiagnostics;
+
+  if (!canAccessSettings) {
+    return null;
+  }
+
+  const cloudMode = getCloudRuntimeMode();
+  const backupEnabled = isLocalBackupUiAvailable();
+  const { campaignSummary, pointSummary } = await loadDashboardData();
+
   return (
     <div className="mx-auto max-w-[1600px] space-y-5">
       <header className="rounded-2xl border border-[var(--line-ghost)] bg-white/90 p-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-              <h1 className="heading-font text-xl font-black tracking-tight text-[var(--brand-navy-strong)]">
+              <h1 className="heading-font text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
               Configurações do Sistema
             </h1>
               <span className="rounded-full border border-[rgba(186,26,26,0.2)] bg-[rgba(186,26,26,0.08)] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[var(--brand-danger)]">
@@ -95,6 +109,8 @@ export default async function GovernancaPage() {
           />
         ) : null}
       </div>
+
+      <SyncStatusPanel />
 
       {canViewUsers ? <AccessManagementPanel sections={["people"]} /> : null}
 

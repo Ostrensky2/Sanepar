@@ -11,6 +11,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { StatusChip } from "@/components/status-chip";
+import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 import type { CampaignImportPreview, SpreadsheetPreview } from "@/lib/types";
 import { formatCompactNumber } from "@/lib/utils";
@@ -37,14 +38,14 @@ const importCopy = {
   field: {
     title: "Planilha de Campo será atualizada",
     description:
-      "A planilha de Campo com pontos, coordenadas, dias, observações e links de evidências é enviada. A aba Campanhas é validada e o mapa da campanha é atualizado pelo app.",
+      "Envie a planilha de Campo. A aba Campanhas é validada e o mapa é atualizado ao publicar.",
     emptyFile: "A planilha de Campo da campanha deve ser selecionada.",
     publishLabel: "Mapa da campanha será publicado",
   },
   results: {
     title: "Planilha de Resultados será atualizada",
     description:
-      "A planilha de Resultados laboratoriais e operacionais é enviada. Enquanto a estrutura final não estiver homologada, o preview é gerado para preparar o dashboard de resultados.",
+      "Envie a planilha de Resultados laboratoriais. O preview é gerado até a publicação.",
     emptyFile: "A planilha de Resultados da campanha deve ser selecionada.",
     publishLabel: "Resultados serão publicados",
   },
@@ -113,18 +114,27 @@ export function ImportPreviewForm({ kind = "field" }: ImportPreviewFormProps) {
     }
 
     if (action === "publish" && "points" in payload) {
-      window.localStorage.setItem("yvae:campaign-map-points", JSON.stringify(payload.points));
-      window.localStorage.setItem(
-        "yvae:campaign-map-import",
-        JSON.stringify({
-          fileName: payload.fileName,
-          pointCount: payload.points.length,
-          originalPointCount: payload.originalPointCount,
-          effectivePointCount: payload.effectivePointCount,
-          importedAt: new Date().toISOString(),
-          persistenceMode: payload.persistence.mode,
-        }),
-      );
+      if (payload.persistence.mode !== "cloud" && !canUseBrowserOnlyPersistence()) {
+        setPreview(null);
+        setError(payload.persistence.message);
+        setIsPending(false);
+        return;
+      }
+
+      if (payload.persistence.mode === "cloud" || canUseBrowserOnlyPersistence()) {
+        window.localStorage.setItem("yvae:campaign-map-points", JSON.stringify(payload.points));
+        window.localStorage.setItem(
+          "yvae:campaign-map-import",
+          JSON.stringify({
+            fileName: payload.fileName,
+            pointCount: payload.points.length,
+            originalPointCount: payload.originalPointCount,
+            effectivePointCount: payload.effectivePointCount,
+            importedAt: new Date().toISOString(),
+            persistenceMode: payload.persistence.mode,
+          }),
+        );
+      }
 
       setPreview(withCampaignSummary(payload.preview, payload));
       setSuccess(payload.persistence.message);

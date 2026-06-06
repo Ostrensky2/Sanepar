@@ -36,14 +36,34 @@ export async function GET() {
     return NextResponse.json({ documents: [], persistence: "browser" });
   }
 
-  const { data, error } = await supabase
+  const { data, error: appDocumentsError } = await supabase
     .from("app_documents")
     .select("*")
     .order("updated_at", { ascending: false })
     .returns<AppDocumentRow[]>();
 
-  if (error) {
-    return readDocumentsFromCampaignSnapshot(supabase, error.message);
+  if (appDocumentsError) {
+    const snapshotResult = await readDocumentsFromCampaignSnapshot(supabase);
+
+    if (!snapshotResult.error) {
+      return NextResponse.json({
+        documents: snapshotResult.documents,
+        persistence: "cloud",
+      });
+    }
+
+    return NextResponse.json(
+      {
+        documents: [],
+        persistence: "cloud-error",
+        error: "Não foi possível ler documentos na nuvem.",
+        details: {
+          appDocuments: appDocumentsError.message,
+          campaignSnapshot: snapshotResult.error,
+        },
+      },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({
@@ -72,12 +92,18 @@ export async function PUT(request: Request) {
     );
   }
 
-  const { data: existingRows, error: readError } = await supabase
+  const { error: readError } = await supabase.from("app_documents").select("id").limit(1);
+
+  if (readError) {
+    return writeDocumentsToCampaignSnapshot(supabase, documents);
+  }
+
+  const { data: existingRows, error: existingRowsError } = await supabase
     .from("app_documents")
     .select("id")
     .returns<{ id: string }[]>();
 
-  if (readError) {
+  if (existingRowsError) {
     return writeDocumentsToCampaignSnapshot(supabase, documents);
   }
 
@@ -93,7 +119,10 @@ export async function PUT(request: Request) {
       .in("id", removedIds);
 
     if (deleteError) {
-      return writeDocumentsToCampaignSnapshot(supabase, documents);
+      return NextResponse.json(
+        { error: "Não foi possível sincronizar exclusões de documentos na nuvem." },
+        { status: 500 },
+      );
     }
   }
 
@@ -111,10 +140,43 @@ export async function PUT(request: Request) {
   return NextResponse.json({ documents, persistence: "cloud" });
 }
 
+export async function DELETE(request: Request) {
+  const supabase = createOptionalSupabaseClient();
+
+  if (!supabase) {
+    return NextResponse.json(
+      { error: "Supabase não configurado para excluir documentos." },
+      { status: 503 },
+    );
+  }
+
+  const payload = (await request.json()) as { ids?: unknown };
+  const ids = Array.isArray(payload.ids)
+    ? payload.ids.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+    : [];
+
+  if (!ids.length) {
+    return NextResponse.json(
+      { error: "A lista de documentos para exclusão é inválida." },
+      { status: 400 },
+    );
+  }
+
+  const { error } = await supabase.from("app_documents").delete().in("id", ids);
+
+  if (error) {
+    return NextResponse.json(
+      { error: "Não foi possível excluir documentos na nuvem." },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ ids, persistence: "cloud" });
+}
+
 async function readDocumentsFromCampaignSnapshot(
   supabase: NonNullable<ReturnType<typeof createOptionalSupabaseClient>>,
-  appDocumentsError?: string,
-) {
+): Promise<{ documents: StoredDocument[]; error: string | null }> {
   const { data, error } = await supabase
     .from("campaign_imports")
     .select("points, created_at")
@@ -124,24 +186,13 @@ async function readDocumentsFromCampaignSnapshot(
     .maybeSingle<AppDocumentSnapshotRow>();
 
   if (error) {
-    return NextResponse.json(
-      {
-        documents: [],
-        persistence: "cloud-error",
-        error: "Não foi possível ler documentos na nuvem.",
-        details: {
-          appDocuments: appDocumentsError,
-          campaignSnapshot: error.message,
-        },
-      },
-      { status: 500 },
-    );
+    return { documents: [], error: error.message };
   }
 
-  return NextResponse.json({
+  return {
     documents: normalizeStoredDocuments(data?.points),
-    persistence: "cloud",
-  });
+    error: null,
+  };
 }
 
 async function writeDocumentsToCampaignSnapshot(

@@ -7,11 +7,12 @@ import {
   ChevronRight,
   DatabaseZap,
   FileText,
+  FlaskConical,
   HelpCircle,
   LockKeyhole,
-  MapPinned,
   MapPin,
   MessageSquareText,
+  NotebookPen,
   Search,
   Target,
 } from "lucide-react";
@@ -142,54 +143,98 @@ const helpModules: HelpModule[] = [
     keywords: ["campanha", "sazonal", "resultados", "planilha de campo", "laboratorio"],
   },
   {
-    title: "Pontos de Coleta",
-    short: "Tabela da planilha de campo",
-    icon: MapPinned,
+    title: "Diário de Campo",
+    short: "Memória operacional diária das campanhas",
+    icon: NotebookPen,
     purpose:
-      "Exibe a tabela técnica dos pontos publicados, com campanha, código SIA, data, manancial, município e coordenadas efetivas.",
+      "Reúne registros diários simples e organizados do que ocorreu em campo: locais visitados, atividades realizadas, condições visuais da água, ocorrências operacionais e pendências. Cada campanha mantém seu próprio diário.",
     whenToUse: [
-      "Use quando precisar conferir registros linha a linha.",
-      "Use para checar coordenadas, municípios, datas ou códigos SIA.",
-      "Use como apoio quando o mapa mostrar algum ponto fora do esperado.",
+      "Use para reconstruir o histórico operacional de uma campanha.",
+      "Use para consultar ocorrências, pendências e responsáveis por data.",
+      "Use para registrar o que aconteceu em campo sem depender de relatórios formais.",
     ],
     primaryTasks: [
       {
-        title: "Conferir pontos importados",
+        title: "Consultar o diário de uma campanha",
         steps: [
-          "Verifique os cards superiores para totais e origem ativa.",
-          "Use a tabela para conferir campanha, código e ponto.",
-          "Compare latitude e longitude quando houver suspeita de erro de localização.",
+          "Selecione a campanha no seletor superior.",
+          "Combine os filtros por data, atividade, ocorrência, status e responsável.",
+          "Percorra a linha do tempo agrupada por dia.",
         ],
       },
       {
-        title: "Investigar dados ausentes",
+        title: "Registrar ou importar eventos",
         steps: [
-          "Procure campos com Não informado.",
-          "Corrija a planilha de origem no módulo Dados.",
-          "Publique novamente a planilha corrigida.",
+          "Abra Entrada de dados → Diário de campo.",
+          "Use Novo registro para lançar um evento manualmente.",
+          "Use Importar para carregar uma planilha de diário de campo.",
         ],
       },
     ],
     controls: [
-      { label: "Origem ativa", detail: "Informa se a tabela vem da nuvem ou da base local embarcada." },
-      { label: "Tabela", detail: "Mostra registros publicados em formato auditável." },
-      { label: "Coordenadas", detail: "Mostram latitude e longitude efetivas quando disponíveis." },
+      { label: "Campanha exibida", detail: "Limita o diário à campanha escolhida." },
+      { label: "Filtros", detail: "Combinam variáveis da planilha para localizar eventos." },
+      { label: "Linha do tempo", detail: "Agrupa os registros por data." },
     ],
     notes: [
-      "Esta tela não edita pontos diretamente.",
-      "Alterações permanentes devem vir da planilha publicada em Dados.",
+      "O Diário de Campo não substitui relatórios técnicos, laudos, atas ou comunicações formais.",
+      "Ele funciona como memória operacional do projeto, voltada à rastreabilidade.",
+      "A inclusão e a edição de registros ficam em Entrada de dados → Diário de campo.",
     ],
     troubleshooting: [
       {
-        issue: "Tabela vazia",
-        action: "Importe e publique uma planilha de Campo no módulo Dados.",
+        issue: "Diário sem eventos",
+        action: "Registre ou importe entradas em Entrada de dados → Diário de campo.",
       },
       {
-        issue: "Coordenada não informada",
-        action: "Revise as colunas de latitude e longitude na planilha de origem.",
+        issue: "Evento não aparece no filtro",
+        action: "Limpe os filtros e confirme a campanha selecionada.",
       },
     ],
-    keywords: ["pontos", "coleta", "sia", "coordenadas", "latitude", "longitude"],
+    keywords: ["diario de campo", "ocorrencia", "pendencia", "evento", "rastreabilidade"],
+  },
+  {
+    title: "Monitoramento",
+    short: "Análises laboratoriais e resultados das campanhas",
+    icon: FlaskConical,
+    purpose:
+      "Apresenta os resultados laboratoriais das campanhas: resumo analítico, parâmetros críticos, etapas de metabarcoding e evolução ao longo das campanhas.",
+    whenToUse: [
+      "Use para interpretar os resultados de uma campanha concluída.",
+      "Use para identificar parâmetros críticos e pendências laboratoriais.",
+      "Use para acompanhar a evolução entre campanhas.",
+    ],
+    primaryTasks: [
+      {
+        title: "Analisar uma campanha",
+        steps: [
+          "Selecione a campanha no seletor superior.",
+          "Use o Resumo Analítico para a visão consolidada.",
+          "Use Parâmetros Críticos para localizar pendências.",
+          "Use Evolução da Campanha quando houver série histórica.",
+        ],
+      },
+    ],
+    controls: [
+      { label: "Campanha exibida", detail: "Troca o conjunto de resultados em análise." },
+      { label: "Etapas de metabarcoding", detail: "Mostra o estágio do processamento laboratorial." },
+      { label: "Mapa de risco", detail: "Distribui os pontos por nível de risco quando há laudos." },
+    ],
+    notes: [
+      "Os resultados dependem da publicação da planilha de Resultados em Entrada de dados.",
+      "Enquanto os laudos não chegam, os indicadores podem aparecer como representativos.",
+    ],
+    troubleshooting: [
+      {
+        issue: "Resultados aparecem como aguardando",
+        action: "Publique a planilha de Resultados laboratoriais em Entrada de dados.",
+      },
+      {
+        issue: "Indicadores marcados como representativos",
+        action: "Os laudos da campanha ainda não foram finalizados; os valores são ilustrativos.",
+      },
+    ],
+    keywords: ["monitoramento", "resultados", "laboratorio", "metabarcoding", "risco", "analise"],
   },
   {
     title: "Ações pontuais",
@@ -290,9 +335,12 @@ const helpModules: HelpModule[] = [
       },
     ],
     controls: [
-      { label: "Importação", detail: "Recebe planilhas e gera prévia validada." },
+      { label: "Status de campanha", detail: "Declara status, datas e etapas de cada campanha." },
+      { label: "Planilhas de campo", detail: "Importa a planilha-síntese que alimenta mapas e pontos." },
+      { label: "Diário de campo", detail: "Registra e importa ocorrências diárias." },
+      { label: "Planilhas de resultados", detail: "Importa planilhas laboratoriais para o Monitoramento." },
+      { label: "Registrar ações pontuais", detail: "Entrada estruturada de demandas pontuais da Sanepar." },
       { label: "Publicação", detail: "Torna os dados importados disponíveis no app." },
-      { label: "Repositório de planilhas", detail: "Mantém controle dos arquivos tabulares associados." },
     ],
     notes: [
       "Somente categorias autorizadas devem importar ou excluir dados.",
@@ -348,7 +396,7 @@ const helpModules: HelpModule[] = [
       },
     ],
     controls: [
-      { label: "Abas", detail: "Filtram por Plano de trabalho, Relatórios, Apresentações, Laudos, Mapas e Institucionais." },
+      { label: "Abas", detail: "Filtram por Plano de trabalho, Relatórios, Resultados, Apresentações, Laudos, Mapas e Institucionais." },
       { label: "Busca", detail: "Localiza documentos por texto." },
       { label: "Ações por linha", detail: "Abrir, baixar, compartilhar, copiar link ou excluir." },
     ],
@@ -385,7 +433,7 @@ const helpModules: HelpModule[] = [
         title: "Gerenciar pessoas autorizadas",
         steps: [
           "Use o formulário Pessoas autorizadas para cadastrar nome, e-mail, instituição e categoria.",
-          "Novos cadastros entram ativos com senha provisória GIA26.",
+          "Novos cadastros entram ativos com senha provisória ATGC26.",
           "Use editar para alterar nome, e-mail ou categoria.",
           "Use os controles de status, senha e exclusão conforme a necessidade administrativa.",
         ],
@@ -426,6 +474,7 @@ const helpModules: HelpModule[] = [
     ],
     notes: [
       "Configurações é área administrativa; alterações afetam a operação inteira.",
+      "Cada painel respeita seu próprio privilégio: uma categoria pode entrar em Configurações vendo apenas o painel liberado, como só Pessoas autorizadas.",
       "Backups locais dependem de localhost e do host operacional configurado.",
       "A versão atual é atualizada sempre que o app recebe alteração.",
     ],
@@ -518,11 +567,11 @@ const generalTopics = [
   },
   {
     title: "Fluxo básico do app",
-    body: "Dados alimenta o sistema, Início mostra a visão operacional, Campanhas e Pontos detalham a base de campo, Documentos guarda links oficiais e Configurações administra acesso, backups e diagnóstico.",
+    body: "Entrada de dados alimenta o sistema, Início mostra a visão operacional, Campanhas e Monitoramento detalham a base de campo e os resultados, Documentos guarda links oficiais e Configurações administra acesso, backups e diagnóstico.",
   },
   {
     title: "Onde editar informações",
-    body: "Edite dados de campo em Dados, documentos em Documentos e usuários em Configurações. Telas de consulta, como Início e Pontos, evitam edição direta para preservar rastreabilidade.",
+    body: "Edite planilhas e registros em Entrada de dados, documentos em Documentos e usuários em Configurações. Telas de consulta, como Início, Campanhas e Monitoramento, evitam edição direta para preservar rastreabilidade.",
   },
 ];
 
@@ -556,7 +605,7 @@ export default function AjudaPage() {
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--brand-teal)]">
                 Central de suporte
               </p>
-              <h1 className="heading-font mt-1 text-2xl font-black text-[var(--brand-navy-strong)]">
+              <h1 className="heading-font mt-1 text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
                 Ajuda do Yva&apos;e
               </h1>
               <p className="mt-1 max-w-2xl text-justify text-sm leading-6 text-[var(--ink-soft)]">

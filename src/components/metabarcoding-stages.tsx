@@ -5,6 +5,9 @@ export type MetabarcodingStageStatus = "done" | "inprogress" | "pending";
 export type MetabarcodingStage = {
   label: string;
   status: MetabarcodingStageStatus;
+  plannedDate?: string;
+  completedDate?: string;
+  note?: string;
 };
 
 const DEFAULT_STAGES: MetabarcodingStage[] = [
@@ -45,7 +48,10 @@ export function MetabarcodingStagesIndicator({
         <StageLegend />
       </header>
 
-      <ol className="grid grid-cols-[repeat(8,minmax(0,1fr))] gap-0 overflow-x-auto pb-2 min-w-[640px]">
+      <ol
+        className="grid gap-0 overflow-x-auto pb-2"
+        style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(84px, 1fr))` }}
+      >
         {stages.map((stage, index) => {
           const next = stages[index + 1];
           return (
@@ -113,6 +119,11 @@ function StageNode({
       >
         {labelFor(stage.status)}
       </p>
+      {stage.plannedDate || stage.completedDate ? (
+        <p className="mt-1 text-[9px] font-semibold leading-tight text-slate-500">
+          {stage.completedDate ? `Concl. ${formatShortDate(stage.completedDate)}` : `Prev. ${formatShortDate(stage.plannedDate)}`}
+        </p>
+      ) : null}
     </li>
   );
 }
@@ -121,6 +132,12 @@ function labelFor(status: MetabarcodingStageStatus) {
   if (status === "done") return "Concluído";
   if (status === "inprogress") return "Em curso";
   return "A fazer";
+}
+
+function formatShortDate(value?: string) {
+  if (!value) return "";
+  const [year, month, day] = value.slice(0, 10).split("-");
+  return year && month && day ? `${day}/${month}` : value;
 }
 
 function StageLegend() {

@@ -29,15 +29,36 @@ import {
 import {
   INITIAL_PASSWORD,
   getStoredSession,
-  loadAuthUsers,
+  loadAuthUsersFromSharedStore,
   persistAuthUsers,
   persistSession,
+  requestPasswordReset,
   type AppUser,
   type AuthSession,
 } from "@/lib/auth-users";
 import { cn } from "@/lib/utils";
 
-const orderedPrivileges = Object.keys(privilegeLabels) as PrivilegeKey[];
+const privilegeGroups: Array<{ title: string; privileges: PrivilegeKey[] }> = [
+  {
+    title: "Módulos",
+    privileges: [
+      "nav.home",
+      "nav.campaigns",
+      "nav.results",
+      "nav.data",
+      "nav.documents",
+      "nav.requests",
+      "nav.settings",
+      "nav.help",
+    ],
+  },
+  {
+    title: "Ações internas",
+    privileges: (Object.keys(privilegeLabels) as PrivilegeKey[]).filter(
+      (privilege) => !privilege.startsWith("nav."),
+    ),
+  },
+];
 const PRIMARY_ADMIN_ID = "usr-antonio-ostrensky";
 const PRIMARY_ADMIN_EMAIL = "ostrensky@ufpr.br";
 
@@ -65,7 +86,6 @@ export function AccessManagementPanel({
   const [newUser, setNewUser] = useState({
     name: "",
     email: "",
-    institution: "ATGC",
     role: "ATGC" as UserCategory,
   });
   const [editingUser, setEditingUser] = useState<{
@@ -75,26 +95,41 @@ export function AccessManagementPanel({
     role: UserCategory;
   } | null>(null);
   const [auditTrail, setAuditTrail] = useState<string[]>([]);
+  const [notice, setNotice] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [savingAction, setSavingAction] = useState<string | null>(null);
 
   useEffect(() => {
-    function sync() {
-      setUsers(loadAuthUsers());
+    let cancelled = false;
+
+    async function sync() {
+      const loadedUsers = await loadAuthUsersFromSharedStore();
+
+      if (cancelled) {
+        return;
+      }
+
+      setUsers(loadedUsers);
       setSession(getStoredSession());
       setActiveCategory(normalizeUserCategory(window.localStorage.getItem(ACCESS_CATEGORY_STORAGE_KEY)));
       setPrivilegeMatrix(getPrivilegeMatrix());
     }
 
-    sync();
-    window.addEventListener("yvae:auth-users-updated", sync);
-    window.addEventListener("yvae:auth-session-updated", sync);
-    window.addEventListener("yvae:access-category-updated", sync);
-    window.addEventListener("yvae:access-privileges-updated", sync);
+    const handleSync = () => {
+      void sync();
+    };
+
+    handleSync();
+    window.addEventListener("yvae:auth-users-updated", handleSync);
+    window.addEventListener("yvae:auth-session-updated", handleSync);
+    window.addEventListener("yvae:access-category-updated", handleSync);
+    window.addEventListener("yvae:access-privileges-updated", handleSync);
 
     return () => {
-      window.removeEventListener("yvae:auth-users-updated", sync);
-      window.removeEventListener("yvae:auth-session-updated", sync);
-      window.removeEventListener("yvae:access-category-updated", sync);
-      window.removeEventListener("yvae:access-privileges-updated", sync);
+      cancelled = true;
+      window.removeEventListener("yvae:auth-users-updated", handleSync);
+      window.removeEventListener("yvae:auth-session-updated", handleSync);
+      window.removeEventListener("yvae:access-category-updated", handleSync);
+      window.removeEventListener("yvae:access-privileges-updated", handleSync);
     };
   }, []);
 
@@ -130,11 +165,30 @@ export function AccessManagementPanel({
   );
   const canManageUsers = hasPrivilege(activeCategory, "users.manage");
   const canManagePermissions = hasPrivilege(activeCategory, "permissions.manage");
+  const isSaving = savingAction !== null;
 
-  function persistUsers(nextUsers: AppUser[], message: string) {
+  async function persistUsers(nextUsers: AppUser[], message: string, actionId = "users") {
+    setSavingAction(actionId);
+    setNotice(null);
     setUsers(nextUsers);
-    persistAuthUsers(nextUsers);
-    setAuditTrail((current) => [message, ...current].slice(0, 5));
+
+    try {
+      const saved = await persistAuthUsers(nextUsers);
+
+      if (!saved) {
+        const errorMessage = "Falha ao salvar na nuvem. A lista foi recarregada.";
+        setAuditTrail((current) => [errorMessage, ...current].slice(0, 5));
+        setNotice({ kind: "error", text: errorMessage });
+        setUsers(await loadAuthUsersFromSharedStore());
+        return false;
+      }
+
+      setAuditTrail((current) => [message, ...current].slice(0, 5));
+      setNotice({ kind: "success", text: message });
+      return true;
+    } finally {
+      setSavingAction(null);
+    }
   }
 
   function syncSessionForUser(user: AppUser) {
@@ -156,18 +210,30 @@ export function AccessManagementPanel({
     router.refresh();
   }
 
-  function updateUser(userId: string, patch: Partial<AppUser>) {
+  async function updateUser(userId: string, patch: Partial<AppUser>) {
     const target = users.find((user) => user.id === userId);
 
-    if (!target || !canManageUsers || touchesAdminAuthority(target, patch, canManageAdminAuthority)) {
+    if (
+      isSaving ||
+      !target ||
+      !canManageUsers ||
+      touchesAdminAuthority(target, patch, canManageAdminAuthority)
+    ) {
       return;
     }
 
     const nextTarget = { ...target, ...patch };
     const nextUsers = users.map((user) => (user.id === userId ? nextTarget : user));
 
-    persistUsers(nextUsers, `Cadastro de ${nextTarget.name} atualizado.`);
-    syncSessionForUser(nextTarget);
+    const saved = await persistUsers(
+      nextUsers,
+      `Cadastro de ${nextTarget.name} atualizado.`,
+      `update-${userId}`,
+    );
+
+    if (saved) {
+      syncSessionForUser(nextTarget);
+    }
   }
 
   function startEditingUser(user: AppUser) {
@@ -183,7 +249,7 @@ export function AccessManagementPanel({
     });
   }
 
-  function saveEditingUser() {
+  async function saveEditingUser() {
     if (!editingUser) {
       return;
     }
@@ -194,11 +260,17 @@ export function AccessManagementPanel({
       (user) => user.id !== editingUser.id && user.email.toLowerCase() === email,
     );
 
-    if (!name || !email || duplicatedEmail) {
+    if (!name || !email) {
+      setNotice({ kind: "error", text: "Informe nome e email para salvar o cadastro." });
       return;
     }
 
-    updateUser(editingUser.id, {
+    if (duplicatedEmail) {
+      setNotice({ kind: "error", text: "Ja existe uma pessoa autorizada com este email." });
+      return;
+    }
+
+    await updateUser(editingUser.id, {
       name,
       email,
       role: editingUser.role,
@@ -207,57 +279,81 @@ export function AccessManagementPanel({
     setEditingUser(null);
   }
 
-  function resetPassword(userId: string) {
+  async function resetPassword(userId: string) {
     const target = users.find((user) => user.id === userId);
 
-    if (!target || !canManageUsers || (target.role === "Admin" && !canManageAdminAuthority)) {
+    if (isSaving || !target || !canManageUsers || (target.role === "Admin" && !canManageAdminAuthority)) {
       return;
     }
 
-    persistUsers(
-      users.map((user) =>
-        user.id === userId
-          ? { ...user, password: INITIAL_PASSWORD, mustChangePassword: true }
-          : user,
-      ),
-      `Senha provisoria GIA26 aplicada para ${target.name}.`,
+    setSavingAction(`reset-${userId}`);
+    setNotice(null);
+    const reset = await requestPasswordReset(userId);
+
+    if (!reset) {
+      const errorMessage = `Falha ao redefinir a senha de ${target.name}.`;
+      setAuditTrail((current) => [errorMessage, ...current].slice(0, 5));
+      setNotice({ kind: "error", text: errorMessage });
+      setSavingAction(null);
+      return;
+    }
+    setSavingAction(null);
+
+    const nextUsers = users.map((user) =>
+      user.id === userId
+        ? { ...user, mustChangePassword: true, lastAccess: "Primeiro acesso pendente" }
+        : user,
+    );
+    await persistUsers(
+      nextUsers,
+      `Senha provisoria ${INITIAL_PASSWORD} aplicada para ${target.name}.`,
+      `reset-${userId}`,
     );
   }
 
   function removeUser(userId: string) {
     const target = users.find((user) => user.id === userId);
 
-    if (!target || !canManageUsers || isProtectedUser(target, canManageAdminAuthority)) {
+    if (isSaving || !target || !canManageUsers || isProtectedUser(target, canManageAdminAuthority)) {
       return;
     }
 
-    persistUsers(
+    if (!window.confirm(`Remover ${target.name} da lista de pessoas autorizadas?`)) {
+      return;
+    }
+
+    void persistUsers(
       users.filter((user) => user.id !== userId),
       `${target.name} removido da lista de entrada.`,
+      `remove-${userId}`,
     );
   }
 
-  function addUser() {
+  async function addUser() {
     const email = newUser.email.trim().toLowerCase();
     const name = newUser.name.trim();
 
-    if (
-      !canManageUsers ||
-      !email ||
-      !name ||
-      (newUser.role === "Admin" && !canManageAdminAuthority) ||
-      users.some((user) => user.email.toLowerCase() === email)
-    ) {
+    if (isSaving || !canManageUsers || (newUser.role === "Admin" && !canManageAdminAuthority)) {
       return;
     }
 
-    persistUsers(
+    if (!name || !email) {
+      setNotice({ kind: "error", text: "Informe nome e email para adicionar uma pessoa." });
+      return;
+    }
+
+    if (users.some((user) => user.email.toLowerCase() === email)) {
+      setNotice({ kind: "error", text: "Ja existe uma pessoa autorizada com este email." });
+      return;
+    }
+
+    const saved = await persistUsers(
       [
         {
           id: `usr-${Date.now()}`,
           name,
           email,
-          institution: newUser.institution.trim() || "Nao informada",
+          institution: newUser.role === "Admin" ? "Admin" : newUser.role,
           role: newUser.role,
           status: "ativo",
           password: INITIAL_PASSWORD,
@@ -267,9 +363,13 @@ export function AccessManagementPanel({
         },
         ...users,
       ],
-      `Cadastro criado para ${name} com senha provisoria GIA26.`,
+      `Cadastro criado para ${name} com senha provisoria ${INITIAL_PASSWORD}.`,
+      "add-user",
     );
-    setNewUser({ name: "", email: "", institution: "ATGC", role: "ATGC" });
+
+    if (saved) {
+      setNewUser({ name: "", email: "", role: "ATGC" });
+    }
   }
 
   function togglePrivilege(category: UserCategory, privilege: PrivilegeKey) {
@@ -337,10 +437,10 @@ export function AccessManagementPanel({
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--line-ghost)] p-4">
           <div>
             <h3 className="heading-font text-lg font-black text-[var(--brand-navy-strong)]">
-              Painel de Privilegios por Categoria
+              Painel de Permissões por Categoria
             </h3>
             <p className="mt-1 text-xs text-[var(--ink-soft)]">
-              Admin fica fixo para evitar bloqueio total. Sanepar, UFPR e ATGC podem ser ajustados conforme a operação.
+              Controle quais módulos e ações aparecem para cada tipo de usuário.
             </p>
           </div>
           <button
@@ -367,41 +467,48 @@ export function AccessManagementPanel({
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--line-ghost)]">
-              {orderedPrivileges.map((privilege) => (
-                <tr key={privilege}>
-                  <td className="px-4 py-3">
-                    <p className="text-sm font-black text-[var(--brand-navy-strong)]">{privilegeLabels[privilege]}</p>
-                    <p className="mt-1 text-xs text-[var(--ink-soft)]">{privilege}</p>
-                  </td>
-                  {visibleCategories.map((category) => {
-                    const enabled = privilegeMatrix[category].includes(privilege);
-                    const locked = category === "Admin" || !canManagePermissions;
+              {privilegeGroups.map((group) => (
+                group.privileges.map((privilege, index) => (
+                  <tr key={privilege}>
+                    <td className="px-4 py-3">
+                      {index === 0 ? (
+                        <p className="mb-2 text-[11px] font-black uppercase tracking-[0.14em] text-[var(--brand-teal)]">
+                          {group.title}
+                        </p>
+                      ) : null}
+                      <p className="text-sm font-black text-[var(--brand-navy-strong)]">{privilegeLabels[privilege]}</p>
+                      <p className="mt-1 text-xs text-[var(--ink-soft)]">{privilege}</p>
+                    </td>
+                    {visibleCategories.map((category) => {
+                      const enabled = privilegeMatrix[category].includes(privilege);
+                      const locked = category === "Admin" || !canManagePermissions;
 
-                    return (
-                      <td key={`${category}-${privilege}`} className="px-3 py-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => togglePrivilege(category, privilege)}
-                          disabled={locked}
-                          className={cn(
-                            "relative inline-flex h-7 w-12 items-center rounded-full transition disabled:cursor-not-allowed",
-                            enabled ? "bg-[var(--brand-teal)]" : "bg-slate-200",
-                            locked && "opacity-70",
-                          )}
-                          aria-label={`${enabled ? "Remover" : "Adicionar"} ${privilegeLabels[privilege]} para ${category}`}
-                          title={locked ? "Bloqueado para este perfil" : "Alternar privilegio"}
-                        >
-                          <span
+                      return (
+                        <td key={`${category}-${privilege}`} className="px-3 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => togglePrivilege(category, privilege)}
+                            disabled={locked}
                             className={cn(
-                              "ml-1 h-5 w-5 rounded-full bg-white shadow transition",
-                              enabled && "translate-x-5",
+                              "relative inline-flex h-7 w-12 items-center rounded-full transition disabled:cursor-not-allowed",
+                              enabled ? "bg-[var(--brand-teal)]" : "bg-slate-200",
+                              locked && "opacity-70",
                             )}
-                          />
-                        </button>
-                      </td>
-                    );
-                  })}
-                </tr>
+                            aria-label={`${enabled ? "Remover" : "Adicionar"} ${privilegeLabels[privilege]} para ${category}`}
+                            title={locked ? "Bloqueado para este perfil" : "Alternar permissão"}
+                          >
+                            <span
+                              className={cn(
+                                "ml-1 h-5 w-5 rounded-full bg-white shadow transition",
+                                enabled && "translate-x-5",
+                              )}
+                            />
+                          </button>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))
               ))}
             </tbody>
           </table>
@@ -417,7 +524,7 @@ export function AccessManagementPanel({
               Pessoas autorizadas
             </h3>
             <p className="mt-1 text-xs text-[var(--ink-soft)]">
-              Novos cadastros entram ativos com senha provisoria GIA26.
+              Novos cadastros entram ativos com senha provisoria ATGC26.
             </p>
           </div>
           <span className="rounded-full border border-[rgba(0,142,156,0.24)] bg-[rgba(0,142,156,0.1)] px-2.5 py-1 text-[11px] font-black text-[var(--brand-teal)]">
@@ -425,40 +532,29 @@ export function AccessManagementPanel({
           </span>
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_0.7fr_0.8fr_auto]">
+        <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_0.8fr_auto]">
           <input
             value={newUser.name}
             onChange={(event) => setNewUser((current) => ({ ...current, name: event.target.value }))}
             placeholder="Nome"
             className="h-10 rounded-xl border border-[var(--line-strong)] bg-white px-3 text-sm outline-none focus:border-[var(--brand-blue)]"
-            disabled={!canManageUsers}
+            disabled={!canManageUsers || isSaving}
           />
           <input
             value={newUser.email}
             onChange={(event) => setNewUser((current) => ({ ...current, email: event.target.value }))}
             placeholder="email@instituicao.com.br"
             className="h-10 rounded-xl border border-[var(--line-strong)] bg-white px-3 text-sm outline-none focus:border-[var(--brand-blue)]"
-            disabled={!canManageUsers}
-          />
-          <input
-            value={newUser.institution}
-            onChange={(event) => setNewUser((current) => ({ ...current, institution: event.target.value }))}
-            placeholder="Instituição"
-            className="h-10 rounded-xl border border-[var(--line-strong)] bg-white px-3 text-sm outline-none focus:border-[var(--brand-blue)]"
-            disabled={!canManageUsers}
+            disabled={!canManageUsers || isSaving}
           />
           <select
             value={visibleCategories.includes(newUser.role) ? newUser.role : "ATGC"}
             onChange={(event) => {
               const role = event.target.value as UserCategory;
-              setNewUser((current) => ({
-                ...current,
-                role,
-                institution: role === "Admin" ? "Admin" : role,
-              }));
+              setNewUser((current) => ({ ...current, role }));
             }}
             className="h-10 rounded-xl border border-[var(--line-strong)] bg-white px-3 text-sm font-bold text-[var(--brand-navy-strong)]"
-            disabled={!canManageUsers}
+            disabled={!canManageUsers || isSaving}
           >
             {visibleCategories.map((role) => (
               <option key={role} value={role}>
@@ -470,20 +566,104 @@ export function AccessManagementPanel({
             type="button"
             onClick={addUser}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[var(--brand-navy-strong)] px-4 text-sm font-bold text-white disabled:opacity-40"
-            disabled={!canManageUsers || !newUser.email.trim() || !newUser.name.trim()}
+            disabled={!canManageUsers || isSaving || !newUser.email.trim() || !newUser.name.trim()}
           >
             <Plus className="h-4 w-4" />
-            Adicionar
+            {savingAction === "add-user" ? "Salvando" : "Adicionar"}
           </button>
         </div>
 
+        {notice ? (
+          <div
+            className={cn(
+              "mt-4 rounded-xl border px-4 py-3 text-sm font-bold",
+              notice.kind === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : "border-red-200 bg-red-50 text-red-800",
+            )}
+          >
+            {notice.text}
+          </div>
+        ) : null}
+
+        {editingUser ? (
+          <div className="mt-4 rounded-xl border border-[var(--line-ghost)] bg-[var(--surface-soft)] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[var(--brand-teal)]">
+                  Editar pessoa autorizada
+                </p>
+                <h3 className="heading-font mt-1 text-lg font-black text-[var(--brand-navy-strong)]">
+                  {editingUser.name || "Cadastro selecionado"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingUser(null)}
+                disabled={isSaving}
+                className="h-9 rounded-xl border border-[var(--line-strong)] bg-white px-4 text-xs font-bold text-[var(--brand-navy-strong)] disabled:opacity-40"
+              >
+                Cancelar
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_0.7fr_auto]">
+              <label className="grid gap-2 text-xs font-bold text-[var(--brand-navy-strong)]">
+                Nome
+                <input
+                  value={editingUser.name}
+                  onChange={(event) => setEditingUser((current) => current ? { ...current, name: event.target.value } : current)}
+                  disabled={isSaving}
+                  className="h-10 rounded-xl border border-[var(--line-strong)] bg-white px-3 text-sm outline-none focus:border-[var(--brand-blue)] disabled:opacity-60"
+                />
+              </label>
+              <label className="grid gap-2 text-xs font-bold text-[var(--brand-navy-strong)]">
+                Email
+                <input
+                  value={editingUser.email}
+                  onChange={(event) => setEditingUser((current) => current ? { ...current, email: event.target.value } : current)}
+                  type="email"
+                  disabled={isSaving}
+                  className="h-10 rounded-xl border border-[var(--line-strong)] bg-white px-3 text-sm outline-none focus:border-[var(--brand-blue)] disabled:opacity-60"
+                />
+              </label>
+              <label className="grid gap-2 text-xs font-bold text-[var(--brand-navy-strong)]">
+                Categoria
+                <select
+                  value={visibleCategories.includes(editingUser.role) ? editingUser.role : "ATGC"}
+                  onChange={(event) => setEditingUser((current) =>
+                    current ? { ...current, role: event.target.value as UserCategory } : current
+                  )}
+                  disabled={isSaving || isProtectedUser(users.find((user) => user.id === editingUser.id), canManageAdminAuthority)}
+                  className="h-10 rounded-xl border border-[var(--line-strong)] bg-white px-3 text-sm font-bold text-[var(--brand-navy-strong)] disabled:opacity-70"
+                >
+                  {visibleCategories.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={() => void saveEditingUser()}
+                  disabled={isSaving || !editingUser.name.trim() || !editingUser.email.trim()}
+                  className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-[var(--brand-navy-strong)] px-4 text-sm font-black text-white disabled:opacity-40 lg:w-auto"
+                >
+                  {savingAction === `update-${editingUser.id}` ? "Salvando" : "Salvar alterações"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-4 overflow-x-auto rounded-xl border border-[var(--line-ghost)]">
-          <table className="w-full min-w-[1020px] text-sm">
+          <table className="w-full min-w-[880px] text-sm">
             <thead>
               <tr className="border-b border-[var(--line-ghost)] bg-[var(--surface-soft)]/70 text-left text-[11px] font-black uppercase tracking-[0.12em] text-[var(--ink-soft)]">
                 <th className="px-4 py-3">Usuário</th>
                 <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Instituição</th>
                 <th className="px-4 py-3">Categoria</th>
                 <th className="px-4 py-3">Cadastro</th>
                 <th className="px-4 py-3">Status</th>
@@ -497,18 +677,17 @@ export function AccessManagementPanel({
                     {user.name}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-[var(--ink)]">{user.email}</td>
-                  <td className="px-4 py-3 text-[var(--ink-soft)]">{user.institution}</td>
                   <td className="px-4 py-3">
                     <select
                       value={user.role}
                       onChange={(event) => {
                         const role = event.target.value as UserCategory;
-                        updateUser(user.id, {
+                        void updateUser(user.id, {
                           role,
                           institution: role === "Admin" ? "Admin" : role,
                         });
                       }}
-                      disabled={!canManageUsers || isProtectedUser(user, canManageAdminAuthority)}
+                      disabled={isSaving || !canManageUsers || isProtectedUser(user, canManageAdminAuthority)}
                       className={cn(
                         "h-9 min-w-36 rounded-full border px-3 text-xs font-black disabled:opacity-70",
                         roleToneClasses[user.role],
@@ -534,8 +713,8 @@ export function AccessManagementPanel({
                   <td className="px-4 py-3">
                     <button
                       type="button"
-                      onClick={() => updateUser(user.id, { status: user.status === "ativo" ? "inativo" : "ativo" })}
-                      disabled={!canManageUsers || isProtectedUser(user, canManageAdminAuthority)}
+                      onClick={() => void updateUser(user.id, { status: user.status === "ativo" ? "inativo" : "ativo" })}
+                      disabled={isSaving || !canManageUsers || isProtectedUser(user, canManageAdminAuthority)}
                       className={cn(
                         "inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-black disabled:opacity-50",
                         user.status === "ativo"
@@ -551,19 +730,19 @@ export function AccessManagementPanel({
                     <div className="flex justify-end gap-2">
                       <ActionButton
                         label="Editar cadastro"
-                        disabled={!canManageUsers}
+                        disabled={isSaving || !canManageUsers}
                         onClick={() => startEditingUser(user)}
                         icon={Pencil}
                       />
                       <ActionButton
                         label="Redefinir senha"
-                        disabled={!canManageUsers}
+                        disabled={isSaving || !canManageUsers || isProtectedUser(user, canManageAdminAuthority)}
                         onClick={() => resetPassword(user.id)}
                         icon={KeyRound}
                       />
                       <ActionButton
                         label="Excluir"
-                        disabled={!canManageUsers || isProtectedUser(user, canManageAdminAuthority)}
+                        disabled={isSaving || !canManageUsers || isProtectedUser(user, canManageAdminAuthority)}
                         onClick={() => removeUser(user.id)}
                         icon={Trash2}
                         danger
@@ -576,75 +755,6 @@ export function AccessManagementPanel({
           </table>
         </div>
       </section>
-      ) : null}
-
-      {showSection("people") && editingUser ? (
-        <section className="rounded-xl border border-[var(--line-ghost)] bg-[var(--surface-soft)] p-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[var(--brand-teal)]">
-                Editar pessoa autorizada
-              </p>
-              <h3 className="heading-font mt-1 text-lg font-black text-[var(--brand-navy-strong)]">
-                {editingUser.name || "Cadastro selecionado"}
-              </h3>
-            </div>
-            <button
-              type="button"
-              onClick={() => setEditingUser(null)}
-              className="h-9 rounded-xl border border-[var(--line-strong)] bg-white px-4 text-xs font-bold text-[var(--brand-navy-strong)]"
-            >
-              Cancelar
-            </button>
-          </div>
-
-          <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_0.7fr_auto]">
-            <label className="grid gap-2 text-xs font-bold text-[var(--brand-navy-strong)]">
-              Nome
-              <input
-                value={editingUser.name}
-                onChange={(event) => setEditingUser((current) => current ? { ...current, name: event.target.value } : current)}
-                className="h-10 rounded-xl border border-[var(--line-strong)] bg-white px-3 text-sm outline-none focus:border-[var(--brand-blue)]"
-              />
-            </label>
-            <label className="grid gap-2 text-xs font-bold text-[var(--brand-navy-strong)]">
-              Email
-              <input
-                value={editingUser.email}
-                onChange={(event) => setEditingUser((current) => current ? { ...current, email: event.target.value } : current)}
-                type="email"
-                className="h-10 rounded-xl border border-[var(--line-strong)] bg-white px-3 text-sm outline-none focus:border-[var(--brand-blue)]"
-              />
-            </label>
-            <label className="grid gap-2 text-xs font-bold text-[var(--brand-navy-strong)]">
-              Categoria
-              <select
-                value={visibleCategories.includes(editingUser.role) ? editingUser.role : "ATGC"}
-                onChange={(event) => setEditingUser((current) =>
-                  current ? { ...current, role: event.target.value as UserCategory } : current
-                )}
-                disabled={isProtectedUser(users.find((user) => user.id === editingUser.id), canManageAdminAuthority)}
-                className="h-10 rounded-xl border border-[var(--line-strong)] bg-white px-3 text-sm font-bold text-[var(--brand-navy-strong)] disabled:opacity-70"
-              >
-                {visibleCategories.map((role) => (
-                  <option key={role} value={role}>
-                    {role}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="flex items-end">
-              <button
-                type="button"
-                onClick={saveEditingUser}
-                disabled={!editingUser.name.trim() || !editingUser.email.trim()}
-                className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-[var(--brand-navy-strong)] px-4 text-sm font-black text-white disabled:opacity-40 lg:w-auto"
-              >
-                Salvar alterações
-              </button>
-            </div>
-          </div>
-        </section>
       ) : null}
 
       {showSection("audit") ? (

@@ -90,8 +90,8 @@ export function PointActionsPageContent() {
           <p className="heading-font text-xl font-bold text-[var(--brand-navy-strong)]">
             Carregando ações pontuais
           </p>
-          <p className="mt-2 max-w-lg text-justify text-sm leading-6 text-slate-500">
-            Consultando os registros compartilhados na nuvem para exibir os eventos cadastrados.
+          <p className="mt-2 max-w-lg text-sm leading-6 text-slate-500">
+            Consultando os registros cadastrados.
           </p>
         </div>
       </div>
@@ -107,9 +107,8 @@ export function PointActionsPageContent() {
           <p className="heading-font text-xl font-bold text-[var(--brand-navy-strong)]">
             Nenhuma ação pontual registrada
           </p>
-          <p className="mt-2 max-w-lg text-justify text-sm leading-6 text-slate-500">
-            Cadastre manualmente as ações pontuais no módulo Dados para liberar os cards,
-            mapa, resultados, fotos e legendas desta página.
+          <p className="mt-2 max-w-lg text-sm leading-6 text-slate-500">
+            Cadastre ações pontuais em Entrada de dados para liberar esta página.
           </p>
         </div>
       </div>
@@ -123,7 +122,7 @@ export function PointActionsPageContent() {
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
             Ação pontual selecionada
           </p>
-          <h2 className="heading-font text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
+          <h2 className="heading-font text-2xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
             {selectedAction.eventName}
           </h2>
           {selectedAction.document ? (
@@ -166,8 +165,8 @@ export function PointActionsPageContent() {
         <MetricCard icon={Camera} label="Fotos" value={totalPhotos} detail="Links Dropbox" />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-2">
-        <div className="relative min-h-[220px] overflow-hidden rounded-[24px] border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)]">
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="relative h-[220px] overflow-hidden rounded-[24px] border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)]">
           <CampaignHydroMap
             points={mapPoints}
             selectedPointId={selectedPoint?.id}
@@ -216,7 +215,7 @@ function HeaderBlock() {
       <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
         Demandas Sanepar
       </p>
-      <h2 className="heading-font text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
+      <h2 className="heading-font text-2xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
         Ações Pontuais Sanepar
       </h2>
     </section>
@@ -242,10 +241,10 @@ function MetricCard({
         </p>
         <Icon className="h-4 w-4 text-[var(--brand-navy-strong)]" />
       </div>
-      <p className="heading-font text-3xl font-black text-[var(--brand-navy-strong)]">
+      <p className="heading-font text-2xl font-black text-[var(--brand-navy-strong)]">
         {value}
       </p>
-      <p className="mt-2 text-[10px] font-semibold text-[var(--brand-teal)]">{detail}</p>
+      <p className="mt-2 text-xs font-semibold text-[var(--brand-teal)]">{detail}</p>
     </article>
   );
 }
@@ -494,7 +493,7 @@ function PhotoDialog({
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg bg-[var(--surface-soft)] px-3 py-2">
-      <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">
+      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
         {label}
       </p>
       <p className="mt-1 font-semibold text-slate-700">{value}</p>

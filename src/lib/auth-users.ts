@@ -5,8 +5,8 @@ import {
   type UserCategory,
 } from "@/lib/access-control";
 
-export const INITIAL_PASSWORD = "GIA26";
-const LEGACY_INITIAL_PASSWORDS = ["ATGC26"];
+export const INITIAL_PASSWORD = "ATGC26";
+const LEGACY_INITIAL_PASSWORDS = ["GIA26"];
 export const AUTH_USERS_STORAGE_KEY = "yvae:auth-users";
 export const AUTH_SESSION_STORAGE_KEY = "yvae:auth-session";
 
@@ -215,8 +215,10 @@ export async function loadAuthUsersFromSharedStore() {
 
 export function persistAuthUsers(users: AppUser[]) {
   persistAuthUsersLocal(users);
-  window.dispatchEvent(new Event("yvae:auth-users-updated"));
-  void persistAuthUsersToSharedStore(users);
+  return persistAuthUsersToSharedStore(users).then((saved) => {
+    window.dispatchEvent(new Event("yvae:auth-users-updated"));
+    return saved;
+  });
 }
 
 export async function persistAuthUsersToSharedStore(users: AppUser[]) {
@@ -270,6 +272,82 @@ export function clearSession() {
   window.dispatchEvent(new Event("yvae:auth-session-updated"));
 }
 
+export type LoginResult =
+  | { ok: true; user: AppUser; mustChangePassword: boolean }
+  | { ok: false; error: string };
+
+export async function requestLogin(email: string, password: string): Promise<LoginResult> {
+  try {
+    const response = await fetch("/api/auth-users/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const payload = (await response.json()) as {
+      user?: unknown;
+      mustChangePassword?: boolean;
+      error?: string;
+    };
+
+    if (!response.ok || !payload.user) {
+      return { ok: false, error: payload.error ?? "Nao foi possivel entrar." };
+    }
+
+    const [user] = normalizeAuthUsers([payload.user]);
+
+    if (!user) {
+      return { ok: false, error: "Resposta de login invalida." };
+    }
+
+    return { ok: true, user, mustChangePassword: Boolean(payload.mustChangePassword) };
+  } catch {
+    return { ok: false, error: "Sem conexao com o servidor de acesso." };
+  }
+}
+
+export async function requestPasswordChange(
+  email: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<LoginResult> {
+  try {
+    const response = await fetch("/api/auth-users/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, currentPassword, newPassword }),
+    });
+    const payload = (await response.json()) as { user?: unknown; error?: string };
+
+    if (!response.ok || !payload.user) {
+      return { ok: false, error: payload.error ?? "Nao foi possivel salvar a senha." };
+    }
+
+    const [user] = normalizeAuthUsers([payload.user]);
+
+    if (!user) {
+      return { ok: false, error: "Resposta invalida ao salvar a senha." };
+    }
+
+    return { ok: true, user, mustChangePassword: false };
+  } catch {
+    return { ok: false, error: "Sem conexao com o servidor de acesso." };
+  }
+}
+
+export async function requestPasswordReset(userId: string): Promise<boolean> {
+  try {
+    const response = await fetch("/api/auth-users/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 function normalizeAuthUser(user: AppUser): AppUser {
   const normalizedRole = normalizeStoredRole(user.role, user.institution);
 
@@ -291,8 +369,8 @@ export function normalizeAuthUsers(value: unknown): AppUser[] {
       normalizeAuthUser({
         ...user,
         email: user.email.trim().toLowerCase(),
-        password: user.password || INITIAL_PASSWORD,
-        mustChangePassword: Boolean(user.mustChangePassword || isInitialPassword(user.password)),
+        password: typeof user.password === "string" ? user.password : "",
+        mustChangePassword: Boolean(user.mustChangePassword),
         createdAt: user.createdAt || new Date().toISOString().slice(0, 10),
         lastAccess: user.lastAccess || "Primeiro acesso pendente",
       }),

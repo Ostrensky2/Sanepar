@@ -12,29 +12,19 @@ import {
   Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-type RequestStatus = "Nova" | "Em análise" | "Em andamento" | "Aguardando retorno" | "Concluída";
-type RequestPriority = "Baixa" | "Normal" | "Alta" | "Urgente";
-type RequestDirection = "Sanepar → ATGC" | "ATGC → Sanepar";
-
-type SupportRequest = {
-  id: string;
-  title: string;
-  requester: string;
-  institution: RequestDirection;
-  type: string;
-  priority: RequestPriority;
-  description: string;
-  response: string;
-  responseUpdatedAt?: string;
-  status: RequestStatus;
-  createdAt: string;
-  updatedAt: string;
-};
-
-const STORAGE_KEY = "yvae:support-requests";
-const DEFAULT_ATGC_EMAIL = "aline.horo@yahoo.com.br";
-const DEFAULT_SANEPAR_EMAIL = "adrianast@sanepar.com.br";
+import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
+import {
+  DEFAULT_ATGC_EMAIL,
+  getRequestRecipient,
+  notifyCounterpart,
+  readSupportRequests,
+  readSupportRequestsFromStorage,
+  writeSupportRequests,
+  type RequestDirection,
+  type RequestPriority,
+  type RequestStatus,
+  type SupportRequest,
+} from "@/lib/support-requests";
 
 const statusOptions: RequestStatus[] = ["Nova", "Em análise", "Em andamento", "Aguardando retorno", "Concluída"];
 const priorityOptions: RequestPriority[] = ["Baixa", "Normal", "Alta", "Urgente"];
@@ -67,17 +57,46 @@ const emptyForm = {
   description: "",
 };
 
+type NotifyFeedback = { id: string; ok: boolean; message: string };
+
 export default function SolicitacoesPage() {
-  const [requests, setRequests] = useState<SupportRequest[]>(readStoredRequests);
+  const [requests, setRequests] = useState<SupportRequest[]>(readSupportRequestsFromStorage);
   const [form, setForm] = useState(emptyForm);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"Todas" | RequestStatus>("Todas");
   const [responseDraftById, setResponseDraftById] = useState<Record<string, string>>({});
   const [savedResponseId, setSavedResponseId] = useState<string | null>(null);
+  const [notifyFeedback, setNotifyFeedback] = useState<NotifyFeedback | null>(null);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(requests));
-  }, [requests]);
+    let active = true;
+
+    readSupportRequests().then((loaded) => {
+      if (active) {
+        setRequests(loaded);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function persist(next: SupportRequest[]) {
+    const savedInCloud = await writeSupportRequests(next);
+
+    if (savedInCloud || canUseBrowserOnlyPersistence()) {
+      setRequests(next);
+      return true;
+    }
+
+    setNotifyFeedback({
+      id: "sync-error",
+      ok: false,
+      message: "A nuvem não confirmou a gravação. A alteração não foi publicada para outros usuários.",
+    });
+    return false;
+  }
 
   const filteredRequests = useMemo(() => {
     if (statusFilter === "Todas") {
@@ -91,7 +110,7 @@ export default function SolicitacoesPage() {
   const openRequests = requests.filter((request) => request.status !== "Concluída").length;
   const urgentRequests = requests.filter((request) => request.priority === "Urgente" && request.status !== "Concluída").length;
 
-  function createRequest(event: React.FormEvent<HTMLFormElement>) {
+  async function createRequest(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!form.title.trim() || !form.description.trim()) {
@@ -107,18 +126,38 @@ export default function SolicitacoesPage() {
       description: form.description.trim(),
       response: "",
       status: "Nova",
+      notified: false,
       createdAt: now,
       updatedAt: now,
     };
 
-    setRequests((current) => [request, ...current]);
+    const baseRequests = requests;
+    const persisted = await persist([request, ...baseRequests]);
+
+    if (!persisted) {
+      return;
+    }
+
     setActiveId(request.id);
     setForm(emptyForm);
+    setNotifyFeedback({ id: request.id, ok: true, message: "Enviando aviso à contraparte…" });
+
+    const result = await notifyCounterpart(request);
+    setNotifyFeedback({ id: request.id, ok: result.ok, message: result.message });
+
+    if (result.delivered) {
+      const notifiedRequest: SupportRequest = {
+        ...request,
+        notified: true,
+        notifiedAt: new Date().toISOString(),
+      };
+      void persist([notifiedRequest, ...baseRequests]);
+    }
   }
 
   function updateStatus(id: string, status: RequestStatus) {
-    setRequests((current) =>
-      current.map((request) =>
+    void persist(
+      requests.map((request) =>
         request.id === id ? { ...request, status, updatedAt: new Date().toISOString() } : request,
       ),
     );
@@ -127,8 +166,8 @@ export default function SolicitacoesPage() {
   function updateResponse(id: string, response: string) {
     const now = new Date().toISOString();
 
-    setRequests((current) =>
-      current.map((request) =>
+    void persist(
+      requests.map((request) =>
         request.id === id
           ? { ...request, response: response.trim(), responseUpdatedAt: now, updatedAt: now }
           : request,
@@ -163,12 +202,11 @@ export default function SolicitacoesPage() {
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--brand-teal)]">
               Demandas e retornos
             </p>
-            <h1 className="heading-font mt-1 text-2xl font-black text-[var(--brand-navy-strong)]">
+            <h1 className="heading-font mt-1 text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
               Solicitações Sanepar
             </h1>
-            <p className="mt-2 text-justify text-sm leading-6 text-[var(--ink-soft)]">
-              Registro organizado das demandas encaminhadas à ATGC, com prioridade, status, histórico mínimo e respostas
-              registradas no próprio sistema. O e-mail funciona como canal auxiliar de aviso.
+            <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">
+              Demandas entre Sanepar e ATGC, com status e respostas registradas no sistema.
             </p>
           </div>
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--brand-teal-soft)] text-[var(--brand-teal)]">
@@ -262,6 +300,24 @@ export default function SolicitacoesPage() {
               Registrar solicitação
             </button>
           </form>
+
+          {notifyFeedback ? (
+            <p
+              className={cn(
+                "mt-3 rounded-xl border px-3 py-2 text-xs font-bold",
+                notifyFeedback.ok
+                  ? "border-[var(--brand-teal)] bg-[var(--brand-teal-soft)] text-[var(--brand-teal)]"
+                  : "border-[var(--brand-amber)] bg-[rgba(197,122,0,0.1)] text-[var(--brand-amber)]",
+              )}
+            >
+              {notifyFeedback.message}
+            </p>
+          ) : null}
+
+          <p className="mt-3 text-xs font-semibold leading-5 text-[var(--ink-soft)]">
+            Ao registrar, a solicitação é salva no sistema e um aviso é enviado automaticamente
+            por e-mail à instituição destinatária.
+          </p>
         </article>
 
         <div className="space-y-4">
@@ -423,8 +479,7 @@ export default function SolicitacoesPage() {
                   Abrir aviso por e-mail
                 </a>
                 <p className="mt-3 text-xs font-semibold leading-5 text-[var(--ink-soft)]">
-                  Use o e-mail apenas para avisar a instituição destinatária. O atendimento e a resposta devem ficar
-                  registrados nesta tela.
+                  O e-mail é só aviso; registre o atendimento nesta tela.
                 </p>
               </aside>
             </section>
@@ -528,36 +583,4 @@ function formatDate(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
-}
-
-function getRequestRecipient(request: SupportRequest) {
-  return request.institution === "ATGC → Sanepar" ? DEFAULT_SANEPAR_EMAIL : DEFAULT_ATGC_EMAIL;
-}
-
-function normalizeInstitution(value: string): RequestDirection {
-  return value === "ATGC → Sanepar" ? "ATGC → Sanepar" : "Sanepar → ATGC";
-}
-
-function readStoredRequests() {
-  if (typeof window === "undefined") {
-    return [];
-  }
-
-  const saved = window.localStorage.getItem(STORAGE_KEY);
-
-  if (!saved) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(saved) as SupportRequest[];
-
-    return parsed.map((request) => ({
-      ...request,
-      institution: normalizeInstitution(request.institution),
-      response: request.response ?? "",
-    }));
-  } catch {
-    return [];
-  }
 }

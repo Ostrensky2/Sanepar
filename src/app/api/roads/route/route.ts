@@ -89,7 +89,7 @@ async function fetchSegmentedRoute(waypoints: Coordinate[]) {
     coordinates.push(...(index === 1 ? segment : segment.slice(1)));
   }
 
-  return coordinates.length > 1 ? coordinates : null;
+  return coordinates.length >= 2 ? coordinates : null;
 }
 
 async function fetchOsrmRoute(waypoints: Coordinate[]) {
@@ -166,9 +166,11 @@ async function fetchOsrmRouteFromUrl(url: URL) {
       return null;
     }
 
-    return coordinates
+    const route = coordinates
       .map(([lon, lat]) => ({ lat, lon }))
       .filter(isValidCoordinate);
+
+    return route.length >= 2 ? route : null;
   } catch {
     return null;
   }
@@ -187,7 +189,7 @@ function requestJsonWithNode(url: URL) {
           "User-Agent": "YvaeMonitoramento/1.0",
         },
         rejectUnauthorized: false,
-        timeout: 8000,
+        timeout: 25000,
       },
       (response) => {
         let body = "";
@@ -287,9 +289,11 @@ async function fetchValhallaRouteFromUrl(endpoint: string, waypoints: Coordinate
       return null;
     }
 
-    return coordinates
+    const route = coordinates
       .map(([lon, lat]) => ({ lat, lon }))
       .filter(isValidCoordinate);
+
+    return route.length >= 2 ? route : null;
   } catch {
     return null;
   } finally {

@@ -47,7 +47,7 @@ export const navigationItems: NavigationItem[] = [
     headerTitle: "Yva'e - Painel de Monitoramento",
     icon: House,
     group: "regular",
-    privilege: "dashboard.view",
+    privilege: "nav.home",
   },
   {
     href: "/campanhas/campo",
@@ -56,34 +56,7 @@ export const navigationItems: NavigationItem[] = [
     headerTitle: "Yva'e - Campanhas Sazonais",
     icon: CarFront,
     group: "regular",
-    privilege: "campaigns.view",
-    children: [
-      {
-        href: "/campanhas/campo",
-        label: "Campo",
-        summary: "mapa e pontos da campanha",
-        headerTitle: "Yva'e - Campanhas Sazonais",
-        icon: MapPin,
-        privilege: "campaigns.view",
-      },
-      {
-        href: "/campanhas/diario-de-campo",
-        label: "Diário de campo",
-        summary: "eventos e registros da equipe",
-        headerTitle: "Yva'e - Diário de Campo das Campanhas",
-        icon: NotebookPen,
-        privilege: "campaigns.view",
-      },
-    ],
-  },
-  {
-    href: "/pontos",
-    label: "Pontos de Coleta",
-    summary: "gestão técnica SIA",
-    headerTitle: "Monitoramento de Pontos (SIA)",
-    icon: MapPin,
-    group: "regular",
-    privilege: "points.view",
+    privilege: "nav.campaigns",
   },
   {
     href: "/campanhas/resultados",
@@ -92,7 +65,7 @@ export const navigationItems: NavigationItem[] = [
     headerTitle: "Resultados",
     icon: LineChart,
     group: "results",
-    privilege: "campaigns.view",
+    privilege: "nav.results",
     children: [
       {
         href: "/campanhas/resultados",
@@ -100,7 +73,6 @@ export const navigationItems: NavigationItem[] = [
         summary: "análises laboratoriais",
         headerTitle: "Yva'e - Monitoramento",
         icon: FlaskConical,
-        privilege: "campaigns.view",
       },
       {
         href: "/acoes-pontuais",
@@ -112,21 +84,27 @@ export const navigationItems: NavigationItem[] = [
     ],
   },
   {
-    href: "/dados/campo",
+    href: "/dados/status",
     label: "Entrada de dados",
     summary: "importação e curadoria",
     headerTitle: "Entrada de Dados",
     icon: DatabaseZap,
     group: "data",
-    privilege: "data.view",
+    privilege: "nav.data",
     children: [
+      {
+        href: "/dados/status",
+        label: "Status de campanha",
+        summary: "andamento e etapas do projeto",
+        headerTitle: "Entrada de Dados - Status de Campanha",
+        icon: LineChart,
+      },
       {
         href: "/dados/campo",
         label: "Planilhas de campo",
         summary: "importação de planilhas de campo",
         headerTitle: "Entrada de Dados - Planilhas de Campo",
         icon: NotebookPen,
-        privilege: "data.view",
       },
       {
         href: "/dados/diario-de-campo",
@@ -134,7 +112,6 @@ export const navigationItems: NavigationItem[] = [
         summary: "ocorrências e registros diários",
         headerTitle: "Entrada de Dados - Diário de Campo",
         icon: NotebookPen,
-        privilege: "data.view",
       },
       {
         href: "/dados/resultados",
@@ -142,7 +119,6 @@ export const navigationItems: NavigationItem[] = [
         summary: "importação de planilhas laboratoriais",
         headerTitle: "Entrada de Dados - Planilhas de Resultados",
         icon: FileSpreadsheet,
-        privilege: "data.view",
       },
       {
         href: "/dados/acoes-pontuais",
@@ -150,7 +126,6 @@ export const navigationItems: NavigationItem[] = [
         summary: "entrada estruturada de ações pontuais",
         headerTitle: "Entrada de Dados - Registrar Ações Pontuais",
         icon: PencilLine,
-        privilege: "data.view",
       },
     ],
   },
@@ -161,7 +136,7 @@ export const navigationItems: NavigationItem[] = [
     headerTitle: "Repositório Oficial de Documentos",
     icon: FileText,
     group: "support",
-    privilege: "documents.view",
+    privilege: "nav.documents",
   },
   {
     href: "/solicitacoes",
@@ -170,6 +145,7 @@ export const navigationItems: NavigationItem[] = [
     headerTitle: "Solicitações Sanepar",
     icon: MessageSquareText,
     group: "support",
+    privilege: "nav.requests",
   },
   {
     href: "/governanca",
@@ -178,7 +154,7 @@ export const navigationItems: NavigationItem[] = [
     headerTitle: "Configurações do Sistema",
     icon: Settings2,
     group: "admin",
-    privilege: "settings.manage",
+    privilege: "nav.settings",
   },
   {
     href: "/ajuda",
@@ -187,5 +163,100 @@ export const navigationItems: NavigationItem[] = [
     headerTitle: "Ajuda do Yva'e",
     icon: CircleHelp,
     group: "admin",
+    privilege: "nav.help",
   },
 ];
+
+const routePrivilegeOverrides: Record<string, PrivilegeKey[]> = {
+  "/campanhas": ["nav.campaigns"],
+  "/dados": ["nav.data"],
+  "/diario-de-campo": ["nav.campaigns"],
+  "/acoes-pontuais": ["nav.results"],
+  "/acoes-pontuais/ver": ["nav.results"],
+  "/acoes-pontuais/registrar": ["nav.data"],
+};
+
+export function getNavigationAccessForPath(pathname: string) {
+  const override = routePrivilegeOverrides[pathname];
+
+  if (override) {
+    return {
+      item: null,
+      child: null,
+      requiredPrivileges: override,
+    };
+  }
+
+  const item = navigationItems.find(
+    (navigationItem) =>
+      navigationItem.href === pathname ||
+      navigationItem.children?.some((child) => child.href === pathname),
+  );
+
+  if (!item) {
+    return null;
+  }
+
+  const child = item.children?.find((navigationChild) => navigationChild.href === pathname);
+
+  return {
+    item,
+    child,
+    requiredPrivileges: [item.privilege, child?.privilege].filter(Boolean) as PrivilegeKey[],
+  };
+}
+
+export function getBreadcrumbsForPath(pathname: string) {
+  const normalizedPath = pathname === "" ? "/" : pathname;
+  const item = navigationItems.find(
+    (navigationItem) =>
+      navigationItem.href === normalizedPath ||
+      navigationItem.children?.some((child) => child.href === normalizedPath),
+  );
+
+  if (item) {
+    const child = item.children?.find((navigationChild) => navigationChild.href === normalizedPath);
+    return [
+      { href: "/", label: "Início" },
+      ...(item.href === "/" ? [] : [{ href: item.href, label: item.label }]),
+      ...(child ? [{ href: child.href, label: child.label }] : []),
+    ];
+  }
+
+  const segments = normalizedPath.split("/").filter(Boolean);
+  if (segments.length === 0) {
+    return [{ href: "/", label: "Início" }];
+  }
+
+  return [
+    { href: "/", label: "Início" },
+    ...segments.map((segment, index) => ({
+      href: `/${segments.slice(0, index + 1).join("/")}`,
+      label: formatSegmentLabel(segment),
+    })),
+  ];
+}
+
+export function getSearchableNavigationItems() {
+  return navigationItems.flatMap((item) => [
+    {
+      href: item.href,
+      label: item.label,
+      group: item.headerTitle,
+      keywords: `${item.label} ${item.summary} ${item.headerTitle}`,
+    },
+    ...(item.children ?? []).map((child) => ({
+      href: child.href,
+      label: child.label,
+      group: item.label,
+      keywords: `${child.label} ${child.summary} ${child.headerTitle} ${item.label}`,
+    })),
+  ]);
+}
+
+function formatSegmentLabel(segment: string) {
+  return segment
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}

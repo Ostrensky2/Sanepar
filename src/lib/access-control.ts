@@ -5,9 +5,16 @@ export type UserCategory =
   | "ATGC";
 
 export type PrivilegeKey =
+  | "nav.home"
+  | "nav.campaigns"
+  | "nav.results"
+  | "nav.data"
+  | "nav.documents"
+  | "nav.requests"
+  | "nav.settings"
+  | "nav.help"
   | "dashboard.view"
   | "campaigns.view"
-  | "points.view"
   | "data.view"
   | "data.import"
   | "data.delete"
@@ -36,9 +43,16 @@ export const userCategories: UserCategory[] = [
 
 export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
   Admin: [
+    "nav.home",
+    "nav.campaigns",
+    "nav.results",
+    "nav.data",
+    "nav.documents",
+    "nav.requests",
+    "nav.settings",
+    "nav.help",
     "dashboard.view",
     "campaigns.view",
-    "points.view",
     "data.view",
     "data.import",
     "data.delete",
@@ -54,9 +68,16 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "settings.diagnostics",
   ],
   Sanepar: [
+    "nav.home",
+    "nav.campaigns",
+    "nav.results",
+    "nav.data",
+    "nav.documents",
+    "nav.requests",
+    "nav.settings",
+    "nav.help",
     "dashboard.view",
     "campaigns.view",
-    "points.view",
     "data.view",
     "data.import",
     "documents.view",
@@ -67,19 +88,31 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "settings.diagnostics",
   ],
   UFPR: [
+    "nav.home",
+    "nav.campaigns",
+    "nav.results",
+    "nav.data",
+    "nav.documents",
+    "nav.help",
     "dashboard.view",
     "campaigns.view",
-    "points.view",
     "data.view",
     "data.import",
     "documents.view",
     "documents.manage",
   ],
   ATGC: [
+    "nav.home",
+    "nav.campaigns",
+    "nav.results",
+    "nav.data",
+    "nav.documents",
+    "nav.help",
     "dashboard.view",
     "campaigns.view",
-    "points.view",
     "data.view",
+    "data.import",
+    "data.delete",
     "documents.view",
   ],
 };
@@ -92,13 +125,20 @@ export const categoryDescriptions: Record<UserCategory, string> = {
   UFPR:
     "Equipe UFPR com curadoria técnica, importação de dados e gestão documental.",
   ATGC:
-    "Equipe ATGC com consulta operacional aos painéis, campanhas, pontos, dados e documentos publicados.",
+    "Equipe ATGC com operação integral da Entrada de dados, campanhas, pontos, resultados e documentos publicados.",
 };
 
 export const privilegeLabels: Record<PrivilegeKey, string> = {
+  "nav.home": "Módulo: Início",
+  "nav.campaigns": "Módulo: Campanhas",
+  "nav.results": "Módulo: Resultados",
+  "nav.data": "Módulo: Entrada de dados",
+  "nav.documents": "Módulo: Documentos",
+  "nav.requests": "Módulo: Solicitações",
+  "nav.settings": "Módulo: Configurações",
+  "nav.help": "Módulo: Ajuda",
   "dashboard.view": "Visualizar Início",
   "campaigns.view": "Visualizar Campanhas",
-  "points.view": "Visualizar Pontos",
   "data.view": "Visualizar Dados",
   "data.import": "Importar planilhas",
   "data.delete": "Excluir planilhas",
@@ -106,7 +146,7 @@ export const privilegeLabels: Record<PrivilegeKey, string> = {
   "documents.manage": "Gerenciar Documentos",
   "settings.manage": "Configurações",
   "backups.manage": "Backups",
-  "users.manage": "Usuários e permissões",
+  "users.manage": "Pessoas autorizadas",
   "permissions.manage": "Alterar matriz de permissões",
   "settings.buildSync": "Build e sincronização",
   "settings.activity": "Atividade dos membros",
@@ -189,7 +229,7 @@ export function normalizeUserCategory(value: string | null | undefined): UserCat
 export function sanitizePrivileges(privileges: PrivilegeKey[]) {
   const allowed = new Set(Object.keys(privilegeLabels));
 
-  return privileges.filter((privilege) => allowed.has(privilege));
+  return Array.from(new Set(expandLegacyPrivileges(privileges))).filter((privilege) => allowed.has(privilege));
 }
 
 export function normalizePrivilegesForCategory(
@@ -200,7 +240,47 @@ export function normalizePrivilegesForCategory(
     return categoryPrivileges.Admin;
   }
 
-  return sanitizePrivileges(privileges ?? categoryPrivileges[category]);
+  const normalizedPrivileges = sanitizePrivileges(privileges ?? categoryPrivileges[category]);
+
+  if (category === "ATGC") {
+    return Array.from(new Set([...normalizedPrivileges, ...categoryPrivileges.ATGC]));
+  }
+
+  return normalizedPrivileges;
+}
+
+function expandLegacyPrivileges(privileges: PrivilegeKey[]) {
+  const expanded = new Set(privileges);
+
+  if (privileges.some((privilege) => privilege.startsWith("nav."))) {
+    return Array.from(expanded);
+  }
+
+  expanded.add("nav.help");
+  expanded.add("nav.requests");
+
+  if (expanded.has("dashboard.view")) {
+    expanded.add("nav.home");
+  }
+
+  if (expanded.has("campaigns.view")) {
+    expanded.add("nav.campaigns");
+    expanded.add("nav.results");
+  }
+
+  if (expanded.has("data.view")) {
+    expanded.add("nav.data");
+  }
+
+  if (expanded.has("documents.view")) {
+    expanded.add("nav.documents");
+  }
+
+  if (expanded.has("settings.manage")) {
+    expanded.add("nav.settings");
+  }
+
+  return Array.from(expanded);
 }
 
 function writeCookie(name: string, value: string) {

@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import {
+  INITIAL_PASSWORD,
   initialAuthUsers,
   normalizeAuthUsers,
   type AppUser,
 } from "@/lib/auth-users";
+import { isPrimaryAdminRow, normalizePrimaryAdminRow } from "@/lib/auth-users-server";
+import { hashPassword, isHashedPassword } from "@/lib/password";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 
 export const runtime = "nodejs";
@@ -43,9 +46,15 @@ export async function GET() {
   }
 
   if (!data?.length) {
+    const seededRows = await Promise.all(
+      initialAuthUsers.map(async (user) => ({
+        ...toRow(user),
+        password: await hashPassword(user.password),
+      })),
+    );
     const { error: seedError } = await supabase
       .from("auth_users")
-      .upsert(initialAuthUsers.map(toRow), { onConflict: "id" });
+      .upsert(seededRows, { onConflict: "id" });
 
     if (seedError) {
       return NextResponse.json(
@@ -54,11 +63,33 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({ users: initialAuthUsers, persistence: "cloud" });
+    return NextResponse.json({ users: stripPasswords(initialAuthUsers), persistence: "cloud" });
+  }
+
+  const legacyRows = data.filter((row) => !isHashedPassword(row.password));
+
+  if (legacyRows.length) {
+    const migratedRows = await Promise.all(
+      legacyRows.map(async (row) => ({
+        ...row,
+        password: await hashPassword(row.password),
+        updated_at: new Date().toISOString(),
+      })),
+    );
+    const { error: migrationError } = await supabase
+      .from("auth_users")
+      .upsert(migratedRows, { onConflict: "id" });
+
+    if (migrationError) {
+      return NextResponse.json(
+        { error: "Nao foi possivel proteger as senhas existentes.", details: migrationError.message },
+        { status: 500 },
+      );
+    }
   }
 
   return NextResponse.json({
-    users: normalizeAuthUsers(data.map(fromRow)),
+    users: stripPasswords(normalizeAuthUsers(data.map(fromRow))),
     persistence: "cloud",
   });
 }
@@ -76,12 +107,46 @@ export async function PUT(request: Request) {
   }
 
   if (!supabase) {
-    return NextResponse.json({ users, persistence: "browser" });
+    return NextResponse.json({ users: stripPasswords(users), persistence: "browser" });
   }
+
+  const { data: existingRows, error: readError } = await supabase
+    .from("auth_users")
+    .select("*")
+    .returns<AuthUserRow[]>();
+
+  if (readError) {
+    return NextResponse.json(
+      { error: "Nao foi possivel verificar usuarios atuais.", details: readError.message },
+      { status: 500 },
+    );
+  }
+
+  const existingById = new Map((existingRows ?? []).map((row) => [row.id, row]));
+  const initialPasswordHash = await hashPassword(INITIAL_PASSWORD);
+
+  const rows = users.map((user) => {
+    const existing = existingById.get(user.id);
+    const baseRow = toRow(user);
+
+    if (existing) {
+      return {
+        ...baseRow,
+        password: existing.password,
+        must_change_password: existing.must_change_password,
+      };
+    }
+
+    return {
+      ...baseRow,
+      password: initialPasswordHash,
+      must_change_password: true,
+    };
+  });
 
   const { error } = await supabase
     .from("auth_users")
-    .upsert(users.map(toRow), { onConflict: "id" });
+    .upsert(rows, { onConflict: "id" });
 
   if (error) {
     return NextResponse.json(
@@ -90,21 +155,46 @@ export async function PUT(request: Request) {
     );
   }
 
-  return NextResponse.json({ users, persistence: "cloud" });
+  const nextIds = new Set(users.map((user) => user.id));
+  const deletedIds = (existingRows ?? [])
+    .filter((row) => !nextIds.has(row.id) && !isPrimaryAdminRow(row))
+    .map((row) => row.id);
+
+  if (deletedIds.length) {
+    const { error: deleteError } = await supabase
+      .from("auth_users")
+      .delete()
+      .in("id", deletedIds);
+
+    if (deleteError) {
+      return NextResponse.json(
+        { error: "Nao foi possivel remover usuarios autorizados na nuvem.", details: deleteError.message },
+        { status: 500 },
+      );
+    }
+  }
+
+  return NextResponse.json({ users: stripPasswords(users), persistence: "cloud" });
+}
+
+function stripPasswords(users: AppUser[]): AppUser[] {
+  return users.map((user) => ({ ...user, password: "" }));
 }
 
 function fromRow(row: AuthUserRow): AppUser {
+  const normalizedRow = normalizePrimaryAdminRow(row);
+
   return {
-    id: row.id,
-    name: row.name,
-    email: row.email,
-    institution: row.institution,
-    role: row.role,
-    status: row.status,
-    password: row.password,
-    mustChangePassword: row.must_change_password,
-    createdAt: row.created_at_label,
-    lastAccess: row.last_access,
+    id: normalizedRow.id,
+    name: normalizedRow.name,
+    email: normalizedRow.email,
+    institution: normalizedRow.institution,
+    role: normalizedRow.role,
+    status: normalizedRow.status,
+    password: normalizedRow.password,
+    mustChangePassword: normalizedRow.must_change_password,
+    createdAt: normalizedRow.created_at_label,
+    lastAccess: normalizedRow.last_access,
   };
 }
 

@@ -27,6 +27,7 @@ import {
   readStoredDocumentsFromStorage,
   type StoredDocument,
 } from "@/lib/app-documents";
+import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 
 type PointForm = {
   id: string;
@@ -184,8 +185,14 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
 
   async function handleImported(imported: PointActionEvent[]) {
     const nextActions = [...imported, ...actions];
-    setActions(nextActions);
     const savedInCloud = await writePointActions(nextActions);
+
+    if (!savedInCloud && !canUseBrowserOnlyPersistence()) {
+      setError("A nuvem não confirmou a importação. Os eventos não foram publicados para outros usuários.");
+      return;
+    }
+
+    setActions(nextActions);
     setIsImportOpen(false);
     const totalPoints = imported.reduce((t, e) => t + e.points.length, 0);
     setMessage(
@@ -302,8 +309,14 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
       ? actions.map((action) => (action.id === editingActionId ? actionPayload : action))
       : [actionPayload, ...actions];
 
-    setActions(nextActions);
     const savedInCloud = await writePointActions(nextActions);
+
+    if (!savedInCloud && !canUseBrowserOnlyPersistence()) {
+      setError("A nuvem não confirmou a gravação. A ação pontual não foi publicada para outros usuários.");
+      return;
+    }
+
+    setActions(nextActions);
     resetForm();
     setMessage(
       editingActionId
@@ -327,9 +340,8 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
           <h3 className="heading-font text-xl font-extrabold text-[var(--brand-navy-strong)]">
             Novo registro de ação pontual
           </h3>
-          <p className="mt-1 max-w-3xl text-justify text-xs leading-5 text-slate-500">
-            Registre manualmente campanhas pontuais realizadas a pedido da Sanepar.
-            Cada evento pode conter um ou mais pontos de coleta, resultados, fotos e legendas.
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            Registro de campanhas pontuais a pedido da Sanepar.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

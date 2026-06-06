@@ -1,3 +1,5 @@
+import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
+
 export const POINT_ACTIONS_STORAGE_KEY = "yvae:point-actions";
 const POINT_ACTIONS_UPDATED_EVENT = "yvae:point-actions-updated";
 
@@ -33,7 +35,7 @@ export type PointActionEvent = {
 };
 
 export function readPointActionsFromStorage() {
-  if (typeof window === "undefined") {
+  if (typeof window === "undefined" || !canUseBrowserOnlyPersistence()) {
     return [];
   }
 
@@ -68,7 +70,7 @@ export async function readPointActions() {
     });
 
     if (!response.ok) {
-      return localActions;
+      return canUseBrowserOnlyPersistence() ? localActions : [];
     }
 
     const payload = (await response.json()) as { actions?: unknown };
@@ -82,13 +84,15 @@ export async function readPointActions() {
     }
 
     if (localActions.length) {
-      await writePointActionsToCloud(localActions);
-      return localActions;
+      const savedInCloud = await writePointActionsToCloud(localActions);
+      if (savedInCloud || canUseBrowserOnlyPersistence()) {
+        return localActions;
+      }
     }
 
     return [];
   } catch {
-    return localActions;
+    return canUseBrowserOnlyPersistence() ? localActions : [];
   }
 }
 
@@ -97,8 +101,13 @@ function cachePointActionsInStorage(actions: PointActionEvent[]) {
 }
 
 export async function writePointActions(actions: PointActionEvent[]) {
-  writePointActionsToStorage(actions);
-  return writePointActionsToCloud(actions);
+  const savedInCloud = await writePointActionsToCloud(actions);
+
+  if (savedInCloud || canUseBrowserOnlyPersistence()) {
+    writePointActionsToStorage(actions);
+  }
+
+  return savedInCloud;
 }
 
 async function writePointActionsToCloud(actions: PointActionEvent[]) {

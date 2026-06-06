@@ -1,7 +1,5 @@
-import { CampaignsFieldDiaryContent } from "@/components/campaigns-field-diary-content";
-
-export const dynamic = "force-dynamic";
+import { redirect } from "next/navigation";
 
 export default function CampanhasDiarioDeCampoPage() {
-  return <CampaignsFieldDiaryContent />;
+  redirect("/dados/diario-de-campo");
 }

@@ -15,10 +15,9 @@ import {
   INITIAL_PASSWORD,
   clearSession,
   getStoredSession,
-  isInitialPassword,
   loadAuthUsersFromSharedStore,
-  persistAuthUsers,
-  persistAuthUsersToSharedStore,
+  requestLogin,
+  requestPasswordChange,
   persistSession,
   type AppUser,
   type AuthSession,
@@ -71,27 +70,21 @@ export function AuthGate({ children }: AuthGateProps) {
     [users],
   );
 
-  function signIn() {
-    const normalizedEmail = email.trim().toLowerCase();
-    const user = users.find((item) => item.email.toLowerCase() === normalizedEmail);
+  async function signIn() {
+    const result = await requestLogin(email, password);
 
-    if (!user || user.password !== password) {
-      setError("Email ou senha incorretos.");
+    if (!result.ok) {
+      setError(result.error);
       return;
     }
 
-    if (user.status !== "ativo") {
-      setError("Este acesso esta inativo. Solicite reativacao a um administrador.");
-      return;
-    }
-
-    if (user.mustChangePassword || isInitialPassword(user.password)) {
-      setPendingUser(user);
+    if (result.mustChangePassword) {
+      setPendingUser(result.user);
       setError("");
       return;
     }
 
-    completeSignIn(user, users);
+    completeSignIn(result.user);
   }
 
   async function changePassword() {
@@ -105,7 +98,7 @@ export function AuthGate({ children }: AuthGateProps) {
     }
 
     if (newPassword === INITIAL_PASSWORD) {
-      setError("Escolha uma senha diferente da senha provisoria GIA26.");
+      setError("Escolha uma senha diferente da senha provisoria ATGC26.");
       return;
     }
 
@@ -114,36 +107,20 @@ export function AuthGate({ children }: AuthGateProps) {
       return;
     }
 
-    const updatedUsers = users.map((user) =>
-      user.id === pendingUser.id
-        ? {
-            ...user,
-            password: newPassword,
-            mustChangePassword: false,
-            lastAccess: formatAccessDate(),
-          }
-        : user,
-    );
-    const updatedUser = updatedUsers.find((user) => user.id === pendingUser.id) ?? pendingUser;
-    const savedInSharedStore = await persistAuthUsersToSharedStore(updatedUsers);
+    const result = await requestPasswordChange(pendingUser.email, password, newPassword);
 
-    if (!savedInSharedStore) {
-      setError("Nao foi possivel confirmar a senha na nuvem. Tente novamente antes de entrar.");
+    if (!result.ok) {
+      setError(result.error);
       return;
     }
 
-    persistAuthUsers(updatedUsers);
-    setUsers(updatedUsers);
     setPendingUser(null);
     setNewPassword("");
     setConfirmPassword("");
-    completeSignIn(updatedUser, updatedUsers);
+    completeSignIn(result.user);
   }
 
-  function completeSignIn(user: AppUser, currentUsers: AppUser[]) {
-    const updatedUsers = currentUsers.map((item) =>
-      item.id === user.id ? { ...item, lastAccess: formatAccessDate() } : item,
-    );
+  function completeSignIn(user: AppUser) {
     const sessionPayload = {
       userId: user.id,
       email: user.email,
@@ -151,11 +128,9 @@ export function AuthGate({ children }: AuthGateProps) {
       role: user.role,
     };
 
-    persistAuthUsers(updatedUsers);
     persistSession(sessionPayload);
     recordActivity(sessionPayload, "login", "Entrada no sistema", "Login confirmado");
     syncActiveRole(user.role);
-    setUsers(updatedUsers);
     setSession(sessionPayload);
     setPassword("");
     setError("");
@@ -184,7 +159,7 @@ export function AuthGate({ children }: AuthGateProps) {
               Entrada controlada do Yva&apos;e
             </h1>
             <p className="mt-4 max-w-sm text-sm leading-6 text-white/78">
-              Use o email cadastrado em Configuracoes. Senhas provisórias entram com GIA26 e pedem troca no primeiro acesso.
+              Use o email cadastrado em Configuracoes. Senhas provisórias entram com ATGC26 e pedem troca no primeiro acesso.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 text-sm">
@@ -252,7 +227,7 @@ export function AuthGate({ children }: AuthGateProps) {
               className="grid gap-4"
               onSubmit={(event) => {
                 event.preventDefault();
-                signIn();
+                void signIn();
               }}
             >
               <label className="grid gap-2 text-sm font-bold text-[var(--brand-navy-strong)]">
@@ -344,14 +319,4 @@ function PasswordField({
 
 function syncActiveRole(role: UserCategory) {
   persistAccessCategory(role);
-}
-
-function formatAccessDate() {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date());
 }

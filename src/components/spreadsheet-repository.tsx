@@ -15,7 +15,17 @@ import {
   normalizeUserCategory,
   type UserCategory,
 } from "@/lib/access-control";
+import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
+import {
+  OPERATION_CANCEL_EVENT,
+  TableSkeletonRows,
+  beginGlobalOperation,
+  emitLocalMode,
+  isCloudConnectionError,
+  toActionableErrorMessage,
+} from "@/components/operational-feedback";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
+import type { LaboratoryRiskPoint, LaboratoryRiskResultRow } from "@/lib/laboratory-risk";
 import type { SpreadsheetPreview } from "@/lib/types";
 
 type SpreadsheetKind = "Campo" | "Laboratório";
@@ -48,7 +58,7 @@ const VIEW_CONFIG: Record<
     kind: "Campo",
     title: "Entrada de Planilhas de Campo",
     description:
-      "Planilha-síntese de campanhas agregada manualmente. O app usa essa fonte para mapas, pontos, rotas, fotos e figuras da campanha.",
+      "Planilha-síntese das campanhas. Alimenta mapas e pontos do app.",
     template: {
       href: "/template-planilha-de-campo.xlsx",
       title: "Modelo da planilha-síntese de campanhas",
@@ -57,7 +67,7 @@ const VIEW_CONFIG: Record<
     },
     formHeading: "Nova planilha de Campo",
     formDescription:
-      "Importe a planilha-síntese da campanha. A publicação atualiza imediatamente mapas, rotas, painel do ponto e figuras.",
+      "Importe a planilha-síntese da campanha.",
     submitLabel: "Carregar planilha",
     metricsLabel: "Campo",
     metricTotalLabel: "Planilhas de Campo",
@@ -68,10 +78,10 @@ const VIEW_CONFIG: Record<
     kind: "Laboratório",
     title: "Entrada de Planilhas de Resultados",
     description:
-      "Planilhas laboratoriais agregadas manualmente. Estes dados alimentam as análises da aba Resultados Analíticos das Campanhas.",
+      "Planilhas laboratoriais no modelo consolidado da Campanha 1. Alimentam as análises de Monitoramento.",
     formHeading: "Nova planilha de Resultados",
     formDescription:
-      "Importe a planilha laboratorial da campanha. O registro fica disponível como preview até a publicação consolidada.",
+      "Importe a planilha laboratorial da campanha. A aba Banco_consolidado deve seguir a ordem homologada das variáveis.",
     submitLabel: "Carregar planilha",
     metricsLabel: "Resultados",
     metricTotalLabel: "Planilhas de Resultados",
@@ -102,6 +112,28 @@ type CampaignPublishPayload = {
   effectivePointCount: number;
   missingFields: string[];
   preview: SpreadsheetPreview;
+  persistence: {
+    mode: "cloud" | "browser";
+    message: string;
+  };
+};
+
+type LaboratoryResultsPayload = {
+  fileName: string;
+  worksheetName: string;
+  rankingWorksheetName: string;
+  rowCount: number;
+  sheetCount: number;
+  columnCount: number;
+  expectedColumnCount: number;
+  headers: string[];
+  matchedHeaders: number;
+  markers: string[];
+  analyzedSets: string[];
+  speciesCount: number;
+  riskRows: LaboratoryRiskResultRow[];
+  riskPoints: LaboratoryRiskPoint[];
+  matchedRiskPointCount: number;
   persistence: {
     mode: "cloud" | "browser";
     message: string;
@@ -182,6 +214,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
     }
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(spreadsheets));
+    window.dispatchEvent(new Event("yvae:spreadsheets-updated"));
   }, [hasLoaded, spreadsheets]);
 
   const canImportSpreadsheets = hasPrivilege(activeCategory, "data.import");
@@ -249,14 +282,30 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
     let sheetCount: number | undefined;
     let statusMessage = "Planilha registrada no módulo Dados.";
     const spreadsheetId = `${file.name}-${crypto.randomUUID()}`;
+    const operationId = `spreadsheet-import:${spreadsheetId}`;
+    const controller = new AbortController();
+    const stopOperation = beginGlobalOperation({
+      id: operationId,
+      title: "Carregando planilha...",
+      description: "Validando arquivo, publicando dados e atualizando o painel.",
+      cancelable: true,
+    });
+    const cancelHandler = (cancelEvent: Event) => {
+      const detail = (cancelEvent as CustomEvent<{ id: string }>).detail;
+      if (detail?.id === operationId) {
+        controller.abort();
+      }
+    };
 
     setIsPending(true);
+    window.addEventListener(OPERATION_CANCEL_EVENT, cancelHandler);
 
     try {
       if (formState.kind === "Campo" && formState.publishFieldMap) {
         const response = await fetch("/api/imports/campaigns", {
           method: "POST",
           body: formData,
+          signal: controller.signal,
         });
         const payload = (await response.json()) as CampaignPublishPayload | { error: string };
 
@@ -264,29 +313,83 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
           throw new Error("error" in payload ? payload.error : "A planilha de Campo não pôde ser publicada.");
         }
 
-        window.localStorage.setItem("yvae:campaign-map-points", JSON.stringify(payload.points));
-        window.localStorage.setItem(
-          "yvae:campaign-map-import",
-          JSON.stringify({
-            fileName: payload.fileName,
-            pointCount: payload.points.length,
-            originalPointCount: payload.originalPointCount,
-            effectivePointCount: payload.effectivePointCount,
-            importedAt: new Date().toISOString(),
-            persistenceMode: payload.persistence.mode,
-          }),
-        );
+        if (payload.persistence.mode !== "cloud" && !canUseBrowserOnlyPersistence()) {
+          throw new Error(payload.persistence.message);
+        }
+
+        if (payload.persistence.mode === "cloud" || canUseBrowserOnlyPersistence()) {
+          if (payload.persistence.mode !== "cloud") {
+            emitLocalMode("A planilha de Campo foi salva neste navegador porque a nuvem não confirmou sincronização.");
+          }
+          window.localStorage.setItem("yvae:campaign-map-points", JSON.stringify(payload.points));
+          window.localStorage.setItem(
+            "yvae:campaign-map-import",
+            JSON.stringify({
+              fileName: payload.fileName,
+              pointCount: payload.points.length,
+              originalPointCount: payload.originalPointCount,
+              effectivePointCount: payload.effectivePointCount,
+              importedAt: new Date().toISOString(),
+              persistenceMode: payload.persistence.mode,
+            }),
+          );
+        }
 
         status = "PUBLICADA";
         rowCount = payload.rowCount;
         sheetCount = payload.preview.sheetCount;
-        statusMessage = "Planilha de Campo registrada e mapa da campanha atualizado.";
+        statusMessage = payload.persistence.message;
+      } else if (formState.kind === "Laboratório") {
+        const resultsData = new FormData();
+        resultsData.append("file", file);
+        const response = await fetch("/api/imports/results", {
+          method: "POST",
+          body: resultsData,
+          signal: controller.signal,
+        });
+        const payload = (await response.json()) as LaboratoryResultsPayload | { error: string };
+
+        if (!response.ok || "error" in payload) {
+          throw new Error(
+            "error" in payload
+              ? payload.error
+              : "A planilha de Resultados não segue o modelo consolidado.",
+          );
+        }
+
+        if (payload.persistence.mode !== "cloud" && !canUseBrowserOnlyPersistence()) {
+          throw new Error(payload.persistence.message);
+        }
+
+        if (payload.persistence.mode === "cloud" || canUseBrowserOnlyPersistence()) {
+          if (payload.persistence.mode !== "cloud") {
+            emitLocalMode("A planilha de Resultados foi salva neste navegador porque a nuvem não confirmou sincronização.");
+          }
+          window.localStorage.setItem("yvae:lab-risk-results", JSON.stringify(payload.riskPoints));
+          window.localStorage.setItem(
+            "yvae:lab-risk-import",
+            JSON.stringify({
+              fileName: payload.fileName,
+              rankingWorksheetName: payload.rankingWorksheetName,
+              riskRowCount: payload.riskRows.length,
+              matchedRiskPointCount: payload.matchedRiskPointCount,
+              importedAt: new Date().toISOString(),
+              persistenceMode: payload.persistence.mode,
+            }),
+          );
+        }
+
+        status = "PUBLICADA";
+        rowCount = payload.rowCount;
+        sheetCount = payload.sheetCount;
+        statusMessage = `${payload.persistence.message} ${payload.rowCount} linhas, ${payload.expectedColumnCount} variáveis obrigatórias validadas${payload.columnCount > payload.expectedColumnCount ? ` e ${payload.columnCount - payload.expectedColumnCount} colunas adicionais` : ""}; ${payload.speciesCount} espécies identificadas; ${payload.matchedRiskPointCount}/${payload.riskRows.length} pontos de risco publicados no Início.`;
       } else {
         const previewData = new FormData();
         previewData.append("file", file);
         const response = await fetch("/api/imports/preview", {
           method: "POST",
           body: previewData,
+          signal: controller.signal,
         });
         const payload = (await response.json()) as SpreadsheetPreview | { error: string };
 
@@ -329,11 +432,19 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
       setMessage(statusMessage);
     } catch (uploadError) {
       setError(
-        uploadError instanceof Error
-          ? uploadError.message
-          : "Não foi possível agregar a planilha.",
+        uploadError instanceof DOMException && uploadError.name === "AbortError"
+          ? "Importação cancelada. Nenhum dado novo foi publicado."
+          : toActionableErrorMessage(
+              uploadError,
+              "Não foi possível agregar a planilha.",
+            ),
       );
+      if (isCloudConnectionError(uploadError)) {
+        emitLocalMode("Falha durante importação de planilha. Dados podem estar apenas neste navegador.");
+      }
     } finally {
+      window.removeEventListener(OPERATION_CANCEL_EVENT, cancelHandler);
+      stopOperation();
       setIsPending(false);
     }
   }
@@ -358,7 +469,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
 
   function deleteSpreadsheet(sheet: StoredSpreadsheet) {
     if (!canDeleteSpreadsheets) {
-      setError("Apenas Admin pode excluir planilhas do módulo Dados.");
+      setError("A categoria ativa pode consultar Dados, mas não pode excluir planilhas.");
       return;
     }
 
@@ -378,7 +489,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
     <div className="mx-auto w-full max-w-6xl space-y-4 px-2 py-2 lg:px-3">
       <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="heading-font mb-1 text-2xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
+          <h2 className="heading-font mb-1 text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
             {config.title}
           </h2>
           <p className="max-w-3xl text-justify text-xs leading-5 text-slate-500">
@@ -424,7 +535,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
             </p>
             {!canImportSpreadsheets ? (
               <p className="mt-3 rounded-lg bg-[rgba(197,122,0,0.08)] px-3 py-2 text-xs font-semibold text-[var(--brand-amber)]">
-                Importação bloqueada para a categoria ativa. Altere para Admin ou Sanepar em Configurações.
+                Importação bloqueada para a categoria ativa. Revise as permissões em Configurações.
               </p>
             ) : null}
           </div>
@@ -523,7 +634,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
             <input
               name="file"
               type="file"
-              accept=".xlsx,.xlsm,.xls"
+              accept=".xlsx,.xlsm"
               disabled={!canImportSpreadsheets || isPending}
               className="sr-only"
               onChange={(event) =>
@@ -626,7 +737,10 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 text-xs">
-              {visibleSpreadsheets.map((sheet) => (
+              {!hasLoaded ? (
+                <TableSkeletonRows rows={5} columns={6} />
+              ) : (
+              visibleSpreadsheets.map((sheet) => (
                 <tr key={sheet.id} className="group transition-all hover:bg-slate-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
@@ -681,11 +795,12 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
                     </div>
                   </td>
                 </tr>
-              ))}
+              ))
+              )}
             </tbody>
           </table>
 
-          {!visibleSpreadsheets.length ? (
+          {hasLoaded && !visibleSpreadsheets.length ? (
             <div className="px-6 py-10 text-center text-sm text-slate-500">
               {config.emptyTableLabel}
             </div>

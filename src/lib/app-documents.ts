@@ -1,9 +1,12 @@
+import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
+
 export const APP_DOCUMENTS_STORAGE_KEY = "yvae:attached-documents";
 export const APP_DOCUMENTS_CLOUD_MIGRATION_KEY = "yvae:attached-documents-cloud-migrated";
 
 export type DocumentType =
   | "Plano de trabalho"
   | "Relatórios"
+  | "Resultados"
   | "Apresentações"
   | "Laudos"
   | "Mapas"
@@ -25,6 +28,7 @@ export type StoredDocument = {
 export const filterTabs: DocumentType[] = [
   "Plano de trabalho",
   "Relatórios",
+  "Resultados",
   "Apresentações",
   "Laudos",
   "Mapas",
@@ -40,12 +44,19 @@ export function isDocumentAllowedInRepository(document: StoredDocument) {
     return false;
   }
 
-  return !/\.(csv|xls|xlsx|xlsm)(?:$|[?#])/.test(title) &&
-    !/\.(csv|xls|xlsx|xlsm)(?:$|[?#])/.test(url);
+  if (type === "resultados") {
+    return true;
+  }
+
+  return !isSpreadsheetLike(title) && !isSpreadsheetLike(url);
+}
+
+function isSpreadsheetLike(value: string) {
+  return /\.(csv|xls|xlsx|xlsm)(?:$|[?#])/.test(value);
 }
 
 export function readStoredDocumentsFromStorage() {
-  if (typeof window === "undefined") {
+  if (typeof window === "undefined" || !canUseBrowserOnlyPersistence()) {
     return [];
   }
 

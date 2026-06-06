@@ -28,6 +28,8 @@ import {
 } from "@/lib/app-documents";
 import { recordActivity } from "@/lib/activity-log";
 import { getStoredSession } from "@/lib/auth-users";
+import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
+import { ErrorBoundary, TableSkeletonRows, emitLocalMode } from "@/components/operational-feedback";
 
 type DocumentSortMode =
   | "numeric-asc"
@@ -96,10 +98,11 @@ export function DocumentRepository() {
         setHasLoadedDocuments(true);
 
         if (!alreadyMigrated && localDocuments.length) {
-          const migrated = await saveDocumentsToCloud(nextDocuments);
-
-          if (migrated) {
+          try {
+            await saveDocumentsToCloud(nextDocuments);
             window.localStorage.setItem(APP_DOCUMENTS_CLOUD_MIGRATION_KEY, "true");
+          } catch {
+            setSyncNotice("Documentos carregados localmente; a nuvem ainda não confirmou a migração.");
           }
         }
       } catch {
@@ -107,9 +110,14 @@ export function DocumentRepository() {
           return;
         }
 
-        setDocuments(localDocuments);
+        setDocuments(canUseBrowserOnlyPersistence() ? localDocuments : []);
         setPersistenceMode("browser");
-        setSyncNotice("Documentos em modo local; a nuvem não está disponível neste ambiente.");
+        setSyncNotice(
+          canUseBrowserOnlyPersistence()
+            ? "Documentos em modo local; a nuvem não está disponível neste ambiente."
+            : "A nuvem não está disponível. Alterações locais não serão exibidas para outros usuários.",
+        );
+        emitLocalMode("Falha de conexão com documentos na nuvem. O repositório está usando dados locais quando disponíveis.");
         setHasLoadedDocuments(true);
       }
     }
@@ -130,9 +138,13 @@ export function DocumentRepository() {
     window.dispatchEvent(new Event("yvae:documents-updated"));
 
     if (persistenceMode === "cloud") {
-      saveDocumentsToCloud(documents).catch(() => {
-        setSyncNotice("A lista local foi atualizada, mas a nuvem não confirmou a gravação.");
-      });
+      saveDocumentsToCloud(documents)
+        .then(() => {
+          setSyncNotice("Documentos sincronizados na nuvem.");
+        })
+        .catch(() => {
+          setSyncNotice("A lista local foi atualizada, mas a nuvem não confirmou a gravação.");
+        });
     }
   }, [documents, hasLoadedDocuments, persistenceMode]);
 
@@ -160,7 +172,7 @@ export function DocumentRepository() {
     visibleDocumentIds.length > 0 &&
     visibleDocumentIds.every((id) => selectedDocumentIds.includes(id));
 
-  function insertDropboxLink(event: FormEvent<HTMLFormElement>) {
+  async function insertDropboxLink(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
 
@@ -192,7 +204,21 @@ export function DocumentRepository() {
       source: "link",
     };
 
-    setDocuments((current) => [newDocument, ...current]);
+    const nextDocuments = [newDocument, ...documents];
+
+    if (persistenceMode === "cloud") {
+      try {
+        await saveDocumentsToCloud(nextDocuments);
+      } catch {
+        setFormError("A nuvem não confirmou a gravação. O documento não foi publicado para outros usuários.");
+        return;
+      }
+    } else if (!canUseBrowserOnlyPersistence()) {
+      setFormError("A nuvem não está disponível. O documento não foi publicado para outros usuários.");
+      return;
+    }
+
+    setDocuments(nextDocuments);
     recordActivity(getStoredSession(), "document.change", newDocument.title, "Documento adicionado");
     setActiveTab(newDocument.type);
     setIsInsertOpen(false);
@@ -205,12 +231,24 @@ export function DocumentRepository() {
     });
   }
 
-  function deleteDocument(document: StoredDocument) {
+  async function deleteDocument(document: StoredDocument) {
     const confirmed = window.confirm(
       `"${document.title}" será apagado da lista de documentos deste painel. Esta ação remove o item da sessão atual.`,
     );
 
     if (!confirmed) {
+      return;
+    }
+
+    if (persistenceMode === "cloud") {
+      try {
+        await deleteDocumentsFromCloud([document.id]);
+      } catch {
+        setSyncNotice("Documento removido localmente, mas a nuvem não confirmou a exclusão.");
+        return;
+      }
+    } else if (!canUseBrowserOnlyPersistence()) {
+      setSyncNotice("A nuvem não está disponível. O documento não foi removido para outros usuários.");
       return;
     }
 
@@ -283,7 +321,7 @@ export function DocumentRepository() {
     });
   }
 
-  function deleteSelectedDocuments() {
+  async function deleteSelectedDocuments() {
     if (!selectedDocuments.length) {
       return;
     }
@@ -297,6 +335,19 @@ export function DocumentRepository() {
     }
 
     const selectedIds = new Set(selectedDocuments.map((document) => document.id));
+
+    if (persistenceMode === "cloud") {
+      try {
+        await deleteDocumentsFromCloud([...selectedIds]);
+      } catch {
+        setSyncNotice("Documentos removidos localmente, mas a nuvem não confirmou a exclusão.");
+        return;
+      }
+    } else if (!canUseBrowserOnlyPersistence()) {
+      setSyncNotice("A nuvem não está disponível. Os documentos não foram removidos para outros usuários.");
+      return;
+    }
+
     setDocuments((current) => current.filter((document) => !selectedIds.has(document.id)));
     setSelectedDocumentIds([]);
   }
@@ -580,60 +631,66 @@ export function DocumentRepository() {
           </div>
         ) : null}
 
-        <div className="glass-panel overflow-hidden rounded-[28px]">
-          <table className="w-full text-left">
-            <thead className="bg-slate-50/50">
-              <tr>
-                <th className="w-12 px-6 py-4">
-                  <input
-                    type="checkbox"
-                    aria-label="Selecionar todos os documentos visíveis"
-                    checked={allVisibleSelected}
-                    onChange={toggleAllVisibleDocuments}
-                    className="h-4 w-4 rounded border-slate-300 text-[var(--brand-navy-strong)] focus:ring-[var(--brand-blue)]"
+        <ErrorBoundary title="Falha na lista de documentos">
+          <div className="glass-panel overflow-hidden rounded-[28px]">
+            <table className="w-full text-left">
+              <thead className="bg-slate-50/50">
+                <tr>
+                  <th className="w-12 px-6 py-4">
+                    <input
+                      type="checkbox"
+                      aria-label="Selecionar todos os documentos visíveis"
+                      checked={allVisibleSelected}
+                      onChange={toggleAllVisibleDocuments}
+                      className="h-4 w-4 rounded border-slate-300 text-[var(--brand-navy-strong)] focus:ring-[var(--brand-blue)]"
+                    />
+                  </th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                    Arquivo
+                  </th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                    Campanha / Ponto
+                  </th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                    Data
+                  </th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                    Tipo
+                  </th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                    Status / Disponibilidade
+                  </th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                    Ações
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-slate-50 text-xs">
+                {!hasLoadedDocuments ? (
+                  <TableSkeletonRows rows={5} columns={7} />
+                ) : (
+                visibleDocuments.map((document) => (
+                  <DocumentRow
+                    key={document.id}
+                    document={document}
+                    selected={selectedDocumentIds.includes(document.id)}
+                    onToggleSelection={toggleDocumentSelection}
+                    onDelete={deleteDocument}
+                    onShare={shareDocument}
                   />
-                </th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
-                  Arquivo
-                </th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
-                  Campanha / Ponto
-                </th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
-                  Data
-                </th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
-                  Tipo
-                </th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
-                  Status / Disponibilidade
-                </th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
-                  Ações
-                </th>
-              </tr>
-            </thead>
+                ))
+                )}
+              </tbody>
+            </table>
 
-            <tbody className="divide-y divide-slate-50 text-xs">
-              {visibleDocuments.map((document) => (
-                <DocumentRow
-                  key={document.id}
-                  document={document}
-                  selected={selectedDocumentIds.includes(document.id)}
-                  onToggleSelection={toggleDocumentSelection}
-                  onDelete={deleteDocument}
-                  onShare={shareDocument}
-                />
-              ))}
-            </tbody>
-          </table>
-
-          {!visibleDocuments.length ? (
-            <div className="px-6 py-10 text-center text-sm text-slate-500">
-              Nenhum documento encontrado para o filtro atual.
-            </div>
-          ) : null}
-        </div>
+            {hasLoadedDocuments && !visibleDocuments.length ? (
+              <div className="px-6 py-10 text-center text-sm text-slate-500">
+                Nenhum documento encontrado para o filtro atual.
+              </div>
+            ) : null}
+          </div>
+        </ErrorBoundary>
 
         <div className="flex items-center justify-between py-2">
           <p className="text-[11px] text-slate-500">
@@ -660,7 +717,25 @@ async function saveDocumentsToCloud(documents: StoredDocument[]) {
     body: JSON.stringify({ documents }),
   });
 
-  return response.ok;
+  if (!response.ok) {
+    throw new Error("A nuvem não confirmou a gravação dos documentos.");
+  }
+
+  return response.json() as Promise<{ documents?: unknown; persistence?: string }>;
+}
+
+async function deleteDocumentsFromCloud(ids: string[]) {
+  const response = await fetch("/api/documents", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids }),
+  });
+
+  if (!response.ok) {
+    throw new Error("A nuvem não confirmou a exclusão dos documentos.");
+  }
+
+  return response.json() as Promise<{ ids?: unknown; persistence?: string }>;
 }
 
 function DocumentRow({

@@ -1,7 +1,8 @@
 "use client";
 
 import { Minus, Plus } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { LaboratoryRiskLevel } from "@/lib/laboratory-risk";
 
 type Coordinate = {
   lat: number;
@@ -26,7 +27,7 @@ export type CampaignHydroMapPoint = {
   driveUrl?: string;
   dropboxUrl?: string;
   photoUrl: string;
-  riskLevel?: "baixo" | "medio" | "alto";
+  riskLevel?: LaboratoryRiskLevel;
 };
 
 type BasinFeature = {
@@ -50,11 +51,12 @@ type Tile = {
   url: string;
   x: number;
   y: number;
+  size: number;
 };
 
 type RoadRouteSegment = {
   id: string;
-  kind: "daily" | "transition";
+  kind: "daily" | "transition" | "displacement";
   label: string;
   color: string;
   waypoints: Coordinate[];
@@ -72,9 +74,19 @@ export type CampaignMapLayerVisibility = {
 };
 
 const tileSize = 256;
-const minZoom = 3;
-const maxZoom = 16;
-const singlePointZoom = 13;
+const absoluteMinZoom = 3;
+const maxZoom = 19;
+const defaultFitPadding = 36;
+const paranaFitPadding = 28;
+const markerHitRadius = 24;
+const wheelZoomThreshold = 180;
+const zoomEpsilon = 0.001;
+const paranaBounds = {
+  north: -22.29,
+  south: -26.72,
+  west: -54.62,
+  east: -48.02,
+};
 const basinColors = [
   "rgba(0, 142, 156, 0.30)",
   "rgba(0, 87, 159, 0.24)",
@@ -93,6 +105,7 @@ const dailyRouteColors = [
   "#b45309",
   "#2563eb",
 ];
+const maxStraightDisplacementMeters = 2000;
 
 export function CampaignHydroMap({
   points,
@@ -104,6 +117,7 @@ export function CampaignHydroMap({
   markerMode = "campaign",
   showPointTooltip = false,
   effectivePointColor,
+  zoomOnSelect = true,
 }: {
   points: CampaignHydroMapPoint[];
   selectedPointId?: string;
@@ -114,11 +128,14 @@ export function CampaignHydroMap({
   markerMode?: "campaign" | "risk" | "pointAction";
   showPointTooltip?: boolean;
   effectivePointColor?: string;
+  zoomOnSelect?: boolean;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{ x: number; y: number; center: Coordinate } | null>(null);
   const fittedPointsKeyRef = useRef<string | null>(null);
+  const fitFrameRef = useRef<number | null>(null);
+  const wheelDeltaRef = useRef(0);
   const routeRequestStatusRef = useRef<Set<string>>(new Set());
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [center, setCenter] = useState<Coordinate>({ lat: -24.75, lon: -51.45 });
@@ -126,6 +143,15 @@ export function CampaignHydroMap({
   const [basins, setBasins] = useState<BasinCollection | null>(null);
   const [resolvedRoadRoutes, setResolvedRoadRoutes] = useState<Record<string, Coordinate[]>>({});
   const [hoveredPoint, setHoveredPoint] = useState<CampaignHydroMapPoint | null>(null);
+  const [windowResizeCount, setWindowResizeCount] = useState(0);
+  const defaultView = useMemo(
+    () => getDefaultMapView(points, layers, size),
+    [layers, points, size],
+  );
+  const minimumView = useMemo(() => getMinimumMapView(size), [size]);
+  const minimumZoom = minimumView.zoom;
+  const mapZoom = Math.max(minimumZoom, Math.min(maxZoom, zoom));
+  const constrainedCenter = isMinimumZoom(mapZoom, minimumZoom) ? minimumView.center : center;
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -144,6 +170,16 @@ export function CampaignHydroMap({
     observer.observe(wrapper);
 
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const handleWindowResize = () => {
+      setWindowResizeCount((current) => current + 1);
+    };
+
+    window.addEventListener("resize", handleWindowResize);
+
+    return () => window.removeEventListener("resize", handleWindowResize);
   }, []);
 
   useEffect(() => {
@@ -168,13 +204,14 @@ export function CampaignHydroMap({
   }, []);
 
   const tiles = useMemo(
-    () => buildTiles(center, zoom, size.width, size.height),
-    [center, size.height, size.width, zoom],
+    () => buildTiles(constrainedCenter, mapZoom, size.width, size.height),
+    [constrainedCenter, mapZoom, size.height, size.width],
   );
-  const shouldResolveRoadRoutes = layers.dailyRoutes || layers.dayTransitions;
+  const shouldResolveRoadRoutes =
+    layers.dailyRoutes || layers.dayTransitions || layers.displacement;
   const routeRequests = useMemo(
-    () => (shouldResolveRoadRoutes ? buildRoadRouteRequests(points) : []),
-    [points, shouldResolveRoadRoutes],
+    () => (shouldResolveRoadRoutes ? buildRoadRouteRequests(points, layers) : []),
+    [layers, points, shouldResolveRoadRoutes],
   );
   const roadRoutes = useMemo(
     () =>
@@ -191,35 +228,48 @@ export function CampaignHydroMap({
 
   useEffect(() => {
     let cancelled = false;
-    const queue = routeRequests.filter(
-      (request) => !routeRequestStatusRef.current.has(request.id),
-    );
+    const maxAttempts = 4;
+    const queue: Array<{ request: (typeof routeRequests)[number]; attempt: number }> =
+      routeRequests
+        .filter((request) => !routeRequestStatusRef.current.has(request.id))
+        .map((request) => ({ request, attempt: 0 }));
 
     async function resolveNextRoute() {
       while (true) {
-        const request = queue.shift();
+        const next = queue.shift();
 
-        if (!request) {
+        if (!next) {
           return;
         }
 
+        const { request, attempt } = next;
         routeRequestStatusRef.current.add(request.id);
 
         const coordinates = await fetchRoadRoute(request.waypoints).catch(
           () => null,
         );
 
+        if (cancelled) {
+          return;
+        }
+
         if (coordinates) {
           const resolved = coordinates;
           setResolvedRoadRoutes((current) =>
             current[request.id] ? current : { ...current, [request.id]: resolved },
           );
+        } else if (attempt + 1 < maxAttempts) {
+          routeRequestStatusRef.current.delete(request.id);
+          const backoffMs = 600 * (attempt + 1);
+          await new Promise((resolve) => window.setTimeout(resolve, backoffMs));
+
+          if (cancelled) {
+            return;
+          }
+
+          queue.push({ request, attempt: attempt + 1 });
         } else {
           routeRequestStatusRef.current.delete(request.id);
-        }
-
-        if (cancelled) {
-          return;
         }
       }
     }
@@ -240,53 +290,135 @@ export function CampaignHydroMap({
       basins,
       points,
       roadRoutes,
-      center,
-      zoom,
+      constrainedCenter,
+      mapZoom,
       size,
       layers,
       selectedPointId,
       markerMode,
       effectivePointColor,
     );
-  }, [basins, center, effectivePointColor, layers, markerMode, points, roadRoutes, selectedPointId, size, zoom]);
+  }, [basins, constrainedCenter, effectivePointColor, layers, mapZoom, markerMode, points, roadRoutes, selectedPointId, size]);
 
   useEffect(() => {
     if (!size.width || !size.height) {
       return;
     }
 
-    const coordinates = points
-      .map((point) => mapCoordinate(point, layers))
-      .filter((coordinate): coordinate is Coordinate => coordinate !== null);
-    const fitKey = coordinates
-      .map((coordinate) => `${coordinate.lat.toFixed(5)},${coordinate.lon.toFixed(5)}`)
-      .join("|");
+    const coordinates = getVisibleMarkerCoordinates(points, layers);
+    const fitKey = [
+      Math.round(size.width),
+      Math.round(size.height),
+      windowResizeCount,
+      defaultView.zoom,
+      defaultView.center.lat.toFixed(5),
+      defaultView.center.lon.toFixed(5),
+      ...coordinates.map((coordinate) => `${coordinate.lat.toFixed(5)},${coordinate.lon.toFixed(5)}`),
+    ].join("|");
 
-    if (!coordinates.length || fittedPointsKeyRef.current === fitKey) {
+    if (fittedPointsKeyRef.current === fitKey) {
       return;
     }
 
     fittedPointsKeyRef.current = fitKey;
-    const nextView = fitCoordinatesToView(coordinates, size);
+    if (fitFrameRef.current !== null) {
+      window.cancelAnimationFrame(fitFrameRef.current);
+      fitFrameRef.current = null;
+    }
     const frame = window.requestAnimationFrame(() => {
-      setCenter(nextView.center);
-      setZoom(nextView.zoom);
+      fitFrameRef.current = null;
+      setCenter(defaultView.center);
+      setZoom(defaultView.zoom);
     });
+    fitFrameRef.current = frame;
 
-    return () => window.cancelAnimationFrame(frame);
-  }, [layers, points, size]);
+    return () => {
+      window.cancelAnimationFrame(frame);
 
-  function zoomBy(delta: number) {
-    setZoom((current) => Math.max(minZoom, Math.min(maxZoom, current + delta)));
+      if (fitFrameRef.current === frame) {
+        fitFrameRef.current = null;
+      }
+    };
+  }, [defaultView, layers, points, size, windowResizeCount]);
+
+  function cancelPendingFitFrame() {
+    if (fitFrameRef.current === null) {
+      return;
+    }
+
+    window.cancelAnimationFrame(fitFrameRef.current);
+    fitFrameRef.current = null;
   }
+
+  const zoomBy = useCallback((delta: number) => {
+    if (!size.width || !size.height) {
+      setZoom((current) => {
+        const nextZoom = Math.max(minimumZoom, Math.min(maxZoom, current + delta));
+
+        if (isMinimumZoom(nextZoom, minimumZoom)) {
+          setCenter(minimumView.center);
+        }
+
+        return nextZoom;
+      });
+      return;
+    }
+
+    const nextZoom = Math.max(minimumZoom, Math.min(maxZoom, mapZoom + delta));
+
+    if (isMinimumZoom(nextZoom, minimumZoom)) {
+      setCenter(minimumView.center);
+    }
+
+    if (nextZoom === mapZoom) {
+      return;
+    }
+
+    setZoom(nextZoom);
+  }, [mapZoom, minimumView.center, minimumZoom, size.height, size.width]);
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+
+    if (!wrapper) {
+      return;
+    }
+
+    function handleWheel(event: WheelEvent) {
+      event.preventDefault();
+      event.stopPropagation();
+      wheelDeltaRef.current += event.deltaY;
+
+      if (Math.abs(wheelDeltaRef.current) < wheelZoomThreshold) {
+        return;
+      }
+
+      zoomBy(wheelDeltaRef.current > 0 ? -1 : 1);
+      wheelDeltaRef.current = 0;
+    }
+
+    wrapper.addEventListener("wheel", handleWheel, { passive: false });
+
+    return () => wrapper.removeEventListener("wheel", handleWheel);
+  }, [zoomBy]);
 
   return (
     <div
       ref={wrapperRef}
       className="absolute inset-0 overflow-hidden bg-[#dbe9ed]"
+      data-default-zoom={defaultView.zoom}
+      data-effective-count={points.filter((point) => point.effective).length}
+      data-map-zoom={mapZoom}
+      data-min-zoom={minimumZoom}
+      data-original-count={points.filter((point) => point.original).length}
+      data-point-count={points.length}
+      data-resolved-route-count={
+        roadRoutes.filter((route) => route.coordinates && route.coordinates.length >= 2).length
+      }
+      data-route-request-count={routeRequests.length}
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
-        dragRef.current = { x: event.clientX, y: event.clientY, center };
+        dragRef.current = { x: event.clientX, y: event.clientY, center: constrainedCenter };
       }}
       onPointerMove={(event) => {
         if (!dragRef.current) {
@@ -296,8 +428,8 @@ export function CampaignHydroMap({
               points,
               event.clientX - bounds.left,
               event.clientY - bounds.top,
-              center,
-              zoom,
+              constrainedCenter,
+              mapZoom,
               size,
               layers,
             );
@@ -309,9 +441,16 @@ export function CampaignHydroMap({
 
         const dx = event.clientX - dragRef.current.x;
         const dy = event.clientY - dragRef.current.y;
-        const start = lonLatToWorld(dragRef.current.center.lon, dragRef.current.center.lat, zoom);
-        const next = worldToLonLat(start.x - dx, start.y - dy, zoom);
-        setCenter(next);
+
+        if (isMinimumZoom(mapZoom, minimumZoom)) {
+          setCenter(minimumView.center);
+          setHoveredPoint(null);
+          return;
+        }
+
+        const start = lonLatToWorld(dragRef.current.center.lon, dragRef.current.center.lat, mapZoom);
+        const next = worldToLonLat(start.x - dx, start.y - dy, mapZoom);
+        setCenter(clampCenterToParana(next));
         setHoveredPoint(null);
       }}
       onPointerUp={() => {
@@ -325,28 +464,30 @@ export function CampaignHydroMap({
         dragRef.current = null;
         setHoveredPoint(null);
       }}
-      onWheel={(event) => {
-        event.preventDefault();
-        zoomBy(event.deltaY > 0 ? -1 : 1);
-      }}
       onClick={(event) => {
-        if (!onSelectPoint || !size.width || !size.height) {
+        if (!size.width || !size.height) {
           return;
         }
 
         const bounds = event.currentTarget.getBoundingClientRect();
-        const selected = findNearestPoint(
+        const selected = findNearestMarker(
           points,
           event.clientX - bounds.left,
           event.clientY - bounds.top,
-          center,
-          zoom,
+          constrainedCenter,
+          mapZoom,
           size,
           layers,
         );
 
         if (selected) {
-          onSelectPoint(selected);
+          onSelectPoint?.(selected.point);
+
+          if (zoomOnSelect) {
+            cancelPendingFitFrame();
+            setCenter(selected.coordinate);
+            setZoom(maxZoom);
+          }
         }
       }}
       style={{ cursor: hoveredPoint ? "pointer" : undefined }}
@@ -364,6 +505,8 @@ export function CampaignHydroMap({
             style={{
               left: tile.x,
               top: tile.y,
+              height: tile.size,
+              width: tile.size,
               filter: layers.roadMap
                 ? "saturate(1.05) contrast(1.04)"
                 : "grayscale(0.92) contrast(0.82) opacity(0.55)",
@@ -378,8 +521,8 @@ export function CampaignHydroMap({
         <PointTooltip
           point={hoveredPoint}
           coordinate={tooltipCoordinate(hoveredPoint, layers)}
-          center={center}
-          zoom={zoom}
+          center={constrainedCenter}
+          zoom={mapZoom}
           size={size}
         />
       ) : null}
@@ -480,14 +623,96 @@ function mapCoordinate(
   return point.effective ?? point.original;
 }
 
+function getVisibleMarkerCoordinates(
+  points: CampaignHydroMapPoint[],
+  layers: CampaignMapLayerVisibility,
+) {
+  const coordinates: Coordinate[] = [];
+  const knownCoordinates = new Set<string>();
+
+  for (const point of points) {
+    const visibleCoordinates = [
+      layers.planned ? point.original : null,
+      layers.effective ? point.effective : null,
+    ];
+
+    for (const coordinate of visibleCoordinates) {
+      if (!coordinate) {
+        continue;
+      }
+
+      const key = `${coordinate.lat.toFixed(7)},${coordinate.lon.toFixed(7)}`;
+
+      if (!knownCoordinates.has(key)) {
+        knownCoordinates.add(key);
+        coordinates.push(coordinate);
+      }
+    }
+  }
+
+  if (coordinates.length) {
+    return coordinates;
+  }
+
+  return points
+    .flatMap((point) => [point.effective, point.original])
+    .filter((coordinate): coordinate is Coordinate => coordinate !== null);
+}
+
+function getDefaultMapView(
+  points: CampaignHydroMapPoint[],
+  layers: CampaignMapLayerVisibility,
+  size: { width: number; height: number },
+) {
+  const minimumView = getMinimumMapView(size);
+
+  if (!size.width || !size.height) {
+    return minimumView;
+  }
+
+  const coordinates = [
+    ...getParanaFrame(),
+    ...getVisibleMarkerCoordinates(points, layers),
+  ];
+
+  if (!coordinates.length) {
+    return minimumView;
+  }
+
+  return fitCoordinatesToView(
+    coordinates,
+    size,
+    minimumView.zoom,
+    defaultFitPadding,
+  );
+}
+
+function getMinimumMapView(size: { width: number; height: number }) {
+  if (!size.width || !size.height) {
+    return {
+      center: paranaCenter(),
+      zoom: absoluteMinZoom,
+    };
+  }
+
+  return fitCoordinatesToView(
+    getParanaFrame(),
+    size,
+    absoluteMinZoom,
+    paranaFitPadding,
+  );
+}
+
 function fitCoordinatesToView(
   coordinates: Coordinate[],
   size: { width: number; height: number },
+  minimumZoom = absoluteMinZoom,
+  padding = defaultFitPadding,
 ) {
   if (coordinates.length === 1) {
     return {
       center: coordinates[0],
-      zoom: singlePointZoom,
+      zoom: maxZoom,
     };
   }
 
@@ -495,32 +720,60 @@ function fitCoordinatesToView(
   const maxLat = Math.max(...coordinates.map((coordinate) => coordinate.lat));
   const minLon = Math.min(...coordinates.map((coordinate) => coordinate.lon));
   const maxLon = Math.max(...coordinates.map((coordinate) => coordinate.lon));
-  const center = {
-    lat: (minLat + maxLat) / 2,
-    lon: (minLon + maxLon) / 2,
-  };
-  const padding = 80;
   const availableWidth = Math.max(size.width - padding * 2, 160);
   const availableHeight = Math.max(size.height - padding * 2, 140);
+  const northWestAtZero = lonLatToWorld(minLon, maxLat, 0);
+  const southEastAtZero = lonLatToWorld(maxLon, minLat, 0);
+  const center = worldToLonLat(
+    (northWestAtZero.x + southEastAtZero.x) / 2,
+    (northWestAtZero.y + southEastAtZero.y) / 2,
+    0,
+  );
+  const boundsWidthAtZero = Math.abs(southEastAtZero.x - northWestAtZero.x);
+  const boundsHeightAtZero = Math.abs(southEastAtZero.y - northWestAtZero.y);
 
-  for (let nextZoom = maxZoom; nextZoom >= minZoom; nextZoom -= 1) {
-    const northWest = lonLatToWorld(minLon, maxLat, nextZoom);
-    const southEast = lonLatToWorld(maxLon, minLat, nextZoom);
-    const boundsWidth = Math.abs(southEast.x - northWest.x);
-    const boundsHeight = Math.abs(southEast.y - northWest.y);
-
-    if (boundsWidth <= availableWidth && boundsHeight <= availableHeight) {
-      return {
-        center,
-        zoom: nextZoom,
-      };
-    }
+  if (!boundsWidthAtZero || !boundsHeightAtZero) {
+    return {
+      center,
+      zoom: maxZoom,
+    };
   }
+
+  const zoomForWidth = Math.log2(availableWidth / boundsWidthAtZero);
+  const zoomForHeight = Math.log2(availableHeight / boundsHeightAtZero);
+  const fittedZoom = Math.min(zoomForWidth, zoomForHeight);
 
   return {
     center,
-    zoom: minZoom,
+    zoom: Math.max(minimumZoom, Math.min(maxZoom, fittedZoom)),
   };
+}
+
+function getParanaFrame() {
+  return [
+    { lat: paranaBounds.north, lon: paranaBounds.west },
+    { lat: paranaBounds.north, lon: paranaBounds.east },
+    { lat: paranaBounds.south, lon: paranaBounds.west },
+    { lat: paranaBounds.south, lon: paranaBounds.east },
+  ];
+}
+
+function paranaCenter() {
+  return {
+    lat: (paranaBounds.north + paranaBounds.south) / 2,
+    lon: (paranaBounds.west + paranaBounds.east) / 2,
+  };
+}
+
+function clampCenterToParana(coordinate: Coordinate) {
+  return {
+    lat: Math.min(Math.max(coordinate.lat, paranaBounds.south), paranaBounds.north),
+    lon: Math.min(Math.max(coordinate.lon, paranaBounds.west), paranaBounds.east),
+  };
+}
+
+function isMinimumZoom(zoom: number, minimumZoom: number) {
+  return zoom <= minimumZoom + zoomEpsilon;
 }
 
 function buildTiles(center: Coordinate, zoom: number, width: number, height: number): Tile[] {
@@ -528,12 +781,19 @@ function buildTiles(center: Coordinate, zoom: number, width: number, height: num
     return [];
   }
 
-  const centerWorld = lonLatToWorld(center.lon, center.lat, zoom);
-  const minX = Math.floor((centerWorld.x - width / 2) / tileSize);
-  const maxX = Math.floor((centerWorld.x + width / 2) / tileSize);
-  const minY = Math.floor((centerWorld.y - height / 2) / tileSize);
-  const maxY = Math.floor((centerWorld.y + height / 2) / tileSize);
-  const tileCount = 2 ** zoom;
+  const tileZoom = Math.max(0, Math.min(19, Math.floor(zoom)));
+  const tileScale = 2 ** (zoom - tileZoom);
+  const scaledTileSize = tileSize * tileScale;
+  const centerWorld = lonLatToWorld(center.lon, center.lat, tileZoom);
+  const scaledCenter = {
+    x: centerWorld.x * tileScale,
+    y: centerWorld.y * tileScale,
+  };
+  const minX = Math.floor((scaledCenter.x - width / 2) / scaledTileSize);
+  const maxX = Math.floor((scaledCenter.x + width / 2) / scaledTileSize);
+  const minY = Math.floor((scaledCenter.y - height / 2) / scaledTileSize);
+  const maxY = Math.floor((scaledCenter.y + height / 2) / scaledTileSize);
+  const tileCount = 2 ** tileZoom;
   const tiles: Tile[] = [];
 
   for (let x = minX; x <= maxX; x += 1) {
@@ -545,10 +805,11 @@ function buildTiles(center: Coordinate, zoom: number, width: number, height: num
       const wrappedX = ((x % tileCount) + tileCount) % tileCount;
 
       tiles.push({
-        key: `${zoom}-${x}-${y}`,
-        url: `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${y}.png`,
-        x: x * tileSize - centerWorld.x + width / 2,
-        y: y * tileSize - centerWorld.y + height / 2,
+        key: `${tileZoom}-${zoom.toFixed(3)}-${x}-${y}`,
+        url: `https://tile.openstreetmap.org/${tileZoom}/${wrappedX}/${y}.png`,
+        x: x * scaledTileSize - scaledCenter.x + width / 2,
+        y: y * scaledTileSize - scaledCenter.y + height / 2,
+        size: scaledTileSize,
       });
     }
   }
@@ -674,12 +935,14 @@ function drawPoints(
         const original = lonLatToScreen(point.original.lon, point.original.lat, center, zoom, size);
         const effective = lonLatToScreen(point.effective.lon, point.effective.lat, center, zoom, size);
 
-        context.beginPath();
-        context.moveTo(original.x, original.y);
-        context.lineTo(effective.x, effective.y);
-        context.strokeStyle = "rgba(0, 66, 98, 0.32)";
-        context.lineWidth = 1;
-        context.stroke();
+        if (haversineDistanceMeters(point.original, point.effective) <= maxStraightDisplacementMeters) {
+          context.beginPath();
+          context.moveTo(original.x, original.y);
+          context.lineTo(effective.x, effective.y);
+          context.strokeStyle = "rgba(0, 66, 98, 0.32)";
+          context.lineWidth = 1;
+          context.stroke();
+        }
       }
     }
   }
@@ -720,7 +983,11 @@ function drawRoadRoutes(
 
   routes.forEach((route) => {
     const visible =
-      route.kind === "daily" ? layers.dailyRoutes : layers.dayTransitions;
+      route.kind === "daily"
+        ? layers.dailyRoutes
+        : route.kind === "transition"
+          ? layers.dayTransitions
+          : layers.displacement;
 
     if (!visible || !route.coordinates || route.coordinates.length < 2) {
       return;
@@ -732,6 +999,8 @@ function drawRoadRoutes(
     const color =
       route.kind === "transition"
         ? "rgba(71, 85, 105, 0.76)"
+        : route.kind === "displacement"
+          ? "rgba(0, 66, 98, 0.48)"
         : route.color;
 
     context.setLineDash(route.kind === "transition" ? [5, 7] : []);
@@ -744,7 +1013,8 @@ function drawRoadRoutes(
       }
     });
     context.strokeStyle = "rgba(255, 255, 255, 0.86)";
-    context.lineWidth = route.kind === "transition" ? 3 : 7;
+    context.lineWidth =
+      route.kind === "daily" ? 7 : route.kind === "transition" ? 3 : 2.8;
     context.stroke();
 
     context.beginPath();
@@ -756,7 +1026,8 @@ function drawRoadRoutes(
       }
     });
     context.strokeStyle = color;
-    context.lineWidth = route.kind === "transition" ? 1.6 : 4.2;
+    context.lineWidth =
+      route.kind === "daily" ? 4.2 : route.kind === "transition" ? 1.6 : 1.4;
     context.stroke();
 
     if (zoom >= 9 && route.kind === "daily") {
@@ -776,7 +1047,10 @@ function drawRoadRoutes(
   context.restore();
 }
 
-function buildRoadRouteRequests(points: CampaignHydroMapPoint[]) {
+function buildRoadRouteRequests(
+  points: CampaignHydroMapPoint[],
+  layers: CampaignMapLayerVisibility,
+) {
   const groups = new Map<string, { key: string; label: string; points: CampaignHydroMapPoint[] }>();
   const inferredDayLabels = new Map<string, string>();
 
@@ -807,6 +1081,7 @@ function buildRoadRouteRequests(points: CampaignHydroMapPoint[]) {
   );
   const dailyRequests: Array<Omit<RoadRouteSegment, "coordinates">> = [];
   const transitionRequests: Array<Omit<RoadRouteSegment, "coordinates">> = [];
+  const displacementRequests: Array<Omit<RoadRouteSegment, "coordinates">> = [];
 
   orderedGroups.forEach((group, groupIndex) => {
     const color = dailyRouteColors[groupIndex % dailyRouteColors.length];
@@ -814,9 +1089,11 @@ function buildRoadRouteRequests(points: CampaignHydroMapPoint[]) {
       .map((point) => routeCoordinate(point))
       .filter((coordinate): coordinate is Coordinate => coordinate !== null);
 
-    if (waypoints.length > 1) {
+    if (layers.dailyRoutes && waypoints.length > 1) {
+      const waypointKey = roadRouteWaypointsKey(waypoints);
+
       dailyRequests.push({
-        id: `daily-${group.key}`,
+        id: `daily-${group.key}-${waypointKey}`,
         kind: "daily",
         label: group.label,
         color,
@@ -826,23 +1103,49 @@ function buildRoadRouteRequests(points: CampaignHydroMapPoint[]) {
 
     const nextGroup = orderedGroups[groupIndex + 1];
 
-    if (nextGroup) {
+    if (layers.dayTransitions && nextGroup) {
       const from = routeCoordinate(group.points[group.points.length - 1]);
       const to = routeCoordinate(nextGroup.points[0]);
 
       if (from && to) {
+        const waypoints = [from, to];
+        const waypointKey = roadRouteWaypointsKey(waypoints);
+
         transitionRequests.push({
-          id: `transition-${group.key}-${nextGroup.key}`,
+          id: `transition-${group.key}-${nextGroup.key}-${waypointKey}`,
           kind: "transition",
           label: `${group.label} > ${nextGroup.label}`,
           color: "#334155",
-          waypoints: [from, to],
+          waypoints,
         });
       }
     }
   });
 
-  return [...dailyRequests, ...transitionRequests];
+  if (layers.displacement) {
+    points.forEach((point) => {
+      if (
+        !point.original ||
+        !point.effective ||
+        haversineDistanceMeters(point.original, point.effective) <= maxStraightDisplacementMeters
+      ) {
+        return;
+      }
+
+      const waypoints = [point.original, point.effective];
+      const waypointKey = roadRouteWaypointsKey(waypoints);
+
+      displacementRequests.push({
+        id: `displacement-${point.id}-${waypointKey}`,
+        kind: "displacement",
+        label: point.code,
+        color: "#00425f",
+        waypoints,
+      });
+    });
+  }
+
+  return [...dailyRequests, ...transitionRequests, ...displacementRequests];
 }
 
 function dayLabelNumber(label: string) {
@@ -852,6 +1155,12 @@ function dayLabelNumber(label: string) {
 
 function routeCoordinate(point?: CampaignHydroMapPoint) {
   return point?.effective ?? point?.original ?? null;
+}
+
+function roadRouteWaypointsKey(waypoints: Coordinate[]) {
+  return waypoints
+    .map((point) => `${point.lon.toFixed(5)},${point.lat.toFixed(5)}`)
+    .join("-");
 }
 
 async function fetchRoadRoute(waypoints: Coordinate[]) {
@@ -916,9 +1225,14 @@ function formatRouteDayLabel(
   inferredDayLabels: Map<string, string>,
 ) {
   if (point.day) {
-    return point.day.toLowerCase().startsWith("dia ")
-      ? point.day
-      : `Dia ${point.day}`;
+    const trimmed = String(point.day).trim();
+    const numberMatch = trimmed.match(/\d+/);
+
+    if (numberMatch) {
+      return `Dia ${Number(numberMatch[0])}`;
+    }
+
+    return trimmed.toLowerCase().startsWith("dia ") ? trimmed : `Dia ${trimmed}`;
   }
 
   const key = point.date || "sem-data";
@@ -991,14 +1305,35 @@ function drawMarkerAt(
 
 function riskColor(riskLevel: CampaignHydroMapPoint["riskLevel"]) {
   if (riskLevel === "alto") {
-    return "#dc2626";
+    return "#7f1d1d";
   }
 
-  if (riskLevel === "medio") {
+  if (riskLevel === "moderado") {
+    return "#f97316";
+  }
+
+  if (riskLevel === "baixoModerado") {
     return "#facc15";
   }
 
   return "#16a34a";
+}
+
+function haversineDistanceMeters(from: Coordinate, to: Coordinate) {
+  const earthRadiusMeters = 6_371_000;
+  const fromLat = degreesToRadians(from.lat);
+  const toLat = degreesToRadians(to.lat);
+  const deltaLat = degreesToRadians(to.lat - from.lat);
+  const deltaLon = degreesToRadians(to.lon - from.lon);
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(fromLat) * Math.cos(toLat) * Math.sin(deltaLon / 2) ** 2;
+
+  return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function degreesToRadians(value: number) {
+  return (value * Math.PI) / 180;
 }
 
 function findNearestPoint(
@@ -1010,7 +1345,23 @@ function findNearestPoint(
   size: { width: number; height: number },
   layers: CampaignMapLayerVisibility,
 ) {
-  let nearest: { point: CampaignHydroMapPoint; distance: number } | null = null;
+  return findNearestMarker(points, clickX, clickY, center, zoom, size, layers)?.point ?? null;
+}
+
+function findNearestMarker(
+  points: CampaignHydroMapPoint[],
+  clickX: number,
+  clickY: number,
+  center: Coordinate,
+  zoom: number,
+  size: { width: number; height: number },
+  layers: CampaignMapLayerVisibility,
+) {
+  let nearest: {
+    point: CampaignHydroMapPoint;
+    coordinate: Coordinate;
+    distance: number;
+  } | null = null;
 
   for (const point of points) {
     const visibleCoordinates = [
@@ -1026,13 +1377,13 @@ function findNearestPoint(
       const screen = lonLatToScreen(coordinate.lon, coordinate.lat, center, zoom, size);
       const distance = Math.hypot(screen.x - clickX, screen.y - clickY);
 
-      if (distance <= 14 && (!nearest || distance < nearest.distance)) {
-        nearest = { point, distance };
+      if (distance <= markerHitRadius && (!nearest || distance < nearest.distance)) {
+        nearest = { point, coordinate, distance };
       }
     }
   }
 
-  return nearest?.point ?? null;
+  return nearest;
 }
 
 function basinCentroid(polygons: number[][][][]) {

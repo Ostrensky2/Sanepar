@@ -45,7 +45,7 @@ export default function PrivacidadePage() {
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--brand-teal)]">
               Política institucional
             </p>
-            <h1 className="heading-font mt-1 text-2xl font-black text-[var(--brand-navy-strong)]">
+            <h1 className="heading-font mt-1 text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
               Privacidade e uso de dados
             </h1>
             <p className="mt-2 text-justify text-sm leading-6 text-[var(--ink-soft)]">

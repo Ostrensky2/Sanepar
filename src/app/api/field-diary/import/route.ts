@@ -186,8 +186,16 @@ export async function POST(request: Request) {
 
   const entries = payloads.map(createEntry);
   const supabase = createOptionalSupabaseClient();
+  const allowBrowserFallback = isLocalRequest(request);
   let saved = entries;
   const saveErrors: string[] = [];
+
+  if (!supabase && !allowBrowserFallback) {
+    return NextResponse.json(
+      { error: "Supabase não configurado para importar o Diário de Campo." },
+      { status: 503 },
+    );
+  }
 
   if (supabase) {
     const rows = await prepareRowsForUpsert(entries);
@@ -204,6 +212,13 @@ export async function POST(request: Request) {
     }
 
     if (error) {
+      if (!allowBrowserFallback) {
+        return NextResponse.json(
+          { error: "O banco recusou a importação do Diário de Campo." },
+          { status: 500 },
+        );
+      }
+
       saved = entries;
       saveErrors.push("O banco recusou a gravação agora, mas os registros foram importados neste navegador.");
     }
@@ -214,6 +229,11 @@ export async function POST(request: Request) {
     errors: [...errors, ...saveErrors],
     entries: saved,
   });
+}
+
+function isLocalRequest(request: Request) {
+  const host = new URL(request.url).hostname;
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
 async function prepareRowsForUpsert(entries: FieldDiaryEntry[]) {

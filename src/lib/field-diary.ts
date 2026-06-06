@@ -1,3 +1,5 @@
+import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
+
 export const FIELD_DIARY_STORAGE_KEY = "yvae:field-diary-entries";
 export const FIELD_DIARY_UPDATED_EVENT = "yvae:field-diary-updated";
 
@@ -104,7 +106,7 @@ export function createEmptyFieldDiaryPayload(): FieldDiaryPayload {
 }
 
 export function readFieldDiaryEntriesFromStorage() {
-  if (typeof window === "undefined") {
+  if (typeof window === "undefined" || !canUseBrowserOnlyPersistence()) {
     return [];
   }
 
@@ -141,7 +143,7 @@ export async function readFieldDiaryEntries() {
     });
 
     if (!response.ok) {
-      return localEntries;
+      return canUseBrowserOnlyPersistence() ? localEntries : [];
     }
 
     const payload = (await response.json()) as { entries?: unknown };
@@ -153,7 +155,7 @@ export async function readFieldDiaryEntries() {
     cacheFieldDiaryEntries(dedupedEntries);
     return dedupedEntries;
   } catch {
-    return localEntries;
+    return canUseBrowserOnlyPersistence() ? localEntries : [];
   }
 }
 
@@ -173,13 +175,6 @@ export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
     createdAt: localEntries.find((item) => item.id === payload.id)?.createdAt ?? now,
     updatedAt: now,
   };
-  const nextEntries = [
-    entry,
-    ...localEntries.filter((item) => item.id !== entry.id),
-  ].sort((a, b) => b.entryDate.localeCompare(a.entryDate) || b.updatedAt.localeCompare(a.updatedAt));
-
-  cacheFieldDiaryEntries(nextEntries);
-
   try {
     const response = await fetch("/api/field-diary", {
       method: entry.id === payload.id ? "PUT" : "POST",
@@ -190,21 +185,43 @@ export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
     });
 
     if (!response.ok) {
-      return { entry, persistence: "browser" as const };
+      if (canUseBrowserOnlyPersistence()) {
+        const nextEntries = mergeLocalFieldDiaryEntry(localEntries, entry);
+        cacheFieldDiaryEntries(nextEntries);
+        return { entry, persistence: "browser" as const };
+      }
+
+      return { entry, persistence: "none" as const };
     }
 
     const result = (await response.json()) as { entry?: unknown };
     const savedEntry = normalizeFieldDiaryEntry(result.entry) ?? entry;
     const refreshedEntries = [
       savedEntry,
-      ...nextEntries.filter((item) => item.id !== savedEntry.id),
+      ...localEntries.filter((item) => item.id !== savedEntry.id),
     ].sort((a, b) => b.entryDate.localeCompare(a.entryDate) || b.updatedAt.localeCompare(a.updatedAt));
 
     cacheFieldDiaryEntries(refreshedEntries);
     return { entry: savedEntry, persistence: "cloud" as const };
   } catch {
-    return { entry, persistence: "browser" as const };
+    if (canUseBrowserOnlyPersistence()) {
+      const nextEntries = mergeLocalFieldDiaryEntry(localEntries, entry);
+      cacheFieldDiaryEntries(nextEntries);
+      return { entry, persistence: "browser" as const };
+    }
+
+    return { entry, persistence: "none" as const };
   }
+}
+
+function mergeLocalFieldDiaryEntry(
+  entries: FieldDiaryEntry[],
+  entry: FieldDiaryEntry,
+) {
+  return [
+    entry,
+    ...entries.filter((item) => item.id !== entry.id),
+  ].sort((a, b) => b.entryDate.localeCompare(a.entryDate) || b.updatedAt.localeCompare(a.updatedAt));
 }
 
 export function normalizeFieldDiaryEntry(value: unknown): FieldDiaryEntry | null {

@@ -14,15 +14,20 @@ import {
   type CampaignMapLayerVisibility,
   type CampaignHydroMapPoint,
 } from "@/components/campaign-hydro-map";
+import { campaignPointMatchesSelectedCampaign } from "@/lib/campaign-points";
 
 export function CampaignMapSection({
   points,
   compact = false,
   useLocalImportCache = true,
+  selectedCampaignId,
+  selectedCampaignTitle,
 }: {
   points: CampaignHydroMapPoint[];
   compact?: boolean;
   useLocalImportCache?: boolean;
+  selectedCampaignId?: string;
+  selectedCampaignTitle?: string;
 }) {
   const [cachedPoints, setCachedPoints] = useState<CampaignHydroMapPoint[] | null>(null);
   const [selectedPointId, setSelectedPointId] = useState(points[0]?.id);
@@ -39,15 +44,38 @@ export function CampaignMapSection({
     effective: true,
     displacement: true,
   });
+  const scopedCachedPoints = useMemo(() => {
+    if (!cachedPoints?.length) {
+      return null;
+    }
+
+    if (!selectedCampaignId || !selectedCampaignTitle) {
+      return cachedPoints;
+    }
+
+    const filtered = cachedPoints.filter((point) =>
+      campaignPointMatchesSelectedCampaign(
+        point,
+        selectedCampaignId,
+        selectedCampaignTitle,
+      ),
+    );
+
+    return filtered.length ? filtered : null;
+  }, [cachedPoints, selectedCampaignId, selectedCampaignTitle]);
   const activePoints = useMemo(
-    () => (useLocalImportCache && cachedPoints?.length ? cachedPoints : points),
-    [cachedPoints, points, useLocalImportCache],
+    () => (useLocalImportCache && scopedCachedPoints?.length ? scopedCachedPoints : points),
+    [points, scopedCachedPoints, useLocalImportCache],
+  );
+  const cacheMatchesSelectedCampaign = Boolean(
+    useLocalImportCache && scopedCachedPoints?.length,
   );
   const selectedPoint = useMemo(
     () =>
       activePoints.find((point) => point.id === selectedPointId) ?? activePoints[0],
     [activePoints, selectedPointId],
   );
+
   const layerOptions: Array<{
     key: keyof CampaignMapLayerVisibility;
     label: string;
@@ -56,7 +84,7 @@ export function CampaignMapSection({
     { key: "basins", label: "Bacias hidrográficas" },
     { key: "dailyRoutes", label: "Percurso rodoviário diário" },
     { key: "dayTransitions", label: "Ligação entre dias" },
-    { key: "planned", label: "Pontos previstos" },
+    { key: "planned", label: "Coordenada de apoio" },
     { key: "effective", label: "Pontos efetivos" },
     { key: "displacement", label: "Deslocamento" },
   ];
@@ -78,7 +106,6 @@ export function CampaignMapSection({
 
           if (Array.isArray(parsed) && parsed.length > 0) {
             setCachedPoints(parsed);
-            setSelectedPointId(parsed[0].id);
           }
         } catch {
           window.localStorage.removeItem("yvae:campaign-map-points");
@@ -108,100 +135,106 @@ export function CampaignMapSection({
     return () => window.clearTimeout(timer);
   }, [useLocalImportCache]);
 
+  const mapHeightClass = compact ? "h-[460px]" : "h-[520px]";
+
   return (
     <section
-      className={`relative overflow-hidden rounded-[30px] border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)] ${
-        compact ? "min-h-[620px]" : "min-h-[calc(100vh-14rem)]"
-      }`}
+      className={`grid items-start gap-4 lg:grid-cols-[14rem_minmax(0,1fr)_18rem] ${mapHeightClass}`}
     >
-      <CampaignHydroMap
-        points={activePoints}
-        selectedPointId={selectedPoint?.id}
-        layers={layers}
-        showPointTooltip
-        onSelectPoint={(point) => {
-          setSelectedPointId(point.id);
-          setIsDetailsPanelOpen(true);
-        }}
-      />
-
-      <div className="absolute left-4 top-4 w-52 overflow-hidden rounded-[20px] border border-[var(--line-ghost)] bg-white/90 shadow backdrop-blur">
-        <div className="flex items-center justify-between border-b border-[var(--line-ghost)] bg-[var(--surface-soft)] px-3 py-2">
-          <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
-            Camadas
-          </span>
-          <Layers3 className="h-4 w-4 text-slate-400" />
-        </div>
-        <div className="p-1 text-[10px] font-semibold text-slate-600">
-          {layerOptions.map((option) => (
-            <label
-              key={option.key}
-              className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 transition-colors hover:bg-slate-100"
-            >
-              <input
-                type="checkbox"
-                checked={layers[option.key]}
-                onChange={(event) =>
-                  setLayers((current) => ({
-                    ...current,
-                    [option.key]: event.target.checked,
-                  }))
-                }
-                className="h-3 w-3 rounded border-slate-300 text-[var(--brand-navy-strong)] focus:ring-0"
-              />
-              <span>{option.label}</span>
-            </label>
-          ))}
-        </div>
-        <div className="grid grid-cols-2 gap-1 border-t border-[var(--line-ghost)] px-3 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">
-          <span className="flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-full border border-slate-900 bg-[#eaff00]" />
-            Prev.
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-full border border-white bg-black shadow" />
-            Efet.
-          </span>
-        </div>
-        {routeLegend.length > 0 ? (
-          <div className="max-h-28 overflow-y-auto border-t border-[var(--line-ghost)] px-3 py-2">
-            <div className="mb-1 flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.14em] text-slate-400">
-              <Route className="h-3 w-3" />
-              Rotas
-            </div>
-            <div className="mb-1.5 flex items-center gap-2 text-[9px] font-semibold text-slate-600">
-              <span className="h-0 w-5 border-t border-dashed border-slate-500" />
-              <span className="truncate">Ligação entre dias</span>
-            </div>
-            <div className="space-y-1">
-              {routeLegend.map((item) => (
-                <div
-                  key={item.key}
-                  className="flex items-center gap-2 text-[9px] font-semibold text-slate-600"
-                >
-                  <span
-                    className="h-1.5 w-5 rounded-full"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="truncate">{item.label}</span>
-                </div>
-              ))}
-            </div>
+      <aside className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto pr-1">
+        {localImportLabel && cacheMatchesSelectedCampaign ? (
+          <div className="rounded-[20px] border border-emerald-200 bg-white px-4 py-3 text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-800 shadow">
+            {localImportLabel}
           </div>
         ) : null}
+
+        <div className="overflow-hidden rounded-[20px] border border-[var(--line-ghost)] bg-white shadow">
+          <div className="flex items-center justify-between border-b border-[var(--line-ghost)] bg-[var(--surface-soft)] px-3 py-2">
+            <span className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
+              Camadas
+            </span>
+            <Layers3 className="h-4 w-4 text-slate-400" />
+          </div>
+          <div className="p-1 text-xs font-semibold text-slate-600">
+            {layerOptions.map((option) => (
+              <label
+                key={option.key}
+                className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 transition-colors hover:bg-slate-100"
+              >
+                <input
+                  type="checkbox"
+                  checked={layers[option.key]}
+                  onChange={(event) =>
+                    setLayers((current) => ({
+                      ...current,
+                      [option.key]: event.target.checked,
+                    }))
+                  }
+                  className="h-3 w-3 rounded border-slate-300 text-[var(--brand-navy-strong)] focus:ring-0"
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-1 border-t border-[var(--line-ghost)] px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+            <span className="flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-full border border-slate-900 bg-[#eaff00]" />
+              Apoio
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-full border border-white bg-black shadow" />
+              Efet.
+            </span>
+          </div>
+          {routeLegend.length > 0 ? (
+            <div className="max-h-64 overflow-y-auto border-t border-[var(--line-ghost)] px-3 py-2">
+              <div className="mb-1 flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                <Route className="h-3 w-3" />
+                Rotas
+              </div>
+              <div className="mb-1.5 flex items-center gap-2 text-[10px] font-semibold text-slate-600">
+                <span className="h-0 w-5 border-t border-dashed border-slate-500" />
+                <span className="truncate">Ligação entre dias</span>
+              </div>
+              <div className="space-y-1">
+                {routeLegend.map((item) => (
+                  <div
+                    key={item.key}
+                    className="flex items-center gap-2 text-[10px] font-semibold text-slate-600"
+                  >
+                    <span
+                      className="h-1.5 w-5 rounded-full"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="truncate">{item.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </aside>
+
+      <div className="relative h-full overflow-hidden rounded-[30px] border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)]">
+        <CampaignHydroMap
+          points={activePoints}
+          selectedPointId={selectedPoint?.id}
+          layers={layers}
+          showPointTooltip
+          zoomOnSelect
+          onSelectPoint={(point) => {
+            setSelectedPointId(point.id);
+            setIsDetailsPanelOpen(true);
+          }}
+        />
       </div>
 
-      {localImportLabel ? (
-        <div className="absolute left-1/2 top-4 max-w-[min(520px,calc(100%-30rem))] -translate-x-1/2 rounded-full border border-emerald-200 bg-white/90 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-800 shadow backdrop-blur">
-          {localImportLabel}
-        </div>
-      ) : null}
-
-      {isDetailsPanelOpen ? (
-        <aside className="absolute right-4 top-4 max-h-[calc(100%-2rem)] w-72 overflow-hidden rounded-[20px] border border-[var(--line-ghost)] bg-white shadow-[0_30px_80px_-42px_rgba(0,66,98,0.34)]">
+      <aside className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto pr-1">
+        {isDetailsPanelOpen ? (
+        <div className="min-h-0 flex-1 overflow-hidden rounded-[20px] border border-[var(--line-ghost)] bg-white shadow-[0_30px_80px_-42px_rgba(0,66,98,0.34)]">
           <div className="bg-[var(--brand-navy-strong)] p-3 text-white">
             <div className="mb-1.5 flex items-start justify-between">
-              <h3 className="heading-font text-xl font-black tracking-tight">
+              <h3 className="heading-font text-lg font-black tracking-tight">
                 {selectedPoint?.code ?? "SIA"}
               </h3>
               <button
@@ -213,14 +246,14 @@ export function CampaignMapSection({
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="flex items-center gap-2 rounded bg-white/10 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.18em]">
+            <div className="flex items-center gap-2 rounded bg-white/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em]">
               <span className="h-1.5 w-1.5 rounded-full bg-[#eaff00]" />
               Dados da campanha
             </div>
           </div>
 
-          <div className="max-h-[calc(100vh-19rem)] space-y-3 overflow-y-auto p-3">
-            <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+          <div className="space-y-3 overflow-y-auto p-3">
+            <div className="grid grid-cols-2 gap-1.5 text-xs">
               <InfoTile label="Campanha" value={selectedPoint?.campaign} />
               <InfoTile label="SIA" value={selectedPoint?.code} />
               <InfoTile label="Ponto" value={selectedPoint?.point} />
@@ -235,7 +268,7 @@ export function CampaignMapSection({
             <InfoBlock label="Condições climáticas" value={selectedPoint?.weatherConditions} />
             <InfoBlock label="Problemas enfrentados" value={selectedPoint?.problems} />
 
-            <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+            <div className="grid grid-cols-2 gap-1.5 text-xs">
               <InfoTile
                 label="Previsto"
                 value={
@@ -260,27 +293,28 @@ export function CampaignMapSection({
             />
 
             <div className="grid grid-cols-2 gap-1.5">
-              <button className="flex flex-col items-center gap-1 rounded border border-slate-100 bg-slate-50 p-1.5 text-[9px] font-bold uppercase text-slate-500 transition-colors hover:bg-slate-100">
+              <button className="flex flex-col items-center gap-1 rounded border border-slate-100 bg-slate-50 p-1.5 text-[10px] font-bold uppercase text-slate-500 transition-colors hover:bg-slate-100">
                 <FileText className="h-4 w-4 text-[var(--brand-navy-strong)]" />
                 Documentos
               </button>
-              <button className="flex flex-col items-center gap-1 rounded border border-slate-100 bg-slate-50 p-1.5 text-[9px] font-bold uppercase text-slate-500 transition-colors hover:bg-slate-100">
+              <button className="flex flex-col items-center gap-1 rounded border border-slate-100 bg-slate-50 p-1.5 text-[10px] font-bold uppercase text-slate-500 transition-colors hover:bg-slate-100">
                 <BarChart3 className="h-4 w-4 text-[var(--brand-navy-strong)]" />
                 Resultados
               </button>
             </div>
           </div>
-        </aside>
+        </div>
       ) : (
         <button
           type="button"
           aria-label="Abrir painel do ponto"
-          className="absolute right-4 top-4 rounded-full border border-[var(--line-ghost)] bg-white/95 px-4 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-[var(--brand-navy-strong)] shadow backdrop-blur transition-colors hover:bg-[var(--surface-soft)]"
+          className="rounded-full border border-[var(--line-ghost)] bg-white px-4 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-[var(--brand-navy-strong)] shadow transition-colors hover:bg-[var(--surface-soft)]"
           onClick={() => setIsDetailsPanelOpen(true)}
         >
           Abrir painel
         </button>
       )}
+      </aside>
 
       {expandedPhotoPoint ? (
         <PhotoModal
@@ -334,9 +368,14 @@ function formatRouteDayLabel(
   inferredDayLabels: Map<string, string>,
 ) {
   if (point.day) {
-    return point.day.toLowerCase().startsWith("dia ")
-      ? point.day
-      : `Dia ${point.day}`;
+    const trimmed = String(point.day).trim();
+    const numberMatch = trimmed.match(/\d+/);
+
+    if (numberMatch) {
+      return `Dia ${Number(numberMatch[0])}`;
+    }
+
+    return trimmed.toLowerCase().startsWith("dia ") ? trimmed : `Dia ${trimmed}`;
   }
 
   const key = point.date || "sem-data";
@@ -354,7 +393,7 @@ function formatRouteDayLabel(
 function InfoTile({ label, value }: { label: string; value?: string }) {
   return (
     <div className="rounded border border-slate-100 bg-slate-50 px-2 py-1.5">
-      <span className="block font-bold uppercase tracking-[0.12em] text-slate-400">
+      <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
         {label}
       </span>
       <span className="font-semibold text-slate-700">{value || "Não informado"}</span>
@@ -365,7 +404,7 @@ function InfoTile({ label, value }: { label: string; value?: string }) {
 function InfoBlock({ label, value }: { label: string; value?: string }) {
   return (
     <div className="rounded border border-slate-100 bg-white px-2 py-1.5 text-xs">
-      <span className="mb-0.5 block text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">
+      <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
         {label}
       </span>
       <p className="font-medium leading-4 text-slate-700">{value || "Não informado"}</p>

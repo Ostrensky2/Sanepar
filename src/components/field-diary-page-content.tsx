@@ -1,12 +1,17 @@
 "use client";
 
 import {
+  BarChart3,
+  CalendarDays,
   CheckCircle2,
   ClipboardList,
   Download,
   Eye,
+  FileSpreadsheet,
   FileText,
+  ListFilter,
   LoaderCircle,
+  MapPin,
   Pencil,
   Plus,
   Search,
@@ -18,6 +23,15 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { SectionCard } from "@/components/section-card";
+import {
+  OPERATION_CANCEL_EVENT,
+  DashboardSkeleton,
+  ErrorBoundary,
+  beginGlobalOperation,
+  emitLocalMode,
+  isCloudConnectionError,
+  toActionableErrorMessage,
+} from "@/components/operational-feedback";
 import {
   activityOptions,
   cacheFieldDiaryEntries,
@@ -51,17 +65,81 @@ const campaignOptions = [
 type Filters = {
   campaign: string;
   date: string;
+  dateFrom: string;
+  dateTo: string;
   location: string;
   municipality: string;
   occurrence: "todos" | "sim" | "nao";
+  activities: string[];
+  waterConditions: string[];
+  occurrenceType: string;
+  status: string;
+  followUp: string;
+  responsible: string;
+  campaignDay: string;
+  dayFrom: string;
+  dayTo: string;
+  operationalStage: OperationalStage | "";
+  hasCoordinates: "todos" | "sim" | "nao";
+  hasFollowUpNotes: "todos" | "sim" | "nao";
+  search: string;
 };
 
 const emptyFilters: Filters = {
   campaign: "",
   date: "",
+  dateFrom: "",
+  dateTo: "",
   location: "",
   municipality: "",
   occurrence: "todos",
+  activities: [],
+  waterConditions: [],
+  occurrenceType: "",
+  status: "",
+  followUp: "",
+  responsible: "",
+  campaignDay: "",
+  dayFrom: "",
+  dayTo: "",
+  operationalStage: "",
+  hasCoordinates: "todos",
+  hasFollowUpNotes: "todos",
+  search: "",
+};
+
+function uniqueSorted(values: Array<string | number | null | undefined>) {
+  const set = new Set<string>();
+  for (const value of values) {
+    const trimmed = String(value ?? "").trim();
+    if (trimmed) set.add(trimmed);
+  }
+  return [...set].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+}
+
+type OperationalStage = "planned" | "recorded" | "occurrence" | "incomplete";
+
+type ViewMode = "daily" | "list";
+
+const operationalStageLabels: Record<OperationalStage, string> = {
+  planned: "Planejado",
+  recorded: "Registrado",
+  occurrence: "Com ocorrência",
+  incomplete: "Incompleto",
+};
+
+const operationalStageDescriptions: Record<OperationalStage, string> = {
+  planned: "Ponto importado ou programado, ainda sem dado operacional de campo.",
+  recorded: "Registro com atividade, condição da água, resumo ou coordenada.",
+  occurrence: "Registro com ocorrência relevante informada.",
+  incomplete: "Registro sem local ou município suficientes para uso operacional.",
+};
+
+const operationalStageClassNames: Record<OperationalStage, string> = {
+  planned: "bg-slate-100 text-slate-700",
+  recorded: "bg-[var(--brand-green-soft)] text-[var(--brand-navy-strong)]",
+  occurrence: "bg-[var(--brand-amber)]/12 text-[var(--brand-amber)]",
+  incomplete: "bg-[rgba(186,26,26,0.10)] text-[var(--brand-danger)]",
 };
 
 type FieldDiaryCampaignScope = {
@@ -80,6 +158,8 @@ export function FieldDiaryPageContent({
   const [formEntry, setFormEntry] = useState<FieldDiaryPayload | null>(null);
   const [viewEntry, setViewEntry] = useState<FieldDiaryEntry | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isAdvancedFiltersOpen, setIsAdvancedFiltersOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("daily");
   const [message, setMessage] = useState("");
   const isCampaignScoped = Boolean(campaignScope);
   const campaignScopeId = campaignScope?.id ?? "";
@@ -96,31 +176,135 @@ export function FieldDiaryPageContent({
     void loadEntries();
   }, []);
 
-  const filteredEntries = useMemo(
+  const scopedEntries = useMemo(
     () =>
-      entries.filter((entry) => {
-        const locationText = `${entry.locationName} ${entry.sia ?? ""}`.toLowerCase();
-        const matchesCampaignScope =
+      entries.filter(
+        (entry) =>
           !campaignScopeId ||
           entry.campaignId === campaignScopeId ||
-          entry.campaignName === campaignScopeName;
-
-        return (
-          matchesCampaignScope &&
-          (isCampaignScoped || !filters.campaign || entry.campaignName === filters.campaign) &&
-          (!filters.date || entry.entryDate === filters.date) &&
-          (!filters.location || locationText.includes(filters.location.toLowerCase())) &&
-          (!filters.municipality || entry.municipality.toLowerCase().includes(filters.municipality.toLowerCase())) &&
-          (filters.occurrence === "todos" ||
-            (filters.occurrence === "sim" ? entry.hasOccurrence : !entry.hasOccurrence))
-        );
-      }),
-    [campaignScopeId, campaignScopeName, entries, filters, isCampaignScoped],
+          entry.campaignName === campaignScopeName,
+      ),
+    [entries, campaignScopeId, campaignScopeName],
   );
 
-  function openNewForm() {
+  const filterOptions = useMemo(() => {
+    const activities = new Set<string>();
+    const waterConditions = new Set<string>();
+    for (const entry of scopedEntries) {
+      for (const activity of entry.activities) activities.add(activity);
+      for (const condition of entry.waterVisualConditions) waterConditions.add(condition);
+    }
+    return {
+      campaigns: uniqueSorted(scopedEntries.map((entry) => entry.campaignName)),
+      municipalities: uniqueSorted(scopedEntries.map((entry) => entry.municipality)),
+      responsibles: uniqueSorted(scopedEntries.map((entry) => entry.createdByName)),
+      campaignDays: uniqueSorted(scopedEntries.map((entry) => String(entry.campaignDay))),
+      occurrenceTypes: uniqueSorted(scopedEntries.map((entry) => entry.occurrenceType)),
+      statuses: uniqueSorted(scopedEntries.map((entry) => entry.status)),
+      followUps: uniqueSorted(scopedEntries.map((entry) => entry.requiresFollowUp)),
+      activities: [...activities].sort((a, b) => a.localeCompare(b, "pt-BR")),
+      waterConditions: [...waterConditions].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    };
+  }, [scopedEntries]);
+
+  const filteredEntries = useMemo(
+    () =>
+      scopedEntries.filter((entry) => {
+        const locationText = `${entry.locationName} ${entry.sia ?? ""}`.toLowerCase();
+
+        // Data e Intervalo de Datas
+        if (filters.date && entry.entryDate !== filters.date) return false;
+        if (filters.dateFrom && entry.entryDate < filters.dateFrom) return false;
+        if (filters.dateTo && entry.entryDate > filters.dateTo) return false;
+
+        // Dia e Intervalo de Dias da Campanha
+        if (filters.campaignDay && String(entry.campaignDay) !== filters.campaignDay) return false;
+        const dayFrom = filters.dayFrom ? Number(filters.dayFrom) : null;
+        const dayTo = filters.dayTo ? Number(filters.dayTo) : null;
+        if (dayFrom !== null && entry.campaignDay < dayFrom) return false;
+        if (dayTo !== null && entry.campaignDay > dayTo) return false;
+
+        // Filtro de coordenadas
+        if (filters.hasCoordinates !== "todos") {
+          const has = hasCoordinatePair(entry);
+          if (filters.hasCoordinates === "sim" ? !has : has) return false;
+        }
+
+        // Filtro de observações de pendência/acompanhamento
+        if (filters.hasFollowUpNotes !== "todos") {
+          const has = Boolean(String(entry.followUpNotes ?? "").trim());
+          if (filters.hasFollowUpNotes === "sim" ? !has : has) return false;
+        }
+
+        // Busca livre
+        if (filters.search) {
+          const haystack = [
+            entry.campaignName,
+            entry.locationName,
+            entry.sia,
+            entry.municipality,
+            entry.createdByName,
+            entry.occurrenceType,
+            entry.occurrenceDescription,
+            entry.followUpNotes,
+            entry.dailySummary,
+            entry.activities.join(" "),
+            entry.waterVisualConditions.join(" "),
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          if (!haystack.includes(filters.search.toLowerCase())) return false;
+        }
+
+        // Multi-select Atividades e Condições
+        if (filters.activities.length) {
+          const set = new Set(entry.activities);
+          if (!filters.activities.every((a) => set.has(a))) return false;
+        }
+        if (filters.waterConditions.length) {
+          const set = new Set(entry.waterVisualConditions);
+          if (!filters.waterConditions.every((c) => set.has(c))) return false;
+        }
+
+        return (
+          (isCampaignScoped || !filters.campaign || entry.campaignName === filters.campaign) &&
+          (!filters.location || locationText.includes(filters.location.toLowerCase())) &&
+          (!filters.municipality || entry.municipality === filters.municipality) &&
+          (filters.occurrence === "todos" ||
+            (filters.occurrence === "sim" ? entry.hasOccurrence : !entry.hasOccurrence)) &&
+          (!filters.occurrenceType || (entry.occurrenceType ?? "") === filters.occurrenceType) &&
+          (!filters.status || entry.status === filters.status) &&
+          (!filters.followUp || entry.requiresFollowUp === filters.followUp) &&
+          (!filters.responsible || (entry.createdByName ?? "") === filters.responsible) &&
+          (!filters.operationalStage || getOperationalStage(entry) === filters.operationalStage)
+        );
+      }),
+    [scopedEntries, filters, isCampaignScoped],
+  );
+
+  const scopedSummary = useMemo(() => summarizeFieldDiaryEntries(scopedEntries), [scopedEntries]);
+  const filteredSummary = useMemo(() => summarizeFieldDiaryEntries(filteredEntries), [filteredEntries]);
+  const dailyGroups = useMemo(() => groupEntriesByFieldDay(filteredEntries), [filteredEntries]);
+  const activeFilterCount = Object.entries(filters).filter(([key, value]) => {
+    if (key === "occurrence" || key === "hasCoordinates" || key === "hasFollowUpNotes") {
+      return value !== "todos";
+    }
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+    return Boolean(value);
+  }).length;
+
+  function openNewForm(defaults: Partial<FieldDiaryPayload> = {}) {
     const session = getStoredSession();
     const payload = createEmptyFieldDiaryPayload();
+    const defaultCampaign = defaults.campaignName
+      ? campaignOptions.find((campaign) => campaign.name === defaults.campaignName)
+      : null;
+    const normalizedDefaults = defaultCampaign && !defaults.campaignId
+      ? { ...defaults, campaignId: defaultCampaign.id }
+      : defaults;
     const scopedCampaign = campaignScope
       ? {
           campaignId: campaignScope.id,
@@ -131,6 +315,7 @@ export function FieldDiaryPageContent({
     setMessage("");
     setFormEntry({
       ...payload,
+      ...normalizedDefaults,
       ...scopedCampaign,
       createdBy: session?.userId ?? "",
       createdByName: session?.name ?? "",
@@ -180,6 +365,11 @@ export function FieldDiaryPageContent({
     }
 
     const result = await saveFieldDiaryEntry(scopedPayload);
+    if (result.persistence === "none") {
+      setMessage("A nuvem não confirmou a gravação. O registro não foi publicado para outros usuários.");
+      return;
+    }
+
     setEntries((current) =>
       [
         result.entry,
@@ -199,7 +389,7 @@ export function FieldDiaryPageContent({
       {campaignScope ? (
         <SectionCard
           title="Diário de Campo"
-          description={`Registro operacional vinculado exclusivamente à ${campaignScope.name}.`}
+          description={`Registro operacional vinculado à ${campaignScope.name}.`}
           action={
             <div className="flex flex-wrap gap-2">
               <ImportButton onClick={() => setIsImportOpen(true)} />
@@ -207,36 +397,22 @@ export function FieldDiaryPageContent({
             </div>
           }
         >
-          <p className="max-w-5xl text-justify text-sm leading-7 text-[var(--ink-soft)]">
-            Cada campanha mantém seu próprio diário para preservar a rastreabilidade das atividades,
-            ocorrências, pendências e observações feitas em campo.
+          <p className="text-sm leading-6 text-[var(--ink-soft)]">
+            Memória operacional da campanha. Detalhes de uso em Ajuda → Diário de Campo.
           </p>
         </SectionCard>
       ) : (
-        <>
-          <PageHeader
-            eyebrow="Campanhas"
-            title="Diário de Campo"
-            description="Memória operacional diária das campanhas, ações pontuais e deslocamentos técnicos do projeto Yva'e, sem substituir relatórios técnicos, laudos, atas ou comunicações formais."
-            aside={
-              <div className="flex flex-wrap items-start justify-end gap-2">
-                <ImportButton onClick={() => setIsImportOpen(true)} />
-                <NewEntryButton onClick={openNewForm} label="Novo registro" />
-              </div>
-            }
-          />
-
-          <SectionCard
-            title="Descrição institucional"
-            description="O módulo reúne registros diários simples e organizados do que ocorreu em campo, apoiando a rastreabilidade das campanhas e a comunicação entre equipes."
-          >
-            <p className="max-w-5xl text-justify text-sm leading-7 text-[var(--ink-soft)]">
-              O Diário de Campo não substitui relatórios técnicos, laudos, atas, comunicações formais ou documentos oficiais.
-              Ele funciona como memória operacional do projeto, incluindo locais visitados, atividades realizadas, condições visuais da água,
-              ocorrências operacionais e eventuais pendências.
-            </p>
-          </SectionCard>
-        </>
+        <PageHeader
+          eyebrow="Campanhas"
+          title="Diário de Campo"
+          description="Memória operacional diária das campanhas e ações de campo."
+          aside={
+            <div className="flex flex-wrap items-start justify-end gap-2">
+              <ImportButton onClick={() => setIsImportOpen(true)} />
+              <NewEntryButton onClick={openNewForm} label="Novo registro" />
+            </div>
+          }
+        />
       )}
 
       {message ? (
@@ -245,15 +421,73 @@ export function FieldDiaryPageContent({
         </div>
       ) : null}
 
+      <ErrorBoundary title="Falha no resumo do Diário de Campo">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <OperationalMetric
+            icon={BarChart3}
+            label="Registros no diário"
+            value={String(scopedSummary.total)}
+            detail={`${filteredSummary.total} visível(is) na consulta atual.`}
+          />
+          <OperationalMetric
+            icon={CheckCircle2}
+            label="Preenchidos"
+            value={String(scopedSummary.recorded + scopedSummary.occurrence)}
+            detail={`${scopedSummary.recorded} registrado(s), ${scopedSummary.occurrence} com ocorrência.`}
+          />
+          <OperationalMetric
+            icon={CalendarDays}
+            label="Planejados"
+            value={String(scopedSummary.planned)}
+            detail="Pontos importados ainda sem relato operacional."
+          />
+          <OperationalMetric
+            icon={MapPin}
+            label="Sem coordenada"
+            value={String(scopedSummary.withoutCoordinates)}
+            detail="Registros que dependem de localização complementar."
+          />
+        </div>
+      </ErrorBoundary>
+
+      <ErrorBoundary title="Falha na consulta do Diário de Campo">
       <SectionCard
-        title="Filtros"
-        description={
-          campaignScope
-            ? "Consulta rápida por data, local, município e ocorrência dentro desta campanha."
-            : "Consulta rápida por campanha, data, local, município e ocorrência."
+        title="Consulta operacional"
+        description="Use os filtros principais para localizar rapidamente dias e pontos de campo."
+        action={
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setIsAdvancedFiltersOpen((open) => !open)}
+              className="inline-flex items-center gap-2 rounded-xl border border-[var(--line-ghost)] bg-white px-3 py-2 text-xs font-bold text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)]"
+            >
+              <ListFilter className="h-3.5 w-3.5" />
+              Filtros avançados
+              {activeFilterCount ? ` (${activeFilterCount})` : ""}
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilters(emptyFilters)}
+              className="inline-flex items-center gap-2 rounded-xl border border-[var(--line-ghost)] bg-white px-3 py-2 text-xs font-bold text-[var(--ink-soft)] transition hover:text-[var(--brand-navy-strong)]"
+            >
+              <Search className="h-3.5 w-3.5" />
+              Limpar
+            </button>
+          </div>
         }
       >
-        <div className={`grid gap-3 md:grid-cols-2 ${isCampaignScoped ? "xl:grid-cols-4" : "xl:grid-cols-5"}`}>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <Field label="Busca livre">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                value={filters.search}
+                onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
+                className={`${inputClassName} pl-9`}
+                placeholder="Texto em qualquer campo"
+              />
+            </div>
+          </Field>
           {!isCampaignScoped ? (
             <Field label="Campanha">
               <select
@@ -262,9 +496,9 @@ export function FieldDiaryPageContent({
                 className={inputClassName}
               >
                 <option value="">Todas</option>
-                {campaignOptions.map((campaign) => (
-                  <option key={campaign.id} value={campaign.name}>
-                    {campaign.name}
+                {filterOptions.campaigns.map((campaign) => (
+                  <option key={campaign} value={campaign}>
+                    {campaign}
                   </option>
                 ))}
               </select>
@@ -278,101 +512,369 @@ export function FieldDiaryPageContent({
               className={inputClassName}
             />
           </Field>
-          <Field label="Local / SIA / Reservatório">
+          <Field label="Dia">
+            <select
+              value={filters.campaignDay}
+              onChange={(event) => setFilters((current) => ({ ...current, campaignDay: event.target.value }))}
+              className={inputClassName}
+            >
+              <option value="">Todos</option>
+              {filterOptions.campaignDays.map((day) => (
+                <option key={day} value={day}>
+                  {day}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Ponto / SIA">
             <input
               value={filters.location}
               onChange={(event) => setFilters((current) => ({ ...current, location: event.target.value }))}
               className={inputClassName}
-              placeholder="Buscar local"
+              placeholder="Buscar ponto"
             />
           </Field>
-          <Field label="Município">
-            <input
-              value={filters.municipality}
-              onChange={(event) => setFilters((current) => ({ ...current, municipality: event.target.value }))}
-              className={inputClassName}
-              placeholder="Buscar município"
-            />
-          </Field>
-          <Field label="Com ocorrência">
+          <Field label="Situação">
             <select
-              value={filters.occurrence}
-              onChange={(event) => setFilters((current) => ({ ...current, occurrence: event.target.value as Filters["occurrence"] }))}
+              value={filters.operationalStage}
+              onChange={(event) =>
+                setFilters((current) => ({
+                  ...current,
+                  operationalStage: event.target.value as Filters["operationalStage"],
+                }))
+              }
               className={inputClassName}
             >
-              <option value="todos">Todos</option>
-              <option value="sim">Sim</option>
-              <option value="nao">Não</option>
+              <option value="">Todas</option>
+              {Object.entries(operationalStageLabels).map(([stage, label]) => (
+                <option key={stage} value={stage}>
+                  {label}
+                </option>
+              ))}
             </select>
           </Field>
         </div>
-      </SectionCard>
 
+        {isAdvancedFiltersOpen ? (
+          <div className="mt-4 border-t border-[var(--line-ghost)] pt-4 space-y-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <Field label="Data inicial">
+                <input
+                  type="date"
+                  value={filters.dateFrom}
+                  onChange={(event) => setFilters((current) => ({ ...current, dateFrom: event.target.value }))}
+                  className={inputClassName}
+                />
+              </Field>
+              <Field label="Data final">
+                <input
+                  type="date"
+                  value={filters.dateTo}
+                  onChange={(event) => setFilters((current) => ({ ...current, dateTo: event.target.value }))}
+                  className={inputClassName}
+                />
+              </Field>
+              <Field label="Dia da campanha (de)">
+                <input
+                  type="number"
+                  min={1}
+                  value={filters.dayFrom}
+                  onChange={(event) => setFilters((current) => ({ ...current, dayFrom: event.target.value }))}
+                  className={inputClassName}
+                  placeholder="Ex: 1"
+                />
+              </Field>
+              <Field label="Dia da campanha (até)">
+                <input
+                  type="number"
+                  min={1}
+                  value={filters.dayTo}
+                  onChange={(event) => setFilters((current) => ({ ...current, dayTo: event.target.value }))}
+                  className={inputClassName}
+                  placeholder="Ex: 5"
+                />
+              </Field>
+              <Field label="Município">
+                <select
+                  value={filters.municipality}
+                  onChange={(event) => setFilters((current) => ({ ...current, municipality: event.target.value }))}
+                  className={inputClassName}
+                >
+                  <option value="">Todos</option>
+                  {filterOptions.municipalities.map((municipality) => (
+                    <option key={municipality} value={municipality}>
+                      {municipality}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Responsável">
+                <select
+                  value={filters.responsible}
+                  onChange={(event) => setFilters((current) => ({ ...current, responsible: event.target.value }))}
+                  className={inputClassName}
+                >
+                  <option value="">Todos</option>
+                  {filterOptions.responsibles.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Tem coordenadas?">
+                <select
+                  value={filters.hasCoordinates}
+                  onChange={(event) =>
+                    setFilters((current) => ({ ...current, hasCoordinates: event.target.value as Filters["hasCoordinates"] }))
+                  }
+                  className={inputClassName}
+                >
+                  <option value="todos">Todos</option>
+                  <option value="sim">Sim</option>
+                  <option value="nao">Não</option>
+                </select>
+              </Field>
+              <Field label="Pendência registrada?">
+                <select
+                  value={filters.hasFollowUpNotes}
+                  onChange={(event) =>
+                    setFilters((current) => ({ ...current, hasFollowUpNotes: event.target.value as Filters["hasFollowUpNotes"] }))
+                  }
+                  className={inputClassName}
+                >
+                  <option value="todos">Todos</option>
+                  <option value="sim">Com pendência</option>
+                  <option value="nao">Sem pendência</option>
+                </select>
+              </Field>
+              <Field label="Houve ocorrência?">
+                <select
+                  value={filters.occurrence}
+                  onChange={(event) =>
+                    setFilters((current) => ({ ...current, occurrence: event.target.value as Filters["occurrence"] }))
+                  }
+                  className={inputClassName}
+                >
+                  <option value="todos">Todos</option>
+                  <option value="sim">Sim</option>
+                  <option value="nao">Não</option>
+                </select>
+              </Field>
+              <Field label="Tipo de ocorrência">
+                <select
+                  value={filters.occurrenceType}
+                  onChange={(event) => setFilters((current) => ({ ...current, occurrenceType: event.target.value }))}
+                  className={inputClassName}
+                  disabled={filters.occurrence === "nao"}
+                >
+                  <option value="">Todos</option>
+                  {filterOptions.occurrenceTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Acompanhamento">
+                <select
+                  value={filters.followUp}
+                  onChange={(event) => setFilters((current) => ({ ...current, followUp: event.target.value }))}
+                  className={inputClassName}
+                >
+                  <option value="">Todos</option>
+                  {filterOptions.followUps.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Status do registro">
+                <select
+                  value={filters.status}
+                  onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
+                  className={inputClassName}
+                >
+                  <option value="">Todos</option>
+                  {filterOptions.statuses.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2 border-t border-[var(--line-ghost)] pt-4">
+              <Checklist
+                label="Atividades realizadas"
+                options={activityOptions}
+                values={filters.activities}
+                onChange={(activities) => setFilters((current) => ({ ...current, activities }))}
+              />
+              <Checklist
+                label="Condições visuais da água"
+                options={waterVisualConditionOptions}
+                values={filters.waterConditions}
+                onChange={(waterConditions) => setFilters((current) => ({ ...current, waterConditions }))}
+              />
+            </div>
+          </div>
+        ) : null}
+      </SectionCard>
+      </ErrorBoundary>
+
+      <ErrorBoundary title="Falha na lista do Diário de Campo">
       <SectionCard
-        title="Registros"
-        description={`${filteredEntries.length} registro(s) encontrado(s).`}
+        title={viewMode === "daily" ? "Diário por dia" : "Lista completa"}
+        description={
+          viewMode === "daily"
+            ? `${dailyGroups.length} dia(s) de campo com ${filteredEntries.length} registro(s).`
+            : `${filteredEntries.length} registro(s) encontrado(s).`
+        }
         action={
-          <button
-            type="button"
-            onClick={() => setFilters(emptyFilters)}
-            className="inline-flex items-center gap-2 rounded-xl border border-[var(--line-ghost)] bg-white px-3 py-2 text-xs font-bold text-[var(--ink-soft)] transition hover:text-[var(--brand-navy-strong)]"
-          >
-            <Search className="h-3.5 w-3.5" />
-            Limpar filtros
-          </button>
+          <div className="inline-flex rounded-xl border border-[var(--line-ghost)] bg-white p-1">
+            <button
+              type="button"
+              onClick={() => setViewMode("daily")}
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition ${
+                viewMode === "daily"
+                  ? "bg-[var(--brand-navy-strong)] text-white"
+                  : "text-[var(--ink-soft)] hover:bg-[var(--surface-soft)]"
+              }`}
+            >
+              <CalendarDays className="h-3.5 w-3.5" />
+              Por dia
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition ${
+                viewMode === "list"
+                  ? "bg-[var(--brand-navy-strong)] text-white"
+                  : "text-[var(--ink-soft)] hover:bg-[var(--surface-soft)]"
+              }`}
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              Lista
+            </button>
+          </div>
         }
       >
         {isLoading ? (
-          <EmptyState title="Carregando registros" description="Consultando o Diário de Campo." />
+          <DashboardSkeleton rows={4} />
         ) : filteredEntries.length ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1080px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-[var(--line-ghost)] text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                  <th className="px-3 py-3">Data</th>
-                  <th className="px-3 py-3">Campanha</th>
-                  <th className="px-3 py-3">Dia</th>
-                  <th className="px-3 py-3">Local / SIA</th>
-                  <th className="px-3 py-3">Coordenadas</th>
-                  <th className="px-3 py-3">Município</th>
-                  <th className="px-3 py-3">Ocorrência</th>
-                  <th className="px-3 py-3">Responsável</th>
-                  <th className="px-3 py-3">Status</th>
-                  <th className="px-3 py-3">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredEntries.map((entry) => (
-                  <tr key={entry.id} className="border-b border-[var(--line-ghost)] align-top">
-                    <td className="px-3 py-4 font-bold text-[var(--brand-navy-strong)]">{formatDate(entry.entryDate)}</td>
-                    <td className="px-3 py-4">{entry.campaignName}</td>
-                    <td className="px-3 py-4">{entry.campaignDay}</td>
-                    <td className="px-3 py-4">
-                      <span className="block font-semibold">{entry.locationName}</span>
-                      {entry.sia ? <span className="text-xs text-slate-500">{entry.sia}</span> : null}
-                    </td>
-                    <td className="px-3 py-4 text-xs font-semibold text-slate-600">
-                      {formatCoordinatePair(entry.latitude, entry.longitude)}
-                    </td>
-                    <td className="px-3 py-4">{entry.municipality}</td>
-                    <td className="px-3 py-4">
-                      <span className={entry.hasOccurrence ? occurrenceYesClassName : occurrenceNoClassName}>
-                        {entry.hasOccurrence ? "Sim" : "Não"}
-                      </span>
-                    </td>
-                    <td className="px-3 py-4">{entry.createdByName || "Não informado"}</td>
-                    <td className="px-3 py-4">{entry.status}</td>
-                    <td className="px-3 py-4">
-                      <div className="flex gap-2">
-                        <IconButton label="Visualizar" onClick={() => setViewEntry(entry)} icon={Eye} />
-                        <IconButton label="Editar" onClick={() => openEditForm(entry)} icon={Pencil} />
-                      </div>
-                    </td>
+          viewMode === "daily" ? (
+            <div className="divide-y divide-[var(--line-ghost)]">
+              {dailyGroups.map((group) => (
+                <section key={group.key} className="py-5 first:pt-0 last:pb-0">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <p className="heading-font text-xl font-black text-[var(--brand-navy-strong)]">
+                        {formatDate(group.entryDate)} · Dia {group.campaignDay}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-[var(--ink-soft)]">{group.campaignName}</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <DailyCount label="Pontos" value={group.summary.total} />
+                      <DailyCount label="Preenchidos" value={group.summary.recorded + group.summary.occurrence} />
+                      <DailyCount label="Planejados" value={group.summary.planned} />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openNewForm({
+                            campaignName: group.campaignName,
+                            campaignDay: group.campaignDay,
+                            entryDate: group.entryDate,
+                          })
+                        }
+                        className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-navy-strong)] px-3 py-2 text-xs font-bold text-white transition hover:bg-[var(--brand-navy)]"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Registrar ponto
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="w-full min-w-[860px] text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-[var(--line-ghost)] text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                          <th className="px-3 py-3">Ponto / SIA</th>
+                          <th className="px-3 py-3">Município</th>
+                          <th className="px-3 py-3">Responsável</th>
+                          <th className="px-3 py-3">Situação</th>
+                          <th className="px-3 py-3">Resumo operacional</th>
+                          <th className="px-3 py-3">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.entries.map((entry) => (
+                          <OperationalEntryRow
+                            key={entry.id}
+                            entry={entry}
+                            onView={() => setViewEntry(entry)}
+                            onEdit={() => openEditForm(entry)}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1080px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--line-ghost)] text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                    <th className="px-3 py-3">Data</th>
+                    <th className="px-3 py-3">Campanha</th>
+                    <th className="px-3 py-3">Dia</th>
+                    <th className="px-3 py-3">Local / SIA</th>
+                    <th className="px-3 py-3">Coordenadas</th>
+                    <th className="px-3 py-3">Município</th>
+                    <th className="px-3 py-3">Situação</th>
+                    <th className="px-3 py-3">Responsável</th>
+                    <th className="px-3 py-3">Status</th>
+                    <th className="px-3 py-3">Ações</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filteredEntries.map((entry) => {
+                    const stage = getOperationalStage(entry);
+
+                    return (
+                      <tr key={entry.id} className="border-b border-[var(--line-ghost)] align-top">
+                        <td className="px-3 py-4 font-bold text-[var(--brand-navy-strong)]">{formatDate(entry.entryDate)}</td>
+                        <td className="px-3 py-4">{entry.campaignName}</td>
+                        <td className="px-3 py-4">{entry.campaignDay}</td>
+                        <td className="px-3 py-4">
+                          <span className="block font-semibold">{entry.locationName || "Sem local"}</span>
+                          {entry.sia ? <span className="text-xs text-slate-500">{entry.sia}</span> : null}
+                        </td>
+                        <td className="px-3 py-4 text-xs font-semibold text-slate-600">
+                          {formatCoordinatePair(entry.latitude, entry.longitude)}
+                        </td>
+                        <td className="px-3 py-4">{entry.municipality || "Não informado"}</td>
+                        <td className="px-3 py-4">
+                          <StageBadge stage={stage} />
+                        </td>
+                        <td className="px-3 py-4">{entry.createdByName || "Não informado"}</td>
+                        <td className="px-3 py-4">{entry.status}</td>
+                        <td className="px-3 py-4">
+                          <div className="flex gap-2">
+                            <IconButton label="Visualizar" onClick={() => setViewEntry(entry)} icon={Eye} />
+                            <IconButton label="Editar" onClick={() => openEditForm(entry)} icon={Pencil} />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
         ) : (
           <EmptyState
             title="Nenhum registro encontrado"
@@ -380,6 +882,7 @@ export function FieldDiaryPageContent({
           />
         )}
       </SectionCard>
+      </ErrorBoundary>
 
       {isImportOpen ? (
         <FieldDiaryImport
@@ -420,6 +923,183 @@ export function FieldDiaryPageContent({
         }} />
       ) : null}
     </div>
+  );
+}
+
+type FieldDiarySummary = Record<OperationalStage, number> & {
+  total: number;
+  withoutCoordinates: number;
+};
+
+type FieldDiaryDayGroup = {
+  key: string;
+  campaignName: string;
+  campaignDay: number;
+  entryDate: string;
+  entries: FieldDiaryEntry[];
+  summary: FieldDiarySummary;
+};
+
+function summarizeFieldDiaryEntries(entries: FieldDiaryEntry[]): FieldDiarySummary {
+  const summary: FieldDiarySummary = {
+    total: entries.length,
+    planned: 0,
+    recorded: 0,
+    occurrence: 0,
+    incomplete: 0,
+    withoutCoordinates: 0,
+  };
+
+  for (const entry of entries) {
+    summary[getOperationalStage(entry)] += 1;
+    if (!hasCoordinatePair(entry)) summary.withoutCoordinates += 1;
+  }
+
+  return summary;
+}
+
+function groupEntriesByFieldDay(entries: FieldDiaryEntry[]): FieldDiaryDayGroup[] {
+  const groups = new Map<string, FieldDiaryEntry[]>();
+
+  for (const entry of entries) {
+    const key = [entry.campaignName, entry.entryDate, entry.campaignDay].join("|");
+    groups.set(key, [...(groups.get(key) ?? []), entry]);
+  }
+
+  return [...groups.entries()]
+    .map(([key, groupEntries]) => {
+      const first = groupEntries[0];
+      return {
+        key,
+        campaignName: first.campaignName,
+        campaignDay: first.campaignDay,
+        entryDate: first.entryDate,
+        entries: [...groupEntries].sort((a, b) =>
+          (a.locationName || a.sia || "").localeCompare(b.locationName || b.sia || "", "pt-BR", { numeric: true }),
+        ),
+        summary: summarizeFieldDiaryEntries(groupEntries),
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.entryDate.localeCompare(a.entryDate) ||
+        b.campaignDay - a.campaignDay ||
+        a.campaignName.localeCompare(b.campaignName, "pt-BR"),
+    );
+}
+
+function hasCoordinatePair(entry: FieldDiaryEntry) {
+  return Boolean(String(entry.latitude ?? "").trim() && String(entry.longitude ?? "").trim());
+}
+
+function hasDiaryContent(entry: FieldDiaryEntry) {
+  return Boolean(
+    entry.activities.length ||
+      entry.waterVisualConditions.length ||
+      String(entry.dailySummary ?? "").trim() ||
+      String(entry.followUpNotes ?? "").trim() ||
+      hasCoordinatePair(entry),
+  );
+}
+
+function getOperationalStage(entry: FieldDiaryEntry): OperationalStage {
+  if (!String(entry.locationName ?? "").trim() || !String(entry.municipality ?? "").trim()) {
+    return "incomplete";
+  }
+
+  if (entry.hasOccurrence) {
+    return "occurrence";
+  }
+
+  return hasDiaryContent(entry) ? "recorded" : "planned";
+}
+
+function getOperationalSummary(entry: FieldDiaryEntry) {
+  const summary = String(entry.dailySummary ?? "").trim();
+  if (summary) return summary;
+
+  const details = [
+    entry.activities.length ? `Atividades: ${entry.activities.join(", ")}` : "",
+    entry.waterVisualConditions.length ? `Água: ${entry.waterVisualConditions.join(", ")}` : "",
+    entry.followUpNotes ? `Pendência: ${entry.followUpNotes}` : "",
+  ].filter(Boolean);
+
+  return details.join(" · ") || operationalStageDescriptions[getOperationalStage(entry)];
+}
+
+function OperationalMetric({
+  icon: Icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: typeof ClipboardList;
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <article className="glass-panel rounded-[24px] p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">{label}</p>
+          <p className="heading-font mt-3 text-3xl font-black text-[var(--brand-navy-strong)]">{value}</p>
+        </div>
+        <span className="rounded-2xl bg-[var(--brand-blue-soft)] p-3 text-[var(--brand-navy-strong)]">
+          <Icon className="h-5 w-5" />
+        </span>
+      </div>
+      <p className="mt-4 text-sm leading-6 text-[var(--ink-soft)]">{detail}</p>
+    </article>
+  );
+}
+
+function DailyCount({ label, value }: { label: string; value: number }) {
+  return (
+    <span className="rounded-full bg-[var(--surface-soft)] px-3 py-1.5 text-xs font-bold text-[var(--brand-navy-strong)]">
+      {label}: {value}
+    </span>
+  );
+}
+
+function StageBadge({ stage }: { stage: OperationalStage }) {
+  return (
+    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${operationalStageClassNames[stage]}`}>
+      {operationalStageLabels[stage]}
+    </span>
+  );
+}
+
+function OperationalEntryRow({
+  entry,
+  onView,
+  onEdit,
+}: {
+  entry: FieldDiaryEntry;
+  onView: () => void;
+  onEdit: () => void;
+}) {
+  const stage = getOperationalStage(entry);
+
+  return (
+    <tr className="border-b border-[var(--line-ghost)] align-top last:border-0">
+      <td className="px-3 py-4">
+        <span className="block font-bold text-[var(--brand-navy-strong)]">{entry.locationName || "Sem local"}</span>
+        {entry.sia ? <span className="text-xs font-semibold text-slate-500">{entry.sia}</span> : null}
+      </td>
+      <td className="px-3 py-4">{entry.municipality || "Não informado"}</td>
+      <td className="px-3 py-4">{entry.createdByName || "Não informado"}</td>
+      <td className="px-3 py-4">
+        <StageBadge stage={stage} />
+      </td>
+      <td className="max-w-md px-3 py-4 text-sm leading-6 text-slate-600">{getOperationalSummary(entry)}</td>
+      <td className="px-3 py-4">
+        <div className="flex gap-2">
+          <IconButton label="Visualizar" onClick={onView} icon={Eye} />
+          <IconButton label="Editar" onClick={onEdit} icon={Pencil} />
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -881,17 +1561,57 @@ function FieldDiaryImport({
     setError(null);
     setResult(null);
 
-    const response = await fetch("/api/field-diary/import", { method: "POST", body: formData });
-    const payload = (await response.json()) as ImportResult | { error: string };
+    const operationId = `field-diary-import:${crypto.randomUUID()}`;
+    const controller = new AbortController();
+    const stopOperation = beginGlobalOperation({
+      id: operationId,
+      title: "Carregando Diário de Campo...",
+      description: "Lendo a planilha, validando registros e preparando a sincronização.",
+      cancelable: true,
+    });
+    const cancelHandler = (cancelEvent: Event) => {
+      const detail = (cancelEvent as CustomEvent<{ id: string }>).detail;
+      if (detail?.id === operationId) {
+        controller.abort();
+      }
+    };
 
-    if (!response.ok || "error" in payload) {
-      setError("error" in payload ? payload.error : "Erro ao processar a planilha.");
+    window.addEventListener(OPERATION_CANCEL_EVENT, cancelHandler);
+
+    try {
+      const response = await fetch("/api/field-diary/import", {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+      });
+      const payload = (await response.json()) as ImportResult | { error: string };
+
+      if (!response.ok || "error" in payload) {
+        throw new Error("error" in payload ? payload.error : "Erro ao processar a planilha.");
+      }
+
+      if (payload.errors.some((item) => /banco|supabase|nuvem/i.test(item))) {
+        emitLocalMode("O Diário de Campo foi importado no navegador, mas a nuvem não confirmou todos os registros.");
+      }
+
+      setResult(payload as ImportResult);
+    } catch (importError) {
+      const message =
+        importError instanceof DOMException && importError.name === "AbortError"
+          ? "Importação cancelada. Nenhum registro novo foi aplicado."
+          : toActionableErrorMessage(
+              importError,
+              "Não foi possível processar a planilha do Diário de Campo.",
+            );
+      setError(message);
+      if (isCloudConnectionError(importError)) {
+        emitLocalMode("Falha durante importação do Diário de Campo. Dados podem não ter sincronizado com a nuvem.");
+      }
+    } finally {
+      window.removeEventListener(OPERATION_CANCEL_EVENT, cancelHandler);
+      stopOperation();
       setIsPending(false);
-      return;
     }
-
-    setResult(payload as ImportResult);
-    setIsPending(false);
   }
 
   return (
@@ -1106,9 +1826,3 @@ const inputClassName =
 
 const textareaClassName =
   "min-h-28 rounded-xl border border-[var(--line-strong)] bg-white px-3 py-3 text-sm font-semibold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none transition placeholder:text-slate-400 focus:border-[var(--brand-blue)] focus:ring-2 focus:ring-[var(--brand-blue)]/20";
-
-const occurrenceYesClassName =
-  "rounded-full bg-[var(--brand-amber)]/12 px-2.5 py-1 text-xs font-bold text-[var(--brand-amber)]";
-
-const occurrenceNoClassName =
-  "rounded-full bg-[var(--brand-green-soft)] px-2.5 py-1 text-xs font-bold text-[var(--brand-navy-strong)]";

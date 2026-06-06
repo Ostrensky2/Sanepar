@@ -1,12 +1,27 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import bundledCampaignMapPoints from "@/data/campaign-map-points.json";
 import {
   readCampaignWorkbookFromPath,
   type CampaignMapPoint,
 } from "@/lib/imports/campaigns";
-import { getLatestPublishedCampaignImport } from "@/lib/supabase";
+import {
+  buildLaboratoryRiskPoints,
+  normalizeLaboratoryRiskLevel,
+  type LaboratoryRiskPoint,
+  type LaboratoryRiskResultRow,
+} from "@/lib/laboratory-risk";
+import {
+  getLatestPublishedCampaignImport,
+  getLatestPublishedLaboratoryRiskPoints,
+} from "@/lib/supabase";
 
 const CAMPAIGN_SYNTHESIS_WORKBOOK_PATH =
   "D:/Dropbox/Sanepar_única/Campo/Campanhas/Campanhas_ Planilha sintese.xlsx";
+const CAMPAIGN_1_DASHBOARD_PATH = path.join(
+  process.cwd(),
+  "public/dashboards/Painel_eDNA_Campanha1_Sanepar.html",
+);
 
 export type DashboardData = {
   campaignPoints: CampaignMapPoint[];
@@ -23,123 +38,51 @@ export type DashboardData = {
     total: number;
     original: number;
     effective: number;
+    monitored: number;
+    fieldCampaigns: number;
   };
-};
-
-export type LaboratoryRiskLevel = "baixo" | "medio" | "alto";
-
-export type LaboratoryRiskPoint = CampaignMapPoint & {
-  riskLevel: LaboratoryRiskLevel;
-  riskLabel: string;
-  eta: string;
-  detectedMarkers: string[];
-  ednaSignal: string;
-  laboratoryStatus: "simulado" | "homologado";
-  resultSummary: string;
 };
 
 export async function loadDashboardData(): Promise<DashboardData> {
   const campaignImport = await loadCampaignImport();
   const campaignPoints = campaignImport.points;
+  const publishedRiskPoints = await getLatestPublishedLaboratoryRiskPoints();
+  const riskRows = publishedRiskPoints?.length
+    ? []
+    : await loadBundledLaboratoryRiskRows();
 
   return {
     campaignPoints,
-    laboratoryRiskPoints: buildLaboratoryRiskPoints(campaignPoints),
+    laboratoryRiskPoints: publishedRiskPoints?.length
+      ? publishedRiskPoints
+      : buildLaboratoryRiskPoints(campaignPoints, riskRows),
     campaignSummary: buildCampaignSummary(campaignPoints, campaignImport),
     pointSummary: {
       total: campaignPoints.length,
       original: campaignPoints.filter((point) => point.original).length,
       effective: campaignPoints.filter((point) => point.effective).length,
+      monitored: countUniqueEffectivePoints(campaignPoints),
+      fieldCampaigns: countCampaignsWithEffectiveCollection(campaignPoints),
     },
   };
 }
 
-function buildLaboratoryRiskPoints(campaignPoints: CampaignMapPoint[]): LaboratoryRiskPoint[] {
-  return campaignPoints
-    .filter((point) => point.effective)
-    .map((point, index) => {
-      const riskLevel = inferRiskLevel(point, index);
-      const eta = inferEta(point);
-
-      return {
-        ...point,
-        riskLevel,
-        riskLabel: riskLabel(riskLevel),
-        eta,
-        detectedMarkers: detectedMarkers(riskLevel),
-        ednaSignal: ednaSignal(riskLevel),
-        laboratoryStatus: "simulado",
-        resultSummary:
-          "Registro preparado para receber resultados laboratoriais de eDNA. O grau de risco será substituído pelos dados homologados assim que a planilha de análise laboratorial estiver disponível.",
-      };
-    });
+function countUniqueEffectivePoints(campaignPoints: CampaignMapPoint[]) {
+  return new Set(
+    campaignPoints
+      .filter((point) => point.effective)
+      .map((point) => point.code.trim() || point.point.trim())
+      .filter(Boolean),
+  ).size;
 }
 
-function inferRiskLevel(point: CampaignMapPoint, index: number): LaboratoryRiskLevel {
-  const seed = `${point.code}-${point.campaign}-${point.municipality}`
-    .split("")
-    .reduce((total, character) => total + character.charCodeAt(0), index);
-  const bucket = seed % 6;
-
-  if (bucket === 0) {
-    return "alto";
-  }
-
-  if (bucket <= 2) {
-    return "medio";
-  }
-
-  return "baixo";
-}
-
-function inferEta(point: CampaignMapPoint) {
-  const source = point.waterBody || point.municipality || point.code;
-  const compact = source
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^A-Za-z0-9]+/g, " ")
-    .trim()
-    .split(" ")
-    .slice(0, 3)
-    .join(" ");
-
-  return compact ? `ETA ${compact}` : "ETA vinculada ao SIA";
-}
-
-function riskLabel(level: LaboratoryRiskLevel) {
-  if (level === "alto") {
-    return "Risco alto";
-  }
-
-  if (level === "medio") {
-    return "Risco moderado";
-  }
-
-  return "Risco baixo";
-}
-
-function detectedMarkers(level: LaboratoryRiskLevel) {
-  if (level === "alto") {
-    return ["Sinal eDNA elevado", "Marcadores críticos", "Reamostragem recomendada"];
-  }
-
-  if (level === "medio") {
-    return ["Sinal eDNA intermediário", "Marcadores sob observação"];
-  }
-
-  return ["Sinal eDNA baixo", "Sem marcador crítico"];
-}
-
-function ednaSignal(level: LaboratoryRiskLevel) {
-  if (level === "alto") {
-    return "Alto";
-  }
-
-  if (level === "medio") {
-    return "Intermediário";
-  }
-
-  return "Baixo";
+function countCampaignsWithEffectiveCollection(campaignPoints: CampaignMapPoint[]) {
+  return new Set(
+    campaignPoints
+      .filter((point) => point.effective)
+      .map((point) => point.campaign.trim())
+      .filter(Boolean),
+  ).size;
 }
 
 async function loadCampaignImport() {
@@ -173,6 +116,72 @@ async function loadCampaignImport() {
     rowCount: points.length,
     source: "Base local embarcada",
   };
+}
+
+async function loadBundledLaboratoryRiskRows(): Promise<LaboratoryRiskResultRow[]> {
+  const html = await readFile(CAMPAIGN_1_DASHBOARD_PATH, "utf8").catch(() => "");
+  const match = html.match(
+    /<script id="DATA" type="application\/json">([\s\S]*?)<\/script>/,
+  );
+
+  if (!match?.[1]) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(match[1]) as { ranking?: Array<Record<string, unknown>> };
+    const ranking = Array.isArray(parsed.ranking) ? parsed.ranking : [];
+
+    return ranking.map(dashboardRankingRowToRiskRow).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function dashboardRankingRowToRiskRow(
+  row: Record<string, unknown>,
+): LaboratoryRiskResultRow {
+  const classification = stringField(row, "Classificação integrada");
+  const environmentalRisk = stringField(row, "Risco ambiental");
+  const operationalRisk = stringField(row, "Risco operacional");
+  const sanitaryRisk = stringField(row, "Risco sanitário");
+
+  return {
+    position: numberField(row, "Posição"),
+    sampleId: stringField(row, "Amostra"),
+    pointName: stringField(row, "Ponto de coleta"),
+    waterBody: stringField(row, "Manancial/corpo hídrico"),
+    municipality: stringField(row, "Município"),
+    campaignDate: stringField(row, "Campanha/Data"),
+    mainOrganisms: stringField(row, "Principais organismos"),
+    mainDrivers: stringField(row, "Principais drivers de risco"),
+    environmentalRisk,
+    operationalRisk,
+    sanitaryRisk,
+    classification,
+    riskLevel: normalizeLaboratoryRiskLevel(classification),
+    environmentalRiskLevel: normalizeLaboratoryRiskLevel(environmentalRisk),
+    operationalRiskLevel: normalizeLaboratoryRiskLevel(operationalRisk),
+    sanitaryRiskLevel: normalizeLaboratoryRiskLevel(sanitaryRisk),
+    score: numberField(row, "Score integrado"),
+    cianoReads: numberField(row, "Ciano reads"),
+    bactReads: numberField(row, "Bact. sanitárias reads"),
+    coiReads: numberField(row, "COI invasores reads"),
+    confidence: stringField(row, "Nível de confiança"),
+    technicalJustification: stringField(row, "Justificativa técnica"),
+    recommendations: stringField(row, "Recomendações"),
+  };
+}
+
+function stringField(row: Record<string, unknown>, key: string) {
+  const value = row[key];
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function numberField(row: Record<string, unknown>, key: string) {
+  const value = row[key];
+  const parsed = typeof value === "number" ? value : Number(String(value).replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function buildCampaignSummary(

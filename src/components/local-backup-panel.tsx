@@ -15,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { beginGlobalOperation, toActionableErrorMessage } from "@/components/operational-feedback";
 
 type LocalBackupPanelProps = {
   enabled: boolean;
@@ -161,6 +162,12 @@ export function LocalBackupPanel({
   );
 
   function runWithProgress(operation: () => Promise<BackupResponse | void>) {
+    const stopOperation = beginGlobalOperation({
+      id: `local-backup:${crypto.randomUUID()}`,
+      title: "Executando operação de backup...",
+      description: "Mantendo o histórico atualizado. Esta operação pode levar alguns instantes.",
+    });
+
     startTransition(async () => {
       setError(null);
       setResult(null);
@@ -172,11 +179,9 @@ export function LocalBackupPanel({
         }
         await refreshHistory();
       } catch (operationError) {
-        setError(
-          operationError instanceof Error
-            ? operationError.message
-            : "Não foi possível concluir a operação.",
-        );
+        setError(toActionableErrorMessage(operationError));
+      } finally {
+        stopOperation();
       }
     });
   }

@@ -127,3 +127,15 @@ table {
   background: #cbd5e1;
   border-radius: 999px;
 }
+
+@keyframes yvae-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(60%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}

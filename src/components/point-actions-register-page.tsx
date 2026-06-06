@@ -10,11 +10,15 @@ import {
 } from "@/lib/access-control";
 
 export function PointActionsRegisterPage() {
-  const [activeCategory, setActiveCategory] = useState<UserCategory>("Admin");
+  const [activeCategory, setActiveCategory] = useState<UserCategory>(() => {
+    if (typeof window === "undefined") {
+      return "Admin";
+    }
+
+    return normalizeUserCategory(window.localStorage.getItem(ACCESS_CATEGORY_STORAGE_KEY));
+  });
 
   useEffect(() => {
-    setActiveCategory(normalizeUserCategory(window.localStorage.getItem(ACCESS_CATEGORY_STORAGE_KEY)));
-
     function refresh() {
       setActiveCategory(normalizeUserCategory(window.localStorage.getItem(ACCESS_CATEGORY_STORAGE_KEY)));
     }
@@ -33,12 +37,11 @@ export function PointActionsRegisterPage() {
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4 px-2 py-2 lg:px-3">
       <section>
-        <h2 className="heading-font mb-1 text-2xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
+        <h2 className="heading-font mb-1 text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
           Registrar Ação Pontual
         </h2>
-        <p className="max-w-3xl text-justify text-xs leading-5 text-slate-500">
-          Entrada estruturada de ações pontuais Sanepar. Os registros aparecem em Ações
-          pontuais e ficam disponíveis para os módulos que consomem essas demandas.
+        <p className="text-xs leading-5 text-slate-500">
+          Entrada estruturada de ações pontuais Sanepar.
         </p>
         <p className="mt-2 text-xs font-semibold text-slate-500">
           Categoria ativa:{" "}

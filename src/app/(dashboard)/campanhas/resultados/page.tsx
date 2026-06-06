@@ -4,7 +4,7 @@ import { loadDashboardData } from "@/lib/dashboard-data";
 export const dynamic = "force-dynamic";
 
 export default async function CampanhasResultadosPage() {
-  const { campaignPoints } = await loadDashboardData();
+  const { laboratoryRiskPoints } = await loadDashboardData();
 
-  return <CampaignsPageContent campaignPoints={campaignPoints} view="resultados" />;
+  return <CampaignsPageContent campaignPoints={laboratoryRiskPoints} view="resultados" />;
 }
