@@ -1,6 +1,6 @@
 "use client";
 
-import { Minus, Plus } from "lucide-react";
+import { Maximize2, Minus, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type Coordinate = {
@@ -72,9 +72,8 @@ export type CampaignMapLayerVisibility = {
 };
 
 const tileSize = 256;
-const minZoom = 3;
+const minZoom = 7;
 const maxZoom = 16;
-const singlePointZoom = 13;
 const basinColors = [
   "rgba(0, 142, 156, 0.30)",
   "rgba(0, 87, 159, 0.24)",
@@ -104,6 +103,7 @@ export function CampaignHydroMap({
   markerMode = "campaign",
   showPointTooltip = false,
   effectivePointColor,
+  fitRequest = 0,
 }: {
   points: CampaignHydroMapPoint[];
   selectedPointId?: string;
@@ -114,6 +114,7 @@ export function CampaignHydroMap({
   markerMode?: "campaign" | "risk" | "pointAction";
   showPointTooltip?: boolean;
   effectivePointColor?: string;
+  fitRequest?: number;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -276,6 +277,31 @@ export function CampaignHydroMap({
     return () => window.cancelAnimationFrame(frame);
   }, [layers, points, size]);
 
+  useEffect(() => {
+    if (!fitRequest || !size.width || !size.height) {
+      return;
+    }
+
+    fittedPointsKeyRef.current = null;
+    const coordinates = points
+      .map((point) => mapCoordinate(point, layers))
+      .filter((coordinate): coordinate is Coordinate => coordinate !== null);
+
+    if (!coordinates.length) {
+      return;
+    }
+
+    const nextView = fitCoordinatesToView(coordinates, size);
+    const frame = window.requestAnimationFrame(() => {
+      setCenter(nextView.center);
+      setZoom(nextView.zoom);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  // fitRequest is the trigger — only re-run when it changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitRequest]);
+
   function zoomBy(delta: number) {
     setZoom((current) => Math.max(minZoom, Math.min(maxZoom, current + delta)));
   }
@@ -388,7 +414,7 @@ export function CampaignHydroMap({
         {caption}
       </div>
 
-      <div className="absolute right-4 bottom-4 flex flex-col overflow-hidden rounded-xl border border-white/70 bg-white/95 shadow">
+      <div className="absolute right-4 top-4 flex flex-col overflow-hidden rounded-xl border border-white/70 bg-white/95 shadow">
         <button
           type="button"
           aria-label="Aproximar mapa"
@@ -412,6 +438,27 @@ export function CampaignHydroMap({
           }}
         >
           <Minus className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          aria-label="Enquadrar todos os pontos"
+          title="Enquadrar todos os pontos"
+          className="flex h-9 w-9 items-center justify-center border-t border-slate-100 text-[var(--brand-navy-strong)] transition-colors hover:bg-slate-100"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            fittedPointsKeyRef.current = null;
+            const coordinates = points
+              .map((point) => mapCoordinate(point, layers))
+              .filter((coordinate): coordinate is Coordinate => coordinate !== null);
+            if (coordinates.length && size.width && size.height) {
+              const nextView = fitCoordinatesToView(coordinates, size);
+              setCenter(nextView.center);
+              setZoom(nextView.zoom);
+            }
+          }}
+        >
+          <Maximize2 className="h-4 w-4" />
         </button>
       </div>
     </div>
@@ -487,7 +534,7 @@ function fitCoordinatesToView(
   if (coordinates.length === 1) {
     return {
       center: coordinates[0],
-      zoom: singlePointZoom,
+      zoom: maxZoom,
     };
   }
 

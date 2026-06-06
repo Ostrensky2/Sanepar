@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, AlertTriangle, Filter, FlaskConical, ShieldCheck } from "lucide-react";
+import { Activity, AlertTriangle, Camera, ExternalLink, Filter, FlaskConical, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   CampaignHydroMap,
@@ -22,6 +22,7 @@ export function HomeRiskMapSection({ points }: { points: LaboratoryRiskPoint[] }
   const [activePoints, setActivePoints] = useState(points);
   const [campaignFilter, setCampaignFilter] = useState("Todas");
   const [selectedPointId, setSelectedPointId] = useState<string | undefined>(points[0]?.id);
+  const [fitRequest, setFitRequest] = useState(0);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -74,7 +75,14 @@ export function HomeRiskMapSection({ points }: { points: LaboratoryRiskPoint[] }
           markerMode="risk"
           showPointTooltip
           caption="Base hidrográfica do Paraná · Pontos efetivos SIA · Resultados eDNA"
-          onSelectPoint={(point) => setSelectedPointId(point.id)}
+          fitRequest={fitRequest}
+          onSelectPoint={(point) => {
+            if (point.id === selectedPointId) {
+              setFitRequest((n) => n + 1);
+            } else {
+              setSelectedPointId(point.id);
+            }
+          }}
         />
 
         <div className="absolute left-4 top-4 w-64 overflow-hidden rounded-[20px] border border-[var(--line-ghost)] bg-white/92 shadow backdrop-blur">
@@ -115,7 +123,8 @@ export function HomeRiskMapSection({ points }: { points: LaboratoryRiskPoint[] }
         </div>
       </div>
 
-      <aside className="glass-panel flex min-h-[620px] flex-col rounded-[28px] p-5">
+      <aside className="glass-panel relative flex min-h-[620px] flex-col overflow-hidden rounded-[28px] p-5 shadow-[0_28px_80px_-40px_rgba(0,66,98,0.32)]">
+        <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-[var(--brand-navy-strong)] via-[var(--brand-teal)] to-[var(--brand-blue)]" />
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>
             <span className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-[var(--brand-green-soft)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--brand-navy-strong)]">
@@ -139,9 +148,10 @@ export function HomeRiskMapSection({ points }: { points: LaboratoryRiskPoint[] }
           <Metric label="Críticos" value={summary.alto} />
         </div>
 
-        <div className="mt-5 flex-1 rounded-[22px] border border-[var(--line-ghost)] bg-white p-4">
+        <div className="mt-5 flex-1 rounded-[22px] border-2 border-[var(--line-strong)] bg-white p-4">
           {selectedPoint ? (
             <div className="space-y-4">
+              <PointPhotoSlot photoUrl={selectedPoint.photoUrl} code={selectedPoint.code} />
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">
@@ -165,11 +175,11 @@ export function HomeRiskMapSection({ points }: { points: LaboratoryRiskPoint[] }
                 <Info label="Sinal eDNA" value={selectedPoint.ednaSignal} />
                 <Info label="Status" value="Aguardando planilha" />
                 <Info
-                  label="Latitude efetiva"
+                  label="Latitude"
                   value={selectedPoint.effective?.lat.toFixed(5)}
                 />
                 <Info
-                  label="Longitude efetiva"
+                  label="Longitude"
                   value={selectedPoint.effective?.lon.toFixed(5)}
                 />
               </div>
@@ -198,6 +208,56 @@ export function HomeRiskMapSection({ points }: { points: LaboratoryRiskPoint[] }
         </div>
       </aside>
     </section>
+  );
+}
+
+function isDirectImageUrl(url: string) {
+  return /\.(jpe?g|png|webp|gif|avif)(\?|$)/i.test(url);
+}
+
+function PointPhotoSlot({ photoUrl, code }: { photoUrl: string; code: string }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const hasDirect = photoUrl && isDirectImageUrl(photoUrl) && !imgFailed;
+  const hasLink = photoUrl && !hasDirect;
+
+  if (hasDirect) {
+    return (
+      <div className="overflow-hidden rounded-[16px] border border-[var(--line-ghost)]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={photoUrl}
+          alt={`Foto do ponto ${code}`}
+          className="h-36 w-full object-cover"
+          onError={() => setImgFailed(true)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3 rounded-[16px] border border-[var(--line-ghost)] bg-[var(--surface-soft)] px-4 py-3">
+      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[var(--brand-blue-soft)] text-[var(--brand-navy)]">
+        <Camera className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+          Fotos do ponto
+        </p>
+        {hasLink ? (
+          <a
+            href={photoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--brand-navy)] hover:underline"
+          >
+            Ver álbum de fotos
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        ) : (
+          <p className="text-xs font-semibold text-slate-400">Nenhuma foto registrada</p>
+        )}
+      </div>
+    </div>
   );
 }
 
