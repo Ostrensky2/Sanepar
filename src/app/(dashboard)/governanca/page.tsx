@@ -11,11 +11,13 @@ import {
   TimerReset,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { AccessManagementPanel } from "@/components/access-management-panel";
-import { BuildSyncDiagnostics } from "@/components/build-sync-diagnostics";
-import { LocalBackupPanel } from "@/components/local-backup-panel";
-import { MemberActivityPanel } from "@/components/member-activity-panel";
 import { StatusChip } from "@/components/status-chip";
+import {
+  AccessManagementPanelLazy as AccessManagementPanel,
+  BuildSyncDiagnosticsLazy as BuildSyncDiagnostics,
+  LocalBackupPanelLazy as LocalBackupPanel,
+  MemberActivityPanelLazy as MemberActivityPanel,
+} from "@/components/governanca-lazy-panels";
 import { SystemDiagnosticsPanel } from "@/components/system-diagnostics-panel";
 import { APP_VERSION_LABEL } from "@/lib/app-version";
 import { getServerAccessContext } from "@/lib/access-control-server";
