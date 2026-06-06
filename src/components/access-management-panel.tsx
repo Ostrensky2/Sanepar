@@ -282,7 +282,7 @@ export function AccessManagementPanel({
   async function resetPassword(userId: string) {
     const target = users.find((user) => user.id === userId);
 
-    if (isSaving || !target || !canManageUsers || (target.role === "Admin" && !canManageAdminAuthority)) {
+    if (isSaving || !target || !canManageUsers || isPasswordResetProtected(target, canManageAdminAuthority)) {
       return;
     }
 
@@ -736,7 +736,7 @@ export function AccessManagementPanel({
                       />
                       <ActionButton
                         label="Redefinir senha"
-                        disabled={isSaving || !canManageUsers || isProtectedUser(user, canManageAdminAuthority)}
+                        disabled={isSaving || !canManageUsers || isPasswordResetProtected(user, canManageAdminAuthority)}
                         onClick={() => resetPassword(user.id)}
                         icon={KeyRound}
                       />
@@ -843,6 +843,14 @@ function isProtectedUser(user: AppUser | undefined, canManageAdminAuthority: boo
 
   if (user.id === PRIMARY_ADMIN_ID || user.email.toLowerCase() === PRIMARY_ADMIN_EMAIL) {
     return true;
+  }
+
+  return user.role === "Admin" && !canManageAdminAuthority;
+}
+
+function isPasswordResetProtected(user: AppUser | undefined, canManageAdminAuthority: boolean) {
+  if (!user) {
+    return false;
   }
 
   return user.role === "Admin" && !canManageAdminAuthority;
