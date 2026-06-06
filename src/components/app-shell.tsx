@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell, CircleHelp, LogOut, UserRound } from "lucide-react";
@@ -12,7 +12,8 @@ import {
 import { SidebarNav } from "@/components/sidebar-nav";
 import { recordActivity } from "@/lib/activity-log";
 import { APP_LAST_UPDATED_LABEL, APP_VERSION_LABEL } from "@/lib/app-version";
-import { clearSession, getStoredSession, type AuthSession } from "@/lib/auth-users";
+import { clearSession } from "@/lib/auth-users";
+import { useSession } from "@/lib/hooks/use-session";
 import { navigationItems } from "@/lib/navigation";
 
 type AppShellProps = {
@@ -36,7 +37,7 @@ const auxiliaryPageMeta: Record<string, { summary: string; headerTitle: string }
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const session = useSession();
   const matchedChild = navigationItems
     .flatMap((item) => item.children ?? [])
     .find((child) => child.href === pathname);
@@ -45,15 +46,6 @@ export function AppShell({ children }: AppShellProps) {
     navigationItems.find((item) => item.href === pathname) ??
     auxiliaryPageMeta[pathname] ??
     navigationItems[0];
-
-  useEffect(() => {
-    const syncSession = () => setSession(getStoredSession());
-
-    syncSession();
-    window.addEventListener("yvae:auth-session-updated", syncSession);
-
-    return () => window.removeEventListener("yvae:auth-session-updated", syncSession);
-  }, []);
 
   useEffect(() => {
     if (!session || !pathname) {
@@ -71,6 +63,9 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <AuthGate>
     <div className="min-h-screen bg-[var(--surface-base)] text-[var(--ink)]">
+      <a href="#conteudo-principal" className="skip-link">
+        Pular para o conteúdo
+      </a>
       <aside className="fixed inset-y-0 left-0 z-50 hidden w-52 flex-col overflow-y-auto overflow-x-hidden border-r border-[var(--line-ghost)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(244,249,251,0.98))] p-3 shadow-[0_30px_80px_-48px_rgba(0,66,98,0.34)] lg:flex">
         <div className="mb-6 px-2">
           <YvaeMasthead />
@@ -149,7 +144,7 @@ export function AppShell({ children }: AppShellProps) {
           </div>
         </div>
 
-        <main className="flex min-h-[calc(100vh-4rem)] flex-col">
+        <main id="conteudo-principal" tabIndex={-1} className="flex min-h-[calc(100vh-4rem)] flex-col outline-none">
           <div className="flex-1 px-4 pb-6 pt-6 lg:px-6 lg:pt-24">{children}</div>
           <footer className="border-t border-[var(--line-ghost)] bg-[rgba(255,255,255,0.88)] px-4 py-4 backdrop-blur-sm lg:px-8">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

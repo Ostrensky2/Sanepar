@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AppProviders } from "@/components/app-providers";
 import { AppShell } from "@/components/app-shell";
 
 export default function DashboardLayout({
@@ -6,5 +7,9 @@ export default function DashboardLayout({
 }: {
   children: ReactNode;
 }) {
-  return <AppShell>{children}</AppShell>;
+  return (
+    <AppProviders>
+      <AppShell>{children}</AppShell>
+    </AppProviders>
+  );
 }

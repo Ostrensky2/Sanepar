@@ -17,6 +17,8 @@ import {
 } from "@/lib/access-control";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 import type { SpreadsheetPreview } from "@/lib/types";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 type SpreadsheetKind = "Campo" | "Laboratório";
 type CampaignScope = "Ordinária" | "Extraordinária";
@@ -125,6 +127,8 @@ const campaigns = [
 const filters = ["Todos", "Ordinárias", "Extraordinárias"] as const;
 
 export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView } = {}) {
+  const confirm = useConfirm();
+  const toast = useToast();
   const config = VIEW_CONFIG[view];
   const [spreadsheets, setSpreadsheets] = useState<StoredSpreadsheet[]>([]);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -356,15 +360,18 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
     URL.revokeObjectURL(url);
   }
 
-  function deleteSpreadsheet(sheet: StoredSpreadsheet) {
+  async function deleteSpreadsheet(sheet: StoredSpreadsheet) {
     if (!canDeleteSpreadsheets) {
       setError("Apenas Admin pode excluir planilhas do módulo Dados.");
       return;
     }
 
-    const confirmed = window.confirm(
-      `Remover "${sheet.fileName}" do repositório de dados deste painel?`,
-    );
+    const confirmed = await confirm({
+      title: "Remover planilha",
+      description: `Remover "${sheet.fileName}" do repositório de dados deste painel?`,
+      confirmLabel: "Remover",
+      tone: "danger",
+    });
 
     if (!confirmed) {
       return;
@@ -372,6 +379,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
 
     setSpreadsheets((current) => current.filter((item) => item.id !== sheet.id));
     void deleteSpreadsheetFile(sheet.id);
+    toast.success("Planilha removida", sheet.fileName);
   }
 
   return (
