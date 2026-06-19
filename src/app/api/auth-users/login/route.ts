@@ -30,6 +30,7 @@ export const runtime = "nodejs";
 const INVALID_CREDENTIALS = "Email ou senha incorretos.";
 const LOGIN_MAX_ATTEMPTS = 10;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const INITIAL_PASSWORD_RESET_USER_IDS = new Set(["usr-adriana-de-souza-trigo"]);
 
 export async function POST(request: Request) {
   const payload = (await request.json()) as { email?: unknown; password?: unknown };
@@ -106,7 +107,7 @@ export async function POST(request: Request) {
   } else if (
     row &&
     initialUser &&
-    row.must_change_password &&
+    (row.must_change_password || INITIAL_PASSWORD_RESET_USER_IDS.has(initialUser.id)) &&
     !matchedStoredPassword &&
     password === INITIAL_PASSWORD
   ) {
