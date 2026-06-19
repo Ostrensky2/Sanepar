@@ -7,6 +7,7 @@ import {
 } from "@/lib/imports/campaigns";
 import {
   buildLaboratoryRiskPoints,
+  hydrateLaboratoryRiskPointPhotos,
   normalizeLaboratoryRiskLevel,
   type LaboratoryRiskPoint,
   type LaboratoryRiskResultRow,
@@ -50,12 +51,16 @@ export async function loadDashboardData(): Promise<DashboardData> {
   const riskRows = publishedRiskPoints?.length
     ? []
     : await loadBundledLaboratoryRiskRows();
+  const laboratoryRiskPoints = publishedRiskPoints?.length
+    ? hydrateLaboratoryRiskPointPhotos(publishedRiskPoints, campaignPoints)
+    : hydrateLaboratoryRiskPointPhotos(
+        buildLaboratoryRiskPoints(campaignPoints, riskRows),
+        campaignPoints,
+      );
 
   return {
     campaignPoints,
-    laboratoryRiskPoints: publishedRiskPoints?.length
-      ? publishedRiskPoints
-      : buildLaboratoryRiskPoints(campaignPoints, riskRows),
+    laboratoryRiskPoints,
     campaignSummary: buildCampaignSummary(campaignPoints, campaignImport),
     pointSummary: {
       total: campaignPoints.length,

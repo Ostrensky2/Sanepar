@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/api-auth";
 import bundledCampaignMapPoints from "@/data/campaign-map-points.json";
 import { MAX_IMPORT_FILE_BYTES } from "@/lib/imports/excel";
 import { parseLaboratoryResultsWorkbook } from "@/lib/imports/results";
@@ -7,12 +8,17 @@ import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 import {
   createOptionalSupabaseClient,
   getLatestPublishedCampaignImport,
-  LAB_RISK_RESULTS_SNAPSHOT_FILE_NAME,
 } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const auth = requireApiSession(request, "data.import");
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get("file");
@@ -61,6 +67,16 @@ export async function POST(request: Request) {
       riskPoints,
     });
 
+    if (persistence.mode === "cloud-error") {
+      return NextResponse.json(
+        {
+          error:
+            "Os resultados foram lidos, mas a publicação na nuvem falhou. Os demais usuários NÃO verão estes dados. Tente novamente ou contate o administrador.",
+        },
+        { status: 502 },
+      );
+    }
+
     return NextResponse.json({
       ...results,
       riskPoints,
@@ -97,19 +113,16 @@ async function persistLaboratoryResults({
     };
   }
 
-  const { error } = await supabase.from("campaign_imports").insert({
-    file_name: LAB_RISK_RESULTS_SNAPSHOT_FILE_NAME,
+  const { error } = await supabase.from("lab_risk_results").insert({
+    file_name: fileName,
     row_count: rowCount,
-    point_count: riskPoints.length,
-    original_point_count: riskRowCount,
-    effective_point_count: riskPoints.length,
-    missing_fields: [`arquivo:${fileName}`],
+    risk_row_count: riskRowCount,
     points: riskPoints,
   });
 
   if (error) {
     return {
-      mode: "browser" as const,
+      mode: "cloud-error" as const,
       message: "A nuvem não confirmou a publicação dos resultados.",
     };
   }

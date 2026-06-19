@@ -58,7 +58,7 @@ export function CampaignStatusEntryPanel() {
         setCampaignManagement(management);
         setHasLoadedCloudManagement(true);
         setHasUnsavedChanges(false);
-        setSaveNotice("Status carregado da nuvem.");
+        setSaveNotice("Status da campanha carregado.");
       }
     }
 
@@ -132,17 +132,9 @@ export function CampaignStatusEntryPanel() {
   return (
     <section className="space-y-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
-            Entrada de dados
-          </p>
-          <h2 className="heading-font text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
-            Status de campanha
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">
-            Declare status, datas e etapas de cada campanha.
-          </p>
-        </div>
+        <p className="text-sm leading-6 text-[var(--ink-soft)]">
+          Declare status, datas e etapas de cada campanha.
+        </p>
 
         <label className="grid gap-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-500 lg:min-w-96">
           Campanha editada
@@ -160,10 +152,10 @@ export function CampaignStatusEntryPanel() {
         </label>
       </div>
 
-      <section className="glass-panel rounded-[30px] p-5">
+      <section className="glass-panel radius-panel p-5">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+            <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
               Ficha da campanha
             </p>
             <h3 className="heading-font mt-1 text-2xl font-extrabold text-[var(--brand-navy-strong)]">
@@ -173,7 +165,7 @@ export function CampaignStatusEntryPanel() {
           <div className="flex min-w-44 items-center gap-3 rounded-2xl bg-[var(--surface-soft)] p-3">
             <Save className="h-5 w-5 text-[var(--brand-teal)]" />
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+              <p className="text-caption font-bold uppercase tracking-[0.16em] text-slate-500">
                 {saveNotice}
               </p>
               <p className="heading-font text-xl font-black text-[var(--brand-navy-strong)]">
@@ -183,9 +175,9 @@ export function CampaignStatusEntryPanel() {
           </div>
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.45fr)]">
+        <div className="grid gap-4 2xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.45fr)]">
           <div className="grid gap-3 rounded-2xl border border-[var(--line-ghost)] bg-white p-4">
-            <label className="grid gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+            <label className="grid gap-2 text-caption font-bold uppercase tracking-[0.16em] text-slate-500">
               Status da campanha
               <select
                 className="rounded-xl border border-[var(--line-strong)] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none focus:border-[var(--brand-blue)]"
@@ -200,7 +192,7 @@ export function CampaignStatusEntryPanel() {
               </select>
             </label>
 
-            <label className="grid gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+            <label className="grid gap-2 text-caption font-bold uppercase tracking-[0.16em] text-slate-500">
               Sub-status da campanha
               <input
                 className="rounded-xl border border-[var(--line-strong)] bg-white px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none focus:border-[var(--brand-blue)]"
@@ -209,7 +201,7 @@ export function CampaignStatusEntryPanel() {
               />
             </label>
 
-            <label className="grid gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+            <label className="grid gap-2 text-caption font-bold uppercase tracking-[0.16em] text-slate-500">
               Pontos previstos
               <input
                 className="rounded-xl border border-[var(--line-strong)] bg-white px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none focus:border-[var(--brand-blue)]"
@@ -219,7 +211,7 @@ export function CampaignStatusEntryPanel() {
               />
             </label>
 
-            <label className="grid gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+            <label className="grid gap-2 text-caption font-bold uppercase tracking-[0.16em] text-slate-500">
               Título do processo
               <input
                 className="rounded-xl border border-[var(--line-strong)] bg-white px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none focus:border-[var(--brand-blue)]"
@@ -228,7 +220,7 @@ export function CampaignStatusEntryPanel() {
               />
             </label>
 
-            <label className="grid gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+            <label className="grid gap-2 text-caption font-bold uppercase tracking-[0.16em] text-slate-500">
               Observação
               <textarea
                 className="min-h-24 rounded-xl border border-[var(--line-strong)] bg-white px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none focus:border-[var(--brand-blue)]"
@@ -241,7 +233,7 @@ export function CampaignStatusEntryPanel() {
           <div className="overflow-x-auto rounded-2xl border border-[var(--line-ghost)] bg-white">
             <table className="w-full min-w-[860px] text-left text-sm">
               <thead>
-                <tr className="border-b border-[var(--line-ghost)] text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                <tr className="border-b border-[var(--line-ghost)] text-caption uppercase tracking-[0.16em] text-slate-500">
                   <th className="px-3 py-3">Etapa</th>
                   <th className="px-3 py-3">Status</th>
                   <th className="px-3 py-3">Prevista</th>
@@ -281,7 +273,11 @@ export function CampaignStatusEntryPanel() {
                     </td>
                     <td className="px-3 py-3">
                       <input
-                        className="rounded-lg border border-[var(--line-strong)] bg-white px-2 py-1.5 text-xs font-semibold outline-none"
+                        className={`rounded-lg border px-2 py-1.5 text-xs font-semibold outline-none transition focus:border-[var(--line-strong)] focus:bg-white ${
+                          stage.plannedDate
+                            ? "border-[var(--line-strong)] bg-white text-[var(--brand-navy-strong)]"
+                            : "border-transparent bg-transparent text-slate-400 hover:border-[var(--line-ghost)]"
+                        }`}
                         type="date"
                         value={stage.plannedDate ?? ""}
                         onChange={(event) => updateStage(index, { plannedDate: event.target.value })}
@@ -289,7 +285,11 @@ export function CampaignStatusEntryPanel() {
                     </td>
                     <td className="px-3 py-3">
                       <input
-                        className="rounded-lg border border-[var(--line-strong)] bg-white px-2 py-1.5 text-xs font-semibold outline-none"
+                        className={`rounded-lg border px-2 py-1.5 text-xs font-semibold outline-none transition focus:border-[var(--line-strong)] focus:bg-white ${
+                          stage.completedDate
+                            ? "border-[var(--line-strong)] bg-white text-[var(--brand-navy-strong)]"
+                            : "border-transparent bg-transparent text-slate-400 hover:border-[var(--line-ghost)]"
+                        }`}
                         type="date"
                         value={stage.completedDate ?? ""}
                         onChange={(event) => updateStage(index, { completedDate: event.target.value })}
@@ -297,10 +297,14 @@ export function CampaignStatusEntryPanel() {
                     </td>
                     <td className="px-3 py-3">
                       <input
-                        className="w-full rounded-lg border border-[var(--line-strong)] bg-white px-2 py-1.5 text-xs font-semibold outline-none"
+                        className={`w-full rounded-lg border px-2 py-1.5 text-xs font-semibold outline-none transition focus:border-[var(--line-strong)] focus:bg-white ${
+                          stage.note
+                            ? "border-[var(--line-strong)] bg-white text-[var(--brand-navy-strong)]"
+                            : "border-transparent bg-transparent text-slate-400 hover:border-[var(--line-ghost)]"
+                        }`}
                         value={stage.note ?? ""}
                         onChange={(event) => updateStage(index, { note: event.target.value })}
-                        placeholder={currentStage?.label === stage.label ? "Etapa atual" : ""}
+                        placeholder={currentStage?.label === stage.label ? "Etapa atual" : "—"}
                       />
                     </td>
                   </tr>
@@ -313,3 +317,4 @@ export function CampaignStatusEntryPanel() {
     </section>
   );
 }
+

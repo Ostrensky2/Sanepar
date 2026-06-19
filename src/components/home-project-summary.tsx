@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   ListChecks,
   FlaskConical,
-  MapPinned,
   Target,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -65,61 +64,65 @@ export function HomeProjectSummary({ pointSummary }: HomeProjectSummaryProps) {
         return `Campanha ${campaignNumber}: ${stage?.label ?? "Etapa não informada"}`;
       })
       .join("; ");
+    const firstActiveStage = activeRows[0]?.management
+      ? getCurrentCampaignStage(activeRows[0].management.stages)?.label
+      : undefined;
 
     return {
       plannedCampaigns: campaigns.length,
       activeCampaigns: activeRows.length,
       resultsFinalized,
+      currentStageLabel: firstActiveStage ?? "Sem campanha ativa",
+      activeCampaignLabel:
+        activeRows.map(({ campaign }) => formatCampaignLabel(campaign.selectorLabel)).join(", ") ||
+        "Todas elegíveis",
       activeStageSummary: activeStageSummary || "Sem campanha ativa",
     };
   }, [campaignManagement, campaigns]);
 
   return (
-    <section className="glass-panel rounded-[28px] border border-[var(--line-ghost)] p-4">
-      <div className="mb-4">
+    <section className="glass-panel radius-panel border border-[var(--line-ghost)] p-4">
+      <div className="mb-3 flex flex-col gap-[var(--space-3)] sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+          <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
             Síntese do projeto
           </p>
-          <h2 className="heading-font mt-1 text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
+          <h2 className="heading-font mt-1 text-xl font-bold tracking-tight text-[var(--brand-navy-strong)]">
             Monitoramento sazonal Yva&apos;e
           </h2>
         </div>
+        <span className="inline-flex w-fit max-w-full items-center rounded-full border border-[var(--brand-teal)]/20 bg-white/80 px-3 py-1.5 text-label font-black text-[var(--brand-navy-strong)] shadow-[0_12px_30px_-24px_rgba(0,66,98,0.34)]">
+          <span className="mr-2 h-2 w-2 rounded-full bg-[var(--brand-teal)]" />
+          <span className="truncate">Campanha: {summary.activeCampaignLabel}</span>
+        </span>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid items-stretch gap-[var(--space-3)] sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard
           icon={Target}
           label="Previstas"
-          value={String(summary.plannedCampaigns).padStart(2, "0")}
+          value={String(summary.plannedCampaigns)}
           detail="campanhas ordinárias"
           tone="primary"
         />
         <SummaryCard
           icon={CalendarCheck2}
           label="Campo realizadas"
-          value={String(pointSummary.fieldCampaigns).padStart(2, "0")}
+          value={String(pointSummary.fieldCampaigns)}
           detail="com coleta efetiva"
           tone="success"
         />
         <SummaryCard
           icon={FlaskConical}
           label="Resultados finais"
-          value={String(summary.resultsFinalized).padStart(2, "0")}
+          value={String(summary.resultsFinalized)}
           detail="publicados ou concluídos"
           tone={summary.resultsFinalized > 0 ? "success" : "warning"}
         />
         <SummaryCard
-          icon={MapPinned}
-          label="Pontos monitorados"
-          value={String(pointSummary.monitored)}
-          detail="únicos com coleta"
-          tone="success"
-        />
-        <SummaryCard
           icon={ListChecks}
           label="Etapa atual"
-          value={String(summary.activeCampaigns).padStart(2, "0")}
+          value={summary.currentStageLabel}
           detail={summary.activeStageSummary}
           tone="neutral"
         />
@@ -153,17 +156,22 @@ function SummaryCard({
   }[tone];
 
   return (
-    <article className={`rounded-2xl border border-[var(--line-ghost)] border-b-2 bg-white p-3 ${toneClass}`}>
+    <article className={`flex h-full min-h-32 flex-col radius-card border border-[var(--line-ghost)] border-b-2 bg-white p-3 ${toneClass}`}>
       <div className="flex items-start justify-between gap-3">
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+        <p className="text-caption font-bold uppercase tracking-[0.14em] text-slate-500">
           {label}
         </p>
         <Icon className="h-4 w-4 flex-shrink-0" />
       </div>
-      <p className="heading-font mt-2 text-3xl font-black text-[var(--brand-navy-strong)]">
+      <p className="heading-font mt-2 text-xl font-black text-[var(--brand-navy-strong)]">
         {value}
       </p>
-      <p className="mt-1 text-[11px] font-semibold leading-4 text-[var(--ink-soft)]">{detail}</p>
+      <p className="mt-1 text-label font-semibold leading-4 text-[var(--ink-soft)]">{detail}</p>
     </article>
   );
 }
+
+function formatCampaignLabel(label: string) {
+  return label.replace(" - ", " – ");
+}
+

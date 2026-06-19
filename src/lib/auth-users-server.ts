@@ -16,8 +16,27 @@ export type AuthUserRow = {
 
 export const PRIMARY_ADMIN_ID = "usr-antonio-ostrensky";
 export const PRIMARY_ADMIN_EMAIL = "ostrensky@ufpr.br";
-export const PRIMARY_ADMIN_PASSWORD_HASH =
-  "scrypt$primary-admin-20260603$26c3ffe9b7d62ac24a4482a214b813441e8c3b14405f95767853830804bec4edeb9a74cac27ce14f3515b8214d25f16220b7f6d769ccf1f4e9632d70554f0691";
+
+// Aceita o hash bruto ou em base64 — arquivos .env passam por expansão de
+// variáveis ($...) que corrompe o formato scrypt$salt$hash se for usado bruto.
+export function getPrimaryAdminPasswordHash(): string | null {
+  const raw = process.env.PRIMARY_ADMIN_PASSWORD_HASH?.trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  if (raw.startsWith("scrypt$")) {
+    return raw;
+  }
+
+  try {
+    const decoded = Buffer.from(raw, "base64").toString("utf8").trim();
+    return decoded.startsWith("scrypt$") ? decoded : null;
+  } catch {
+    return null;
+  }
+}
 
 export function rowToUser(row: AuthUserRow): AppUser {
   const normalizedRow = normalizePrimaryAdminRow(row);

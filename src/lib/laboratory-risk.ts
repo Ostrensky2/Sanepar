@@ -2,6 +2,17 @@ import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 
 export type LaboratoryRiskLevel = "baixo" | "baixoModerado" | "moderado" | "alto";
 
+export const laboratoryRiskColors: Record<LaboratoryRiskLevel, string> = {
+  baixo: "#16a34a",
+  baixoModerado: "#CDC602",
+  moderado: "#FC883A",
+  alto: "#FC2D09",
+};
+
+export function laboratoryRiskColor(level: LaboratoryRiskLevel) {
+  return laboratoryRiskColors[level];
+}
+
 export type LaboratoryRiskResultRow = {
   position: number | null;
   sampleId: string;
@@ -85,6 +96,40 @@ export function buildLaboratoryRiskPoints(
   );
 }
 
+export function hydrateLaboratoryRiskPointPhotos(
+  riskPoints: LaboratoryRiskPoint[],
+  campaignPoints: CampaignMapPoint[],
+): LaboratoryRiskPoint[] {
+  if (!riskPoints.length || !campaignPoints.length) {
+    return riskPoints;
+  }
+
+  const fieldPointByPhotoKey = new Map<string, CampaignMapPoint>();
+
+  for (const point of campaignPoints) {
+    const key = campaignPhotoMatchKey(point);
+
+    if (key && !fieldPointByPhotoKey.has(key)) {
+      fieldPointByPhotoKey.set(key, point);
+    }
+  }
+
+  return riskPoints.map((riskPoint) => {
+    const fieldPoint = fieldPointByPhotoKey.get(campaignPhotoMatchKey(riskPoint));
+
+    if (!fieldPoint) {
+      return riskPoint;
+    }
+
+    return {
+      ...riskPoint,
+      driveUrl: fieldPoint.driveUrl,
+      dropboxUrl: fieldPoint.dropboxUrl,
+      photoUrl: fieldPoint.photoUrl || fieldPoint.dropboxUrl || fieldPoint.driveUrl,
+    };
+  });
+}
+
 export function normalizeLaboratoryRiskLevel(value: string): LaboratoryRiskLevel {
   const normalized = normalizeText(value);
 
@@ -143,7 +188,7 @@ function toLaboratoryRiskPoint(
     laboratoryStatus: "homologado",
     resultSummary:
       row.technicalJustification ||
-      `Classificação integrada ${row.classification.toLowerCase()} com score ${
+      `Classificação integrada ${row.classification.toLowerCase()} com escore ${
         row.score?.toFixed(3) ?? "não informado"
       }.`,
     score: row.score,
@@ -222,6 +267,29 @@ function matchScore(row: LaboratoryRiskResultRow, point: CampaignMapPoint) {
   }
 
   return score;
+}
+
+function campaignPhotoMatchKey(point: Pick<CampaignMapPoint, "campaign" | "code" | "point">) {
+  const campaignKey = normalizeCampaignKey(point.campaign);
+  const pointKey = normalizeSiaKey(point.code) || normalizePointName(point.point);
+
+  return campaignKey && pointKey ? `${campaignKey}|${pointKey}` : "";
+}
+
+function normalizeCampaignKey(value: string | undefined) {
+  const normalized = normalizeText(value);
+  const campaignNumber =
+    normalized.match(/\b(\d+)\s*[ao]?\s+campanha\b/)?.[1] ??
+    normalized.match(/\bcampanha\s*(\d+)\b/)?.[1];
+
+  return campaignNumber ? `campanha:${Number(campaignNumber)}` : normalized;
+}
+
+function normalizeSiaKey(value: string | undefined) {
+  const normalized = normalizeText(value);
+  const siaNumber = normalized.match(/\d+/)?.[0];
+
+  return siaNumber ? `sia:${Number(siaNumber)}` : normalized;
 }
 
 function detectedMarkers(row: LaboratoryRiskResultRow) {

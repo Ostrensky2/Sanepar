@@ -1,6 +1,6 @@
 {
   "name": "yvae-monitoramento",
-  "version": "1.0.4",
+  "version": "1.0.9",
   "private": true,
   "scripts": {
     "sync:version": "node scripts/update-app-version.mjs",
@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
@@ -30,6 +31,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.8"
   }
 }

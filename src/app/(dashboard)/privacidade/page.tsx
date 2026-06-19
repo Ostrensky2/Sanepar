@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Database, Eye, FileCheck2, FileText, LockKeyhole, ShieldCheck } from "lucide-react";
+import { Database, Eye, FileCheck2, FileText, LockKeyhole } from "lucide-react";
 
 const dataItems = [
   "identificação de usuários autorizados",
@@ -38,27 +38,12 @@ const commitments = [
 
 export default function PrivacidadePage() {
   return (
-    <div className="mx-auto max-w-[1200px] space-y-5">
-      <section className="rounded-2xl border border-[var(--line-ghost)] bg-white/92 p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-3xl">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--brand-teal)]">
-              Política institucional
-            </p>
-            <h1 className="heading-font mt-1 text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
-              Privacidade e uso de dados
-            </h1>
-            <p className="mt-2 text-justify text-sm leading-6 text-[var(--ink-soft)]">
-              Esta página descreve como as informações do projeto são organizadas no Yva’e, com o objetivo de apoiar
-              a colaboração técnica entre ATGC e Sanepar, fortalecendo a comunicação, a rastreabilidade, a organização
-              documental, a segurança da informação e a consulta qualificada aos dados do projeto.
-            </p>
-          </div>
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--brand-teal-soft)] text-[var(--brand-teal)]">
-            <ShieldCheck className="h-5 w-5" />
-          </div>
-        </div>
-      </section>
+    <div className="space-y-5">
+      <p className="max-w-3xl text-justify text-sm leading-6 text-[var(--ink-soft)]">
+        Esta página descreve como as informações do projeto são organizadas no Yva’e, com o objetivo de apoiar
+        a colaboração técnica entre ATGC e Sanepar, fortalecendo a comunicação, a rastreabilidade, a organização
+        documental, a segurança da informação e a consulta qualificada aos dados do projeto.
+      </p>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <PolicySection title="Finalidade do tratamento dos dados">
@@ -182,7 +167,7 @@ export default function PrivacidadePage() {
         </article>
 
         <aside className="rounded-2xl border border-[var(--line-ghost)] bg-white/92 p-5">
-          <h2 className="text-[11px] font-black uppercase tracking-[0.16em] text-[var(--ink-soft)]">
+          <h2 className="text-label font-black uppercase tracking-[0.16em] text-[var(--ink-soft)]">
             Compromissos institucionais
           </h2>
           <p className="mt-2 text-justify text-sm leading-6 text-[var(--ink-soft)]">
@@ -281,3 +266,4 @@ function InfoList({ items, columns = false }: { items: string[]; columns?: boole
     </ul>
   );
 }
+

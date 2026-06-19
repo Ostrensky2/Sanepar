@@ -1,4 +1,4 @@
-import { ClipboardCheck, FileText, Handshake, MessagesSquare, Scale } from "lucide-react";
+import { ClipboardCheck, FileText, Handshake, MessagesSquare } from "lucide-react";
 
 const useItems = [
   "consultar documentos, registros e resultados associados ao projeto",
@@ -13,27 +13,12 @@ const useItems = [
 
 export default function TermosPage() {
   return (
-    <div className="mx-auto max-w-[1200px] space-y-5">
-      <section className="rounded-2xl border border-[var(--line-ghost)] bg-white/92 p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-3xl">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--brand-teal)]">
-              Condições de uso
-            </p>
-            <h1 className="heading-font mt-1 text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
-              Termos de uso do Yva’e
-            </h1>
-            <p className="mt-2 text-justify text-sm leading-6 text-[var(--ink-soft)]">
-              Estes termos orientam o uso da plataforma Yva’e como ambiente de apoio à comunicação, organização
-              técnica, rastreabilidade e consulta de informações entre ATGC e Sanepar durante a execução do projeto
-              Yva’e.
-            </p>
-          </div>
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--brand-blue-soft)] text-[var(--brand-navy)]">
-            <Scale className="h-5 w-5" />
-          </div>
-        </div>
-      </section>
+    <div className="space-y-5">
+      <p className="max-w-3xl text-justify text-sm leading-6 text-[var(--ink-soft)]">
+        Estes termos orientam o uso da plataforma Yva’e como ambiente de apoio à comunicação, organização
+        técnica, rastreabilidade e consulta de informações entre ATGC e Sanepar durante a execução do projeto
+        Yva’e.
+      </p>
 
       <section className="rounded-2xl border border-[var(--line-ghost)] bg-[var(--brand-teal-soft)] p-5">
         <div className="flex items-start gap-4">
@@ -192,7 +177,7 @@ export default function TermosPage() {
         </article>
 
         <aside className="rounded-2xl border border-[var(--line-ghost)] bg-white/92 p-5">
-          <h2 className="text-[11px] font-black uppercase tracking-[0.16em] text-[var(--ink-soft)]">
+          <h2 className="text-label font-black uppercase tracking-[0.16em] text-[var(--ink-soft)]">
             Uso adequado da plataforma
           </h2>
           <p className="mt-2 text-justify text-sm leading-6 text-[var(--ink-soft)]">O uso adequado do Yva’e inclui:</p>
@@ -251,3 +236,4 @@ function TermSection({ title, children }: { title: string; children: React.React
     </article>
   );
 }
+

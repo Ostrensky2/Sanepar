@@ -19,6 +19,7 @@ import {
   requestLogin,
   requestPasswordChange,
   persistSession,
+  verifyServerSession,
   type AppUser,
   type AuthSession,
 } from "@/lib/auth-users";
@@ -48,7 +49,13 @@ export function AuthGate({ children }: AuthGateProps) {
       setUsers(loadedUsers);
       syncPrivilegeMatrixCookie();
 
-      if (storedSession && loadedUsers.some((user) => user.id === storedSession.userId && user.status === "ativo")) {
+      const serverSessionActive = storedSession ? await verifyServerSession() : false;
+
+      if (
+        storedSession &&
+        serverSessionActive &&
+        loadedUsers.some((user) => user.id === storedSession.userId && user.status === "ativo")
+      ) {
         setSession(storedSession);
         syncActiveRole(storedSession.role);
       } else {
@@ -92,8 +99,8 @@ export function AuthGate({ children }: AuthGateProps) {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setError("A nova senha deve ter pelo menos 6 caracteres.");
+    if (newPassword.length < 10) {
+      setError("A nova senha deve ter pelo menos 10 caracteres.");
       return;
     }
 
@@ -147,7 +154,7 @@ export function AuthGate({ children }: AuthGateProps) {
 
   return (
     <main className="grid min-h-screen place-items-center px-4 py-10">
-      <section className="grid w-full max-w-5xl overflow-hidden rounded-[28px] border border-[var(--line-ghost)] bg-white shadow-[0_34px_100px_-60px_rgba(0,66,98,0.55)] lg:grid-cols-[0.9fr_1.1fr]">
+      <section className="grid w-full max-w-5xl overflow-hidden radius-panel border border-[var(--line-ghost)] bg-white shadow-[0_34px_100px_-60px_rgba(0,66,98,0.55)] lg:grid-cols-[0.9fr_1.1fr]">
         <div className="hero-gradient relative flex min-h-[420px] flex-col justify-between p-8 text-white">
           <YvaeMasthead />
           <div>
@@ -320,3 +327,4 @@ function PasswordField({
 function syncActiveRole(role: UserCategory) {
   persistAccessCategory(role);
 }
+

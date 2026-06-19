@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/api-auth";
 import type {
   PointActionEvent,
   PointActionPhoto,
@@ -53,6 +54,12 @@ function todayLabel(): string {
 }
 
 export async function POST(request: Request) {
+  const auth = requireApiSession(request, "data.import");
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const formData = await request.formData();
   const file = formData.get("file");
 

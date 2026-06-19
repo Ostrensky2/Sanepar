@@ -8,7 +8,6 @@ import {
   DatabaseZap,
   FileText,
   FlaskConical,
-  HelpCircle,
   LockKeyhole,
   MapPin,
   MessageSquareText,
@@ -594,40 +593,25 @@ export default function AjudaPage() {
   const ActiveIcon = activeModule.icon;
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-5">
-      <section className="rounded-2xl border border-[var(--line-ghost)] bg-white/92 p-5">
-        <div className="grid gap-4 lg:grid-cols-[1fr_minmax(340px,0.52fr)] lg:items-center">
-          <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-blue-soft)] text-[var(--brand-navy)]">
-              <HelpCircle className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--brand-teal)]">
-                Central de suporte
-              </p>
-              <h1 className="heading-font mt-1 text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
-                Ajuda do Yva&apos;e
-              </h1>
-              <p className="mt-1 max-w-2xl text-justify text-sm leading-6 text-[var(--ink-soft)]">
-                Guia operacional por módulo, com instruções de uso, controles e correção de problemas.
-              </p>
-            </div>
-          </div>
-          <label className="flex h-11 items-center gap-3 rounded-xl border border-[var(--line-strong)] bg-white px-4">
-            <Search className="h-4 w-4 text-[var(--ink-soft)]" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none"
-              placeholder="Buscar módulo, ação, erro ou palavra-chave..."
-            />
-          </label>
-        </div>
+    <div className="space-y-5">
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <p className="max-w-2xl text-sm leading-6 text-[var(--ink-soft)]">
+          Guia operacional por módulo, com instruções de uso, controles e correção de problemas.
+        </p>
+        <label className="flex h-11 items-center gap-3 rounded-xl border border-[var(--line-strong)] bg-white px-4 lg:min-w-[340px]">
+          <Search className="h-4 w-4 text-[var(--ink-soft)]" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none"
+            placeholder="Buscar módulo, ação, erro ou palavra-chave..."
+          />
+        </label>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[320px_1fr]">
         <aside className="rounded-2xl border border-[var(--line-ghost)] bg-white/90 p-4 xl:sticky xl:top-4 xl:self-start">
-          <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+          <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
             Módulos
           </p>
           <div className="mt-3 grid gap-2">
@@ -654,7 +638,7 @@ export default function AjudaPage() {
                     <span className="block text-sm font-black text-[var(--brand-navy-strong)]">
                       {module.title}
                     </span>
-                    <span className="mt-0.5 block truncate text-[11px] font-semibold text-[var(--ink-soft)]">
+                    <span className="mt-0.5 block truncate text-label font-semibold text-[var(--ink-soft)]">
                       {module.short}
                     </span>
                   </span>
@@ -688,7 +672,7 @@ export default function AjudaPage() {
                   <ActiveIcon className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--brand-teal)]">
+                  <p className="text-caption font-black uppercase tracking-[0.18em] text-[var(--brand-teal)]">
                     Módulo selecionado
                   </p>
                   <h2 className="heading-font mt-1 text-2xl font-black text-[var(--brand-navy-strong)]">
@@ -784,7 +768,7 @@ export default function AjudaPage() {
 function HelpBlock({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section>
-      <h3 className="mb-3 text-[11px] font-black uppercase tracking-[0.16em] text-[var(--ink-soft)]">
+      <h3 className="mb-3 text-label font-black uppercase tracking-[0.16em] text-[var(--ink-soft)]">
         {title}
       </h3>
       {children}
@@ -812,3 +796,4 @@ function normalize(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 }
+

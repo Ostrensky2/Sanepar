@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/api-auth";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 import {
   normalizeFieldDiaryEntry,
@@ -13,8 +14,11 @@ type FieldDiaryRow = {
   campaign_name: string;
   campaign_day: number;
   entry_date: string;
+  collection_time: string | null;
   location_name: string;
   sia: string | null;
+  samples_replicas_edna: string | null;
+  zooplankton_id: string | null;
   latitude?: string | null;
   longitude?: string | null;
   municipality: string;
@@ -25,6 +29,8 @@ type FieldDiaryRow = {
   occurrence_description: string | null;
   requires_follow_up: string;
   follow_up_notes: string | null;
+  weather_conditions: string | null;
+  point_accessibility: string | null;
   daily_summary: string;
   status: string;
   created_by: string | null;
@@ -33,7 +39,13 @@ type FieldDiaryRow = {
   updated_at: string;
 };
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = requireApiSession(request);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const supabase = createOptionalSupabaseClient();
 
   if (!supabase) {
@@ -69,6 +81,12 @@ export async function PUT(request: Request) {
 }
 
 async function writeEntry(request: Request, mode: "insert" | "upsert") {
+  const auth = requireApiSession(request, "data.import");
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const supabase = createOptionalSupabaseClient();
 
   if (!supabase) {
@@ -88,17 +106,10 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
     );
   }
 
-  let result =
+  const result =
     mode === "insert"
       ? await supabase.from("field_diary_entries").insert(toRow(entry)).select("*").single<FieldDiaryRow>()
       : await supabase.from("field_diary_entries").upsert(toRow(entry), { onConflict: "id" }).select("*").single<FieldDiaryRow>();
-
-  if (isMissingCoordinateColumnError(result.error)) {
-    result =
-      mode === "insert"
-        ? await supabase.from("field_diary_entries").insert(toRow(entry, false)).select("*").single<FieldDiaryRow>()
-        : await supabase.from("field_diary_entries").upsert(toRow(entry, false), { onConflict: "id" }).select("*").single<FieldDiaryRow>();
-  }
 
   const { data, error } = result;
 
@@ -122,8 +133,11 @@ function fromRow(row: FieldDiaryRow): FieldDiaryEntry {
     campaignName: row.campaign_name,
     campaignDay: row.campaign_day,
     entryDate: row.entry_date,
+    collectionTime: row.collection_time ?? "",
     locationName: row.location_name,
     sia: row.sia,
+    samplesReplicasEdna: row.samples_replicas_edna ?? "",
+    zooplanktonId: row.zooplankton_id ?? "",
     latitude: row.latitude,
     longitude: row.longitude,
     municipality: row.municipality,
@@ -134,6 +148,8 @@ function fromRow(row: FieldDiaryRow): FieldDiaryEntry {
     occurrenceDescription: row.occurrence_description,
     requiresFollowUp: row.requires_follow_up as FieldDiaryEntry["requiresFollowUp"],
     followUpNotes: row.follow_up_notes,
+    weatherConditions: (row.weather_conditions ?? "") as FieldDiaryEntry["weatherConditions"],
+    pointAccessibility: (row.point_accessibility ?? "") as FieldDiaryEntry["pointAccessibility"],
     dailySummary: row.daily_summary,
     status: row.status as FieldDiaryEntry["status"],
     createdBy: row.created_by,
@@ -143,15 +159,20 @@ function fromRow(row: FieldDiaryRow): FieldDiaryEntry {
   };
 }
 
-function toRow(entry: FieldDiaryEntry, includeCoordinates = true) {
-  const row = {
+function toRow(entry: FieldDiaryEntry) {
+  return {
     id: entry.id,
     campaign_id: entry.campaignId,
     campaign_name: entry.campaignName,
     campaign_day: entry.campaignDay,
     entry_date: entry.entryDate,
+    collection_time: entry.collectionTime || null,
     location_name: entry.locationName,
     sia: entry.sia || null,
+    samples_replicas_edna: entry.samplesReplicasEdna || null,
+    zooplankton_id: entry.zooplanktonId || null,
+    latitude: entry.latitude || null,
+    longitude: entry.longitude || null,
     municipality: entry.municipality,
     activities: entry.activities,
     water_visual_conditions: entry.waterVisualConditions,
@@ -160,6 +181,8 @@ function toRow(entry: FieldDiaryEntry, includeCoordinates = true) {
     occurrence_description: entry.hasOccurrence ? entry.occurrenceDescription || null : null,
     requires_follow_up: entry.requiresFollowUp,
     follow_up_notes: entry.followUpNotes || null,
+    weather_conditions: entry.weatherConditions || null,
+    point_accessibility: entry.pointAccessibility || null,
     daily_summary: entry.dailySummary,
     status: entry.status,
     created_by: entry.createdBy || null,
@@ -167,20 +190,4 @@ function toRow(entry: FieldDiaryEntry, includeCoordinates = true) {
     created_at: entry.createdAt,
     updated_at: new Date().toISOString(),
   };
-
-  return includeCoordinates
-    ? {
-        ...row,
-        latitude: entry.latitude || null,
-        longitude: entry.longitude || null,
-      }
-    : row;
-}
-
-function isMissingCoordinateColumnError(error: unknown) {
-  if (!error || typeof error !== "object") return false;
-
-  const message = "message" in error ? String(error.message) : "";
-  const details = "details" in error ? String(error.details) : "";
-  return /latitude|longitude/i.test(`${message} ${details}`);
 }

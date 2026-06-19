@@ -269,7 +269,19 @@ export function isInitialPassword(password: string) {
 export function clearSession() {
   window.localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
   document.cookie = `${ACCESS_CATEGORY_COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`;
+  void fetch("/api/auth-users/session", { method: "DELETE", keepalive: true }).catch(() => undefined);
   window.dispatchEvent(new Event("yvae:auth-session-updated"));
+}
+
+// Confirma se o cookie de sessão do servidor ainda é válido. Em caso de falha
+// de rede assume válido para não derrubar o uso offline.
+export async function verifyServerSession(): Promise<boolean> {
+  try {
+    const response = await fetch("/api/auth-users/session", { cache: "no-store" });
+    return response.ok;
+  } catch {
+    return true;
+  }
 }
 
 export type LoginResult =

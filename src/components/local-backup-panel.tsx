@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronRight,
   CloudUpload,
   DatabaseBackup,
   Download,
@@ -42,6 +43,7 @@ type BackupHistoryItem = {
 };
 
 const CLOUD_RESTORE_REQUESTS_STORAGE_KEY = "yvae:cloud-restore-requests";
+const APP_MANUAL_BACKUP_LIMIT = 5;
 
 type OperationLogEntry = {
   timestamp: string;
@@ -293,12 +295,12 @@ export function LocalBackupPanel({
               ["Último backup", latestAppBackup ? formatDateTime(latestAppBackup.date) : "Nunca"],
               ["Status", "Gerenciado no localhost"],
               ["Tamanho", latestAppBackup ? formatBytes(latestAppBackup.sizeBytes) : "---"],
-              ["Backups retidos", String(backups.filter((backup) => backup.type === "manual-app").length)],
+              ["Backups retidos", `${backups.filter((backup) => backup.type === "manual-app").length}/${APP_MANUAL_BACKUP_LIMIT}`],
             ]}
             details={[
               `Local: ${targetRoot}`,
               "Arquivo atual: versão em execução",
-              "Política: acionamento sempre manual a partir do localhost.",
+              `Política: manter os ${APP_MANUAL_BACKUP_LIMIT} backups mais recentes; os mais antigos são apagados após cada novo salvamento.`,
             ]}
             actions={[
               {
@@ -415,17 +417,17 @@ export function LocalBackupPanel({
           />
         </div>
 
-        <section className="rounded-xl border border-[var(--line-ghost)] bg-white/70 p-4">
+        <section className="rounded-xl border border-[var(--line-ghost)] bg-white/82 p-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-sm font-black text-[var(--brand-navy-strong)]">
                 Automação do backup
               </p>
-              <p className="mt-1 text-xs text-[var(--ink-soft)]">
+              <p className="mt-1 text-xs font-normal text-[var(--ink-soft)]">
                 Rotina diária do BD e retenção mensal.
               </p>
             </div>
-            <span className="rounded-lg bg-[var(--surface-soft)] px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[var(--brand-navy-strong)]">
+            <span className="rounded-lg border border-[var(--line-ghost)] bg-white px-3 py-1 text-label font-normal uppercase tracking-[0.12em] text-[var(--brand-navy-strong)]">
               {enabled ? "Host operacional" : "Somente leitura"}
             </span>
           </div>
@@ -435,7 +437,7 @@ export function LocalBackupPanel({
             <MiniStat label="Tarefa diária" value="12:15" />
             <MiniStat label="Retenção mensal" value="Dias 01 e 15" />
           </div>
-          <div className="mt-4 rounded-xl border border-[var(--line-ghost)] bg-white p-3 text-xs leading-5 text-[var(--ink-soft)]">
+          <div className="mt-4 rounded-lg border border-[var(--line-ghost)] bg-[var(--surface-soft)]/55 p-3 text-xs font-normal leading-5 text-[var(--ink-soft)]">
             O app agenda o backup automático do BD uma vez ao dia às 12:15. O backup do APP permanece manual e só é executado pelo localhost.
           </div>
         </section>
@@ -451,20 +453,20 @@ export function LocalBackupPanel({
           />
         ) : null}
 
-        <section className="rounded-xl bg-[var(--surface-soft)] p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <section className="overflow-hidden rounded-xl border border-[var(--line-ghost)] bg-white/82">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line-ghost)] bg-[var(--surface-soft)]/50 px-4 py-3">
             <div>
               <p className="text-sm font-black text-[var(--brand-navy-strong)]">
                 Últimos 5 auto backups do BD
               </p>
-              <p className="mt-1 text-xs text-[var(--ink-soft)]">
+              <p className="mt-1 text-xs font-normal text-[var(--ink-soft)]">
                 Salvamentos diários registrados no disco local.
               </p>
             </div>
             <button
               type="button"
               onClick={() => void refreshHistory()}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--line-strong)] bg-white text-[var(--brand-navy-strong)]"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--line-strong)] bg-white text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)]"
               aria-label="Atualizar histórico"
               title="Atualizar histórico"
             >
@@ -472,31 +474,31 @@ export function LocalBackupPanel({
             </button>
           </div>
 
-          <div className="mt-4 overflow-x-auto">
+          <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-[0.16em] text-[var(--ink-soft)]">
+              <thead className="bg-white text-xs uppercase tracking-[0.14em] text-[var(--ink-soft)]">
                 <tr>
-                  <th className="px-3 py-3">Data</th>
-                  <th className="px-3 py-3">Tamanho</th>
-                  <th className="px-3 py-3">Status</th>
-                  <th className="px-3 py-3">Ações</th>
+                  <th className="px-4 py-3">Data</th>
+                  <th className="px-4 py-3">Tamanho</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--line-ghost)]">
                 {latestDailyBackups.map((backup) => (
-                  <tr key={backup.id} className="align-top">
-                    <td className="px-3 py-4 font-semibold text-[var(--brand-navy-strong)]">
+                  <tr key={backup.id} className="align-top hover:bg-[var(--surface-soft)]/50 transition-colors duration-150">
+                    <td className="px-4 py-4 font-normal text-[var(--brand-navy-strong)]">
                       {formatDateTime(backup.date)}
                     </td>
-                    <td className="px-3 py-4">{formatBytes(backup.sizeBytes)}</td>
-                    <td className="px-3 py-4">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-bold text-[#0b5f40]">
+                    <td className="px-4 py-4">{formatBytes(backup.sizeBytes)}</td>
+                    <td className="px-4 py-4">
+                      <span className="inline-flex items-center gap-1 rounded-lg border border-[rgba(0,168,107,0.16)] bg-[rgba(0,168,107,0.06)] px-2.5 py-1 text-xs font-normal text-[#0b5f40]">
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         {backup.status}
                       </span>
                     </td>
-                    <td className="px-3 py-4">
-                      <div className="flex flex-wrap gap-2">
+                    <td className="px-4 py-4">
+                      <div className="flex flex-wrap justify-end gap-2">
                         <button
                           type="button"
                           disabled={!backup.restorable || isPending}
@@ -512,7 +514,7 @@ export function LocalBackupPanel({
                               run: (inputValue) => restoreBackup(backup, inputValue),
                             })
                           }
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--line-strong)] bg-white text-[var(--brand-navy-strong)] disabled:cursor-not-allowed disabled:opacity-40"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--line-strong)] bg-white text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)] disabled:cursor-not-allowed disabled:opacity-40"
                           aria-label="Restaurar backup"
                           title="Restaurar backup"
                         >
@@ -521,7 +523,7 @@ export function LocalBackupPanel({
                         <a
                           href={backup.downloadable ? `/api/local/backups/${backup.id}/download` : undefined}
                           aria-disabled={!backup.downloadable}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--line-strong)] bg-white text-[var(--brand-navy-strong)] aria-disabled:pointer-events-none aria-disabled:opacity-40"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--line-strong)] bg-white text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)] aria-disabled:pointer-events-none aria-disabled:opacity-40"
                           aria-label="Baixar backup"
                           title="Baixar backup"
                         >
@@ -533,7 +535,7 @@ export function LocalBackupPanel({
                 ))}
                 {latestDailyBackups.length === 0 ? (
                   <tr>
-                    <td className="px-3 py-8 text-center text-sm text-[var(--ink-soft)]" colSpan={4}>
+                    <td className="px-4 py-8 text-center text-sm text-[var(--ink-soft)]" colSpan={4}>
                       Nenhum auto backup encontrado.
                     </td>
                   </tr>
@@ -582,7 +584,7 @@ export function LocalBackupPanel({
           }
         />
 
-        <div className="rounded-[24px] bg-[var(--surface-soft)] p-5">
+        <div className="radius-panel bg-[var(--surface-soft)] p-5">
           <div className="flex items-start gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[var(--brand-navy)]">
               <DatabaseBackup className="h-5 w-5" />
@@ -595,7 +597,7 @@ export function LocalBackupPanel({
                 O arquivo de BD configurado em YVAE_DATABASE_PATH ou BACKUP_DATABASE_PATH
                 é salvo e restaurado. O Supabase remoto exige exportação própria.
               </p>
-              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-teal)]">
+              <p className="mt-3 text-xs font-normal uppercase tracking-[0.18em] text-[var(--brand-teal)]">
                 Destino: {resolvedDatabaseRoot}
               </p>
             </div>
@@ -612,7 +614,7 @@ export function LocalBackupPanel({
                   run: () => postBackupAction("database"),
                 })
               }
-              className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-navy-strong)] px-4 py-3 text-sm font-bold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-navy-strong)] px-4 py-3 text-sm font-normal text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <DatabaseBackup className="h-4 w-4" />
               Banco de Dados será salvo
@@ -629,7 +631,7 @@ export function LocalBackupPanel({
                   run: async () => undefined,
                 })
               }
-              className="inline-flex items-center gap-2 rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-sm font-bold text-[var(--brand-navy-strong)] transition hover:bg-[var(--brand-blue-soft)] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-sm font-normal text-[var(--brand-navy-strong)] transition hover:bg-[var(--brand-blue-soft)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <RotateCcw className="h-4 w-4" />
               Banco de Dados será recuperado
@@ -686,7 +688,7 @@ export function LocalBackupPanel({
         />
       ) : null}
 
-      <section className="rounded-[24px] bg-[var(--surface-soft)] p-5">
+      <section className="radius-panel bg-[var(--surface-soft)] p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="heading-font text-lg font-bold text-[var(--brand-navy-strong)]">
@@ -699,7 +701,7 @@ export function LocalBackupPanel({
           <button
             type="button"
             onClick={() => void refreshHistory()}
-            className="rounded-xl border border-[var(--line-strong)] bg-white px-4 py-2 text-sm font-bold text-[var(--brand-navy-strong)]"
+            className="rounded-xl border border-[var(--line-strong)] bg-white px-4 py-2 text-sm font-normal text-[var(--brand-navy-strong)]"
           >
             Histórico será atualizado
           </button>
@@ -718,9 +720,9 @@ export function LocalBackupPanel({
             </thead>
             <tbody className="divide-y divide-[var(--line-ghost)]">
               {backups.map((backup) => (
-                <tr key={backup.id} className="align-top">
+                <tr key={backup.id} className="align-top hover:bg-[var(--surface-soft)]/50 transition-colors duration-150">
                   <td className="px-3 py-4">
-                    <p className="font-semibold text-[var(--brand-navy-strong)]">
+                    <p className="font-normal text-[var(--brand-navy-strong)]">
                       {formatDateTime(backup.date)}
                     </p>
                     <p className="mt-1 max-w-[360px] truncate text-xs text-[var(--ink-soft)]">
@@ -730,7 +732,7 @@ export function LocalBackupPanel({
                   <td className="px-3 py-4">{backupTypeLabel(backup.type)}</td>
                   <td className="px-3 py-4">{formatBytes(backup.sizeBytes)}</td>
                   <td className="px-3 py-4">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-bold text-[#0b5f40]">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-normal text-[#0b5f40] shadow-sm border border-[rgba(0,168,107,0.1)]">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       {backup.status}
                     </span>
@@ -752,7 +754,7 @@ export function LocalBackupPanel({
                             run: (inputValue) => restoreBackup(backup, inputValue),
                           })
                         }
-                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--line-strong)] bg-white px-3 py-2 text-xs font-bold text-[var(--brand-navy-strong)] disabled:cursor-not-allowed disabled:opacity-40"
+                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--line-strong)] bg-white px-3 py-2 text-xs font-normal text-[var(--brand-navy-strong)] disabled:cursor-not-allowed disabled:opacity-40 hover:bg-[var(--surface-soft)]/40 hover:shadow-sm active:scale-[0.95] transition-all"
                       >
                         <RotateCcw className="h-3.5 w-3.5" />
                         Restaurar
@@ -760,7 +762,7 @@ export function LocalBackupPanel({
                       <a
                         href={backup.downloadable ? `/api/local/backups/${backup.id}/download` : undefined}
                         aria-disabled={!backup.downloadable}
-                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--line-strong)] bg-white px-3 py-2 text-xs font-bold text-[var(--brand-navy-strong)] aria-disabled:pointer-events-none aria-disabled:opacity-40"
+                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--line-strong)] bg-white px-3 py-2 text-xs font-normal text-[var(--brand-navy-strong)] aria-disabled:pointer-events-none aria-disabled:opacity-40 hover:bg-[var(--surface-soft)]/40 hover:shadow-sm active:scale-[0.95] transition-all"
                       >
                         <Download className="h-3.5 w-3.5" />
                         Baixar
@@ -779,7 +781,7 @@ export function LocalBackupPanel({
                             },
                           })
                         }
-                        className="inline-flex items-center gap-1 rounded-lg bg-[rgba(186,26,26,0.08)] px-3 py-2 text-xs font-bold text-[var(--brand-danger)] disabled:cursor-not-allowed disabled:opacity-40"
+                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--brand-danger)]/20 bg-[rgba(186,26,26,0.04)] px-3 py-2 text-xs font-normal text-[var(--brand-danger)] disabled:cursor-not-allowed disabled:opacity-40 hover:bg-[rgba(186,26,26,0.08)] hover:border-[var(--brand-danger)]/50 active:scale-[0.95] transition-all"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                         Excluir
@@ -800,7 +802,7 @@ export function LocalBackupPanel({
         </div>
       </section>
 
-      <section className="rounded-[24px] bg-[var(--surface-soft)] p-5">
+      <section className="radius-panel bg-[var(--surface-soft)] p-5">
         <p className="heading-font text-lg font-bold text-[var(--brand-navy-strong)]">
           Log de operações
         </p>
@@ -808,7 +810,7 @@ export function LocalBackupPanel({
           {logs.map((log, index) => (
             <div key={`${log.timestamp}-${index}`} className="rounded-xl bg-white px-4 py-3 text-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="font-bold text-[var(--brand-navy-strong)]">{log.operation}</p>
+                <p className="font-normal text-[var(--brand-navy-strong)]">{log.operation}</p>
                 <span className="text-xs uppercase tracking-[0.16em] text-[var(--ink-soft)]">
                   {formatDateTime(log.timestamp)} - {log.status}
                 </span>
@@ -869,13 +871,13 @@ function BackupOverviewCard({
   actions,
 }: BackupOverviewCardProps) {
   return (
-    <article className="rounded-xl border border-[var(--line-ghost)] bg-white/76 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <article className="flex min-h-[320px] flex-col rounded-xl border border-[var(--line-ghost)] bg-white/84 p-4 shadow-[0_14px_42px_-38px_rgba(0,66,98,0.42)]">
+      <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <div className={
             tone === "danger"
-              ? "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-[var(--brand-danger)]"
-              : "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[rgba(255,105,0,0.1)] text-[#e25f00]"
+              ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[rgba(186,26,26,0.07)] text-[var(--brand-danger)]"
+              : "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-blue-soft)] text-[var(--brand-navy)]"
           }>
             <Icon className="h-4 w-4" />
           </div>
@@ -885,8 +887,8 @@ function BackupOverviewCard({
         </div>
         <span className={
           tone === "danger"
-            ? "rounded-lg bg-red-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-[var(--brand-danger)]"
-            : "rounded-lg bg-[var(--brand-navy-strong)] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-white"
+            ? "shrink-0 rounded-lg border border-[rgba(186,26,26,0.18)] bg-[rgba(186,26,26,0.05)] px-2.5 py-1 text-[10px] font-normal uppercase tracking-[0.1em] text-[var(--brand-danger)]"
+            : "shrink-0 rounded-lg border border-[var(--line-ghost)] bg-[var(--surface-soft)] px-2.5 py-1 text-[10px] font-normal uppercase tracking-[0.1em] text-[var(--brand-navy-strong)]"
         }>
           {badge}
         </span>
@@ -898,13 +900,19 @@ function BackupOverviewCard({
         ))}
       </div>
 
-      <div className="mt-3 space-y-1 text-xs leading-5 text-[var(--ink-soft)]">
-        {details.map((detail) => (
-          <p key={detail} className="truncate">{detail}</p>
-        ))}
-      </div>
+      <details className="group mt-3">
+        <summary className="flex cursor-pointer list-none items-center gap-1 text-xs font-bold text-[var(--ink-soft)] transition hover:text-[var(--brand-navy-strong)] [&::-webkit-details-marker]:hidden">
+          <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+          Detalhes técnicos
+        </summary>
+        <div className="mt-2 space-y-1 rounded-lg border border-[var(--line-ghost)] bg-[var(--surface-soft)]/58 px-3 py-2 text-xs leading-5 text-[var(--ink-soft)]">
+          {details.map((detail) => (
+            <p key={detail} className="break-all">{detail}</p>
+          ))}
+        </div>
+      </details>
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-auto flex flex-wrap gap-2 pt-4">
         {actions.map((action) => (
           <button
             key={action.label}
@@ -913,8 +921,8 @@ function BackupOverviewCard({
             onClick={action.onClick}
             className={
               action.danger
-                ? "h-9 rounded-xl border border-[var(--line-strong)] bg-white px-3 text-xs font-bold text-[var(--brand-danger)] disabled:cursor-not-allowed disabled:opacity-50"
-                : "h-9 rounded-xl bg-[var(--brand-teal)] px-3 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                ? "h-9 rounded-lg border border-[var(--brand-danger)]/30 bg-white px-3 text-xs font-normal text-[var(--brand-danger)] transition hover:bg-[var(--brand-danger)]/5 disabled:cursor-not-allowed disabled:opacity-40"
+                : "h-9 rounded-lg border border-[var(--brand-navy-strong)] bg-[var(--brand-navy-strong)] px-3 text-xs font-normal text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             }
           >
             {action.label}
@@ -927,11 +935,11 @@ function BackupOverviewCard({
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-[var(--line-ghost)] bg-white/78 px-3 py-2">
-      <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[var(--ink-soft)]">
+    <div className="min-w-0 rounded-lg border border-[var(--line-ghost)] bg-white px-3 py-2">
+      <p className="text-caption font-black uppercase tracking-[0.1em] text-[var(--ink-soft)]">
         {label}
       </p>
-      <p className="mt-1 truncate text-sm font-black text-[var(--brand-navy-strong)]">{value}</p>
+      <p className="mt-1 truncate text-sm font-normal text-[var(--brand-navy-strong)]">{value}</p>
     </div>
   );
 }
@@ -946,17 +954,17 @@ function ActionCard({
   onClick,
 }: ActionCardProps) {
   return (
-    <div className="rounded-[24px] bg-[var(--surface-soft)] p-5">
+    <div className="radius-panel bg-gradient-to-b from-white/90 to-[var(--surface-soft)]/50 border border-[var(--line-ghost)]/80 p-5 shadow-[var(--shadow-soft)] hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 backdrop-blur-md">
       <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[var(--brand-navy)]">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[var(--brand-navy)] shadow-sm border border-white/50">
           <Icon className="h-5 w-5" />
         </div>
         <div>
           <p className="heading-font text-base font-bold text-[var(--brand-navy-strong)]">
             {title}
           </p>
-          <p className="mt-2 text-xs leading-5 text-[var(--ink-soft)]">{description}</p>
-          <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-teal)]">
+          <p className="mt-2 text-xs font-normal leading-5 text-[var(--ink-soft)]">{description}</p>
+          <p className="mt-3 text-xs font-normal uppercase tracking-[0.18em] text-[var(--brand-teal)]">
             {detail}
           </p>
         </div>
@@ -965,7 +973,7 @@ function ActionCard({
         type="button"
         onClick={onClick}
         disabled={disabled}
-        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--brand-navy-strong),var(--brand-teal))] px-4 py-3 text-sm font-bold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--brand-navy-strong),var(--brand-teal))] px-4 py-3 text-sm font-normal text-white transition shadow-sm hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60 hover:shadow-md active:scale-[0.99] duration-200"
       >
         <Icon className="h-4 w-4" />
         {buttonLabel}
@@ -976,12 +984,12 @@ function ActionCard({
 
 function StatusMessage({ tone, message }: { tone: "success" | "error" | "info"; message: string }) {
   const classes = {
-    success: "bg-[rgba(0,168,107,0.08)] text-[#0b5f40]",
-    error: "bg-[rgba(186,26,26,0.08)] text-[var(--brand-danger)]",
-    info: "bg-[var(--brand-blue-soft)] text-[var(--brand-navy-strong)]",
+    success: "bg-[rgba(0,168,107,0.06)] text-[#0b5f40] border border-[rgba(0,168,107,0.15)]",
+    error: "bg-[rgba(186,26,26,0.06)] text-[var(--brand-danger)] border border-[rgba(186,26,26,0.15)]",
+    info: "bg-[var(--brand-blue-soft)]/60 text-[var(--brand-navy-strong)] border border-[var(--brand-blue-soft)]",
   };
 
-  return <div className={`rounded-xl px-4 py-3 text-sm font-semibold ${classes[tone]}`}>{message}</div>;
+  return <div className={`rounded-xl px-4 py-3 text-sm font-normal shadow-sm backdrop-blur-sm ${classes[tone]}`}>{message}</div>;
 }
 
 type ConfirmationModalProps = {
@@ -1006,10 +1014,10 @@ function ConfirmationModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[rgba(10,24,38,0.42)] px-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-[24px] bg-white p-6 shadow-[0_30px_80px_-40px_rgba(0,30,64,0.5)]">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[rgba(10,24,38,0.5)] px-4 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="w-full max-w-lg radius-panel bg-white/95 border border-white/60 p-6 shadow-[0_32px_128px_-32px_rgba(0,30,64,0.6)] backdrop-blur-lg animate-in fade-in zoom-in-95 duration-200 ease-out">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[rgba(197,122,0,0.12)] text-[var(--brand-amber)]">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[rgba(197,122,0,0.12)] text-[var(--brand-amber)] shadow-sm">
             <AlertTriangle className="h-5 w-5" />
           </div>
           <div>
@@ -1023,12 +1031,12 @@ function ConfirmationModal({
         </div>
 
         {pendingAction.inputLabel ? (
-          <label className="mt-5 block text-sm font-bold text-[var(--brand-navy-strong)]">
+          <label className="mt-5 block text-sm font-normal text-[var(--brand-navy-strong)]">
             {pendingAction.inputLabel}
             <input
               value={modalInput}
               onChange={(event) => setModalInput(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-[var(--line-strong)] px-3 py-2 text-sm outline-none focus:border-[var(--brand-blue)]"
+              className="mt-2 w-full rounded-xl border border-[var(--line-strong)] px-4 py-2.5 text-sm outline-none focus:border-[var(--brand-blue)] focus:ring-2 focus:ring-[var(--brand-blue-soft)] bg-white/70 backdrop-blur-sm transition-all duration-200"
             />
           </label>
         ) : null}
@@ -1037,14 +1045,14 @@ function ConfirmationModal({
           <button
             type="button"
             onClick={closeModal}
-            className="rounded-xl border border-[var(--line-strong)] px-4 py-2 text-sm font-bold text-[var(--brand-navy-strong)]"
+            className="rounded-xl border border-[var(--line-strong)] px-4 py-2 text-sm font-normal text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)]/50 active:scale-[0.98] transition-all duration-200"
           >
             Cancelar
           </button>
           <button
             type="button"
             onClick={executeModalAction}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold text-white ${
+            className={`inline-flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-normal text-white shadow-sm hover:brightness-105 active:scale-[0.98] transition-all duration-200 ${
               pendingAction.danger
                 ? "bg-[var(--brand-danger)]"
                 : "bg-[var(--brand-navy-strong)]"
@@ -1122,3 +1130,4 @@ function isCloudRestoreRequest(value: unknown): value is CloudRestoreRequest {
 
   return Boolean(candidate.id && candidate.createdAt && candidate.backupLabel && candidate.backupPath);
 }
+

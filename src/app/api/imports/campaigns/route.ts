@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/api-auth";
 import { parseCampaignWorkbook } from "@/lib/imports/campaigns";
 import { MAX_IMPORT_FILE_BYTES, previewWorkbook } from "@/lib/imports/excel";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
@@ -6,6 +7,12 @@ import { createOptionalSupabaseClient } from "@/lib/supabase";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const auth = requireApiSession(request, "data.import");
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get("file");
@@ -33,8 +40,19 @@ export async function POST(request: Request) {
 
     const buffer = await file.arrayBuffer();
     const campaignImport = await parseCampaignWorkbook(buffer, file.name);
+    normalizeCampaignKeys(campaignImport.points);
     const preview = await previewWorkbook(buffer, file.name);
     const persistence = await persistCampaignImport(campaignImport);
+
+    if (persistence.mode === "cloud-error") {
+      return NextResponse.json(
+        {
+          error:
+            "A planilha foi lida, mas a publicação na nuvem falhou. Os demais usuários NÃO verão estes dados. Tente novamente ou contate o administrador.",
+        },
+        { status: 502 },
+      );
+    }
 
     return NextResponse.json({
       ...campaignImport,
@@ -61,6 +79,10 @@ async function persistCampaignImport(campaignImport: Awaited<ReturnType<typeof p
     };
   }
 
+  const campaignKey =
+    campaignImport.points[0]?.campaign?.trim().toLowerCase() ||
+    campaignImport.fileName.trim().toLowerCase();
+
   const { error } = await supabase.from("campaign_imports").insert({
     file_name: campaignImport.fileName,
     row_count: campaignImport.rowCount,
@@ -69,13 +91,13 @@ async function persistCampaignImport(campaignImport: Awaited<ReturnType<typeof p
     effective_point_count: campaignImport.effectivePointCount,
     missing_fields: campaignImport.missingFields,
     points: campaignImport.points,
+    campaign_key: campaignKey,
   });
 
   if (error) {
     return {
-      mode: "browser" as const,
-      message:
-        "A tabela campaign_imports ainda não aceitou gravação; o painel usará a planilha neste navegador.",
+      mode: "cloud-error" as const,
+      message: "A nuvem recusou a gravação da planilha de campanhas.",
     };
   }
 
@@ -83,4 +105,20 @@ async function persistCampaignImport(campaignImport: Awaited<ReturnType<typeof p
     mode: "cloud" as const,
     message: "Planilha publicada no Supabase e pronta para o painel.",
   };
+}
+
+// Pontos sem campanha herdariam uma "campanha fantasma" na agregação por
+// chave; preenche com a primeira campanha não vazia encontrada na planilha.
+function normalizeCampaignKeys(points: Awaited<ReturnType<typeof parseCampaignWorkbook>>["points"]) {
+  const fallbackCampaign = points.find((point) => point.campaign?.trim())?.campaign?.trim();
+
+  if (!fallbackCampaign) {
+    return;
+  }
+
+  for (const point of points) {
+    if (!point.campaign?.trim()) {
+      point.campaign = fallbackCampaign;
+    }
+  }
 }

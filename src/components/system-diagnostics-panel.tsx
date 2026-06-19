@@ -117,7 +117,7 @@ export function SystemDiagnosticsPanel({
         ))}
       </div>
 
-      <div className="flex flex-col gap-3 rounded-xl border border-[var(--line-ghost)] bg-white/70 p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-xl border border-[var(--line-ghost)] bg-white/82 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <StatusIcon tone={items.every((item) => item.tone !== "warning") ? "ok" : "warning"} />
           <div>
@@ -130,7 +130,7 @@ export function SystemDiagnosticsPanel({
           </div>
         </div>
         <button
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[var(--brand-navy-strong)] px-4 text-xs font-black text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[var(--brand-navy-strong)] bg-[var(--brand-navy-strong)] px-3 text-xs font-black text-white transition hover:opacity-90 disabled:opacity-60"
           type="button"
           onClick={() => void runCheck()}
           disabled={isChecking}
@@ -147,19 +147,19 @@ function DiagnosticCard({ item }: { item: DiagnosticItem }) {
   const Icon = item.icon;
 
   return (
-    <article className="rounded-xl border border-[var(--line-ghost)] bg-white/80 p-3">
+    <article className="rounded-xl border border-[var(--line-ghost)] bg-white/84 p-4 shadow-[0_14px_42px_-38px_rgba(0,66,98,0.42)]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+          <p className="text-caption font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
             {item.label}
           </p>
           <p className="mt-1 text-xl font-black text-[var(--brand-navy-strong)]">{item.value}</p>
         </div>
-        <div className={cn("rounded-lg p-2", toneClass(item.tone))}>
+        <div className={cn("rounded-lg p-2.5", toneClass(item.tone))}>
           <Icon className="h-4 w-4" />
         </div>
       </div>
-      <p className="mt-2 text-[11px] font-semibold text-[var(--ink-soft)]">{item.detail}</p>
+      <p className="mt-3 truncate text-label font-semibold text-[var(--ink-soft)]">{item.detail}</p>
     </article>
   );
 }
@@ -203,3 +203,4 @@ function formatLocalDateTime(date: Date) {
     minute: "2-digit",
   }).format(date);
 }
+

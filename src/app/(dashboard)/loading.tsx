@@ -4,7 +4,7 @@ import { DashboardSkeleton } from "@/components/operational-feedback";
 
 export default function DashboardLoading() {
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 px-2 py-2 lg:px-3">
+    <div className="space-y-6">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="grid flex-1 gap-3">
           <div className="h-3 w-40 animate-pulse rounded bg-slate-200" />

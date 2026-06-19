@@ -15,7 +15,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
   APP_DOCUMENTS_CLOUD_MIGRATION_KEY,
   APP_DOCUMENTS_STORAGE_KEY,
@@ -29,13 +29,24 @@ import {
 import { recordActivity } from "@/lib/activity-log";
 import { getStoredSession } from "@/lib/auth-users";
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
+import { EmptyState } from "@/components/empty-state";
 import { ErrorBoundary, TableSkeletonRows, emitLocalMode } from "@/components/operational-feedback";
+import { SyncStatusBadge } from "@/components/sync-status-badge";
+import { type SyncStatusSnapshot } from "@/lib/sync-status";
 
 type DocumentSortMode =
   | "numeric-asc"
   | "numeric-desc"
   | "alpha-asc"
   | "alpha-desc";
+
+type InsertLinkFormState = {
+  title: string;
+  dropboxUrl: string;
+  campaign: string;
+  point: string;
+  type: DocumentType;
+};
 
 const documentSortOptions: Array<{ label: string; value: DocumentSortMode }> = [
   { label: "Numérico crescente", value: "numeric-asc" },
@@ -56,13 +67,14 @@ export function DocumentRepository() {
   const [shareNotice, setShareNotice] = useState<string | null>(null);
   const [isInsertOpen, setIsInsertOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [formState, setFormState] = useState({
+  const [formState, setFormState] = useState<InsertLinkFormState>({
     title: "",
     dropboxUrl: "",
     campaign: "",
     point: "",
     type: "Plano de trabalho" as DocumentType,
   });
+  const insertButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -171,6 +183,38 @@ export function DocumentRepository() {
   const allVisibleSelected =
     visibleDocumentIds.length > 0 &&
     visibleDocumentIds.every((id) => selectedDocumentIds.includes(id));
+  const activeDocumentsCount = useMemo(
+    () => documents.filter((document) => !/arquivad/i.test(document.status)).length,
+    [documents],
+  );
+  const archivedDocumentsCount = documents.length - activeDocumentsCount;
+  const insertedDocumentsCount = useMemo(
+    () => documents.filter((document) => document.source === "link" || document.status === "INSERIDO").length,
+    [documents],
+  );
+  const latestDocument = documents[0];
+  const syncSnapshot = useMemo<SyncStatusSnapshot>(
+    () => ({
+      state: persistenceMode === "cloud" ? "synced" : "offline",
+      reason:
+        syncNotice ??
+        (persistenceMode === "cloud"
+          ? "Documentos sincronizados na nuvem."
+          : "Documentos em modo local."),
+      lastSyncedAt: persistenceMode === "cloud" ? new Date().toISOString() : null,
+      updatedAt: new Date().toISOString(),
+    }),
+    [persistenceMode, syncNotice],
+  );
+
+  useEffect(() => {
+    if (!shareNotice) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setShareNotice(null), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [shareNotice]);
 
   async function insertDropboxLink(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -221,7 +265,7 @@ export function DocumentRepository() {
     setDocuments(nextDocuments);
     recordActivity(getStoredSession(), "document.change", newDocument.title, "Documento adicionado");
     setActiveTab(newDocument.type);
-    setIsInsertOpen(false);
+    closeInsertDialog();
     setFormState({
       title: "",
       dropboxUrl: "",
@@ -229,6 +273,15 @@ export function DocumentRepository() {
       point: "",
       type: "Plano de trabalho",
     });
+  }
+
+  function openInsertDialog() {
+    setIsInsertOpen(true);
+  }
+
+  function closeInsertDialog() {
+    setIsInsertOpen(false);
+    window.requestAnimationFrame(() => insertButtonRef.current?.focus());
   }
 
   async function deleteDocument(document: StoredDocument) {
@@ -377,153 +430,62 @@ export function DocumentRepository() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-8 px-2 py-2 lg:px-4">
-      <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h2 className="heading-font mb-1 text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
-            Repositório Oficial de Documentos
-          </h2>
+    <div className="space-y-8">
+      <section className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-3">
+            <SyncStatusBadge snapshot={syncSnapshot} />
+            <p className="text-label font-semibold text-[var(--ink-soft)]">
+              {activeDocumentsCount} documentos ativos
+              {latestDocument ? ` - último carregado: ${latestDocument.title}` : " - nenhum documento carregado"}
+            </p>
+          </div>
+          {syncNotice ? (
+            <p className="mt-1 text-caption font-semibold text-[var(--ink-soft)]">{syncNotice}</p>
+          ) : null}
         </div>
-        <div className="flex gap-4">
-          <button
-            className="inline-flex items-center gap-2 rounded-lg bg-[var(--brand-navy-strong)] px-5 py-2.5 text-xs font-bold text-white transition-opacity hover:opacity-90"
-            type="button"
-            onClick={() => setIsInsertOpen(true)}
-          >
-            <Upload className="h-4 w-4" />
-            Link Dropbox será inserido
-          </button>
-        </div>
+        <button
+          ref={insertButtonRef}
+          className="inline-flex w-fit items-center gap-2 radius-control bg-[var(--brand-navy-strong)] px-5 py-2.5 text-xs font-bold text-white transition-opacity hover:opacity-90"
+          type="button"
+          onClick={openInsertDialog}
+        >
+          <Upload className="h-4 w-4" />
+          Inserir link
+        </button>
       </section>
 
-      <section>
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="heading-font text-base font-bold text-[var(--brand-navy-strong)]">
-            Destaques do Período
-          </h3>
-          <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
-            {documents.length} documentos no painel
-          </span>
-        </div>
-
-        <div className="grid gap-6">
-          <article className="glass-panel relative flex min-h-[240px] flex-col justify-between overflow-hidden rounded-[28px] p-6">
-            <div className="absolute right-0 top-0 h-full w-1/2 bg-gradient-to-l from-[var(--brand-navy-strong)]/10 to-transparent" />
-            <div className="relative z-10">
-              <span className="mb-3 inline-block rounded-full bg-[var(--brand-green-soft)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--brand-navy-strong)]">
-                REPOSITÓRIO ATIVO
-              </span>
-              <h4 className="heading-font mb-2 text-2xl font-extrabold leading-tight text-[var(--brand-navy-strong)]">
-                Biblioteca Técnica Yva&apos;e
-              </h4>
-            </div>
-
-            <div className="relative z-10 flex gap-3">
-              <button
-                className="inline-flex items-center gap-2 rounded bg-[var(--surface-soft)] px-3 py-2 text-xs font-bold text-[var(--brand-navy-strong)] transition-colors hover:bg-[var(--surface-muted)]"
-                type="button"
-                onClick={() => setIsInsertOpen(true)}
-              >
-                <Upload className="h-4 w-4" />
-                Link será inserido
-              </button>
-              <button
-                className="inline-flex items-center gap-2 rounded bg-[var(--surface-soft)] px-3 py-2 text-xs font-bold text-[var(--brand-navy-strong)] transition-colors hover:bg-[var(--surface-muted)]"
-                type="button"
-                onClick={() => downloadDocument(documents[0])}
-              >
-                <Download className="h-4 w-4" />
-                Destaque será baixado
-              </button>
-            </div>
-          </article>
-        </div>
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard label="Total" value={documents.length} />
+        <MetricCard label="Ativos" value={activeDocumentsCount} />
+        <MetricCard label="Arquivados" value={archivedDocumentsCount} />
+        <MetricCard label="Inseridos" value={insertedDocumentsCount} />
       </section>
 
       {isInsertOpen ? (
-        <section className="glass-panel rounded-[24px] p-5">
-          <div className="mb-4 flex items-start justify-between gap-4">
-            <div>
-              <h3 className="heading-font text-lg font-bold text-[var(--brand-navy-strong)]">
-                Link do Dropbox será inserido
-              </h3>
-              <p className="mt-1 text-xs text-slate-500">
-                A referência do documento é cadastrada; o arquivo permanece no Dropbox.
-              </p>
-            </div>
+        <InsertLinkDialog
+          formState={formState}
+          formError={formError}
+          onClose={closeInsertDialog}
+          onSubmit={insertDropboxLink}
+          onChange={setFormState}
+        />
+      ) : null}
+
+      {shareNotice ? (
+        <div className="fixed bottom-4 right-4 z-50 w-[min(420px,calc(100vw-2rem))] radius-panel border border-[var(--line-ghost)] bg-white px-4 py-3 text-xs font-semibold text-[var(--brand-navy-strong)] shadow-[0_20px_48px_-34px_rgba(0,66,98,0.35)]">
+          <div className="flex items-start gap-3">
+            <p className="min-w-0 flex-1">{shareNotice}</p>
             <button
               type="button"
-              aria-label="Fechar formulário de link"
-              className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100"
-              onClick={() => setIsInsertOpen(false)}
+              aria-label="Fechar aviso"
+              className="rounded p-1 text-[var(--ink-soft)] transition hover:bg-[var(--surface-soft)]"
+              onClick={() => setShareNotice(null)}
             >
               <X className="h-4 w-4" />
             </button>
           </div>
-
-          <form className="grid gap-3 lg:grid-cols-6" onSubmit={insertDropboxLink}>
-            <input
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs lg:col-span-2"
-              placeholder="Título do documento"
-              value={formState.title}
-              onChange={(event) =>
-                setFormState((current) => ({ ...current, title: event.target.value }))
-              }
-            />
-            <input
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs lg:col-span-2"
-              placeholder="Link do Dropbox"
-              value={formState.dropboxUrl}
-              onChange={(event) =>
-                setFormState((current) => ({ ...current, dropboxUrl: event.target.value }))
-              }
-            />
-            <select
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
-              value={formState.type}
-              onChange={(event) =>
-                setFormState((current) => ({
-                  ...current,
-                  type: event.target.value as DocumentType,
-                }))
-              }
-            >
-              {filterTabs.map((tab) => (
-                <option key={tab} value={tab}>
-                  {tab}
-                </option>
-              ))}
-            </select>
-            <button
-              type="submit"
-              className="rounded-lg bg-[var(--brand-navy-strong)] px-4 py-2 text-xs font-bold text-white transition-opacity hover:opacity-90"
-            >
-              Link será inserido
-            </button>
-            <input
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs lg:col-span-2"
-              placeholder="Campanha"
-              value={formState.campaign}
-              onChange={(event) =>
-                setFormState((current) => ({ ...current, campaign: event.target.value }))
-              }
-            />
-            <input
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs lg:col-span-2"
-              placeholder="Ponto ou observação"
-              value={formState.point}
-              onChange={(event) =>
-                setFormState((current) => ({ ...current, point: event.target.value }))
-              }
-            />
-          </form>
-
-          {formError ? (
-            <p className="mt-3 text-xs font-semibold text-[var(--brand-danger)]">
-              {formError}
-            </p>
-          ) : null}
-        </section>
+        </div>
       ) : null}
 
       <section className="space-y-6">
@@ -575,20 +537,8 @@ export function DocumentRepository() {
           </div>
         </div>
 
-        {shareNotice ? (
-          <div className="rounded-lg border border-[var(--line-ghost)] bg-white px-4 py-3 text-xs font-semibold text-[var(--brand-navy-strong)]">
-            {shareNotice}
-          </div>
-        ) : null}
-
-        {syncNotice ? (
-          <div className="rounded-lg border border-[var(--line-ghost)] bg-white px-4 py-3 text-xs font-semibold text-[var(--brand-navy-strong)]">
-            {syncNotice}
-          </div>
-        ) : null}
-
         {selectedDocuments.length > 0 ? (
-          <div className="flex flex-col gap-3 rounded-[20px] border border-[var(--line-ghost)] bg-white px-4 py-3 shadow-[0_20px_60px_-42px_rgba(0,66,98,0.28)] lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-3 radius-panel border border-[var(--line-ghost)] bg-white px-4 py-3 shadow-[0_20px_60px_-42px_rgba(0,66,98,0.28)] lg:flex-row lg:items-center lg:justify-between">
             <p className="text-xs font-bold text-[var(--brand-navy-strong)]">
               {selectedDocuments.length} documento
               {selectedDocuments.length > 1 ? "s" : ""} selecionado
@@ -632,7 +582,7 @@ export function DocumentRepository() {
         ) : null}
 
         <ErrorBoundary title="Falha na lista de documentos">
-          <div className="glass-panel overflow-hidden rounded-[28px]">
+          <div className="glass-panel overflow-hidden radius-panel">
             <table className="w-full text-left">
               <thead className="bg-slate-50/50">
                 <tr>
@@ -645,22 +595,22 @@ export function DocumentRepository() {
                       className="h-4 w-4 rounded border-slate-300 text-[var(--brand-navy-strong)] focus:ring-[var(--brand-blue)]"
                     />
                   </th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                  <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
                     Arquivo
                   </th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                  <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
                     Campanha / Ponto
                   </th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                  <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
                     Data
                   </th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                  <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
                     Tipo
                   </th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                  <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
                     Status / Disponibilidade
                   </th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                  <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
                     Ações
                   </th>
                 </tr>
@@ -685,15 +635,28 @@ export function DocumentRepository() {
             </table>
 
             {hasLoadedDocuments && !visibleDocuments.length ? (
-              <div className="px-6 py-10 text-center text-sm text-slate-500">
-                Nenhum documento encontrado para o filtro atual.
+              <div className="p-4">
+                <EmptyState
+                  icon={FileText}
+                  title={
+                    persistenceMode !== "cloud" && !documents.length
+                      ? "Documentos disponíveis apenas com a nuvem"
+                      : "Nenhum documento encontrado"
+                  }
+                  description={
+                    persistenceMode !== "cloud" && !documents.length
+                      ? "O repositório fica na nuvem e este dispositivo está em modo local. Os documentos voltam a aparecer quando a conexão for restabelecida."
+                      : "Ajuste os filtros ou insira um novo link de documento para esta categoria."
+                  }
+                  compact
+                />
               </div>
             ) : null}
           </div>
         </ErrorBoundary>
 
         <div className="flex items-center justify-between py-2">
-          <p className="text-[11px] text-slate-500">
+          <p className="text-label text-slate-500">
             Exibindo{" "}
             <span className="font-bold text-[var(--brand-navy-strong)]">
               {visibleDocuments.length}
@@ -706,6 +669,155 @@ export function DocumentRepository() {
           </p>
         </div>
       </section>
+    </div>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: number }) {
+  return (
+    <article className="radius-card border border-[var(--line-ghost)] bg-white/90 px-4 py-3 shadow-[0_16px_36px_-32px_rgba(0,66,98,0.24)]">
+      <p className="text-caption font-bold uppercase tracking-[0.16em] text-[var(--ink-soft)]">
+        {label}
+      </p>
+      <p className="heading-font mt-2 text-2xl font-black text-[var(--brand-navy-strong)]">
+        {value}
+      </p>
+    </article>
+  );
+}
+
+function InsertLinkDialog({
+  formState,
+  formError,
+  onClose,
+  onSubmit,
+  onChange,
+}: {
+  formState: InsertLinkFormState;
+  formError: string | null;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onChange: Dispatch<SetStateAction<InsertLinkFormState>>;
+}) {
+  const firstFieldRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    firstFieldRef.current?.focus();
+
+    return () => {
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-[rgba(0,37,56,0.42)] px-4 py-6"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <dialog
+        open
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="insert-link-dialog-title"
+        onCancel={(event) => {
+          event.preventDefault();
+          onClose();
+        }}
+        className="m-0 w-full max-w-3xl radius-panel border border-[var(--line-ghost)] bg-white p-0 text-[var(--ink)] shadow-[0_30px_80px_-40px_rgba(0,37,56,0.42)]"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-[var(--line-ghost)] px-5 py-4">
+          <div>
+            <h3 id="insert-link-dialog-title" className="heading-font text-lg font-bold text-[var(--brand-navy-strong)]">
+              Inserir link
+            </h3>
+            <p className="mt-1 text-xs text-slate-500">
+              A referência do documento é cadastrada; o arquivo permanece no Dropbox.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Fechar formulário de link"
+            className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100"
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <form className="grid gap-3 p-5 lg:grid-cols-6" onSubmit={onSubmit}>
+          <input
+            ref={firstFieldRef}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs lg:col-span-2"
+            placeholder="Título do documento"
+            value={formState.title}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, title: event.target.value }))
+            }
+          />
+          <input
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs lg:col-span-2"
+            placeholder="Link do Dropbox"
+            value={formState.dropboxUrl}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, dropboxUrl: event.target.value }))
+            }
+          />
+          <select
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
+            value={formState.type}
+            onChange={(event) =>
+              onChange((current) => ({
+                ...current,
+                type: event.target.value as DocumentType,
+              }))
+            }
+          >
+            {filterTabs.map((tab) => (
+              <option key={tab} value={tab}>
+                {tab}
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            className="rounded-lg bg-[var(--brand-navy-strong)] px-4 py-2 text-xs font-bold text-white transition-opacity hover:opacity-90"
+          >
+            Inserir link
+          </button>
+          <input
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs lg:col-span-2"
+            placeholder="Campanha"
+            value={formState.campaign}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, campaign: event.target.value }))
+            }
+          />
+          <input
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs lg:col-span-2"
+            placeholder="Ponto ou observação"
+            value={formState.point}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, point: event.target.value }))
+            }
+          />
+
+          {formError ? (
+            <p className="text-xs font-semibold text-[var(--brand-danger)] lg:col-span-6">
+              {formError}
+            </p>
+          ) : null}
+        </form>
+      </dialog>
     </div>
   );
 }
@@ -773,7 +885,7 @@ function DocumentRow({
             >
               {document.title}
             </button>
-            <p className="text-[9px] text-slate-500">
+            <p className="text-caption text-slate-500">
               Link Dropbox • Inserido
             </p>
           </div>
@@ -782,18 +894,18 @@ function DocumentRow({
 
       <td className="px-6 py-4 text-slate-500">
         <p className="font-bold">{document.campaign}</p>
-        <p className="text-[10px]">{document.point}</p>
+        <p className="text-caption">{document.point}</p>
       </td>
 
       <td className="px-6 py-4 text-slate-500">{document.date}</td>
       <td className="px-6 py-4">
-        <span className="rounded bg-slate-100 px-2 py-0.5 text-[9px] font-bold">
+        <span className="rounded bg-slate-100 px-2 py-0.5 text-caption font-bold">
           {document.type.toUpperCase()}
         </span>
       </td>
       <td className="px-6 py-4">
         <div
-          className={`inline-block rounded-sm border-l-[3px] px-2 py-1 text-[9px] font-bold ${statusClassForDocument(document)}`}
+          className={`inline-block rounded-sm border-l-[3px] px-2 py-1 text-caption font-bold ${statusClassForDocument(document)}`}
         >
           {document.status}
         </div>
@@ -996,3 +1108,4 @@ function inferTitleFromUrl(value: string) {
     return "Documento Dropbox";
   }
 }
+

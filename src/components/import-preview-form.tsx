@@ -181,7 +181,7 @@ export function ImportPreviewForm({ kind = "field" }: ImportPreviewFormProps) {
     <div className="space-y-5">
       <form className="space-y-4" onSubmit={handleSubmit}>
         <label
-          className={`block rounded-[24px] border-2 p-5 text-sm text-[var(--ink-soft)] transition-colors ${
+          className={`block radius-panel border-2 p-5 text-sm text-[var(--ink-soft)] transition-colors ${
             isDragging
               ? "border-[var(--brand-blue)] bg-[var(--brand-blue-soft)]"
               : "border-dashed border-[var(--line-strong)] bg-[var(--surface-soft)]"
@@ -254,13 +254,13 @@ export function ImportPreviewForm({ kind = "field" }: ImportPreviewFormProps) {
       </form>
 
       {error ? (
-        <div className="rounded-[24px] bg-[rgba(186,26,26,0.08)] p-4 text-sm text-[var(--brand-danger)]">
+        <div className="radius-panel bg-[rgba(186,26,26,0.08)] p-4 text-sm text-[var(--brand-danger)]">
           {error}
         </div>
       ) : null}
 
       {success ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[24px] bg-[rgba(5,150,105,0.10)] p-4 text-sm font-medium text-emerald-800">
+        <div className="flex flex-wrap items-center justify-between gap-3 radius-panel bg-[rgba(5,150,105,0.10)] p-4 text-sm font-medium text-emerald-800">
           <span className="inline-flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4" />
             {success}
@@ -276,7 +276,7 @@ export function ImportPreviewForm({ kind = "field" }: ImportPreviewFormProps) {
       ) : null}
 
       {deferredPreview ? (
-        <div className="space-y-4 rounded-[28px] bg-[var(--surface-soft)] p-5">
+        <div className="space-y-4 radius-panel bg-[var(--surface-soft)] p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="heading-font text-lg font-bold text-[var(--brand-navy-strong)]">
@@ -313,7 +313,7 @@ export function ImportPreviewForm({ kind = "field" }: ImportPreviewFormProps) {
             {deferredPreview.sheets.map((sheet) => (
               <article
                 key={sheet.name}
-                className="rounded-[24px] border border-[var(--line-ghost)] bg-white p-4 shadow-[0_18px_40px_-34px_rgba(0,66,98,0.22)]"
+                className="radius-panel border border-[var(--line-ghost)] bg-white p-4 shadow-[0_18px_40px_-34px_rgba(0,66,98,0.22)]"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -365,8 +365,8 @@ function withCampaignSummary(
 
 function ImportMetric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-[18px] bg-white p-4">
-      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+    <div className="radius-card bg-white p-4">
+      <p className="text-caption font-bold uppercase tracking-[0.18em] text-slate-400">
         {label}
       </p>
       <p className="mt-1 text-2xl font-black text-[var(--brand-navy-strong)]">
@@ -375,3 +375,4 @@ function ImportMetric({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
+

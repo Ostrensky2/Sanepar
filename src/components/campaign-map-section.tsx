@@ -15,6 +15,7 @@ import {
   type CampaignHydroMapPoint,
 } from "@/components/campaign-hydro-map";
 import { campaignPointMatchesSelectedCampaign } from "@/lib/campaign-points";
+import { getPhotoPreview } from "@/lib/photo-preview";
 
 export function CampaignMapSection({
   points,
@@ -136,21 +137,20 @@ export function CampaignMapSection({
   }, [useLocalImportCache]);
 
   const mapHeightClass = compact ? "h-[460px]" : "h-[520px]";
+  const panelMaxHeightClass = compact ? "max-h-[460px]" : "max-h-[520px]";
 
   return (
-    <section
-      className={`grid items-start gap-4 lg:grid-cols-[14rem_minmax(0,1fr)_18rem] ${mapHeightClass}`}
-    >
-      <aside className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto pr-1">
+    <section className="grid items-start gap-4 lg:grid-cols-[14rem_minmax(0,1fr)_18rem]">
+      <aside className={`flex flex-col gap-4 overflow-y-auto pr-1 ${panelMaxHeightClass}`}>
         {localImportLabel && cacheMatchesSelectedCampaign ? (
-          <div className="rounded-[20px] border border-emerald-200 bg-white px-4 py-3 text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-800 shadow">
+          <div className="radius-card border border-emerald-200 bg-white px-4 py-3 text-label font-bold uppercase tracking-[0.12em] text-emerald-800 shadow">
             {localImportLabel}
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-[20px] border border-[var(--line-ghost)] bg-white shadow">
+        <div className="overflow-hidden radius-card border border-[var(--line-ghost)] bg-white shadow">
           <div className="flex items-center justify-between border-b border-[var(--line-ghost)] bg-[var(--surface-soft)] px-3 py-2">
-            <span className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
+            <span className="text-label font-black uppercase tracking-[0.18em] text-slate-500">
               Camadas
             </span>
             <Layers3 className="h-4 w-4 text-slate-400" />
@@ -176,7 +176,7 @@ export function CampaignMapSection({
               </label>
             ))}
           </div>
-          <div className="grid grid-cols-2 gap-1 border-t border-[var(--line-ghost)] px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+          <div className="grid grid-cols-2 gap-1 border-t border-[var(--line-ghost)] px-3 py-2 text-caption font-bold uppercase tracking-[0.12em] text-slate-500">
             <span className="flex items-center gap-1">
               <span className="h-2.5 w-2.5 rounded-full border border-slate-900 bg-[#eaff00]" />
               Apoio
@@ -188,11 +188,11 @@ export function CampaignMapSection({
           </div>
           {routeLegend.length > 0 ? (
             <div className="max-h-64 overflow-y-auto border-t border-[var(--line-ghost)] px-3 py-2">
-              <div className="mb-1 flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+              <div className="mb-1 flex items-center gap-1 text-caption font-black uppercase tracking-[0.14em] text-slate-400">
                 <Route className="h-3 w-3" />
                 Rotas
               </div>
-              <div className="mb-1.5 flex items-center gap-2 text-[10px] font-semibold text-slate-600">
+              <div className="mb-1.5 flex items-center gap-2 text-caption font-semibold text-slate-600">
                 <span className="h-0 w-5 border-t border-dashed border-slate-500" />
                 <span className="truncate">Ligação entre dias</span>
               </div>
@@ -200,7 +200,7 @@ export function CampaignMapSection({
                 {routeLegend.map((item) => (
                   <div
                     key={item.key}
-                    className="flex items-center gap-2 text-[10px] font-semibold text-slate-600"
+                    className="flex items-center gap-2 text-caption font-semibold text-slate-600"
                   >
                     <span
                       className="h-1.5 w-5 rounded-full"
@@ -215,13 +215,15 @@ export function CampaignMapSection({
         </div>
       </aside>
 
-      <div className="relative h-full overflow-hidden rounded-[30px] border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)]">
+      <div className={`relative overflow-hidden radius-panel border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)] ${mapHeightClass}`}>
         <CampaignHydroMap
           points={activePoints}
           selectedPointId={selectedPoint?.id}
           layers={layers}
           showPointTooltip
           zoomOnSelect
+          clipBaseTilesToBasins
+          caption="Mapa rodoviário OpenStreetMap · Diário de Campo · Sanepar"
           onSelectPoint={(point) => {
             setSelectedPointId(point.id);
             setIsDetailsPanelOpen(true);
@@ -229,9 +231,9 @@ export function CampaignMapSection({
         />
       </div>
 
-      <aside className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto pr-1">
+      <aside className={`flex flex-col gap-4 overflow-y-auto pr-1 ${panelMaxHeightClass}`}>
         {isDetailsPanelOpen ? (
-        <div className="min-h-0 flex-1 overflow-hidden rounded-[20px] border border-[var(--line-ghost)] bg-white shadow-[0_30px_80px_-42px_rgba(0,66,98,0.34)]">
+        <div className="overflow-hidden radius-card border border-[var(--line-ghost)] bg-white shadow-[0_30px_80px_-42px_rgba(0,66,98,0.34)]">
           <div className="bg-[var(--brand-navy-strong)] p-3 text-white">
             <div className="mb-1.5 flex items-start justify-between">
               <h3 className="heading-font text-lg font-black tracking-tight">
@@ -246,7 +248,7 @@ export function CampaignMapSection({
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="flex items-center gap-2 rounded bg-white/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em]">
+            <div className="flex items-center gap-2 rounded bg-white/10 px-2 py-1 text-caption font-bold uppercase tracking-[0.16em]">
               <span className="h-1.5 w-1.5 rounded-full bg-[#eaff00]" />
               Dados da campanha
             </div>
@@ -293,11 +295,11 @@ export function CampaignMapSection({
             />
 
             <div className="grid grid-cols-2 gap-1.5">
-              <button className="flex flex-col items-center gap-1 rounded border border-slate-100 bg-slate-50 p-1.5 text-[10px] font-bold uppercase text-slate-500 transition-colors hover:bg-slate-100">
+              <button className="flex flex-col items-center gap-1 rounded border border-slate-100 bg-slate-50 p-1.5 text-caption font-bold uppercase text-slate-500 transition-colors hover:bg-slate-100">
                 <FileText className="h-4 w-4 text-[var(--brand-navy-strong)]" />
                 Documentos
               </button>
-              <button className="flex flex-col items-center gap-1 rounded border border-slate-100 bg-slate-50 p-1.5 text-[10px] font-bold uppercase text-slate-500 transition-colors hover:bg-slate-100">
+              <button className="flex flex-col items-center gap-1 rounded border border-slate-100 bg-slate-50 p-1.5 text-caption font-bold uppercase text-slate-500 transition-colors hover:bg-slate-100">
                 <BarChart3 className="h-4 w-4 text-[var(--brand-navy-strong)]" />
                 Resultados
               </button>
@@ -308,7 +310,7 @@ export function CampaignMapSection({
         <button
           type="button"
           aria-label="Abrir painel do ponto"
-          className="rounded-full border border-[var(--line-ghost)] bg-white px-4 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-[var(--brand-navy-strong)] shadow transition-colors hover:bg-[var(--surface-soft)]"
+          className="rounded-full border border-[var(--line-ghost)] bg-white px-4 py-2 text-caption font-black uppercase tracking-[0.16em] text-[var(--brand-navy-strong)] shadow transition-colors hover:bg-[var(--surface-soft)]"
           onClick={() => setIsDetailsPanelOpen(true)}
         >
           Abrir painel
@@ -393,7 +395,7 @@ function formatRouteDayLabel(
 function InfoTile({ label, value }: { label: string; value?: string }) {
   return (
     <div className="rounded border border-slate-100 bg-slate-50 px-2 py-1.5">
-      <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+      <span className="block text-caption font-bold uppercase tracking-[0.12em] text-slate-400">
         {label}
       </span>
       <span className="font-semibold text-slate-700">{value || "Não informado"}</span>
@@ -404,7 +406,7 @@ function InfoTile({ label, value }: { label: string; value?: string }) {
 function InfoBlock({ label, value }: { label: string; value?: string }) {
   return (
     <div className="rounded border border-slate-100 bg-white px-2 py-1.5 text-xs">
-      <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+      <span className="mb-0.5 block text-caption font-bold uppercase tracking-[0.16em] text-slate-400">
         {label}
       </span>
       <p className="font-medium leading-4 text-slate-700">{value || "Não informado"}</p>
@@ -420,22 +422,55 @@ function PointPhotoPreview({
   onExpand: () => void;
 }) {
   const preview = getPhotoPreview(point?.photoUrl);
+  const [photoState, setPhotoState] = useState<{
+    previewKey?: string;
+    candidateIndex: number;
+    hasError: boolean;
+  }>({ candidateIndex: 0, hasError: false });
+  const previewKey = preview?.originalUrl;
+  const activeState =
+    photoState.previewKey === previewKey
+      ? photoState
+      : { candidateIndex: 0, hasError: false };
+  const activeSrc = preview?.candidates[activeState.candidateIndex] ?? preview?.src;
+  const imageFailed = activeState.hasError;
 
   return (
     <button
       type="button"
       className="relative h-24 w-full overflow-hidden rounded border border-slate-200 bg-slate-100 text-slate-400 transition hover:brightness-95"
       onClick={onExpand}
-      disabled={!preview}
+      disabled={!preview || imageFailed}
       aria-label="Expandir foto representativa do ponto"
     >
-      {preview?.kind === "image" ? (
+      {preview?.kind === "image" && !imageFailed ? (
         // Google Drive thumbnails need a regular image element.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           alt={`Foto representativa do ponto ${point?.code ?? ""}`}
           className="h-full w-full object-cover"
-          src={preview.src}
+          onError={() => {
+            setPhotoState((current) => {
+              const candidateIndex =
+                current.previewKey === previewKey ? current.candidateIndex : 0;
+              const nextCandidateIndex = candidateIndex + 1;
+
+              if (nextCandidateIndex < preview.candidates.length) {
+                return {
+                  previewKey,
+                  candidateIndex: nextCandidateIndex,
+                  hasError: false,
+                };
+              }
+
+              return {
+                previewKey,
+                candidateIndex,
+                hasError: true,
+              };
+            });
+          }}
+          src={activeSrc}
         />
       ) : preview?.kind === "folder" ? (
         <iframe
@@ -444,12 +479,17 @@ function PointPhotoPreview({
           title={`Foto representativa do ponto ${point?.code ?? ""}`}
         />
       ) : (
-        <div className="flex h-full items-center justify-center">
+        <div className="flex h-full flex-col items-center justify-center gap-1 px-3 text-center">
           <ImageIcon className="h-8 w-8 text-slate-300" />
+          {imageFailed ? (
+            <span className="text-caption font-bold text-slate-500">
+              Foto indisponível — verifique o Drive
+            </span>
+          ) : null}
         </div>
       )}
-      {preview ? (
-        <span className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-white">
+      {preview && !imageFailed ? (
+        <span className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-1 text-caption font-bold uppercase tracking-[0.14em] text-white">
           ampliar
         </span>
       ) : null}
@@ -465,6 +505,7 @@ function PhotoModal({
   onClose: () => void;
 }) {
   const preview = getPhotoPreview(point.photoUrl);
+  const [candidateIndex, setCandidateIndex] = useState(0);
 
   if (!preview) {
     return null;
@@ -472,10 +513,10 @@ function PhotoModal({
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-6 backdrop-blur-sm">
-      <div className="relative h-full max-h-[82vh] w-full max-w-5xl overflow-hidden rounded-[24px] border border-white/20 bg-white shadow-2xl">
+      <div className="relative h-full max-h-[82vh] w-full max-w-5xl overflow-hidden radius-panel border border-white/20 bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+            <p className="text-caption font-bold uppercase tracking-[0.18em] text-slate-400">
               Foto representativa
             </p>
             <h3 className="heading-font text-lg font-black text-[var(--brand-navy-strong)]">
@@ -499,7 +540,12 @@ function PhotoModal({
             <img
               alt={`Foto representativa do ponto ${point.code}`}
               className="h-full w-full object-contain"
-              src={preview.src}
+              onError={() =>
+                setCandidateIndex((current) =>
+                  current + 1 < preview.candidates.length ? current + 1 : current,
+                )
+              }
+              src={preview.candidates[candidateIndex] ?? preview.src}
             />
           ) : (
             <iframe
@@ -514,75 +560,3 @@ function PhotoModal({
   );
 }
 
-function getPhotoPreview(url?: string) {
-  if (!url) {
-    return null;
-  }
-
-  const dropboxPreview = getDropboxPreview(url);
-
-  if (dropboxPreview) {
-    return dropboxPreview;
-  }
-
-  const drivePreview = getDrivePreview(url);
-
-  if (drivePreview) {
-    return drivePreview;
-  }
-
-  return {
-    kind: "image" as const,
-    src: url,
-  };
-}
-
-function getDrivePreview(url: string) {
-  const fileMatch =
-    url.match(/\/file\/d\/([^/]+)/) ||
-    url.match(/[?&]id=([^&]+)/) ||
-    url.match(/\/uc\?id=([^&]+)/);
-
-  if (fileMatch?.[1]) {
-    return {
-      kind: "image" as const,
-      src: `https://drive.google.com/thumbnail?id=${fileMatch[1]}&sz=w1600`,
-    };
-  }
-
-  const folderMatch = url.match(/\/folders\/([^/?]+)/);
-
-  if (folderMatch?.[1]) {
-    return {
-      kind: "folder" as const,
-      src: `https://drive.google.com/embeddedfolderview?id=${folderMatch[1]}#grid`,
-    };
-  }
-
-  return {
-    kind: "image" as const,
-    src: url,
-  };
-}
-
-function getDropboxPreview(url: string) {
-  let parsed: URL;
-
-  try {
-    parsed = new URL(url);
-  } catch {
-    return null;
-  }
-
-  if (!parsed.hostname.endsWith("dropbox.com")) {
-    return null;
-  }
-
-  parsed.searchParams.delete("dl");
-  parsed.searchParams.set("raw", "1");
-
-  return {
-    kind: "image" as const,
-    src: parsed.toString(),
-  };
-}

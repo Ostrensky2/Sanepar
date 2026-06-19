@@ -99,6 +99,22 @@ export function formatLastSyncLabel(lastSyncedAt: string | null, now = new Date(
   return `há ${days} d`;
 }
 
+const technicalReasonPattern =
+  /typeerror|fetch failed|econnrefused|enotfound|etimedout|abort|exception|stack|getaddrinfo|socket|ssl|tls/i;
+
+export function sanitizeCloudReason(
+  reason: string | null | undefined,
+  fallback = "Não foi possível conectar à nuvem.",
+) {
+  const trimmed = (reason ?? "").trim();
+
+  if (!trimmed || technicalReasonPattern.test(trimmed)) {
+    return fallback;
+  }
+
+  return trimmed;
+}
+
 function isSyncState(value: unknown): value is SyncState {
   return value === "checking" || value === "synced" || value === "pending" || value === "offline";
 }

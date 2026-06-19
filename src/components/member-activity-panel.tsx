@@ -60,7 +60,7 @@ export function MemberActivityPanel() {
             <p className="mt-1 text-xs leading-5 text-[var(--ink-soft)]">
               Ingressos, navegação e arquivos.
             </p>
-            <p className="mt-2 text-[11px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+            <p className="mt-2 text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
               Recorte atual: {formatDateLabel(date, period)}
             </p>
           </div>
@@ -100,12 +100,12 @@ export function MemberActivityPanel() {
 
       <div className="grid gap-4 p-4 pt-0 xl:grid-cols-[1.1fr_0.9fr]">
         <section className="overflow-hidden rounded-xl border border-[var(--line-ghost)] bg-white/70">
-          <h4 className="border-b border-[var(--line-ghost)] px-4 py-3 text-[11px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+          <h4 className="border-b border-[var(--line-ghost)] px-4 py-3 text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
             Ranking de atividade
           </h4>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
-              <thead className="text-left text-[11px] font-black uppercase tracking-[0.12em] text-[var(--ink-soft)]">
+              <thead className="text-left text-label font-black uppercase tracking-[0.12em] text-[var(--ink-soft)]">
                 <tr>
                   <th className="px-4 py-3">Membro</th>
                   <th className="px-4 py-3">Ingressos</th>
@@ -120,7 +120,7 @@ export function MemberActivityPanel() {
                     <td className="px-4 py-3">
                       <p className="font-black text-[var(--brand-navy-strong)]">{member.user.name}</p>
                       <p className="text-xs text-[var(--ink-soft)]">{member.user.email}</p>
-                      <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-600">
+                      <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-1 text-caption font-black uppercase tracking-[0.14em] text-slate-600">
                         {member.user.role}
                       </span>
                     </td>
@@ -144,7 +144,7 @@ export function MemberActivityPanel() {
             <ActivityList title="Páginas mais visitadas" activities={scopedActivities.filter((activity) => activity.kind === "page.view")} />
             <ActivityList title="Atividade com arquivos" activities={fileActivities} />
             <div className="rounded-xl border border-[var(--line-ghost)] bg-white p-4">
-              <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+              <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
                 Últimos arquivos no app
               </p>
               <div className="mt-3 grid gap-2">
@@ -168,7 +168,7 @@ function ActivityMetric({ label, value, icon: Icon }: { label: string; value: nu
     <article className="rounded-xl border border-[var(--line-ghost)] bg-white/76 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--ink-soft)]">{label}</p>
+          <p className="text-label font-black uppercase tracking-[0.12em] text-[var(--ink-soft)]">{label}</p>
           <p className="mt-2 text-2xl font-black text-[var(--brand-navy-strong)]">{value}</p>
         </div>
         <div className="rounded-xl bg-[var(--brand-teal-soft)] p-2.5 text-[var(--brand-teal)]">
@@ -196,7 +196,7 @@ function ActivityList({ title, activities }: { title: string; activities: Activi
 
   return (
     <div className="rounded-xl border border-[var(--line-ghost)] bg-white p-4">
-      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">{title}</p>
+      <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">{title}</p>
       <div className="mt-3 grid gap-2">
         {grouped.map((item) => (
           <div key={item.target} className="rounded-lg bg-[var(--surface-soft)] px-3 py-2">
@@ -287,3 +287,4 @@ function formatDateTime(value: string) {
     minute: "2-digit",
   }).format(parsed);
 }
+

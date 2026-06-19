@@ -16,7 +16,7 @@ export function SectionCard({
   className = "",
 }: SectionCardProps) {
   return (
-    <section className={`glass-panel rounded-[32px] p-6 ${className}`}>
+    <section className={`glass-panel radius-panel p-6 ${className}`}>
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-2xl">
           <h2 className="heading-font text-xl font-bold tracking-tight text-[var(--brand-navy-strong)]">
@@ -32,3 +32,4 @@ export function SectionCard({
     </section>
   );
 }
+

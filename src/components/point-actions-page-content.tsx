@@ -84,8 +84,7 @@ export function PointActionsPageContent() {
   if (isLoadingActions) {
     return (
       <div className="space-y-6">
-        <HeaderBlock />
-        <div className="flex min-h-80 flex-col items-center justify-center rounded-[30px] border border-dashed border-slate-300 bg-[var(--surface-soft)] p-8 text-center">
+        <div className="flex min-h-80 flex-col items-center justify-center radius-panel border border-dashed border-slate-300 bg-[var(--surface-soft)] p-8 text-center">
           <FileSpreadsheet className="mb-4 h-10 w-10 animate-pulse text-slate-400" />
           <p className="heading-font text-xl font-bold text-[var(--brand-navy-strong)]">
             Carregando ações pontuais
@@ -101,8 +100,7 @@ export function PointActionsPageContent() {
   if (!actions.length) {
     return (
       <div className="space-y-6">
-        <HeaderBlock />
-        <div className="flex min-h-80 flex-col items-center justify-center rounded-[30px] border border-dashed border-slate-300 bg-[var(--surface-soft)] p-8 text-center">
+        <div className="flex min-h-80 flex-col items-center justify-center radius-panel border border-dashed border-slate-300 bg-[var(--surface-soft)] p-8 text-center">
           <FileSpreadsheet className="mb-4 h-10 w-10 text-slate-400" />
           <p className="heading-font text-xl font-bold text-[var(--brand-navy-strong)]">
             Nenhuma ação pontual registrada
@@ -119,7 +117,7 @@ export function PointActionsPageContent() {
     <div className="space-y-6">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+          <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
             Ação pontual selecionada
           </p>
           <h2 className="heading-font text-2xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
@@ -165,23 +163,30 @@ export function PointActionsPageContent() {
         <MetricCard icon={Camera} label="Fotos" value={totalPhotos} detail="Links Dropbox" />
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <div className="relative h-[220px] overflow-hidden rounded-[24px] border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)]">
-          <CampaignHydroMap
-            points={mapPoints}
-            selectedPointId={selectedPoint?.id}
-            layers={actionMapLayers}
-            markerMode="pointAction"
-            showPointTooltip
-            caption="Ações pontuais · Pontos efetivos · Sanepar"
-            onSelectPoint={(point) => setSelectedPointId(point.id)}
-          />
+      <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <div className="space-y-4">
+          <div className="relative h-[420px] overflow-hidden radius-panel border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)]">
+            <CampaignHydroMap
+              points={mapPoints}
+              selectedPointId={selectedPoint?.id}
+              layers={actionMapLayers}
+              markerMode="pointAction"
+              showPointTooltip
+              clipBaseTilesToBasins
+              caption="Ações pontuais · Pontos efetivos · Sanepar"
+              onSelectPoint={(point) => setSelectedPointId(point.id)}
+            />
+          </div>
+
+          {selectedPoint ? (
+            <PointActionPhotos point={selectedPoint} />
+          ) : null}
         </div>
 
-        <aside className="glass-panel rounded-[28px] p-5 shadow-[0_24px_72px_-48px_rgba(0,66,98,0.32)]">
+        <aside className="glass-panel radius-panel p-5 shadow-[0_24px_72px_-48px_rgba(0,66,98,0.32)]">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">
+              <p className="text-caption font-bold uppercase tracking-[0.22em] text-slate-400">
                 Ação pontual
               </p>
               <h3 className="heading-font mt-1 text-2xl font-black text-[var(--brand-navy-strong)]">
@@ -209,19 +214,6 @@ export function PointActionsPageContent() {
   );
 }
 
-function HeaderBlock() {
-  return (
-    <section>
-      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
-        Demandas Sanepar
-      </p>
-      <h2 className="heading-font text-2xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
-        Ações Pontuais Sanepar
-      </h2>
-    </section>
-  );
-}
-
 function MetricCard({
   icon: Icon,
   label,
@@ -234,9 +226,9 @@ function MetricCard({
   detail: string;
 }) {
   return (
-    <article className="glass-panel rounded-[24px] border-b-2 border-[var(--brand-blue)] p-4 shadow-[0_18px_54px_-42px_rgba(0,66,98,0.35)]">
+    <article className="glass-panel radius-panel border-b-2 border-[var(--brand-blue)] p-4 shadow-[0_18px_54px_-42px_rgba(0,66,98,0.35)]">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+        <p className="text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
           {label}
         </p>
         <Icon className="h-4 w-4 text-[var(--brand-navy-strong)]" />
@@ -258,8 +250,6 @@ function PointActionCard({
   objectives: string;
   document: PointActionEvent["document"];
 }) {
-  const [expandedPhoto, setExpandedPhoto] = useState<PointActionSamplePoint["photos"][number] | null>(null);
-
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2 text-xs xl:grid-cols-4">
@@ -273,15 +263,15 @@ function PointActionCard({
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <div className="rounded-[18px] border border-[var(--line-ghost)] bg-white p-4 shadow-[0_18px_48px_-42px_rgba(0,66,98,0.28)]">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+        <div className="radius-card border border-[var(--line-ghost)] bg-white p-4 shadow-[0_18px_48px_-42px_rgba(0,66,98,0.28)]">
+          <p className="text-caption font-bold uppercase tracking-[0.18em] text-slate-400">
             Objetivos
           </p>
           <p className="mt-2 text-justify text-sm leading-6 text-slate-600">{objectives}</p>
         </div>
 
-        <div className="rounded-[18px] border border-[var(--line-ghost)] bg-white p-4 shadow-[0_18px_48px_-42px_rgba(0,66,98,0.28)]">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+        <div className="radius-card border border-[var(--line-ghost)] bg-white p-4 shadow-[0_18px_48px_-42px_rgba(0,66,98,0.28)]">
+          <p className="text-caption font-bold uppercase tracking-[0.18em] text-slate-400">
             Resultados
           </p>
           <p className="mt-2 text-justify text-sm leading-6 text-slate-600">{point.results}</p>
@@ -293,10 +283,10 @@ function PointActionCard({
           href={document.dropboxUrl}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center justify-between gap-3 rounded-[18px] border border-blue-100 bg-white p-4 text-sm font-bold text-blue-700 transition-colors hover:border-blue-200 hover:bg-blue-50"
+          className="flex items-center justify-between gap-3 radius-card border border-blue-100 bg-white p-4 text-sm font-bold text-blue-700 transition-colors hover:border-blue-200 hover:bg-blue-50"
         >
           <span className="min-w-0">
-            <span className="block text-[10px] uppercase tracking-[0.18em] text-slate-400">
+            <span className="block text-caption uppercase tracking-[0.18em] text-slate-400">
               Documento do evento
             </span>
             <span className="mt-1 block truncate underline decoration-blue-300 underline-offset-4">
@@ -306,41 +296,48 @@ function PointActionCard({
           <ExternalLink className="h-4 w-4 shrink-0 text-blue-600" />
         </a>
       ) : (
-        <p className="rounded-[18px] bg-[var(--surface-soft)] p-4 text-xs font-semibold text-slate-500">
+        <p className="radius-card bg-[var(--surface-soft)] p-4 text-xs font-semibold text-slate-500">
           Nenhum documento vinculado a este evento.
         </p>
       )}
 
-      <div>
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
-          Fotos
-        </p>
-        <div className="grid gap-3 lg:grid-cols-2">
-          {point.photos.length ? (
-            point.photos.map((photo, index) => (
-              <button
-                type="button"
-                key={photo.id}
-                className="grid w-full grid-cols-[96px_1fr] gap-3 rounded-[16px] border border-[var(--line-ghost)] bg-white p-2 text-left shadow-[0_14px_38px_-34px_rgba(0,66,98,0.34)] transition-colors hover:bg-[var(--surface-soft)]"
-                onClick={() => setExpandedPhoto(photo)}
-              >
-                <PhotoThumb photoUrl={photo.url} alt={photo.caption || `Foto ${index + 1}`} />
-                <span className="min-w-0 py-1">
-                  <span className="block text-xs font-black text-[var(--brand-navy-strong)]">
-                    Foto {index + 1}
-                  </span>
-                  <span className="mt-1 block text-justify text-xs leading-5 text-slate-500">
-                    {photo.caption || "Sem legenda informada"}
-                  </span>
+    </div>
+  );
+}
+
+function PointActionPhotos({ point }: { point: PointActionSamplePoint }) {
+  const [expandedPhoto, setExpandedPhoto] = useState<PointActionSamplePoint["photos"][number] | null>(null);
+
+  return (
+    <section className="glass-panel radius-panel p-4 shadow-[0_24px_72px_-48px_rgba(0,66,98,0.32)]">
+      <p className="mb-3 text-caption font-bold uppercase tracking-[0.18em] text-slate-400">
+        Fotos do ponto selecionado
+      </p>
+      <div className="grid gap-3 md:grid-cols-2">
+        {point.photos.length ? (
+          point.photos.map((photo, index) => (
+            <button
+              type="button"
+              key={photo.id}
+              className="w-full radius-card border border-[var(--line-ghost)] bg-white p-2 text-left shadow-[0_14px_38px_-34px_rgba(0,66,98,0.34)] transition-colors hover:bg-[var(--surface-soft)]"
+              onClick={() => setExpandedPhoto(photo)}
+            >
+              <PhotoThumb photoUrl={photo.url} alt={photo.caption || `Foto ${index + 1}`} />
+              <span className="block min-w-0 px-1 py-2">
+                <span className="block text-xs font-black text-[var(--brand-navy-strong)]">
+                  Foto {index + 1}
                 </span>
-              </button>
-            ))
-          ) : (
-            <p className="rounded-[16px] bg-[var(--surface-soft)] p-3 text-xs font-semibold text-slate-500">
-              Nenhuma foto vinculada a este ponto.
-            </p>
-          )}
-        </div>
+                <span className="mt-1 block text-justify text-xs leading-5 text-slate-500">
+                  {photo.caption || "Sem legenda informada"}
+                </span>
+              </span>
+            </button>
+          ))
+        ) : (
+          <p className="radius-card bg-[var(--surface-soft)] p-3 text-xs font-semibold text-slate-500">
+            Nenhuma foto vinculada a este ponto.
+          </p>
+        )}
       </div>
 
       {expandedPhoto ? (
@@ -351,7 +348,7 @@ function PointActionCard({
           onNavigate={setExpandedPhoto}
         />
       ) : null}
-    </div>
+    </section>
   );
 }
 
@@ -359,7 +356,7 @@ function PhotoThumb({ photoUrl, alt }: { photoUrl: string; alt: string }) {
   const previewUrl = toDropboxPreviewUrl(photoUrl);
 
   return (
-    <span className="relative block h-24 w-24 overflow-hidden rounded-xl bg-[var(--surface-soft)]">
+    <span className="relative block h-44 w-full overflow-hidden rounded-xl bg-[var(--surface-soft)]">
       <span className="absolute inset-0 flex items-center justify-center text-slate-400">
         <Camera className="h-5 w-5" />
       </span>
@@ -411,7 +408,7 @@ function PhotoDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[24px] bg-white shadow-[0_28px_90px_-24px_rgba(0,0,0,0.5)]">
+      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden radius-panel bg-white shadow-[0_28px_90px_-24px_rgba(0,0,0,0.5)]">
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
           <div className="flex items-center gap-3">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
@@ -493,7 +490,7 @@ function PhotoDialog({
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg bg-[var(--surface-soft)] px-3 py-2">
-      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+      <p className="text-caption font-bold uppercase tracking-[0.16em] text-slate-400">
         {label}
       </p>
       <p className="mt-1 font-semibold text-slate-700">{value}</p>
@@ -544,3 +541,4 @@ function toDropboxPreviewUrl(url: string) {
     return trimmedUrl;
   }
 }
+

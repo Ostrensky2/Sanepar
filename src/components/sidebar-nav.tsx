@@ -18,6 +18,7 @@ import {
   readSyncStatusSnapshot,
   type SyncStatusSnapshot,
 } from "@/lib/sync-status";
+import { SyncStatusBadge } from "@/components/sync-status-badge";
 import { cn } from "@/lib/utils";
 
 type SidebarNavProps = {
@@ -106,6 +107,8 @@ export function SidebarNav({ mobile = false }: SidebarNavProps) {
           <div key={item.href} className={startsNewGroup ? "mt-4 border-t border-[var(--line-ghost)] pt-4" : undefined}>
             <Link
               href={item.href}
+              title={item.label}
+              aria-label={item.label}
               className={cn(
                 mobile
                   ? "min-w-max rounded-full border px-3 py-2"
@@ -136,8 +139,10 @@ export function SidebarNav({ mobile = false }: SidebarNavProps) {
                     <Link
                       key={child.href}
                       href={child.href}
+                      title={child.label}
+                      aria-label={child.label}
                       className={cn(
-                        "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[11px] tracking-tight transition-all duration-200 ease-out",
+                        "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-label tracking-tight transition-all duration-200 ease-out",
                         childIsActive
                           ? "bg-white font-black text-[var(--brand-navy-strong)] shadow-sm ring-1 ring-[var(--brand-blue-soft)]"
                           : "font-semibold text-[var(--ink-soft)] hover:translate-x-0.5 hover:bg-white hover:text-[var(--brand-navy-strong)]",
@@ -159,15 +164,17 @@ export function SidebarNav({ mobile = false }: SidebarNavProps) {
                 <Link
                   key={child.href}
                   href={child.href}
+                  title={child.label}
+                  aria-label={child.label}
                   className={cn(
-                    "ml-2 inline-flex min-w-max items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold transition-all",
+                    "ml-2 inline-flex min-w-max items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-label font-semibold transition-all",
                     childIsActive
                       ? "border-[var(--brand-navy-strong)] bg-[var(--brand-navy-strong)] text-white"
                       : "border-[var(--line-ghost)] bg-white text-[var(--ink-soft)]",
                   )}
                 >
                   {ChildIcon ? <ChildIcon className="h-3 w-3" /> : null}
-                  <span>{child.label}</span>
+                  <span className="truncate">{child.label}</span>
                   <Badge count={badges[child.href]} active={childIsActive} />
                 </Link>
               );
@@ -180,23 +187,9 @@ export function SidebarNav({ mobile = false }: SidebarNavProps) {
 }
 
 function SidebarSyncStatus({ status }: { status: SyncStatusSnapshot }) {
-  const classes = {
-    checking: "bg-slate-300",
-    synced: "bg-[var(--brand-teal)]",
-    pending: "bg-[var(--brand-amber)]",
-    offline: "bg-[var(--brand-danger)]",
-  };
-  const label = {
-    checking: "Verificando",
-    synced: "Sincronizado",
-    pending: "Pendente",
-    offline: "Offline",
-  };
-
   return (
-    <div className="mb-3 flex items-center gap-2 rounded-xl border border-[var(--line-ghost)] bg-white px-3 py-2 text-[11px] font-black text-[var(--brand-navy-strong)]">
-      <span className={`h-2.5 w-2.5 rounded-full ${classes[status.state]}`} />
-      <span className="min-w-0 flex-1 truncate">{label[status.state]}</span>
+    <div className="mb-3">
+      <SyncStatusBadge snapshot={status} className="w-full justify-start bg-white" />
     </div>
   );
 }
@@ -207,7 +200,7 @@ function Badge({ count, active }: { count?: number; active: boolean }) {
   return (
     <span
       className={cn(
-        "ml-auto rounded-full px-2 py-0.5 text-[10px] font-black leading-none",
+        "ml-auto rounded-full px-2 py-0.5 text-caption font-black leading-none",
         active
           ? "bg-[var(--brand-navy-strong)] text-white"
           : "bg-[var(--surface-soft)] text-[var(--ink-soft)]",
@@ -255,3 +248,4 @@ function readString(value: unknown, key: string) {
   const candidate = (value as Record<string, unknown>)[key];
   return typeof candidate === "string" ? candidate : "";
 }
+

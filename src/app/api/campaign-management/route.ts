@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/api-auth";
 import {
   CAMPAIGN_MANAGEMENT_SNAPSHOT_FILE_NAME,
   createOptionalSupabaseClient,
@@ -6,12 +7,25 @@ import {
 
 export const runtime = "nodejs";
 
+const SINGLETON_ID = "singleton";
+
+type CampaignManagementRow = {
+  management: unknown;
+  updated_at: string;
+};
+
 type CampaignManagementSnapshotRow = {
   points: unknown;
   created_at: string;
 };
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = requireApiSession(request);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const supabase = createOptionalSupabaseClient();
 
   if (!supabase) {
@@ -19,6 +33,21 @@ export async function GET() {
   }
 
   const { data, error } = await supabase
+    .from("campaign_management")
+    .select("management, updated_at")
+    .eq("id", SINGLETON_ID)
+    .maybeSingle<CampaignManagementRow>();
+
+  if (!error && isRecord(data?.management)) {
+    return NextResponse.json({
+      management: data.management,
+      persistence: "cloud",
+    });
+  }
+
+  // Fallback legado: snapshots gravados em campaign_imports antes da
+  // migração para a tabela campaign_management.
+  const { data: legacy, error: legacyError } = await supabase
     .from("campaign_imports")
     .select("points, created_at")
     .eq("file_name", CAMPAIGN_MANAGEMENT_SNAPSHOT_FILE_NAME)
@@ -26,7 +55,7 @@ export async function GET() {
     .limit(1)
     .maybeSingle<CampaignManagementSnapshotRow>();
 
-  if (error) {
+  if (legacyError) {
     return NextResponse.json(
       { error: "Não foi possível consultar o status das campanhas." },
       { status: 500 },
@@ -34,12 +63,18 @@ export async function GET() {
   }
 
   return NextResponse.json({
-    management: isRecord(data?.points) ? data.points : null,
+    management: isRecord(legacy?.points) ? legacy.points : null,
     persistence: "cloud",
   });
 }
 
 export async function PUT(request: Request) {
+  const auth = requireApiSession(request, "data.import");
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const supabase = createOptionalSupabaseClient();
 
   if (!supabase) {
@@ -58,16 +93,14 @@ export async function PUT(request: Request) {
     );
   }
 
-  const campaignCount = Object.keys(payload.management).length;
-  const { error } = await supabase.from("campaign_imports").insert({
-    file_name: CAMPAIGN_MANAGEMENT_SNAPSHOT_FILE_NAME,
-    row_count: campaignCount,
-    point_count: campaignCount,
-    original_point_count: 0,
-    effective_point_count: 0,
-    missing_fields: [],
-    points: payload.management,
-  });
+  const { error } = await supabase.from("campaign_management").upsert(
+    {
+      id: SINGLETON_ID,
+      management: payload.management,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
 
   if (error) {
     return NextResponse.json(

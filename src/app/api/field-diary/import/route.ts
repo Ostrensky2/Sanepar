@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/api-auth";
 import {
   fieldDiaryEntryKey,
   normalizeFieldDiaryEntry,
@@ -37,8 +38,11 @@ type FieldDiaryImportRow = {
   campaign_name: string;
   campaign_day: number;
   entry_date: string;
+  collection_time?: string | null;
   location_name: string;
   sia?: string | null;
+  samples_replicas_edna?: string | null;
+  zooplankton_id?: string | null;
   municipality: string;
   activities: string[];
   water_visual_conditions: string[];
@@ -47,6 +51,8 @@ type FieldDiaryImportRow = {
   occurrence_description?: string | null;
   requires_follow_up: string;
   follow_up_notes?: string | null;
+  weather_conditions?: string | null;
+  point_accessibility?: string | null;
   daily_summary: string;
   status: string;
   created_by?: string | null;
@@ -109,6 +115,12 @@ function createEntry(payload: FieldDiaryPayload): FieldDiaryEntry {
 }
 
 export async function POST(request: Request) {
+  const auth = requireApiSession(request, "data.import");
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const formData = await request.formData();
   const file = formData.get("file");
 
@@ -161,9 +173,12 @@ export async function POST(request: Request) {
       campaignName: cellText(row, COL.campaignName),
       campaignDay,
       entryDate,
+      collectionTime: "",
       createdByName: cellText(row, COL.createdByName) || null,
       locationName: cellText(row, COL.locationName),
       sia: cellText(row, COL.sia) || null,
+      samplesReplicasEdna: "",
+      zooplanktonId: "",
       latitude: cellText(row, COL.latitude) || null,
       longitude: cellText(row, COL.longitude) || null,
       municipality: cellText(row, COL.municipality),
@@ -174,6 +189,8 @@ export async function POST(request: Request) {
       occurrenceDescription: hasOccurrence ? cellText(row, COL.occurrenceDescription) || null : null,
       requiresFollowUp,
       followUpNotes: cellText(row, COL.followUpNotes) || null,
+      weatherConditions: "",
+      pointAccessibility: "",
       dailySummary: cellText(row, COL.dailySummary),
       status,
       createdBy: null,
@@ -199,17 +216,9 @@ export async function POST(request: Request) {
 
   if (supabase) {
     const rows = await prepareRowsForUpsert(entries);
-    let { error } = await supabase
+    const { error } = await supabase
       .from("field_diary_entries")
       .upsert(rows, { onConflict: "id" });
-
-    if (isMissingCoordinateColumnError(error)) {
-      const retry = await supabase
-        .from("field_diary_entries")
-        .upsert(rows.map((row) => removeCoordinates(row)), { onConflict: "id" });
-
-      error = retry.error;
-    }
 
     if (error) {
       if (!allowBrowserFallback) {
@@ -274,15 +283,20 @@ async function prepareRowsForUpsert(entries: FieldDiaryEntry[]) {
   });
 }
 
-function toRow(entry: FieldDiaryEntry, includeCoordinates = true): FieldDiaryImportRow {
-  const row = {
+function toRow(entry: FieldDiaryEntry): FieldDiaryImportRow {
+  return {
     id: entry.id,
     campaign_id: entry.campaignId,
     campaign_name: entry.campaignName,
     campaign_day: entry.campaignDay,
     entry_date: entry.entryDate,
+    collection_time: entry.collectionTime || null,
     location_name: entry.locationName,
     sia: entry.sia || null,
+    samples_replicas_edna: entry.samplesReplicasEdna || null,
+    zooplankton_id: entry.zooplanktonId || null,
+    latitude: entry.latitude || null,
+    longitude: entry.longitude || null,
     municipality: entry.municipality,
     activities: entry.activities,
     water_visual_conditions: entry.waterVisualConditions,
@@ -291,6 +305,8 @@ function toRow(entry: FieldDiaryEntry, includeCoordinates = true): FieldDiaryImp
     occurrence_description: entry.hasOccurrence ? entry.occurrenceDescription || null : null,
     requires_follow_up: entry.requiresFollowUp,
     follow_up_notes: entry.followUpNotes || null,
+    weather_conditions: entry.weatherConditions || null,
+    point_accessibility: entry.pointAccessibility || null,
     daily_summary: entry.dailySummary,
     status: entry.status,
     created_by: entry.createdBy || null,
@@ -298,21 +314,6 @@ function toRow(entry: FieldDiaryEntry, includeCoordinates = true): FieldDiaryImp
     created_at: entry.createdAt,
     updated_at: entry.updatedAt,
   };
-
-  return includeCoordinates
-    ? {
-        ...row,
-        latitude: entry.latitude || null,
-        longitude: entry.longitude || null,
-      }
-    : row;
-}
-
-function removeCoordinates(row: FieldDiaryImportRow) {
-  const next = { ...row };
-  delete next.latitude;
-  delete next.longitude;
-  return next;
 }
 
 function rowKey(row: Pick<FieldDiaryImportRow, "campaign_name" | "entry_date" | "location_name" | "sia">) {
@@ -333,8 +334,11 @@ function mergeRows(existing: FieldDiaryImportRow, incoming: FieldDiaryImportRow)
     campaign_name: incoming.campaign_name || existing.campaign_name,
     campaign_day: incoming.campaign_day || existing.campaign_day,
     entry_date: incoming.entry_date || existing.entry_date,
+    collection_time: incoming.collection_time || existing.collection_time,
     location_name: incoming.location_name || existing.location_name,
     sia: incoming.sia || existing.sia,
+    samples_replicas_edna: incoming.samples_replicas_edna || existing.samples_replicas_edna,
+    zooplankton_id: incoming.zooplankton_id || existing.zooplankton_id,
     latitude: incoming.latitude || existing.latitude,
     longitude: incoming.longitude || existing.longitude,
     municipality: incoming.municipality || existing.municipality,
@@ -347,6 +351,8 @@ function mergeRows(existing: FieldDiaryImportRow, incoming: FieldDiaryImportRow)
     occurrence_description: incoming.occurrence_description || existing.occurrence_description,
     requires_follow_up: incoming.requires_follow_up || existing.requires_follow_up,
     follow_up_notes: incoming.follow_up_notes || existing.follow_up_notes,
+    weather_conditions: incoming.weather_conditions || existing.weather_conditions,
+    point_accessibility: incoming.point_accessibility || existing.point_accessibility,
     daily_summary: incoming.daily_summary || existing.daily_summary,
     status: incoming.status || existing.status,
     created_by: incoming.created_by || existing.created_by,
@@ -356,10 +362,3 @@ function mergeRows(existing: FieldDiaryImportRow, incoming: FieldDiaryImportRow)
   };
 }
 
-function isMissingCoordinateColumnError(error: unknown) {
-  if (!error || typeof error !== "object") return false;
-
-  const message = "message" in error ? String(error.message) : "";
-  const details = "details" in error ? String(error.details) : "";
-  return /latitude|longitude/i.test(`${message} ${details}`);
-}

@@ -54,7 +54,6 @@ const WHITE = "FFFFFFFF";
 const LIGHT_BLUE = "FFE8F4FB";
 const EXAMPLE_BG = "FFF8FAFC";
 const EXAMPLE_FG = "FF64748B";
-const REQUIRED_MARK_BG = "FFFFE4E1";
 
 const columns = [
   { header: "Campanha *", key: "campaignName", width: 32 },

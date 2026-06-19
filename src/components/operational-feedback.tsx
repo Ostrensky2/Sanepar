@@ -7,6 +7,7 @@ import {
   markPending,
   markSynced,
   readSyncStatusSnapshot,
+  sanitizeCloudReason,
   type SyncState,
 } from "@/lib/sync-status";
 
@@ -56,7 +57,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             <AlertTriangle className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[var(--brand-danger)]">
+            <p className="text-label font-black uppercase tracking-[0.16em] text-[var(--brand-danger)]">
               Seção indisponível
             </p>
             <h2 className="heading-font mt-1 text-lg font-black text-[var(--brand-navy-strong)]">
@@ -86,60 +87,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
 export function OperationalFeedbackLayer() {
   const [operation, setOperation] = useState<OperationDetail | null>(null);
-  const [health, setHealth] = useState<CloudHealth>(() => readSyncStatusSnapshot().state);
-  const [localReason, setLocalReason] = useState(() => readSyncStatusSnapshot().reason);
-  const [isCheckingSync, setIsCheckingSync] = useState(false);
-  const isLocal = health === "pending" || health === "offline";
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function checkHealth() {
-      setIsCheckingSync(true);
-      try {
-        const response = await fetch("/api/health", { cache: "no-store" });
-        const payload = (await response.json()) as {
-          runtimeMode?: string;
-          services?: { supabase?: string };
-          messages?: { supabase?: string };
-        };
-
-        if (!isMounted) return;
-
-        if (!response.ok || payload.services?.supabase !== "configured") {
-          const reason = payload.messages?.supabase ?? "Supabase não está pronto neste ambiente.";
-          const nextState = payload.services?.supabase === "pending" ? "pending" : "offline";
-          setHealth(nextState);
-          setLocalReason(reason);
-          if (nextState === "pending") {
-            markPending(reason);
-          } else {
-            markOffline(reason);
-          }
-          return;
-        }
-
-        setHealth("synced");
-        setLocalReason("Dados sincronizados com a nuvem.");
-        markSynced("Supabase disponível. Dados sincronizados com a nuvem.");
-      } catch {
-        if (!isMounted) return;
-        setHealth("offline");
-        setLocalReason("Falha de conexão com o banco de dados.");
-        markOffline("Falha de conexão com o banco de dados.");
-      } finally {
-        if (isMounted) {
-          setIsCheckingSync(false);
-        }
-      }
-    }
-
-    void checkHealth();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   useEffect(() => {
     function handleOperation(event: Event) {
@@ -148,72 +95,117 @@ export function OperationalFeedbackLayer() {
       setOperation(detail.active ? detail : null);
     }
 
+    window.addEventListener(OPERATION_STATE_EVENT, handleOperation);
+
+    return () => {
+      window.removeEventListener(OPERATION_STATE_EVENT, handleOperation);
+    };
+  }, []);
+
+  if (!operation) {
+    return null;
+  }
+
+  return (
+    <>
+      <HeaderProgress />
+      <div className="fixed left-4 right-4 top-20 z-[70] flex flex-col gap-3 lg:left-64">
+        <OperationToast operation={operation} />
+      </div>
+    </>
+  );
+}
+
+const LOCAL_NOTICE_DISMISSED_KEY = "yvae:local-notice-dismissed";
+
+export function LocalModeNotice() {
+  const [health, setHealth] = useState<CloudHealth>(() => readSyncStatusSnapshot().state);
+  const [localReason, setLocalReason] = useState(() =>
+    sanitizeCloudReason(readSyncStatusSnapshot().reason),
+  );
+  const [isCheckingSync, setIsCheckingSync] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.sessionStorage.getItem(LOCAL_NOTICE_DISMISSED_KEY) === "1";
+  });
+  const isLocal = health === "pending" || health === "offline";
+
+  async function checkHealth(manual: boolean) {
+    setIsCheckingSync(true);
+    try {
+      const response = await fetch("/api/health", { cache: "no-store" });
+      const payload = (await response.json()) as {
+        services?: { supabase?: string };
+        messages?: { supabase?: string };
+      };
+
+      if (response.ok && payload.services?.supabase === "configured") {
+        setHealth("synced");
+        setLocalReason("Dados sincronizados com a nuvem.");
+        markSynced(manual ? "Sincronização manual concluída." : "Supabase disponível. Dados sincronizados com a nuvem.");
+        window.sessionStorage.removeItem(LOCAL_NOTICE_DISMISSED_KEY);
+        setDismissed(false);
+        return;
+      }
+
+      const reason = sanitizeCloudReason(
+        payload.messages?.supabase,
+        "A nuvem não está disponível no momento.",
+      );
+      const nextState = payload.services?.supabase === "pending" ? "pending" : "offline";
+      setHealth(nextState);
+      setLocalReason(reason);
+      if (nextState === "pending") {
+        markPending(reason);
+      } else {
+        markOffline(reason);
+      }
+    } catch {
+      setHealth("offline");
+      setLocalReason("Não foi possível conectar à nuvem.");
+      markOffline("Não foi possível conectar à nuvem.");
+    } finally {
+      setIsCheckingSync(false);
+    }
+  }
+
+  useEffect(() => {
+    void checkHealth(false);
+  }, []);
+
+  useEffect(() => {
     function handleLocalMode(event: Event) {
       const detail = (event as CustomEvent<{ reason?: string }>).detail;
-      const reason = detail?.reason ?? "Dados não sincronizados com a nuvem.";
+      const reason = sanitizeCloudReason(detail?.reason, "Dados não sincronizados com a nuvem.");
       setHealth("pending");
       setLocalReason(reason);
       markPending(reason);
     }
 
-    window.addEventListener(OPERATION_STATE_EVENT, handleOperation);
     window.addEventListener(LOCAL_MODE_EVENT, handleLocalMode);
 
     return () => {
-      window.removeEventListener(OPERATION_STATE_EVENT, handleOperation);
       window.removeEventListener(LOCAL_MODE_EVENT, handleLocalMode);
     };
   }, []);
 
+  if (!isLocal || dismissed) {
+    return null;
+  }
+
   return (
-    <>
-      {operation ? <HeaderProgress /> : null}
-      <div className="fixed right-4 top-20 z-[70] flex w-[min(380px,calc(100vw-2rem))] flex-col gap-3">
-        {isLocal ? (
-          <LocalModeBanner
-            reason={localReason}
-            state={health}
-            checking={isCheckingSync}
-            onSync={() => {
-              void (async () => {
-                setIsCheckingSync(true);
-                try {
-                  const response = await fetch("/api/health", { cache: "no-store" });
-                  const payload = (await response.json()) as {
-                    services?: { supabase?: string };
-                    messages?: { supabase?: string };
-                  };
-
-                  if (response.ok && payload.services?.supabase === "configured") {
-                    setHealth("synced");
-                    setLocalReason("Dados sincronizados com a nuvem.");
-                    markSynced("Sincronização manual concluída.");
-                    return;
-                  }
-
-                  const reason = payload.messages?.supabase ?? "A nuvem ainda não está disponível.";
-                  const nextState = payload.services?.supabase === "pending" ? "pending" : "offline";
-                  setHealth(nextState);
-                  setLocalReason(reason);
-                  if (nextState === "pending") {
-                    markPending(reason);
-                  } else {
-                    markOffline(reason);
-                  }
-                } catch {
-                  setHealth("offline");
-                  setLocalReason("Falha de conexão com o banco de dados.");
-                  markOffline("Falha de conexão com o banco de dados.");
-                } finally {
-                  setIsCheckingSync(false);
-                }
-              })();
-            }}
-          />
-        ) : null}
-        {operation ? <OperationToast operation={operation} /> : null}
-      </div>
-    </>
+    <LocalModeBanner
+      reason={localReason}
+      state={health}
+      checking={isCheckingSync}
+      onSync={() => {
+        void checkHealth(true);
+      }}
+      onDismiss={() => {
+        window.sessionStorage.setItem(LOCAL_NOTICE_DISMISSED_KEY, "1");
+        setDismissed(true);
+      }}
+    />
   );
 }
 
@@ -301,7 +293,7 @@ export function TableSkeletonRows({ rows = 5, columns = 6 }: { rows?: number; co
 
 function HeaderProgress() {
   return (
-    <div className="fixed left-0 right-0 top-0 z-[80] h-1 bg-[var(--brand-blue-soft)] lg:left-52">
+    <div className="fixed left-0 right-0 top-0 z-[80] h-1 bg-[var(--brand-blue-soft)] lg:left-60">
       <div className="h-full w-1/2 animate-[yvae-progress_1.25s_ease-in-out_infinite] rounded-r-full bg-[var(--brand-teal)]" />
     </div>
   );
@@ -312,36 +304,48 @@ function LocalModeBanner({
   state,
   checking,
   onSync,
+  onDismiss,
 }: {
   reason: string;
   state: SyncState;
   checking: boolean;
   onSync: () => void;
+  onDismiss: () => void;
 }) {
   const isOffline = state === "offline";
 
   return (
-    <div className={`rounded-xl border bg-white px-4 py-3 shadow-[0_20px_48px_-34px_rgba(0,66,98,0.35)] ${
-      isOffline ? "border-[rgba(186,26,26,0.28)]" : "border-[rgba(197,122,0,0.24)]"
-    }`}>
-      <div className="flex items-start gap-3">
-        <WifiOff className={`mt-0.5 h-4 w-4 shrink-0 ${isOffline ? "text-[var(--brand-danger)]" : "text-[var(--brand-amber)]"}`} />
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-black text-[var(--brand-navy-strong)]">
-            Modo local ativo — dados salvos apenas neste dispositivo
-          </p>
-          <p className="mt-1 text-xs leading-5 text-[var(--ink-soft)]">
-            {reason} Verifique a internet ou sincronize manualmente quando a nuvem responder.
-          </p>
-        </div>
+    <div
+      className={`mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border bg-white/92 px-3 py-2 ${
+        isOffline ? "border-[rgba(186,26,26,0.24)]" : "border-[rgba(197,122,0,0.22)]"
+      }`}
+    >
+      <WifiOff
+        className={`h-4 w-4 shrink-0 ${isOffline ? "text-[var(--brand-danger)]" : "text-[var(--brand-amber)]"}`}
+      />
+      <p className="min-w-0 flex-1 text-xs leading-5 text-[var(--ink-soft)]">
+        <span className="font-bold text-[var(--brand-navy-strong)]">Modo local</span>
+        {" — dados salvos apenas neste dispositivo. "}
+        {reason}
+      </p>
+      <div className="flex shrink-0 items-center gap-1.5">
         <button
           type="button"
           onClick={onSync}
           disabled={checking}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--line-ghost)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--line-ghost)] bg-white px-2.5 py-1 text-label font-bold text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${checking ? "animate-spin" : ""}`} />
           Sincronizar
+        </button>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Ocultar aviso de modo local"
+          title="Ocultar aviso de modo local"
+          className="rounded p-1 text-[var(--ink-soft)] transition hover:bg-[var(--surface-soft)] hover:text-[var(--brand-navy-strong)]"
+        >
+          <X className="h-4 w-4" />
         </button>
       </div>
     </div>
@@ -377,3 +381,4 @@ function OperationToast({ operation }: { operation: OperationDetail }) {
     </div>
   );
 }
+

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/api-auth";
 import { execFile } from "node:child_process";
 import https from "node:https";
 import { promisify } from "node:util";
@@ -26,6 +27,12 @@ const execFileAsync = promisify(execFile);
 const routeCache = new Map<string, Coordinate[]>();
 
 export async function POST(request: Request) {
+  const auth = requireApiSession(request);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   let body: { waypoints?: Coordinate[] };
 
   try {

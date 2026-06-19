@@ -35,10 +35,10 @@ export function MetabarcodingStagesIndicator({
   title?: string;
 }) {
   return (
-    <section className="glass-panel rounded-[32px] p-6">
+    <section className="glass-panel radius-panel p-6">
       <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+          <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
             Status do processo
           </p>
           <h2 className="heading-font text-xl font-bold tracking-tight text-[var(--brand-navy-strong)]">
@@ -99,7 +99,7 @@ function StageNode({
       ) : null}
 
       <span
-        className={`relative z-10 flex h-11 w-11 items-center justify-center rounded-full border-[3px] border-white text-[11px] font-black shadow-[0_8px_22px_-12px_rgba(0,66,98,0.45)] ${
+        className={`relative z-10 flex h-11 w-11 items-center justify-center rounded-full border-[3px] border-white text-label font-black shadow-[0_8px_22px_-12px_rgba(0,66,98,0.45)] ${
           stage.status === "inprogress" ? "animate-pulse" : ""
         }`}
         style={{
@@ -110,17 +110,17 @@ function StageNode({
         {stage.status === "done" ? <Check className="h-5 w-5" strokeWidth={3} /> : index}
       </span>
 
-      <p className="mt-2 px-1 text-[10px] font-bold leading-tight tracking-tight text-[var(--brand-navy-strong)]">
+      <p className="mt-2 px-1 text-caption font-bold leading-tight tracking-tight text-[var(--brand-navy-strong)]">
         {stage.label}
       </p>
       <p
-        className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.14em]"
+        className="mt-0.5 text-caption font-bold uppercase tracking-[0.14em]"
         style={{ color: fill }}
       >
         {labelFor(stage.status)}
       </p>
       {stage.plannedDate || stage.completedDate ? (
-        <p className="mt-1 text-[9px] font-semibold leading-tight text-slate-500">
+        <p className="mt-1 text-caption font-semibold leading-tight text-slate-500">
           {stage.completedDate ? `Concl. ${formatShortDate(stage.completedDate)}` : `Prev. ${formatShortDate(stage.plannedDate)}`}
         </p>
       ) : null}
@@ -142,7 +142,7 @@ function formatShortDate(value?: string) {
 
 function StageLegend() {
   return (
-    <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+    <div className="flex items-center gap-3 text-caption font-semibold uppercase tracking-[0.14em] text-slate-500">
       <LegendDot color={METABARCODING_STAGE_COLORS.done} label="Concluído" />
       <LegendDot color={METABARCODING_STAGE_COLORS.inprogress} label="Em curso" />
       <LegendDot color={METABARCODING_STAGE_COLORS.pending} label="A fazer" />
@@ -169,3 +169,4 @@ export function currentStageColor(stages: MetabarcodingStage[] = DEFAULT_STAGES)
   if (lastDone) return METABARCODING_STAGE_COLORS.done;
   return METABARCODING_STAGE_COLORS.pending;
 }
+

@@ -5,13 +5,12 @@ import {
   DatabaseBackup,
   HardDrive,
   LockKeyhole,
-  RefreshCw,
   ShieldCheck,
   SlidersHorizontal,
   TimerReset,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { AccessManagementPanel } from "@/components/access-management-panel";
+import { AccessManagementPanel, AccessManagementProvider } from "@/components/access-management-panel";
 import { BuildSyncDiagnostics } from "@/components/build-sync-diagnostics";
 import { LocalBackupPanel } from "@/components/local-backup-panel";
 import { MemberActivityPanel } from "@/components/member-activity-panel";
@@ -59,30 +58,23 @@ export default async function GovernancaPage() {
 
   const cloudMode = getCloudRuntimeMode();
   const backupEnabled = isLocalBackupUiAvailable();
+  const deploymentCommit = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local-dev";
   const { campaignSummary, pointSummary } = await loadDashboardData();
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-5">
-      <header className="rounded-2xl border border-[var(--line-ghost)] bg-white/90 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="space-y-5">
+      <header className="flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-[var(--line-ghost)] bg-white/82 px-5 py-4 shadow-[var(--shadow-soft)]">
         <div>
-          <div className="flex flex-wrap items-center gap-3">
-              <h1 className="heading-font text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
-              Configurações do Sistema
-            </h1>
-              <span className="rounded-full border border-[rgba(186,26,26,0.2)] bg-[rgba(186,26,26,0.08)] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[var(--brand-danger)]">
-              Master
-            </span>
-          </div>
-            <p className="mt-1 text-xs text-[var(--ink-soft)]">
-              Operação, acesso, backups e diagnóstico do ambiente.
+          <p className="text-label font-black uppercase tracking-[0.16em] text-[var(--brand-teal)]">
+            Painel administrativo
+          </p>
+          <p className="mt-1 text-sm leading-6 text-[var(--ink-soft)]">
+            Operação, acesso, backups e diagnóstico do ambiente.
           </p>
         </div>
-          <button className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--line-strong)] bg-white px-4 text-sm font-bold text-[var(--brand-navy-strong)] shadow-sm">
-          <RefreshCw className="h-4 w-4" />
-          Atualizar
-        </button>
-        </div>
+        <span className="rounded-lg border border-[rgba(186,26,26,0.2)] bg-[rgba(186,26,26,0.06)] px-3 py-1.5 text-label font-black uppercase tracking-[0.12em] text-[var(--brand-danger)]">
+          Master
+        </span>
       </header>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -110,9 +102,20 @@ export default async function GovernancaPage() {
         ) : null}
       </div>
 
-      <SyncStatusPanel />
+      {canViewBuildSync || canViewDiagnostics ? <SyncStatusPanel /> : null}
 
-      {canViewUsers ? <AccessManagementPanel sections={["people"]} /> : null}
+      <AccessManagementProvider>
+        {canViewUsers ? (
+          <SettingsPanel
+            icon={ShieldCheck}
+            tone="blue"
+            title="Pessoas autorizadas"
+            description="Cadastro e manutenção dos usuários liberados para acessar o sistema."
+            aside={<StatusChip label="acesso controlado" tone="primary" />}
+          >
+            <AccessManagementPanel sections={["people"]} />
+          </SettingsPanel>
+        ) : null}
 
       {canViewBackups ? (
         <SettingsPanel
@@ -137,7 +140,13 @@ export default async function GovernancaPage() {
         </SettingsPanel>
       ) : null}
 
-      {canViewBuildSync ? <BuildSyncDiagnostics cloudMode={cloudMode} localEnabled={backupEnabled} /> : null}
+      {canViewBuildSync ? (
+        <BuildSyncDiagnostics
+          cloudMode={cloudMode}
+          localEnabled={backupEnabled}
+          deploymentCommit={deploymentCommit}
+        />
+      ) : null}
 
       {canViewActivity ? <MemberActivityPanel /> : null}
 
@@ -152,6 +161,7 @@ export default async function GovernancaPage() {
           <AccessManagementPanel sections={["stats", "privileges", "audit"]} />
         </SettingsPanel>
       ) : null}
+      </AccessManagementProvider>
 
       {canViewRules ? (
         <SettingsPanel
@@ -216,15 +226,15 @@ const statToneClasses: Record<ControlStatProps["tone"], string> = {
 
 function ControlStat({ label, value, icon: Icon, tone }: ControlStatProps) {
   return (
-    <article className="rounded-2xl border border-[var(--line-ghost)] bg-white/86 p-4">
+    <article className="rounded-xl border border-[var(--line-ghost)] bg-white/86 p-4 shadow-[0_12px_36px_-32px_rgba(0,66,98,0.4)]">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+          <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
             {label}
           </p>
           <p className="mt-1 text-base font-black text-[var(--brand-navy-strong)]">{value}</p>
         </div>
-        <div className={cn("rounded-xl p-2.5", statToneClasses[tone])}>
+        <div className={cn("rounded-lg p-2.5", statToneClasses[tone])}>
           <Icon className="h-4 w-4" />
         </div>
       </div>
@@ -260,10 +270,10 @@ function SettingsPanel({
   children,
 }: SettingsPanelProps) {
   return (
-    <section className={cn("rounded-2xl border border-[var(--line-ghost)] bg-white/90 p-4 shadow-[0_18px_50px_-44px_rgba(0,66,98,0.28)] sm:p-5", compact && "border-l-4 border-l-[var(--brand-amber)]")}>
-      <header className="flex flex-wrap items-start justify-between gap-4">
+    <section className={cn("overflow-hidden rounded-xl border border-[var(--line-ghost)] bg-white/92 shadow-[0_18px_50px_-44px_rgba(0,66,98,0.32)]", compact && "border-l-4 border-l-[var(--brand-amber)]")}>
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--line-ghost)] bg-[var(--surface-soft)]/34 px-4 py-4 sm:px-5">
         <div className="flex items-start gap-4">
-          <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", panelToneClasses[tone])}>
+          <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", panelToneClasses[tone])}>
             <Icon className="h-4 w-4" />
           </div>
           <div>
@@ -275,7 +285,7 @@ function SettingsPanel({
         </div>
         {aside}
       </header>
-      <div className="mt-4">{children}</div>
+      <div className="p-4 sm:p-5">{children}</div>
     </section>
   );
 }
@@ -301,3 +311,4 @@ function RuleRow({
     </article>
   );
 }
+

@@ -1,17 +1,16 @@
 "use client";
 
-import { Activity, CalendarDays, CheckCircle2, CircleDot, FlaskConical } from "lucide-react";
+import { Activity, CalendarDays, CheckCircle2, FlaskConical } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   buildInitialCampaignManagement,
   calculateCampaignProgress,
-  calculateProjectProgress,
   defaultCampaigns,
   getCurrentCampaignStage,
-  isCampaignActive,
   readCampaignManagement,
   type CampaignManagementById,
 } from "@/lib/campaign-management";
+import { SectionCard } from "@/components/section-card";
 
 export function ProjectStatusPanel() {
   const campaigns = defaultCampaigns;
@@ -49,31 +48,14 @@ export function ProjectStatusPanel() {
     [campaignManagement, campaigns],
   );
 
-  const activeRows = campaignRows.filter(({ management }) =>
-    management ? isCampaignActive(management.status) : false,
-  );
   const highlightedRows = campaignRows.slice(0, 4);
-  const projectProgress = calculateProjectProgress(campaignManagement);
 
   return (
-    <section className="glass-panel rounded-[28px] p-4">
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
-            Status do projeto
-          </p>
-          <h2 className="heading-font mt-1 text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
-            Campanhas, etapas e evolução
-          </h2>
-          <p className="mt-1 max-w-3xl text-xs leading-5 text-[var(--ink-soft)]">
-            Leitura operacional alimentada pela Entrada de dados.
-          </p>
-        </div>
-        <div className="grid min-w-52 grid-cols-2 gap-2">
-          <MiniStatus label="Avanço total" value={`${projectProgress}%`} icon={Activity} />
-          <MiniStatus label="Ativas" value={String(activeRows.length).padStart(2, "0")} icon={CircleDot} />
-        </div>
-      </div>
+    <SectionCard
+      title="Campanhas, etapas e evolução"
+      description="Leitura operacional alimentada pela Entrada de dados."
+      className="p-4"
+    >
 
       <div className="grid gap-3 xl:grid-cols-4">
         {highlightedRows.map(({ campaign, management, progress, currentStage }) => (
@@ -83,7 +65,7 @@ export function ProjectStatusPanel() {
           >
             <div className="mb-2 flex items-start justify-between gap-3">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                <p className="text-caption font-bold uppercase tracking-[0.16em] text-slate-500">
                   {campaign.selectorLabel}
                 </p>
                 <p className="mt-1 heading-font text-base font-black text-[var(--brand-navy-strong)]">
@@ -102,7 +84,7 @@ export function ProjectStatusPanel() {
                   }}
                 />
               </div>
-              <span className="w-8 text-right text-[10px] font-black text-[var(--brand-navy-strong)]">
+              <span className="w-8 text-right text-caption font-black text-[var(--brand-navy-strong)]">
                 {progress}%
               </span>
             </div>
@@ -119,31 +101,13 @@ export function ProjectStatusPanel() {
           </article>
         ))}
       </div>
-    </section>
+    </SectionCard>
   );
 }
 
 function progressGradient(progress: number) {
   const opacity = Math.min(0.95, 0.32 + progress / 160);
   return `linear-gradient(90deg, rgba(20,184,166,0.22), rgba(20,184,166,${opacity}), var(--brand-teal))`;
-}
-
-function MiniStatus({
-  label,
-  value,
-  icon: Icon,
-}: {
-  label: string;
-  value: string;
-  icon: typeof Activity;
-}) {
-  return (
-    <div className="rounded-2xl bg-[var(--surface-soft)] p-3">
-      <Icon className="mb-1.5 h-4 w-4 text-[var(--brand-teal)]" />
-      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{label}</p>
-      <p className="heading-font text-xl font-black text-[var(--brand-navy-strong)]">{value}</p>
-    </div>
-  );
 }
 
 function StatusIcon({ status }: { status: string }) {
@@ -158,3 +122,4 @@ function StatusIcon({ status }: { status: string }) {
     </span>
   );
 }
+

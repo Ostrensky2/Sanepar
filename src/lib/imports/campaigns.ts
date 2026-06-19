@@ -55,7 +55,15 @@ const REQUIRED_FIELD_ALIASES = {
   problems: ["problemas enfrentados", "problemas"],
   driveUrl: ["drive", "google drive", "link drive"],
   dropboxUrl: ["dropbox", "link dropbox"],
-  photoUrl: ["link foto representativa", "foto representativa", "link foto"],
+  photoUrl: [
+    "link foto representativa",
+    "foto representativa",
+    "link foto",
+    "link de foto",
+    "link fotos",
+    "link de fotos",
+    "fotos",
+  ],
 } satisfies Record<string, string[]>;
 
 const FALLBACK_COLUMNS = {
@@ -155,7 +163,8 @@ function parseCampaignWorksheet(
     const campaign = readMappedCell(row, columns.campaign, FALLBACK_COLUMNS.campaign);
     const driveUrl = readMappedCell(row, columns.driveUrl, FALLBACK_COLUMNS.driveUrl);
     const dropboxUrl = readMappedCell(row, columns.dropboxUrl, FALLBACK_COLUMNS.dropboxUrl);
-    const legacyPhotoUrl = readMappedCell(row, columns.photoUrl, FALLBACK_COLUMNS.photoUrl);
+    const fieldPhotoUrl = readMappedCell(row, columns.photoUrl, FALLBACK_COLUMNS.photoUrl);
+    const photoUrl = fieldPhotoUrl || dropboxUrl || driveUrl;
 
     points.push({
       id: `${campaign || "campanha"}-${code}-${rowNumber}`,
@@ -189,7 +198,7 @@ function parseCampaignWorksheet(
         "Não informado",
       driveUrl,
       dropboxUrl,
-      photoUrl: dropboxUrl || legacyPhotoUrl || driveUrl,
+      photoUrl,
     });
   }
 

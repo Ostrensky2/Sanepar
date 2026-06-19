@@ -28,6 +28,12 @@ type CampaignImportRow = {
   missing_fields: string[];
   points: CampaignMapPoint[];
   created_at: string;
+  campaign_key?: string | null;
+};
+
+type LabRiskResultRow = {
+  points: unknown;
+  created_at: string;
 };
 
 type JsonSnapshotRow = {
@@ -115,6 +121,19 @@ export async function getLatestPublishedLaboratoryRiskPoints() {
   }
 
   const { data, error } = await supabase
+    .from("lab_risk_results")
+    .select("points, created_at")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<LabRiskResultRow>();
+
+  if (!error && Array.isArray(data?.points)) {
+    return data.points as LaboratoryRiskPoint[];
+  }
+
+  // Fallback legado: snapshots gravados em campaign_imports antes da
+  // migração para a tabela lab_risk_results.
+  const { data: legacy, error: legacyError } = await supabase
     .from("campaign_imports")
     .select("points, created_at")
     .eq("file_name", LAB_RISK_RESULTS_SNAPSHOT_FILE_NAME)
@@ -122,14 +141,20 @@ export async function getLatestPublishedLaboratoryRiskPoints() {
     .limit(1)
     .maybeSingle<JsonSnapshotRow>();
 
-  if (error || !Array.isArray(data?.points)) {
+  if (legacyError || !Array.isArray(legacy?.points)) {
     return null;
   }
 
-  return data.points as LaboratoryRiskPoint[];
+  return legacy.points as LaboratoryRiskPoint[];
 }
 
 function inferCampaignKeyFromRow(row: CampaignImportRow) {
+  const explicitKey = row.campaign_key?.trim().toLowerCase();
+
+  if (explicitKey) {
+    return explicitKey;
+  }
+
   const firstPoint = row.points?.[0];
   const fromPoint = firstPoint?.campaign?.trim().toLowerCase();
 

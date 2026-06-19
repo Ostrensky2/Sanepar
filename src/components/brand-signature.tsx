@@ -18,7 +18,7 @@ export function YvaeMasthead({
   return (
     <div
       className={cn(
-        "brand-logo-shell overflow-hidden rounded-[28px] border p-4",
+        "brand-logo-shell overflow-hidden radius-panel border p-4",
         compact ? "max-w-[11rem]" : "w-full",
         className,
       )}
@@ -36,7 +36,7 @@ export function YvaeMasthead({
 
       {!compact ? (
         <div className="mt-4">
-          <p className="text-center text-[10px] font-bold uppercase tracking-[0.28em] text-[var(--brand-teal)]">
+          <p className="text-center text-caption font-bold uppercase tracking-[0.28em] text-[var(--brand-teal)]">
             Sistema de monitoramento
           </p>
         </div>
@@ -52,13 +52,13 @@ export function InstitutionalPartners({
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       {!compact ? (
-        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+        <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
           Parceria institucional
         </p>
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="brand-logo-shell rounded-[20px] border px-3 py-2">
+        <div className="brand-logo-shell radius-card border px-3 py-2">
           <Image
             src="/brand/sanepar-logo.jpg"
             alt="Sanepar"
@@ -68,7 +68,7 @@ export function InstitutionalPartners({
           />
         </div>
 
-        <div className="brand-logo-shell flex items-center rounded-[20px] border bg-white px-3 py-2">
+        <div className="brand-logo-shell flex items-center radius-card border bg-white px-3 py-2">
           <Image
             src="/brand/atgc-logo.png"
             alt="ATGC"
@@ -81,3 +81,4 @@ export function InstitutionalPartners({
     </div>
   );
 }
+

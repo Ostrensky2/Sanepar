@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/api-auth";
 import {
   createOptionalSupabaseClient,
   POINT_ACTIONS_SNAPSHOT_FILE_NAME,
@@ -22,7 +23,13 @@ type PointActionSnapshotRow = {
   created_at: string;
 };
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = requireApiSession(request);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const supabase = createOptionalSupabaseClient();
 
   if (!supabase) {
@@ -46,6 +53,12 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const auth = requireApiSession(request, "data.import");
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const supabase = createOptionalSupabaseClient();
 
   if (!supabase) {
@@ -73,7 +86,10 @@ export async function PUT(request: Request) {
     .returns<{ id: string }[]>();
 
   if (readError) {
-    return writeActionsToCampaignSnapshot(supabase, actions);
+    return NextResponse.json(
+      { error: "Não foi possível ler as ações pontuais na nuvem." },
+      { status: 500 },
+    );
   }
 
   const nextIds = new Set(actions.map((action) => action.id));
@@ -88,7 +104,10 @@ export async function PUT(request: Request) {
       .in("id", removedIds);
 
     if (deleteError) {
-      return writeActionsToCampaignSnapshot(supabase, actions);
+      return NextResponse.json(
+        { error: "Não foi possível remover ações pontuais na nuvem." },
+        { status: 500 },
+      );
     }
   }
 
@@ -107,7 +126,10 @@ export async function PUT(request: Request) {
     );
 
     if (upsertError) {
-      return writeActionsToCampaignSnapshot(supabase, actions);
+      return NextResponse.json(
+        { error: "Não foi possível salvar ações pontuais na nuvem." },
+        { status: 500 },
+      );
     }
   }
 
@@ -137,33 +159,6 @@ async function readActionsFromCampaignSnapshot(
     actions,
     persistence: "cloud-snapshot",
   });
-}
-
-async function writeActionsToCampaignSnapshot(
-  supabase: NonNullable<ReturnType<typeof createOptionalSupabaseClient>>,
-  actions: PointActionEvent[],
-) {
-  const { error } = await supabase.from("campaign_imports").insert({
-    file_name: POINT_ACTIONS_SNAPSHOT_FILE_NAME,
-    row_count: actions.length,
-    point_count: actions.reduce((total, action) => total + action.points.length, 0),
-    original_point_count: 0,
-    effective_point_count: actions.reduce(
-      (total, action) => total + action.points.length,
-      0,
-    ),
-    missing_fields: [],
-    points: actions,
-  });
-
-  if (error) {
-    return NextResponse.json(
-      { error: "Não foi possível salvar ações pontuais na nuvem." },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json({ actions, persistence: "cloud-snapshot" });
 }
 
 function fromRow(row: PointActionRow): PointActionEvent {

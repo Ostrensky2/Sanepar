@@ -79,13 +79,8 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "dashboard.view",
     "campaigns.view",
     "data.view",
-    "data.import",
     "documents.view",
-    "documents.manage",
-    "settings.manage",
     "users.manage",
-    "settings.activity",
-    "settings.diagnostics",
   ],
   UFPR: [
     "nav.home",
@@ -93,6 +88,7 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "nav.results",
     "nav.data",
     "nav.documents",
+    "nav.requests",
     "nav.help",
     "dashboard.view",
     "campaigns.view",
@@ -107,6 +103,8 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "nav.results",
     "nav.data",
     "nav.documents",
+    "nav.requests",
+    "nav.settings",
     "nav.help",
     "dashboard.view",
     "campaigns.view",
@@ -114,6 +112,7 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "data.import",
     "data.delete",
     "documents.view",
+    "users.manage",
   ],
 };
 
@@ -121,11 +120,11 @@ export const categoryDescriptions: Record<UserCategory, string> = {
   Admin:
     "Controle total do app, incluindo usuários, backups, importações e exclusões.",
   Sanepar:
-    "Coordenação institucional Sanepar com operação ampla, cadastro de pessoas e gestão documental.",
+    "Coordenação institucional Sanepar com leitura operacional, Entrada de dados sem edição e cadastro restrito de pessoas Sanepar.",
   UFPR:
     "Equipe UFPR com curadoria técnica, importação de dados e gestão documental.",
   ATGC:
-    "Equipe ATGC com operação integral da Entrada de dados, campanhas, pontos, resultados e documentos publicados.",
+    "Equipe ATGC com operação da Entrada de dados e cadastro restrito de pessoas ATGC.",
 };
 
 export const privilegeLabels: Record<PrivilegeKey, string> = {
@@ -241,12 +240,14 @@ export function normalizePrivilegesForCategory(
   }
 
   const normalizedPrivileges = sanitizePrivileges(privileges ?? categoryPrivileges[category]);
+  const allowedPrivileges = new Set(categoryPrivileges[category]);
 
-  if (category === "ATGC") {
-    return Array.from(new Set([...normalizedPrivileges, ...categoryPrivileges.ATGC]));
-  }
-
-  return normalizedPrivileges;
+  return Array.from(
+    new Set([
+      ...normalizedPrivileges.filter((privilege) => allowedPrivileges.has(privilege)),
+      ...categoryPrivileges[category],
+    ]),
+  );
 }
 
 function expandLegacyPrivileges(privileges: PrivilegeKey[]) {

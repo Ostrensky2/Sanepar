@@ -1,8 +1,9 @@
 "use client";
 
-import { Minus, Plus } from "lucide-react";
+import { Minimize2, Minus, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { LaboratoryRiskLevel } from "@/lib/laboratory-risk";
+import { normalizeCampaignKey } from "@/lib/campaign-points";
+import { laboratoryRiskColor, type LaboratoryRiskLevel } from "@/lib/laboratory-risk";
 
 type Coordinate = {
   lat: number;
@@ -81,12 +82,19 @@ const paranaFitPadding = 28;
 const markerHitRadius = 24;
 const wheelZoomThreshold = 180;
 const zoomEpsilon = 0.001;
+const paranaVisualBounds = {
+  north: -22.516087,
+  south: -26.715371,
+  west: -54.618983,
+  east: -48.023055,
+};
 const paranaBounds = {
   north: -22.29,
   south: -26.72,
   west: -54.62,
   east: -48.02,
 };
+const statewideCoverageThreshold = 0.58;
 const basinColors = [
   "rgba(0, 142, 156, 0.30)",
   "rgba(0, 87, 159, 0.24)",
@@ -118,6 +126,7 @@ export function CampaignHydroMap({
   showPointTooltip = false,
   effectivePointColor,
   zoomOnSelect = true,
+  clipBaseTilesToBasins: shouldClipBaseTilesToBasins = true,
 }: {
   points: CampaignHydroMapPoint[];
   selectedPointId?: string;
@@ -129,12 +138,15 @@ export function CampaignHydroMap({
   showPointTooltip?: boolean;
   effectivePointColor?: string;
   zoomOnSelect?: boolean;
+  clipBaseTilesToBasins?: boolean;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{ x: number; y: number; center: Coordinate } | null>(null);
   const fittedPointsKeyRef = useRef<string | null>(null);
   const fitFrameRef = useRef<number | null>(null);
+  const fitRevisionRef = useRef(0);
+  const userControlledViewRef = useRef(false);
   const wheelDeltaRef = useRef(0);
   const routeRequestStatusRef = useRef<Set<string>>(new Set());
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -151,7 +163,9 @@ export function CampaignHydroMap({
   const minimumView = useMemo(() => getMinimumMapView(size), [size]);
   const minimumZoom = minimumView.zoom;
   const mapZoom = Math.max(minimumZoom, Math.min(maxZoom, zoom));
-  const constrainedCenter = isMinimumZoom(mapZoom, minimumZoom) ? minimumView.center : center;
+  const constrainedCenter = isMinimumZoom(mapZoom, minimumZoom)
+    ? minimumView.center
+    : clampCenterToParanaView(center, mapZoom, size);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -297,8 +311,9 @@ export function CampaignHydroMap({
       selectedPointId,
       markerMode,
       effectivePointColor,
+      shouldClipBaseTilesToBasins,
     );
-  }, [basins, constrainedCenter, effectivePointColor, layers, mapZoom, markerMode, points, roadRoutes, selectedPointId, size]);
+  }, [basins, constrainedCenter, effectivePointColor, layers, mapZoom, markerMode, points, roadRoutes, selectedPointId, shouldClipBaseTilesToBasins, size]);
 
   useEffect(() => {
     if (!size.width || !size.height) {
@@ -321,12 +336,19 @@ export function CampaignHydroMap({
     }
 
     fittedPointsKeyRef.current = fitKey;
+    userControlledViewRef.current = false;
+
     if (fitFrameRef.current !== null) {
       window.cancelAnimationFrame(fitFrameRef.current);
       fitFrameRef.current = null;
     }
+    const fitRevision = fitRevisionRef.current + 1;
+    fitRevisionRef.current = fitRevision;
     const frame = window.requestAnimationFrame(() => {
       fitFrameRef.current = null;
+      if (fitRevisionRef.current !== fitRevision) {
+        return;
+      }
       setCenter(defaultView.center);
       setZoom(defaultView.zoom);
     });
@@ -342,6 +364,8 @@ export function CampaignHydroMap({
   }, [defaultView, layers, points, size, windowResizeCount]);
 
   function cancelPendingFitFrame() {
+    fitRevisionRef.current += 1;
+
     if (fitFrameRef.current === null) {
       return;
     }
@@ -350,7 +374,17 @@ export function CampaignHydroMap({
     fitFrameRef.current = null;
   }
 
-  const zoomBy = useCallback((delta: number) => {
+  const resetToDefaultView = useCallback(() => {
+    userControlledViewRef.current = true;
+    cancelPendingFitFrame();
+    setCenter(defaultView.center);
+    setZoom(defaultView.zoom);
+  }, [defaultView.center, defaultView.zoom]);
+
+  const zoomBy = useCallback((delta: number, anchor?: { x: number; y: number }) => {
+    userControlledViewRef.current = true;
+    cancelPendingFitFrame();
+
     if (!size.width || !size.height) {
       setZoom((current) => {
         const nextZoom = Math.max(minimumZoom, Math.min(maxZoom, current + delta));
@@ -368,6 +402,16 @@ export function CampaignHydroMap({
 
     if (isMinimumZoom(nextZoom, minimumZoom)) {
       setCenter(minimumView.center);
+    } else if (anchor) {
+      setCenter(
+        clampCenterToParanaView(
+          centerForAnchoredZoom(constrainedCenter, mapZoom, nextZoom, size, anchor),
+          nextZoom,
+          size,
+        ),
+      );
+    } else {
+      setCenter((current) => clampCenterToParanaView(current, nextZoom, size));
     }
 
     if (nextZoom === mapZoom) {
@@ -375,7 +419,7 @@ export function CampaignHydroMap({
     }
 
     setZoom(nextZoom);
-  }, [mapZoom, minimumView.center, minimumZoom, size.height, size.width]);
+  }, [constrainedCenter, mapZoom, minimumView.center, minimumZoom, size]);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -383,6 +427,8 @@ export function CampaignHydroMap({
     if (!wrapper) {
       return;
     }
+
+    const mapWrapper = wrapper;
 
     function handleWheel(event: WheelEvent) {
       event.preventDefault();
@@ -393,13 +439,17 @@ export function CampaignHydroMap({
         return;
       }
 
-      zoomBy(wheelDeltaRef.current > 0 ? -1 : 1);
+      const bounds = mapWrapper.getBoundingClientRect();
+      zoomBy(wheelDeltaRef.current > 0 ? -1 : 1, {
+        x: event.clientX - bounds.left,
+        y: event.clientY - bounds.top,
+      });
       wheelDeltaRef.current = 0;
     }
 
-    wrapper.addEventListener("wheel", handleWheel, { passive: false });
+    mapWrapper.addEventListener("wheel", handleWheel, { passive: false });
 
-    return () => wrapper.removeEventListener("wheel", handleWheel);
+    return () => mapWrapper.removeEventListener("wheel", handleWheel);
   }, [zoomBy]);
 
   return (
@@ -443,6 +493,7 @@ export function CampaignHydroMap({
         const dy = event.clientY - dragRef.current.y;
 
         if (isMinimumZoom(mapZoom, minimumZoom)) {
+          userControlledViewRef.current = true;
           setCenter(minimumView.center);
           setHoveredPoint(null);
           return;
@@ -450,7 +501,8 @@ export function CampaignHydroMap({
 
         const start = lonLatToWorld(dragRef.current.center.lon, dragRef.current.center.lat, mapZoom);
         const next = worldToLonLat(start.x - dx, start.y - dy, mapZoom);
-        setCenter(clampCenterToParana(next));
+        userControlledViewRef.current = true;
+        setCenter(clampCenterToParanaView(next, mapZoom, size));
         setHoveredPoint(null);
       }}
       onPointerUp={() => {
@@ -484,9 +536,14 @@ export function CampaignHydroMap({
           onSelectPoint?.(selected.point);
 
           if (zoomOnSelect) {
+            userControlledViewRef.current = true;
             cancelPendingFitFrame();
-            setCenter(selected.coordinate);
-            setZoom(maxZoom);
+            if (selected.point.id === selectedPointId && mapZoom >= maxZoom - zoomEpsilon) {
+              resetToDefaultView();
+            } else {
+              setCenter(clampCenterToParanaView(selected.coordinate, maxZoom, size));
+              setZoom(maxZoom);
+            }
           }
         }
       }}
@@ -527,7 +584,7 @@ export function CampaignHydroMap({
         />
       ) : null}
 
-      <div className="absolute bottom-4 left-4 rounded border border-white/70 bg-white/90 px-3 py-2 text-[10px] font-semibold text-slate-600 shadow backdrop-blur">
+      <div className="absolute bottom-4 left-4 rounded border border-white/70 bg-white/90 px-3 py-2 text-caption font-semibold text-slate-600 shadow backdrop-blur">
         {caption}
       </div>
 
@@ -543,6 +600,19 @@ export function CampaignHydroMap({
           }}
         >
           <Plus className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          aria-label="Voltar ao enquadramento padrão"
+          title="Voltar ao enquadramento padrão"
+          className="flex h-9 w-9 items-center justify-center border-t border-slate-100 text-[var(--brand-navy-strong)] transition-colors hover:bg-slate-100"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            resetToDefaultView();
+          }}
+        >
+          <Minimize2 className="h-4 w-4" />
         </button>
         <button
           type="button"
@@ -587,14 +657,14 @@ function PointTooltip({
       className="pointer-events-none absolute z-30 min-w-44 rounded-xl border border-white/70 bg-white/95 px-3 py-2 text-xs shadow-[0_18px_42px_-24px_rgba(0,66,98,0.48)] backdrop-blur"
       style={{ left, top }}
     >
-      <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">
+      <p className="text-caption font-black uppercase tracking-[0.18em] text-slate-400">
         Ponto SIA
       </p>
       <p className="mt-0.5 font-black text-[var(--brand-navy-strong)]">
         {point.municipality}
       </p>
       <p className="mt-0.5 font-semibold text-slate-600">{point.code}</p>
-      <p className="mt-1 max-w-56 text-[11px] font-medium leading-4 text-slate-500">
+      <p className="mt-1 max-w-56 text-label font-medium leading-4 text-slate-500">
         {point.waterBody || "Manancial não informado"}
       </p>
     </div>
@@ -670,21 +740,42 @@ function getDefaultMapView(
     return minimumView;
   }
 
-  const coordinates = [
-    ...getParanaFrame(),
-    ...getVisibleMarkerCoordinates(points, layers),
-  ];
+  const coordinates = getVisibleMarkerCoordinates(points, layers);
 
   if (!coordinates.length) {
     return minimumView;
   }
 
-  return fitCoordinatesToView(
+  if (shouldUseStatewideFrame(coordinates)) {
+    return minimumView;
+  }
+
+  const fittedView = fitCoordinatesToView(
     coordinates,
     size,
     minimumView.zoom,
     defaultFitPadding,
   );
+
+  return {
+    ...fittedView,
+    center: clampCenterToParanaView(fittedView.center, fittedView.zoom, size),
+  };
+}
+
+function shouldUseStatewideFrame(coordinates: Coordinate[]) {
+  if (coordinates.length < 2) {
+    return false;
+  }
+
+  const minLat = Math.min(...coordinates.map((coordinate) => coordinate.lat));
+  const maxLat = Math.max(...coordinates.map((coordinate) => coordinate.lat));
+  const minLon = Math.min(...coordinates.map((coordinate) => coordinate.lon));
+  const maxLon = Math.max(...coordinates.map((coordinate) => coordinate.lon));
+  const latCoverage = (maxLat - minLat) / (paranaVisualBounds.north - paranaVisualBounds.south);
+  const lonCoverage = (maxLon - minLon) / (paranaVisualBounds.east - paranaVisualBounds.west);
+
+  return latCoverage >= statewideCoverageThreshold || lonCoverage >= statewideCoverageThreshold;
 }
 
 function getMinimumMapView(size: { width: number; height: number }) {
@@ -751,17 +842,17 @@ function fitCoordinatesToView(
 
 function getParanaFrame() {
   return [
-    { lat: paranaBounds.north, lon: paranaBounds.west },
-    { lat: paranaBounds.north, lon: paranaBounds.east },
-    { lat: paranaBounds.south, lon: paranaBounds.west },
-    { lat: paranaBounds.south, lon: paranaBounds.east },
+    { lat: paranaVisualBounds.north, lon: paranaVisualBounds.west },
+    { lat: paranaVisualBounds.north, lon: paranaVisualBounds.east },
+    { lat: paranaVisualBounds.south, lon: paranaVisualBounds.west },
+    { lat: paranaVisualBounds.south, lon: paranaVisualBounds.east },
   ];
 }
 
 function paranaCenter() {
   return {
-    lat: (paranaBounds.north + paranaBounds.south) / 2,
-    lon: (paranaBounds.west + paranaBounds.east) / 2,
+    lat: (paranaVisualBounds.north + paranaVisualBounds.south) / 2,
+    lon: (paranaVisualBounds.west + paranaVisualBounds.east) / 2,
   };
 }
 
@@ -770,6 +861,60 @@ function clampCenterToParana(coordinate: Coordinate) {
     lat: Math.min(Math.max(coordinate.lat, paranaBounds.south), paranaBounds.north),
     lon: Math.min(Math.max(coordinate.lon, paranaBounds.west), paranaBounds.east),
   };
+}
+
+function clampCenterToParanaView(
+  coordinate: Coordinate,
+  zoom: number,
+  size: { width: number; height: number },
+) {
+  if (!size.width || !size.height) {
+    return clampCenterToParana(coordinate);
+  }
+
+  const northWest = lonLatToWorld(paranaBounds.west, paranaBounds.north, zoom);
+  const southEast = lonLatToWorld(paranaBounds.east, paranaBounds.south, zoom);
+  const desired = lonLatToWorld(coordinate.lon, coordinate.lat, zoom);
+  const halfWidth = size.width / 2;
+  const halfHeight = size.height / 2;
+  const minCenterX = northWest.x + halfWidth;
+  const maxCenterX = southEast.x - halfWidth;
+  const minCenterY = northWest.y + halfHeight;
+  const maxCenterY = southEast.y - halfHeight;
+  const x = minCenterX <= maxCenterX
+    ? Math.min(Math.max(desired.x, minCenterX), maxCenterX)
+    : (northWest.x + southEast.x) / 2;
+  const y = minCenterY <= maxCenterY
+    ? Math.min(Math.max(desired.y, minCenterY), maxCenterY)
+    : (northWest.y + southEast.y) / 2;
+
+  return worldToLonLat(x, y, zoom);
+}
+
+function centerForAnchoredZoom(
+  center: Coordinate,
+  currentZoom: number,
+  nextZoom: number,
+  size: { width: number; height: number },
+  anchor: { x: number; y: number },
+) {
+  const currentCenterWorld = lonLatToWorld(center.lon, center.lat, currentZoom);
+  const anchorWorld = {
+    x: currentCenterWorld.x + anchor.x - size.width / 2,
+    y: currentCenterWorld.y + anchor.y - size.height / 2,
+  };
+  const anchorCoordinate = worldToLonLat(anchorWorld.x, anchorWorld.y, currentZoom);
+  const nextAnchorWorld = lonLatToWorld(
+    anchorCoordinate.lon,
+    anchorCoordinate.lat,
+    nextZoom,
+  );
+  const nextCenterWorld = {
+    x: nextAnchorWorld.x - anchor.x + size.width / 2,
+    y: nextAnchorWorld.y - anchor.y + size.height / 2,
+  };
+
+  return worldToLonLat(nextCenterWorld.x, nextCenterWorld.y, nextZoom);
 }
 
 function isMinimumZoom(zoom: number, minimumZoom: number) {
@@ -781,7 +926,7 @@ function buildTiles(center: Coordinate, zoom: number, width: number, height: num
     return [];
   }
 
-  const tileZoom = Math.max(0, Math.min(19, Math.floor(zoom)));
+  const tileZoom = Math.max(0, Math.min(19, Math.round(zoom)));
   const tileScale = 2 ** (zoom - tileZoom);
   const scaledTileSize = tileSize * tileScale;
   const centerWorld = lonLatToWorld(center.lon, center.lat, tileZoom);
@@ -829,6 +974,7 @@ function drawMapOverlay(
   selectedPointId?: string,
   markerMode: "campaign" | "risk" | "pointAction" = "campaign",
   effectivePointColor?: string,
+  shouldClipBaseTilesToBasins = false,
 ) {
   if (!canvas || !size.width || !size.height) {
     return;
@@ -845,6 +991,10 @@ function drawMapOverlay(
 
   context.setTransform(ratio, 0, 0, ratio, 0, 0);
   context.clearRect(0, 0, size.width, size.height);
+
+  if (basins && shouldClipBaseTilesToBasins) {
+    clipBaseTilesToBasins(context, basins, center, zoom, size);
+  }
 
   if (basins && layers.basins) {
     drawBasins(context, basins, center, zoom, size);
@@ -865,6 +1015,22 @@ function drawMapOverlay(
   );
 }
 
+function clipBaseTilesToBasins(
+  context: CanvasRenderingContext2D,
+  basins: BasinCollection,
+  center: Coordinate,
+  zoom: number,
+  size: { width: number; height: number },
+) {
+  context.save();
+  context.beginPath();
+  context.rect(0, 0, size.width, size.height);
+  appendBasinPaths(context, basins, center, zoom, size);
+  context.fillStyle = "#dbe9ed";
+  context.fill("evenodd");
+  context.restore();
+}
+
 function drawBasins(
   context: CanvasRenderingContext2D,
   basins: BasinCollection,
@@ -878,20 +1044,7 @@ function drawBasins(
       : (feature.geometry.coordinates as number[][][][]);
 
     context.beginPath();
-
-    for (const polygon of polygons) {
-      for (const ring of polygon) {
-        ring.forEach(([lon, lat], pointIndex) => {
-          const screen = lonLatToScreen(lon, lat, center, zoom, size);
-          if (pointIndex === 0) {
-            context.moveTo(screen.x, screen.y);
-          } else {
-            context.lineTo(screen.x, screen.y);
-          }
-        });
-        context.closePath();
-      }
-    }
+    appendPolygonPaths(context, polygons, center, zoom, size);
 
     context.fillStyle = basinColors[index % basinColors.length];
     context.strokeStyle = "rgba(0, 66, 98, 0.78)";
@@ -914,6 +1067,44 @@ function drawBasins(
       context.fillText(label, screen.x, screen.y);
     }
   });
+}
+
+function appendBasinPaths(
+  context: CanvasRenderingContext2D,
+  basins: BasinCollection,
+  center: Coordinate,
+  zoom: number,
+  size: { width: number; height: number },
+) {
+  for (const feature of basins.features) {
+    const polygons = feature.geometry.type === "Polygon"
+      ? [feature.geometry.coordinates as number[][][]]
+      : (feature.geometry.coordinates as number[][][][]);
+
+    appendPolygonPaths(context, polygons, center, zoom, size);
+  }
+}
+
+function appendPolygonPaths(
+  context: CanvasRenderingContext2D,
+  polygons: number[][][][],
+  center: Coordinate,
+  zoom: number,
+  size: { width: number; height: number },
+) {
+  for (const polygon of polygons) {
+    for (const ring of polygon) {
+      ring.forEach(([lon, lat], pointIndex) => {
+        const screen = lonLatToScreen(lon, lat, center, zoom, size);
+        if (pointIndex === 0) {
+          context.moveTo(screen.x, screen.y);
+        } else {
+          context.lineTo(screen.x, screen.y);
+        }
+      });
+      context.closePath();
+    }
+  }
 }
 
 function drawPoints(
@@ -1051,7 +1242,10 @@ function buildRoadRouteRequests(
   points: CampaignHydroMapPoint[],
   layers: CampaignMapLayerVisibility,
 ) {
-  const groups = new Map<string, { key: string; label: string; points: CampaignHydroMapPoint[] }>();
+  const groups = new Map<
+    string,
+    { key: string; campaignKey: string; label: string; points: CampaignHydroMapPoint[] }
+  >();
   const inferredDayLabels = new Map<string, string>();
 
   for (const point of points) {
@@ -1062,7 +1256,8 @@ function buildRoadRouteRequests(
     }
 
     const label = formatRouteDayLabel(point, inferredDayLabels);
-    const key = `${point.campaign || "campanha"}-${label}`;
+    const campaignKey = normalizeCampaignKey(point.campaign) || "campanha";
+    const key = `${campaignKey}-${label}`;
     const group = groups.get(key);
 
     if (group) {
@@ -1070,6 +1265,7 @@ function buildRoadRouteRequests(
     } else {
       groups.set(key, {
         key,
+        campaignKey,
         label,
         points: [point],
       });
@@ -1077,7 +1273,9 @@ function buildRoadRouteRequests(
   }
 
   const orderedGroups = [...groups.values()].sort(
-    (a, b) => dayLabelNumber(a.label) - dayLabelNumber(b.label),
+    (a, b) =>
+      a.campaignKey.localeCompare(b.campaignKey) ||
+      dayLabelNumber(a.label) - dayLabelNumber(b.label),
   );
   const dailyRequests: Array<Omit<RoadRouteSegment, "coordinates">> = [];
   const transitionRequests: Array<Omit<RoadRouteSegment, "coordinates">> = [];
@@ -1103,7 +1301,7 @@ function buildRoadRouteRequests(
 
     const nextGroup = orderedGroups[groupIndex + 1];
 
-    if (layers.dayTransitions && nextGroup) {
+    if (layers.dayTransitions && nextGroup && nextGroup.campaignKey === group.campaignKey) {
       const from = routeCoordinate(group.points[group.points.length - 1]);
       const to = routeCoordinate(nextGroup.points[0]);
 
@@ -1267,7 +1465,7 @@ function drawMarkerAt(
   if (isPointAction && type === "effective") {
     context.beginPath();
     context.arc(x, y, 7.2, 0, Math.PI * 2);
-    context.fillStyle = "#f97316";
+    context.fillStyle = "#FC883A";
     context.strokeStyle = "#ffffff";
     context.lineWidth = selected ? 2.6 : 1.8;
     context.fill();
@@ -1303,20 +1501,8 @@ function drawMarkerAt(
   context.stroke();
 }
 
-function riskColor(riskLevel: CampaignHydroMapPoint["riskLevel"]) {
-  if (riskLevel === "alto") {
-    return "#7f1d1d";
-  }
-
-  if (riskLevel === "moderado") {
-    return "#f97316";
-  }
-
-  if (riskLevel === "baixoModerado") {
-    return "#facc15";
-  }
-
-  return "#16a34a";
+function riskColor(riskLevel: NonNullable<CampaignHydroMapPoint["riskLevel"]>) {
+  return laboratoryRiskColor(riskLevel);
 }
 
 function haversineDistanceMeters(from: Coordinate, to: Coordinate) {
@@ -1447,3 +1633,4 @@ function worldToLonLat(x: number, y: number, zoom: number): Coordinate {
 
   return { lat, lon };
 }
+

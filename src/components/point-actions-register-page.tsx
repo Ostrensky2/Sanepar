@@ -35,17 +35,13 @@ export function PointActionsRegisterPage() {
   const canImport = hasPrivilege(activeCategory, "data.import");
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-4 px-2 py-2 lg:px-3">
+    <div className="space-y-4">
       <section>
-        <h2 className="heading-font mb-1 text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
-          Registrar Ação Pontual
-        </h2>
-        <p className="text-xs leading-5 text-slate-500">
+        <p className="text-sm leading-6 text-[var(--ink-soft)]">
           Entrada estruturada de ações pontuais Sanepar.
         </p>
         <p className="mt-2 text-xs font-semibold text-slate-500">
-          Categoria ativa:{" "}
-          <span className="text-[var(--brand-navy-strong)]">{activeCategory}</span>
+          Perfil <span className="text-[var(--brand-navy-strong)]">{activeCategory}</span>
           {" "}· registro {canImport ? "permitido" : "bloqueado"}
         </p>
       </section>

@@ -1,12 +1,4 @@
 {
-  "env": {
-    "NEXT_PUBLIC_DISABLE_DB": "true"
-  },
-  "build": {
-    "env": {
-      "NEXT_PUBLIC_DISABLE_DB": "true"
-    }
-  },
   "crons": [
     {
       "path": "/api/keep-alive",

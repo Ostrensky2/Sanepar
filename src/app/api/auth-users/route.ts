@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorDetails, requireApiSession, type ApiSession } from "@/lib/api-auth";
 import {
   INITIAL_PASSWORD,
   initialAuthUsers,
@@ -25,7 +26,13 @@ type AuthUserRow = {
   updated_at: string;
 };
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = requireApiSession(request);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const supabase = createOptionalSupabaseClient();
 
   if (!supabase) {
@@ -40,12 +47,16 @@ export async function GET() {
 
   if (error) {
     return NextResponse.json(
-      { error: "Nao foi possivel consultar usuarios autorizados.", details: error.message },
+      { error: "Nao foi possivel consultar usuarios autorizados.", details: errorDetails(error.message) },
       { status: 500 },
     );
   }
 
   if (!data?.length) {
+    if (process.env.AUTH_USERS_ALLOW_SEED !== "true") {
+      return NextResponse.json({ users: [], persistence: "cloud" });
+    }
+
     const seededRows = await Promise.all(
       initialAuthUsers.map(async (user) => ({
         ...toRow(user),
@@ -58,12 +69,15 @@ export async function GET() {
 
     if (seedError) {
       return NextResponse.json(
-        { error: "Nao foi possivel preparar usuarios autorizados na nuvem.", details: seedError.message },
+        { error: "Nao foi possivel preparar usuarios autorizados na nuvem.", details: errorDetails(seedError.message) },
         { status: 500 },
       );
     }
 
-    return NextResponse.json({ users: stripPasswords(initialAuthUsers), persistence: "cloud" });
+    return NextResponse.json({
+      users: stripPasswords(scopeVisibleUsersForSession(initialAuthUsers, auth.session)),
+      persistence: "cloud",
+    });
   }
 
   const legacyRows = data.filter((row) => !isHashedPassword(row.password));
@@ -82,19 +96,25 @@ export async function GET() {
 
     if (migrationError) {
       return NextResponse.json(
-        { error: "Nao foi possivel proteger as senhas existentes.", details: migrationError.message },
+        { error: "Nao foi possivel proteger as senhas existentes.", details: errorDetails(migrationError.message) },
         { status: 500 },
       );
     }
   }
 
   return NextResponse.json({
-    users: stripPasswords(normalizeAuthUsers(data.map(fromRow))),
+    users: stripPasswords(scopeVisibleUsersForSession(normalizeAuthUsers(data.map(fromRow)), auth.session)),
     persistence: "cloud",
   });
 }
 
 export async function PUT(request: Request) {
+  const auth = requireApiSession(request, "users.manage");
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const supabase = createOptionalSupabaseClient();
   const payload = (await request.json()) as { users?: unknown };
   const users = normalizeAuthUsers(payload.users);
@@ -117,15 +137,16 @@ export async function PUT(request: Request) {
 
   if (readError) {
     return NextResponse.json(
-      { error: "Nao foi possivel verificar usuarios atuais.", details: readError.message },
+      { error: "Nao foi possivel verificar usuarios atuais.", details: errorDetails(readError.message) },
       { status: 500 },
     );
   }
 
   const existingById = new Map((existingRows ?? []).map((row) => [row.id, row]));
+  const scopedUsers = scopeUsersForSession(users, existingRows ?? [], auth.session);
   const initialPasswordHash = await hashPassword(INITIAL_PASSWORD);
 
-  const rows = users.map((user) => {
+  const rows = scopedUsers.map((user) => {
     const existing = existingById.get(user.id);
     const baseRow = toRow(user);
 
@@ -150,12 +171,12 @@ export async function PUT(request: Request) {
 
   if (error) {
     return NextResponse.json(
-      { error: "Nao foi possivel salvar usuarios autorizados na nuvem.", details: error.message },
+      { error: "Nao foi possivel salvar usuarios autorizados na nuvem.", details: errorDetails(error.message) },
       { status: 500 },
     );
   }
 
-  const nextIds = new Set(users.map((user) => user.id));
+  const nextIds = new Set(scopedUsers.map((user) => user.id));
   const deletedIds = (existingRows ?? [])
     .filter((row) => !nextIds.has(row.id) && !isPrimaryAdminRow(row))
     .map((row) => row.id);
@@ -168,13 +189,51 @@ export async function PUT(request: Request) {
 
     if (deleteError) {
       return NextResponse.json(
-        { error: "Nao foi possivel remover usuarios autorizados na nuvem.", details: deleteError.message },
+        { error: "Nao foi possivel remover usuarios autorizados na nuvem.", details: errorDetails(deleteError.message) },
         { status: 500 },
       );
     }
   }
 
-  return NextResponse.json({ users: stripPasswords(users), persistence: "cloud" });
+  return NextResponse.json({ users: stripPasswords(scopedUsers), persistence: "cloud" });
+}
+
+function scopeUsersForSession(
+  submittedUsers: AppUser[],
+  existingRows: AuthUserRow[],
+  session: ApiSession | null,
+) {
+  if (!session || session.role === "Admin") {
+    return submittedUsers;
+  }
+
+  if (session.role !== "Sanepar" && session.role !== "ATGC") {
+    return normalizeAuthUsers(existingRows.map(fromRow));
+  }
+
+  const existingUsers = normalizeAuthUsers(existingRows.map(fromRow));
+  const existingIds = new Set(existingUsers.map((user) => user.id));
+  const newScopedUsers = submittedUsers
+    .filter((user) => !existingIds.has(user.id) && user.role === session.role)
+    .map((user) => ({
+      ...user,
+      role: session.role,
+      institution: session.role,
+    }));
+
+  return [...newScopedUsers, ...existingUsers];
+}
+
+function scopeVisibleUsersForSession(users: AppUser[], session: ApiSession | null) {
+  if (!session || session.role === "Admin") {
+    return users;
+  }
+
+  if (session.role !== "Sanepar" && session.role !== "ATGC") {
+    return [];
+  }
+
+  return users.filter((user) => user.role === session.role);
 }
 
 function stripPasswords(users: AppUser[]): AppUser[] {

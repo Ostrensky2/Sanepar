@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/api-auth";
 import { sendEmail } from "@/lib/email";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 import {
@@ -32,6 +33,12 @@ function buildEmailText(request: SupportRequest) {
 }
 
 export async function POST(httpRequest: Request) {
+  const auth = requireApiSession(httpRequest);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const payload = (await httpRequest.json().catch(() => ({}))) as {
     request?: unknown;
   };

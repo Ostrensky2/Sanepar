@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/api-auth";
 import { INITIAL_PASSWORD } from "@/lib/auth-users";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 import { hashPassword } from "@/lib/password";
@@ -6,6 +7,19 @@ import { hashPassword } from "@/lib/password";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const auth = requireApiSession(request, "users.manage");
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  if (auth.session && auth.session.role !== "Admin") {
+    return NextResponse.json(
+      { error: "Somente Admin pode redefinir senhas." },
+      { status: 403 },
+    );
+  }
+
   const supabase = createOptionalSupabaseClient();
 
   if (!supabase) {

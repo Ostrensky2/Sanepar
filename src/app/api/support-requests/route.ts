@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/api-auth";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 import {
   isSupportRequest,
@@ -63,7 +64,13 @@ function toRow(request: SupportRequest) {
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = requireApiSession(request);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const supabase = createOptionalSupabaseClient();
 
   if (!supabase) {
@@ -87,6 +94,12 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const auth = requireApiSession(request);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const supabase = createOptionalSupabaseClient();
 
   if (!supabase) {

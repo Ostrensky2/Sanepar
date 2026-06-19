@@ -11,8 +11,8 @@ export function AppDocumentMetric() {
   const documents = useAttachedDocuments();
 
   return (
-    <article className="glass-panel rounded-[28px] border-b-2 border-[var(--brand-blue)] p-4">
-      <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+    <article className="glass-panel radius-panel border-b-2 border-[var(--brand-blue)] p-4">
+      <p className="mb-2 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
         Documentos anexados
       </p>
       <div className="flex items-baseline gap-2">
@@ -21,7 +21,7 @@ export function AppDocumentMetric() {
         </span>
         <span className="text-xs font-medium text-slate-500">registros no app</span>
       </div>
-      <p className="mt-2 flex items-center gap-1 text-[10px] font-semibold text-[var(--brand-teal)]">
+      <p className="mt-2 flex items-center gap-1 text-caption font-semibold text-[var(--brand-teal)]">
         <CircleCheckBig className="h-3 w-3" /> Somatório da aba Documentos
       </p>
     </article>
@@ -36,8 +36,8 @@ export function AppDocumentHighlights() {
 
   if (!latestDocuments.length) {
     return (
-      <section className="glass-panel rounded-[24px] border p-4">
-        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+      <section className="glass-panel radius-panel border p-4">
+        <p className="text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
           Documentos
         </p>
         <h3 className="mt-2 text-sm font-bold text-[var(--brand-navy-strong)]">
@@ -51,17 +51,17 @@ export function AppDocumentHighlights() {
   }
 
   return (
-    <section className="glass-panel rounded-[24px] border p-4">
+    <section className="glass-panel radius-panel border p-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+          <p className="text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
             Documentos
           </p>
           <h3 className="mt-2 text-sm font-bold text-[var(--brand-navy-strong)]">
             Últimos 10 arquivos adicionados ou alterados
           </h3>
         </div>
-        <span className="rounded-full bg-[var(--brand-blue-soft)] px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--brand-navy)]">
+        <span className="rounded-full bg-[var(--brand-blue-soft)] px-3 py-1 text-caption font-black uppercase tracking-[0.14em] text-[var(--brand-navy)]">
           {latestDocuments.length} registros
         </span>
       </div>
@@ -134,3 +134,4 @@ function formatDocumentDate(document: StoredDocument) {
 
   return document.date ? `Anexado em ${document.date}` : "Data não informada";
 }
+

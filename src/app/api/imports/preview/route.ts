@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/api-auth";
 import { MAX_IMPORT_FILE_BYTES, previewWorkbook } from "@/lib/imports/excel";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const auth = requireApiSession(request, "data.import");
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get("file");

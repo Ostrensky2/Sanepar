@@ -11,6 +11,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 export const BACKUP_ROOT = String.raw`D:\Dropbox\Aplicativos\Yva´e-backup`;
@@ -23,14 +24,58 @@ export const BACKUP_LOG_FILE = path.join(BACKUP_LOG_ROOT, "operacoes.jsonl");
 
 const DAILY_BACKUP_HOUR = 12;
 const DAILY_BACKUP_MINUTE = 15;
+const MANUAL_APP_BACKUP_LIMIT = 5;
+
+interface BackupConfig {
+  connectionString: string;
+  pgDumpPath: string;
+  backupRoot: string;
+}
+
+export async function getBackupConfig(): Promise<BackupConfig | null> {
+  try {
+    const configPath = path.join(process.cwd(), "scripts", "backup-config.local.json");
+    const content = await readFile(configPath, "utf8");
+    return JSON.parse(content) as BackupConfig;
+  } catch {
+    return null;
+  }
+}
+
+async function runExternalCommand(executable: string, args: string[]) {
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn(executable, args, { windowsHide: true });
+    let stderr = "";
+
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(stderr.trim() || `${path.basename(executable)} finalizou com codigo ${code}.`));
+    });
+  });
+}
 
 const EXCLUDED_DIRECTORIES = new Set([
   ".git",
   ".turbo",
   ".vercel",
+  ".next",
+  ".playwright-cli",
+  ".playwright-mcp",
+  ".claude",
   "coverage",
   "node_modules",
   "playwright-report",
+  "output",
+  "dist",
+  "build",
 ]);
 
 const EXCLUDED_DIRECTORY_PATHS = new Set([
@@ -115,27 +160,33 @@ export async function createLocalAppBackup() {
     const timestamp = formatBackupTimestamp(new Date());
     const destinationRoot = path.join(APP_BACKUP_TARGET_ROOT, `APP_${timestamp}`);
     const archivePath = `${destinationRoot}.zip`;
-    const copiedFiles = await copyApplicationTo(destinationRoot);
+    const tempDir = path.join(tmpdir(), `yvae-backup-app-${timestamp}`);
 
-    await writeManifest(destinationRoot, {
+    const copiedFiles = await copyApplicationTo(tempDir);
+
+    await writeManifest(tempDir, {
       kind: "manual-app",
       generatedAt: new Date().toISOString(),
       sourceRoot: process.cwd(),
-      destinationRoot,
+      destinationRoot: tempDir,
       copiedFiles,
       note: "Arquivos .env e bancos locais são ignorados por segurança.",
     });
 
-    await zipDirectory(destinationRoot, archivePath);
+    await zipDirectory(tempDir, archivePath);
     const checksum = await checksumFile(archivePath);
-    const sizeBytes = await getPathSize(destinationRoot) + (await getPathSize(archivePath));
+    const sizeBytes = await getPathSize(archivePath);
+
+    // Remove the OS temporary folder after zipping to prevent any Dropbox locking
+    await rm(tempDir, { recursive: true, force: true });
+    await pruneManualAppBackups();
 
     return {
       ok: true,
       message: "Versão atual do aplicativo salva com sucesso.",
       type: "manual-app",
       generatedAt: new Date().toISOString(),
-      destinationRoot,
+      destinationRoot: archivePath,
       archivePath,
       copiedFiles,
       sizeBytes,
@@ -146,6 +197,44 @@ export async function createLocalAppBackup() {
 
 export async function createDatabaseBackup() {
   return runLoggedOperation("backup-bd-manual", async () => {
+    const config = await getBackupConfig();
+
+    if (config) {
+      const timestamp = formatBackupTimestamp(new Date());
+      const destinationRoot = DB_BACKUP_TARGET_ROOT;
+      const databaseBackupPath = path.join(destinationRoot, `BD_${timestamp}.dump`);
+
+      await ensureBackupDirectories();
+      await runExternalCommand(config.pgDumpPath, [
+        `--dbname=${config.connectionString}`,
+        "-F",
+        "c",
+        "-f",
+        databaseBackupPath,
+      ]);
+
+      const checksum = await checksumFile(databaseBackupPath);
+      const sizeBytes = await getPathSize(databaseBackupPath);
+
+      await writeFile(
+        `${databaseBackupPath}.sha256`,
+        `${checksum}  ${path.basename(databaseBackupPath)}\n`,
+        "utf8",
+      );
+
+      return {
+        ok: true,
+        message: "Banco de dados salvo com sucesso (PostgreSQL remoto).",
+        type: "manual-db",
+        generatedAt: new Date().toISOString(),
+        destinationRoot,
+        databaseBackupPath,
+        copiedFiles: 1,
+        sizeBytes,
+        checksum,
+      } satisfies BackupOperationResult;
+    }
+
     const databasePath = await resolveDatabasePath();
     const timestamp = formatBackupTimestamp(new Date());
     const extension = path.extname(databasePath) || ".db";
@@ -182,12 +271,56 @@ export async function createDailyBackup(date = new Date()) {
   return runLoggedOperation("backup-diario-bd", async () => {
     const day = formatDateOnly(date);
     const destinationRoot = path.join(DAILY_BACKUP_TARGET_ROOT, `Backup_Diario_${day}`);
+    const config = await getBackupConfig();
+
+    await rm(destinationRoot, { recursive: true, force: true });
+    await mkdir(destinationRoot, { recursive: true });
+
+    if (config) {
+      const databaseBackupPath = path.join(destinationRoot, `BD_${day}.dump`);
+
+      await runExternalCommand(config.pgDumpPath, [
+        `--dbname=${config.connectionString}`,
+        "-F",
+        "c",
+        "-f",
+        databaseBackupPath,
+      ]);
+
+      const checksum = await checksumPath(destinationRoot);
+      await writeFile(
+        `${databaseBackupPath}.sha256`,
+        `${checksum}  ${path.basename(databaseBackupPath)}\n`,
+        "utf8",
+      );
+
+      await writeManifest(destinationRoot, {
+        kind: "diario-bd",
+        generatedAt: new Date().toISOString(),
+        destinationRoot,
+        databaseBackupPath,
+        copiedFiles: 1,
+        checksum,
+        note: "Backup diário automático do banco de dados (PostgreSQL remoto).",
+      });
+
+      return {
+        ok: true,
+        message: "Backup diário do banco de dados concluído (PostgreSQL remoto).",
+        type: "diario",
+        generatedAt: new Date().toISOString(),
+        destinationRoot,
+        databaseBackupPath,
+        copiedFiles: 1,
+        sizeBytes: await getPathSize(destinationRoot),
+        checksum,
+      } satisfies BackupOperationResult;
+    }
+
     const databasePath = await resolveDatabasePath();
     const extension = path.extname(databasePath) || ".db";
     const databaseBackupPath = path.join(destinationRoot, `BD_${day}${extension}`);
 
-    await rm(destinationRoot, { recursive: true, force: true });
-    await mkdir(destinationRoot, { recursive: true });
     await copyFile(databasePath, databaseBackupPath);
 
     const checksum = await checksumPath(destinationRoot);
@@ -336,13 +469,52 @@ export async function restoreDatabaseBackup(id: string, confirmation: string) {
 
   return runLoggedOperation("restaurar-bd", async () => {
     const backup = await findBackupById(id);
-    const databasePath = await resolveDatabasePath();
 
     if (!backup || backup.type !== "manual-db") {
       throw new Error("Um backup de banco manual deve ser selecionado para que a restauração seja realizada.");
     }
 
     await assertPathInsideBackupRoot(backup.path);
+
+    const config = await getBackupConfig();
+
+    if (config) {
+      const pgRestorePath = config.pgDumpPath.replace(/pg_dump\.exe$/i, "pg_restore.exe");
+      const safetyCopy = path.join(
+        DB_BACKUP_TARGET_ROOT,
+        `BD_pre-restore-${formatBackupTimestamp(new Date())}.dump`
+      );
+
+      // Try generating a safety dump first
+      await runExternalCommand(config.pgDumpPath, [
+        `--dbname=${config.connectionString}`,
+        "-F",
+        "c",
+        "-f",
+        safetyCopy,
+      ]).catch(() => undefined);
+
+      await runExternalCommand(pgRestorePath, [
+        `--dbname=${config.connectionString}`,
+        "--clean",
+        "--if-exists",
+        backup.path,
+      ]);
+
+      return {
+        ok: true,
+        message: `Banco de dados PostgreSQL restaurado. Cópia de segurança anterior: ${safetyCopy}`,
+        type: "manual-db",
+        generatedAt: new Date().toISOString(),
+        destinationRoot: "PostgreSQL remoto",
+        databaseBackupPath: backup.path,
+        copiedFiles: 1,
+        sizeBytes: await getPathSize(backup.path),
+        checksum: await checksumFile(backup.path).catch(() => undefined),
+      } satisfies BackupOperationResult;
+    }
+
+    const databasePath = await resolveDatabasePath();
     const currentChecksum = await checksumFile(databasePath).catch(() => undefined);
     const safetyCopy = `${databasePath}.pre-restore-${formatBackupTimestamp(new Date())}`;
 
@@ -436,8 +608,7 @@ function shouldSkipEntry(name: string, relativePath: string, isDirectory: boolea
   if (isDirectory) {
     return EXCLUDED_DIRECTORIES.has(name) || EXCLUDED_DIRECTORY_PATHS.has(normalizedRelative);
   }
-
-  if (EXCLUDED_FILES.has(name)) {
+  if (name.startsWith(".env") || EXCLUDED_FILES.has(name)) {
     return true;
   }
 
@@ -449,7 +620,6 @@ function shouldSkipEntry(name: string, relativePath: string, isDirectory: boolea
 
   return normalizedRelative.endsWith("/backup-manifest.json");
 }
-
 async function ensureBackupDirectories() {
   await Promise.all([
     mkdir(APP_BACKUP_TARGET_ROOT, { recursive: true }),
@@ -513,6 +683,22 @@ async function scanAppBackups() {
   }
 
   return records;
+}
+
+async function pruneManualAppBackups(limit = MANUAL_APP_BACKUP_LIMIT) {
+  const appBackups = await scanAppBackups();
+  const excessBackups = appBackups
+    .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
+    .slice(limit);
+
+  for (const backup of excessBackups) {
+    await assertPathInsideBackupRoot(backup.path);
+    await rm(backup.path, { recursive: true, force: true });
+
+    if (backup.path.endsWith(".zip")) {
+      await rm(backup.path.replace(/\.zip$/i, ""), { recursive: true, force: true });
+    }
+  }
 }
 
 async function scanDbBackups() {
@@ -630,38 +816,7 @@ async function writeManifest(destinationRoot: string, manifest: Record<string, u
 
 async function zipDirectory(sourceDir: string, destinationZip: string) {
   await mkdir(path.dirname(destinationZip), { recursive: true });
-  await runPowerShell(
-    `Compress-Archive -LiteralPath ${quotePowerShell(sourceDir)} -DestinationPath ${quotePowerShell(destinationZip)} -Force`,
-  );
-}
-
-async function runPowerShell(command: string) {
-  return new Promise<void>((resolve, reject) => {
-    const child = spawn(
-      "powershell.exe",
-      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
-      { windowsHide: true },
-    );
-    let stderr = "";
-
-    child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
-    });
-
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-
-      reject(new Error(stderr.trim() || `PowerShell finalizou com codigo ${code}.`));
-    });
-  });
-}
-
-function quotePowerShell(value: string) {
-  return `'${value.replaceAll("'", "''")}'`;
+  await runExternalCommand("tar.exe", ["-c", "-f", destinationZip, "-C", sourceDir, "."]);
 }
 
 async function checksumFile(filePath: string) {

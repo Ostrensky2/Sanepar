@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   KeyRound,
@@ -75,9 +75,7 @@ type AccessManagementPanelProps = {
   sections?: AccessManagementSection[];
 };
 
-export function AccessManagementPanel({
-  sections = ["stats", "privileges", "people", "audit"],
-}: AccessManagementPanelProps) {
+export function useAccessManagement() {
   const router = useRouter();
   const [users, setUsers] = useState<AppUser[]>([]);
   const [session, setSession] = useState<AuthSession | null>(null);
@@ -133,20 +131,22 @@ export function AccessManagementPanel({
     };
   }, []);
 
-  const canManageAdminAuthority = isPrimaryAdminSession(session);
+  const sessionCategory = session?.role ?? activeCategory;
+  const canManageAdminAuthority = sessionCategory === "Admin";
+  const canEditExistingUsers = canManageAdminAuthority;
   const visibleCategories = useMemo(
     () =>
       canManageAdminAuthority
         ? userCategories
-        : userCategories.filter((category) => category !== "Admin"),
-    [canManageAdminAuthority],
+        : userCategories.filter((category) => category === sessionCategory),
+    [canManageAdminAuthority, sessionCategory],
   );
   const visibleUsers = useMemo(
     () =>
       canManageAdminAuthority
         ? users
-        : users.filter((user) => user.role !== "Admin"),
-    [canManageAdminAuthority, users],
+        : users.filter((user) => user.role === sessionCategory),
+    [canManageAdminAuthority, sessionCategory, users],
   );
   const activeUsers = useMemo(
     () => visibleUsers.filter((user) => user.status === "ativo").length,
@@ -163,8 +163,11 @@ export function AccessManagementPanel({
       ),
     [visibleUsers],
   );
-  const canManageUsers = hasPrivilege(activeCategory, "users.manage");
-  const canManagePermissions = hasPrivilege(activeCategory, "permissions.manage");
+  const canManageUsers = hasPrivilege(sessionCategory, "users.manage");
+  const canAddUsers =
+    canManageUsers &&
+    (canManageAdminAuthority || sessionCategory === "Sanepar" || sessionCategory === "ATGC");
+  const canManagePermissions = hasPrivilege(sessionCategory, "permissions.manage");
   const isSaving = savingAction !== null;
 
   async function persistUsers(nextUsers: AppUser[], message: string, actionId = "users") {
@@ -217,6 +220,7 @@ export function AccessManagementPanel({
       isSaving ||
       !target ||
       !canManageUsers ||
+      !canEditExistingUsers ||
       touchesAdminAuthority(target, patch, canManageAdminAuthority)
     ) {
       return;
@@ -237,7 +241,7 @@ export function AccessManagementPanel({
   }
 
   function startEditingUser(user: AppUser) {
-    if (user.role === "Admin" && !canManageAdminAuthority) {
+    if (!canEditExistingUsers || (user.role === "Admin" && !canManageAdminAuthority)) {
       return;
     }
 
@@ -282,7 +286,13 @@ export function AccessManagementPanel({
   async function resetPassword(userId: string) {
     const target = users.find((user) => user.id === userId);
 
-    if (isSaving || !target || !canManageUsers || isPasswordResetProtected(target, canManageAdminAuthority)) {
+    if (
+      isSaving ||
+      !target ||
+      !canManageUsers ||
+      !canEditExistingUsers ||
+      isPasswordResetProtected(target, canManageAdminAuthority)
+    ) {
       return;
     }
 
@@ -314,7 +324,13 @@ export function AccessManagementPanel({
   function removeUser(userId: string) {
     const target = users.find((user) => user.id === userId);
 
-    if (isSaving || !target || !canManageUsers || isProtectedUser(target, canManageAdminAuthority)) {
+    if (
+      isSaving ||
+      !target ||
+      !canManageUsers ||
+      !canEditExistingUsers ||
+      isProtectedUser(target, canManageAdminAuthority)
+    ) {
       return;
     }
 
@@ -332,8 +348,14 @@ export function AccessManagementPanel({
   async function addUser() {
     const email = newUser.email.trim().toLowerCase();
     const name = newUser.name.trim();
+    const role = canManageAdminAuthority ? newUser.role : sessionCategory;
 
-    if (isSaving || !canManageUsers || (newUser.role === "Admin" && !canManageAdminAuthority)) {
+    if (
+      isSaving ||
+      !canAddUsers ||
+      (role === "Admin" && !canManageAdminAuthority) ||
+      (!canManageAdminAuthority && role !== "Sanepar" && role !== "ATGC")
+    ) {
       return;
     }
 
@@ -353,8 +375,8 @@ export function AccessManagementPanel({
           id: `usr-${Date.now()}`,
           name,
           email,
-          institution: newUser.role === "Admin" ? "Admin" : newUser.role,
-          role: newUser.role,
+          institution: role === "Admin" ? "Admin" : role,
+          role,
           status: "ativo",
           password: INITIAL_PASSWORD,
           mustChangePassword: true,
@@ -368,7 +390,7 @@ export function AccessManagementPanel({
     );
 
     if (saved) {
-      setNewUser({ name: "", email: "", role: "ATGC" });
+      setNewUser({ name: "", email: "", role: canManageAdminAuthority ? "ATGC" : role });
     }
   }
 
@@ -400,6 +422,101 @@ export function AccessManagementPanel({
     setAuditTrail((current) => ["Matriz recomendada restaurada.", ...current].slice(0, 5));
   }
 
+  return {
+    users,
+    session,
+    activeCategory,
+    setActiveCategory,
+    privilegeMatrix,
+    newUser,
+    setNewUser,
+    editingUser,
+    setEditingUser,
+    auditTrail,
+    notice,
+    savingAction,
+    canManageAdminAuthority,
+    canEditExistingUsers,
+    visibleCategories,
+    visibleUsers,
+    activeUsers,
+    firstAccessCount,
+    sortedUsers,
+    canAddUsers,
+    canManagePermissions,
+    isSaving,
+    updateUser,
+    startEditingUser,
+    saveEditingUser,
+    resetPassword,
+    removeUser,
+    addUser,
+    togglePrivilege,
+    applyRecommendedMatrix,
+    router,
+  };
+}
+
+type AccessManagementContextValue = ReturnType<typeof useAccessManagement>;
+
+const AccessManagementContext = createContext<AccessManagementContextValue | null>(null);
+
+export function AccessManagementProvider({ children }: { children: ReactNode }) {
+  const value = useAccessManagement();
+
+  return (
+    <AccessManagementContext.Provider value={value}>
+      {children}
+    </AccessManagementContext.Provider>
+  );
+}
+
+function useAccessManagementContext() {
+  const context = useContext(AccessManagementContext);
+
+  if (!context) {
+    throw new Error("AccessManagementPanel deve ser usado dentro de AccessManagementProvider.");
+  }
+
+  return context;
+}
+
+export function AccessManagementPanel({
+  sections = ["stats", "privileges", "people", "audit"],
+}: AccessManagementPanelProps) {
+  const {
+    users,
+    session,
+    activeCategory,
+    setActiveCategory,
+    privilegeMatrix,
+    newUser,
+    setNewUser,
+    editingUser,
+    setEditingUser,
+    auditTrail,
+    notice,
+    savingAction,
+    canManageAdminAuthority,
+    canEditExistingUsers,
+    visibleCategories,
+    visibleUsers,
+    activeUsers,
+    firstAccessCount,
+    sortedUsers,
+    canAddUsers,
+    canManagePermissions,
+    isSaving,
+    updateUser,
+    startEditingUser,
+    saveEditingUser,
+    resetPassword,
+    removeUser,
+    addUser,
+    togglePrivilege,
+    applyRecommendedMatrix,
+    router,
+  } = useAccessManagementContext();
   const showSection = (section: AccessManagementSection) => sections.includes(section);
 
   return (
@@ -409,11 +526,11 @@ export function AccessManagementPanel({
         <AccessStat label="Usuários ativos" value={`${activeUsers}/${visibleUsers.length}`} icon={ShieldCheck} />
         <AccessStat label="Primeiro acesso" value={String(firstAccessCount)} icon={KeyRound} />
         <div className="rounded-xl border border-[var(--line-ghost)] bg-white/76 p-4">
-          <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+          <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
             Categoria da sessão
           </p>
           <select
-            value={visibleCategories.includes(activeCategory) ? activeCategory : visibleCategories[0]}
+            value={visibleCategories.includes(activeCategory) ? activeCategory : visibleCategories[0] ?? "ATGC"}
             onChange={(event) => {
               const role = event.target.value as UserCategory;
               setActiveCategory(role);
@@ -435,14 +552,9 @@ export function AccessManagementPanel({
       {showSection("privileges") ? (
       <section className="overflow-hidden rounded-xl border border-[var(--line-ghost)] bg-white/84">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--line-ghost)] p-4">
-          <div>
-            <h3 className="heading-font text-lg font-black text-[var(--brand-navy-strong)]">
-              Painel de Permissões por Categoria
-            </h3>
-            <p className="mt-1 text-xs text-[var(--ink-soft)]">
-              Controle quais módulos e ações aparecem para cada tipo de usuário.
-            </p>
-          </div>
+          <p className="text-xs font-bold text-[var(--ink-soft)]">
+            Controle quais módulos e ações aparecem para cada tipo de usuário.
+          </p>
           <button
             type="button"
             onClick={applyRecommendedMatrix}
@@ -457,7 +569,7 @@ export function AccessManagementPanel({
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-sm">
             <thead>
-              <tr className="border-b border-[var(--line-ghost)] bg-[var(--surface-soft)]/70 text-left text-[11px] font-black uppercase tracking-[0.12em] text-[var(--ink-soft)]">
+              <tr className="border-b border-[var(--line-ghost)] bg-[var(--surface-soft)]/70 text-left text-label font-black uppercase tracking-[0.12em] text-[var(--ink-soft)]">
                 <th className="w-[34%] px-4 py-3">Privilegio</th>
                 {visibleCategories.map((category) => (
                   <th key={category} className="px-3 py-3 text-center">
@@ -472,7 +584,7 @@ export function AccessManagementPanel({
                   <tr key={privilege}>
                     <td className="px-4 py-3">
                       {index === 0 ? (
-                        <p className="mb-2 text-[11px] font-black uppercase tracking-[0.14em] text-[var(--brand-teal)]">
+                        <p className="mb-2 text-label font-black uppercase tracking-[0.14em] text-[var(--brand-teal)]">
                           {group.title}
                         </p>
                       ) : null}
@@ -518,17 +630,12 @@ export function AccessManagementPanel({
 
       {showSection("people") ? (
       <section className="rounded-2xl border border-[var(--line-ghost)] bg-white/90 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h3 className="heading-font text-lg font-black text-[var(--brand-navy-strong)]">
-              Pessoas autorizadas
-            </h3>
-            <p className="mt-1 text-xs text-[var(--ink-soft)]">
-              Novos cadastros entram ativos com senha provisoria ATGC26.
-            </p>
-          </div>
-          <span className="rounded-full border border-[rgba(0,142,156,0.24)] bg-[rgba(0,142,156,0.1)] px-2.5 py-1 text-[11px] font-black text-[var(--brand-teal)]">
-            {canManageUsers ? "cadastro liberado" : "somente leitura"}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <p className="text-xs text-[var(--ink-soft)]">
+            Novos cadastros entram ativos com senha provisória ATGC26.
+          </p>
+          <span className="rounded-full border border-[rgba(0,142,156,0.24)] bg-[rgba(0,142,156,0.1)] px-2.5 py-1 text-label font-black text-[var(--brand-teal)]">
+            {canAddUsers ? "cadastro liberado" : "somente leitura"}
           </span>
         </div>
 
@@ -538,23 +645,23 @@ export function AccessManagementPanel({
             onChange={(event) => setNewUser((current) => ({ ...current, name: event.target.value }))}
             placeholder="Nome"
             className="h-10 rounded-xl border border-[var(--line-strong)] bg-white px-3 text-sm outline-none focus:border-[var(--brand-blue)]"
-            disabled={!canManageUsers || isSaving}
+            disabled={!canAddUsers || isSaving}
           />
           <input
             value={newUser.email}
             onChange={(event) => setNewUser((current) => ({ ...current, email: event.target.value }))}
             placeholder="email@instituicao.com.br"
             className="h-10 rounded-xl border border-[var(--line-strong)] bg-white px-3 text-sm outline-none focus:border-[var(--brand-blue)]"
-            disabled={!canManageUsers || isSaving}
+            disabled={!canAddUsers || isSaving}
           />
           <select
-            value={visibleCategories.includes(newUser.role) ? newUser.role : "ATGC"}
+            value={visibleCategories.includes(newUser.role) ? newUser.role : visibleCategories[0] ?? "ATGC"}
             onChange={(event) => {
               const role = event.target.value as UserCategory;
               setNewUser((current) => ({ ...current, role }));
             }}
             className="h-10 rounded-xl border border-[var(--line-strong)] bg-white px-3 text-sm font-bold text-[var(--brand-navy-strong)]"
-            disabled={!canManageUsers || isSaving}
+            disabled={!canAddUsers || isSaving || !canManageAdminAuthority}
           >
             {visibleCategories.map((role) => (
               <option key={role} value={role}>
@@ -566,7 +673,7 @@ export function AccessManagementPanel({
             type="button"
             onClick={addUser}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[var(--brand-navy-strong)] px-4 text-sm font-bold text-white disabled:opacity-40"
-            disabled={!canManageUsers || isSaving || !newUser.email.trim() || !newUser.name.trim()}
+            disabled={!canAddUsers || isSaving || !newUser.email.trim() || !newUser.name.trim()}
           >
             <Plus className="h-4 w-4" />
             {savingAction === "add-user" ? "Salvando" : "Adicionar"}
@@ -590,7 +697,7 @@ export function AccessManagementPanel({
           <div className="mt-4 rounded-xl border border-[var(--line-ghost)] bg-[var(--surface-soft)] p-4">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[var(--brand-teal)]">
+                <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--brand-teal)]">
                   Editar pessoa autorizada
                 </p>
                 <h3 className="heading-font mt-1 text-lg font-black text-[var(--brand-navy-strong)]">
@@ -630,11 +737,15 @@ export function AccessManagementPanel({
               <label className="grid gap-2 text-xs font-bold text-[var(--brand-navy-strong)]">
                 Categoria
                 <select
-                  value={visibleCategories.includes(editingUser.role) ? editingUser.role : "ATGC"}
+                  value={visibleCategories.includes(editingUser.role) ? editingUser.role : visibleCategories[0] ?? "ATGC"}
                   onChange={(event) => setEditingUser((current) =>
                     current ? { ...current, role: event.target.value as UserCategory } : current
                   )}
-                  disabled={isSaving || isProtectedUser(users.find((user) => user.id === editingUser.id), canManageAdminAuthority)}
+                  disabled={
+                    isSaving ||
+                    !canEditExistingUsers ||
+                    isProtectedUser(users.find((user) => user.id === editingUser.id), canManageAdminAuthority)
+                  }
                   className="h-10 rounded-xl border border-[var(--line-strong)] bg-white px-3 text-sm font-bold text-[var(--brand-navy-strong)] disabled:opacity-70"
                 >
                   {visibleCategories.map((role) => (
@@ -661,7 +772,7 @@ export function AccessManagementPanel({
         <div className="mt-4 overflow-x-auto rounded-xl border border-[var(--line-ghost)]">
           <table className="w-full min-w-[880px] text-sm">
             <thead>
-              <tr className="border-b border-[var(--line-ghost)] bg-[var(--surface-soft)]/70 text-left text-[11px] font-black uppercase tracking-[0.12em] text-[var(--ink-soft)]">
+              <tr className="border-b border-[var(--line-ghost)] bg-[var(--surface-soft)]/70 text-left text-label font-black uppercase tracking-[0.12em] text-[var(--ink-soft)]">
                 <th className="px-4 py-3">Usuário</th>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Categoria</th>
@@ -687,7 +798,7 @@ export function AccessManagementPanel({
                           institution: role === "Admin" ? "Admin" : role,
                         });
                       }}
-                      disabled={isSaving || !canManageUsers || isProtectedUser(user, canManageAdminAuthority)}
+                      disabled={isSaving || !canEditExistingUsers || isProtectedUser(user, canManageAdminAuthority)}
                       className={cn(
                         "h-9 min-w-36 rounded-full border px-3 text-xs font-black disabled:opacity-70",
                         roleToneClasses[user.role],
@@ -714,7 +825,7 @@ export function AccessManagementPanel({
                     <button
                       type="button"
                       onClick={() => void updateUser(user.id, { status: user.status === "ativo" ? "inativo" : "ativo" })}
-                      disabled={isSaving || !canManageUsers || isProtectedUser(user, canManageAdminAuthority)}
+                      disabled={isSaving || !canEditExistingUsers || isProtectedUser(user, canManageAdminAuthority)}
                       className={cn(
                         "inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-black disabled:opacity-50",
                         user.status === "ativo"
@@ -730,19 +841,23 @@ export function AccessManagementPanel({
                     <div className="flex justify-end gap-2">
                       <ActionButton
                         label="Editar cadastro"
-                        disabled={isSaving || !canManageUsers}
+                        disabled={isSaving || !canEditExistingUsers}
                         onClick={() => startEditingUser(user)}
                         icon={Pencil}
                       />
                       <ActionButton
                         label="Redefinir senha"
-                        disabled={isSaving || !canManageUsers || isPasswordResetProtected(user, canManageAdminAuthority)}
+                        disabled={
+                          isSaving ||
+                          !canEditExistingUsers ||
+                          isPasswordResetProtected(user, canManageAdminAuthority)
+                        }
                         onClick={() => resetPassword(user.id)}
                         icon={KeyRound}
                       />
                       <ActionButton
                         label="Excluir"
-                        disabled={isSaving || !canManageUsers || isProtectedUser(user, canManageAdminAuthority)}
+                        disabled={isSaving || !canEditExistingUsers || isProtectedUser(user, canManageAdminAuthority)}
                         onClick={() => removeUser(user.id)}
                         icon={Trash2}
                         danger
@@ -759,7 +874,7 @@ export function AccessManagementPanel({
 
       {showSection("audit") ? (
       <section className="rounded-xl border border-[var(--line-ghost)] bg-[var(--surface-soft)] p-4">
-        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+        <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
           Registro de acessos
         </p>
         <div className="mt-3 grid gap-2">
@@ -791,7 +906,7 @@ function AccessStat({
     <div className="rounded-xl border border-[var(--line-ghost)] bg-white/76 p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+          <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
             {label}
           </p>
           <p className="mt-1 text-xl font-black text-[var(--brand-navy-strong)]">{value}</p>
@@ -856,10 +971,6 @@ function isPasswordResetProtected(user: AppUser | undefined, canManageAdminAutho
   return user.role === "Admin" && !canManageAdminAuthority;
 }
 
-function isPrimaryAdminSession(session: AuthSession | null) {
-  return session?.userId === PRIMARY_ADMIN_ID || session?.email.toLowerCase() === PRIMARY_ADMIN_EMAIL;
-}
-
 function touchesAdminAuthority(
   target: AppUser,
   patch: Partial<AppUser>,
@@ -874,3 +985,5 @@ function touchesAdminAuthority(
 
   return touchesAdminRole && !canManageAdminAuthority;
 }
+
+

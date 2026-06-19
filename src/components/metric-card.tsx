@@ -34,7 +34,7 @@ export function MetricCard({
   icon: Icon,
 }: MetricCardProps) {
   return (
-    <article className="glass-panel relative overflow-hidden rounded-[30px] p-5">
+    <article className="glass-panel relative overflow-hidden radius-panel p-5">
       <div
         className={cn(
           "absolute inset-x-0 top-0 h-1 bg-gradient-to-r",
@@ -48,7 +48,7 @@ export function MetricCard({
             {value}
           </p>
         </div>
-        <div className={cn("rounded-[20px] p-3", iconClasses[tone])}>
+        <div className={cn("radius-card p-3", iconClasses[tone])}>
           <Icon className="h-5 w-5" />
         </div>
       </div>
@@ -56,3 +56,4 @@ export function MetricCard({
     </article>
   );
 }
+

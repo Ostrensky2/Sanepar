@@ -6,9 +6,14 @@ import { APP_VERSION } from "@/lib/app-version";
 type BuildSyncDiagnosticsProps = {
   cloudMode: string;
   localEnabled: boolean;
+  deploymentCommit: string;
 };
 
-export function BuildSyncDiagnostics({ cloudMode, localEnabled }: BuildSyncDiagnosticsProps) {
+export function BuildSyncDiagnostics({
+  cloudMode,
+  localEnabled,
+  deploymentCommit,
+}: BuildSyncDiagnosticsProps) {
   const buildDate = new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "2-digit",
@@ -17,10 +22,10 @@ export function BuildSyncDiagnostics({ cloudMode, localEnabled }: BuildSyncDiagn
   }).format(new Date());
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-[var(--line-ghost)] bg-white/90">
-      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--line-ghost)] p-4">
+    <section className="overflow-hidden rounded-xl border border-[var(--line-ghost)] bg-white/92 shadow-[0_18px_50px_-44px_rgba(0,66,98,0.32)]">
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--line-ghost)] bg-[var(--surface-soft)]/34 px-4 py-4 sm:px-5">
         <div className="flex items-start gap-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--line-ghost)] bg-white text-[var(--brand-navy)]">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[rgba(197,122,0,0.1)] text-[var(--brand-amber)]">
             <BarChart3 className="h-4 w-4" />
           </div>
           <div>
@@ -32,22 +37,23 @@ export function BuildSyncDiagnostics({ cloudMode, localEnabled }: BuildSyncDiagn
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-emerald-700">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-lg border border-[rgba(0,168,107,0.16)] bg-[rgba(0,168,107,0.06)] px-3 py-1.5 text-label font-black uppercase tracking-[0.12em] text-[#0b5f40]">
             Sincronizado
           </span>
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="inline-flex h-9 items-center gap-2 rounded-xl bg-white px-3 text-xs font-black uppercase tracking-[0.12em] text-[var(--brand-teal)]"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--line-strong)] bg-white text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)]"
+            aria-label="Sincronizar agora"
+            title="Sincronizar agora"
           >
             <RefreshCw className="h-4 w-4" />
-            Sincronizar agora
           </button>
         </div>
       </header>
 
-      <div className="grid gap-3 p-4 lg:grid-cols-2">
+      <div className="grid gap-3 p-4 sm:p-5 lg:grid-cols-2">
         <DiagnosticBox
           icon={Cloud}
           title="Nuvem (Vercel)"
@@ -55,10 +61,10 @@ export function BuildSyncDiagnostics({ cloudMode, localEnabled }: BuildSyncDiagn
             ["Versão", APP_VERSION],
             ["Ambiente", cloudMode],
             ["Build", buildDate],
-            ["Commit", "local-dev"],
+            ["Commit", deploymentCommit],
           ]}
           footerLabel="Deployed commit"
-          footerValue="local-dev"
+          footerValue={deploymentCommit}
         />
         <DiagnosticBox
           icon={Laptop}
@@ -74,12 +80,12 @@ export function BuildSyncDiagnostics({ cloudMode, localEnabled }: BuildSyncDiagn
         />
       </div>
 
-      <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line-ghost)] bg-[var(--surface-soft)]/60 px-4 py-3">
+      <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line-ghost)] bg-[var(--surface-soft)]/50 px-4 py-3 sm:px-5">
         <p className="inline-flex items-center gap-2 font-mono text-xs text-[var(--ink-soft)]">
           <KeyRound className="h-4 w-4" />
-          ID: yvae-local-diagnostics
+          ID: yvae-build-sync-diagnostics
         </p>
-        <button className="h-9 rounded-xl border border-[var(--line-strong)] bg-white px-4 text-xs font-black text-[var(--brand-navy-strong)]">
+        <button className="h-9 rounded-lg border border-[var(--line-strong)] bg-white px-4 text-xs font-black text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)]">
           Ver extrato completo
         </button>
       </footer>
@@ -101,25 +107,26 @@ function DiagnosticBox({
   footerValue: string;
 }) {
   return (
-    <article className="rounded-xl border border-[var(--line-ghost)] bg-white/70 p-4">
-      <p className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+    <article className="rounded-xl border border-[var(--line-ghost)] bg-white/84 p-4">
+      <p className="inline-flex items-center gap-2 text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
         <Icon className="h-4 w-4 text-[var(--brand-teal)]" />
         {title}
       </p>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {items.map(([label, value]) => (
-          <div key={label}>
-            <p className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--ink-soft)]">
+          <div key={label} className="min-w-0 rounded-lg border border-[var(--line-ghost)] bg-white px-3 py-2">
+            <p className="text-label font-black uppercase tracking-[0.12em] text-[var(--ink-soft)]">
               {label}
             </p>
-            <p className="mt-1 text-base font-black text-[var(--brand-navy-strong)]">{value}</p>
+            <p className="mt-1 truncate text-sm font-black text-[var(--brand-navy-strong)]">{value}</p>
           </div>
         ))}
       </div>
-      <div className="mt-4 flex items-center justify-between gap-3 rounded-lg bg-[var(--brand-navy-strong)] px-3 py-2 font-mono text-[11px] uppercase text-white">
+      <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-[var(--line-ghost)] bg-[var(--surface-soft)]/58 px-3 py-2 font-mono text-label uppercase text-[var(--ink-soft)]">
         <span>{footerLabel}</span>
-        <span className="text-[var(--brand-teal)]">{footerValue}</span>
+        <span className="truncate text-[var(--brand-navy-strong)]">{footerValue}</span>
       </div>
     </article>
   );
 }
+

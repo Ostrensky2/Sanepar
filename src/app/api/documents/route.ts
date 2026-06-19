@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/api-auth";
 import {
   APP_DOCUMENTS_SNAPSHOT_FILE_NAME,
   createOptionalSupabaseClient,
@@ -29,7 +30,13 @@ type AppDocumentSnapshotRow = {
   created_at: string;
 };
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = requireApiSession(request);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const supabase = createOptionalSupabaseClient();
 
   if (!supabase) {
@@ -73,6 +80,12 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const auth = requireApiSession(request, "documents.manage");
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const supabase = createOptionalSupabaseClient();
 
   if (!supabase) {
@@ -92,19 +105,16 @@ export async function PUT(request: Request) {
     );
   }
 
-  const { error: readError } = await supabase.from("app_documents").select("id").limit(1);
-
-  if (readError) {
-    return writeDocumentsToCampaignSnapshot(supabase, documents);
-  }
-
   const { data: existingRows, error: existingRowsError } = await supabase
     .from("app_documents")
     .select("id")
     .returns<{ id: string }[]>();
 
   if (existingRowsError) {
-    return writeDocumentsToCampaignSnapshot(supabase, documents);
+    return NextResponse.json(
+      { error: "Não foi possível ler os documentos na nuvem." },
+      { status: 500 },
+    );
   }
 
   const nextIds = new Set(documents.map((document) => document.id));
@@ -133,7 +143,10 @@ export async function PUT(request: Request) {
     );
 
     if (upsertError) {
-      return writeDocumentsToCampaignSnapshot(supabase, documents);
+      return NextResponse.json(
+        { error: "Não foi possível salvar documentos na nuvem." },
+        { status: 500 },
+      );
     }
   }
 
@@ -141,6 +154,12 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const auth = requireApiSession(request, "documents.manage");
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
   const supabase = createOptionalSupabaseClient();
 
   if (!supabase) {
@@ -193,30 +212,6 @@ async function readDocumentsFromCampaignSnapshot(
     documents: normalizeStoredDocuments(data?.points),
     error: null,
   };
-}
-
-async function writeDocumentsToCampaignSnapshot(
-  supabase: NonNullable<ReturnType<typeof createOptionalSupabaseClient>>,
-  documents: StoredDocument[],
-) {
-  const { error } = await supabase.from("campaign_imports").insert({
-    file_name: APP_DOCUMENTS_SNAPSHOT_FILE_NAME,
-    row_count: documents.length,
-    point_count: documents.length,
-    original_point_count: 0,
-    effective_point_count: documents.length,
-    missing_fields: [],
-    points: documents,
-  });
-
-  if (error) {
-    return NextResponse.json(
-      { error: "Não foi possível salvar documentos na nuvem." },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json({ documents, persistence: "cloud" });
 }
 
 function fromRow(row: AppDocumentRow): StoredDocument {

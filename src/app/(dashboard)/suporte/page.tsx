@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { AlertTriangle, CircleHelp, Mail, MailCheck, Route, Wrench } from "lucide-react";
+import { AlertTriangle, Mail, MailCheck, Route, Wrench } from "lucide-react";
 
 const supportFlows = [
   {
@@ -42,32 +42,17 @@ const supportRequestItems = [
 
 export default function SuportePage() {
   return (
-    <div className="mx-auto max-w-[1200px] space-y-5">
-      <section className="rounded-2xl border border-[var(--line-ghost)] bg-white/92 p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-3xl">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--brand-teal)]">
-              Atendimento e orientação
-            </p>
-            <h1 className="heading-font mt-1 text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
-              Suporte do Yva’e
-            </h1>
-            <div className="mt-2 space-y-3 text-justify text-sm leading-6 text-[var(--ink-soft)]">
-              <p>
-                Este suporte orienta o uso do Yva’e como ambiente de apoio à comunicação, organização técnica e
-                consulta de informações entre ATGC e Sanepar.
-              </p>
-              <p>
-                Para demandas formais, decisões institucionais, autorizações, validações técnicas ou comunicações
-                oficiais, devem ser mantidos também os canais convencionais definidos pelas equipes responsáveis.
-              </p>
-            </div>
-          </div>
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--brand-teal-soft)] text-[var(--brand-teal)]">
-            <CircleHelp className="h-5 w-5" />
-          </div>
-        </div>
-      </section>
+    <div className="space-y-5">
+      <div className="max-w-3xl space-y-3 text-justify text-sm leading-6 text-[var(--ink-soft)]">
+        <p>
+          Este suporte orienta o uso do Yva’e como ambiente de apoio à comunicação, organização técnica e
+          consulta de informações entre ATGC e Sanepar.
+        </p>
+        <p>
+          Para demandas formais, decisões institucionais, autorizações, validações técnicas ou comunicações
+          oficiais, devem ser mantidos também os canais convencionais definidos pelas equipes responsáveis.
+        </p>
+      </div>
 
       <section className="grid gap-4 lg:grid-cols-3">
         {supportFlows.map((flow) => (
@@ -203,3 +188,4 @@ function SupportSection({
     </article>
   );
 }
+

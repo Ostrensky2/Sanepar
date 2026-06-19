@@ -42,9 +42,28 @@ export const occurrenceTypeOptions = [
 
 export const followUpOptions = ["Não", "Sim", "Avaliar posteriormente"] as const;
 export const fieldDiaryStatusOptions = ["Rascunho", "Enviado", "Revisado"] as const;
+export const weatherConditionOptions = [
+  "Sol",
+  "Sol entre nuvens",
+  "Nublado Pós Chuva",
+  "Chuvoso",
+  "Chuva forte",
+  "Tempestade",
+  "Garoando",
+  "Nublado / Neblina",
+  "Não informado",
+] as const;
+export const pointAccessibilityOptions = [
+  "Fácil",
+  "Moderado",
+  "Difícil",
+  "Inacessível",
+] as const;
 
 export type FieldDiaryStatus = (typeof fieldDiaryStatusOptions)[number];
 export type FieldDiaryFollowUp = (typeof followUpOptions)[number];
+export type WeatherCondition = (typeof weatherConditionOptions)[number];
+export type PointAccessibility = (typeof pointAccessibilityOptions)[number];
 
 export type FieldDiaryEntry = {
   id: string;
@@ -52,8 +71,11 @@ export type FieldDiaryEntry = {
   campaignName: string;
   campaignDay: number;
   entryDate: string;
+  collectionTime: string;
   locationName: string;
   sia?: string | null;
+  samplesReplicasEdna?: string | null;
+  zooplanktonId?: string | null;
   latitude?: string | null;
   longitude?: string | null;
   municipality: string;
@@ -64,6 +86,8 @@ export type FieldDiaryEntry = {
   occurrenceDescription?: string | null;
   requiresFollowUp: FieldDiaryFollowUp;
   followUpNotes?: string | null;
+  weatherConditions?: WeatherCondition | "";
+  pointAccessibility?: PointAccessibility | "";
   dailySummary: string;
   status: FieldDiaryStatus;
   createdBy?: string | null;
@@ -86,8 +110,11 @@ export function createEmptyFieldDiaryPayload(): FieldDiaryPayload {
     campaignName: "1ª Campanha - Verão 2026",
     campaignDay: 1,
     entryDate: todayIsoDate(),
+    collectionTime: "",
     locationName: "",
     sia: "",
+    samplesReplicasEdna: "",
+    zooplanktonId: "",
     latitude: "",
     longitude: "",
     municipality: "",
@@ -98,6 +125,8 @@ export function createEmptyFieldDiaryPayload(): FieldDiaryPayload {
     occurrenceDescription: "",
     requiresFollowUp: "Não",
     followUpNotes: "",
+    weatherConditions: "",
+    pointAccessibility: "",
     dailySummary: "",
     status: "Rascunho",
     createdBy: "",
@@ -130,6 +159,10 @@ export function readFieldDiaryEntriesFromStorage() {
 }
 
 export function cacheFieldDiaryEntries(entries: FieldDiaryEntry[]) {
+  if (!canUseBrowserOnlyPersistence()) {
+    return;
+  }
+
   window.localStorage.setItem(FIELD_DIARY_STORAGE_KEY, JSON.stringify(entries));
   window.dispatchEvent(new Event(FIELD_DIARY_UPDATED_EVENT));
 }
@@ -167,9 +200,14 @@ export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
     id: payload.id ?? crypto.randomUUID(),
     campaignId: payload.campaignId ?? null,
     sia: payload.sia ?? "",
+    collectionTime: payload.collectionTime ?? "",
+    samplesReplicasEdna: payload.samplesReplicasEdna ?? "",
+    zooplanktonId: payload.zooplanktonId ?? "",
     occurrenceType: payload.hasOccurrence ? payload.occurrenceType : "",
     occurrenceDescription: payload.hasOccurrence ? payload.occurrenceDescription : "",
     followUpNotes: payload.followUpNotes ?? "",
+    weatherConditions: payload.weatherConditions ?? "",
+    pointAccessibility: payload.pointAccessibility ?? "",
     createdBy: payload.createdBy ?? "",
     createdByName: payload.createdByName ?? "",
     createdAt: localEntries.find((item) => item.id === payload.id)?.createdAt ?? now,
@@ -247,8 +285,11 @@ export function normalizeFieldDiaryEntry(value: unknown): FieldDiaryEntry | null
     campaignName,
     campaignDay: Number(candidate.campaignDay) || 1,
     entryDate,
+    collectionTime: candidate.collectionTime ? String(candidate.collectionTime) : "",
     locationName,
     sia: candidate.sia ? String(candidate.sia) : "",
+    samplesReplicasEdna: candidate.samplesReplicasEdna ? String(candidate.samplesReplicasEdna) : "",
+    zooplanktonId: candidate.zooplanktonId ? String(candidate.zooplanktonId) : "",
     latitude: candidate.latitude ? String(candidate.latitude) : "",
     longitude: candidate.longitude ? String(candidate.longitude) : "",
     municipality,
@@ -259,6 +300,8 @@ export function normalizeFieldDiaryEntry(value: unknown): FieldDiaryEntry | null
     occurrenceDescription: candidate.occurrenceDescription ? String(candidate.occurrenceDescription) : "",
     requiresFollowUp: normalizeFollowUp(candidate.requiresFollowUp),
     followUpNotes: candidate.followUpNotes ? String(candidate.followUpNotes) : "",
+    weatherConditions: normalizeWeatherCondition(candidate.weatherConditions),
+    pointAccessibility: normalizePointAccessibility(candidate.pointAccessibility),
     dailySummary,
     status: normalizeStatus(candidate.status),
     createdBy: candidate.createdBy ? String(candidate.createdBy) : "",
@@ -308,6 +351,9 @@ function mergeFieldDiaryEntries(base: FieldDiaryEntry, incoming: FieldDiaryEntry
     campaignName: preferred.campaignName || fallback.campaignName,
     locationName: preferred.locationName || fallback.locationName,
     sia: preferred.sia || fallback.sia,
+    collectionTime: preferred.collectionTime || fallback.collectionTime,
+    samplesReplicasEdna: preferred.samplesReplicasEdna || fallback.samplesReplicasEdna,
+    zooplanktonId: preferred.zooplanktonId || fallback.zooplanktonId,
     latitude: preferred.latitude || fallback.latitude,
     longitude: preferred.longitude || fallback.longitude,
     municipality: preferred.municipality || fallback.municipality,
@@ -319,6 +365,8 @@ function mergeFieldDiaryEntries(base: FieldDiaryEntry, incoming: FieldDiaryEntry
     occurrenceType: preferred.occurrenceType || fallback.occurrenceType,
     occurrenceDescription: preferred.occurrenceDescription || fallback.occurrenceDescription,
     followUpNotes: preferred.followUpNotes || fallback.followUpNotes,
+    weatherConditions: preferred.weatherConditions || fallback.weatherConditions,
+    pointAccessibility: preferred.pointAccessibility || fallback.pointAccessibility,
     dailySummary: preferred.dailySummary || fallback.dailySummary,
     createdAt: base.createdAt < incoming.createdAt ? base.createdAt : incoming.createdAt,
     updatedAt: base.updatedAt > incoming.updatedAt ? base.updatedAt : incoming.updatedAt,
@@ -329,9 +377,14 @@ function scoreFieldDiaryEntry(entry: FieldDiaryEntry) {
   return [
     entry.locationName,
     entry.sia,
+    entry.collectionTime,
+    entry.samplesReplicasEdna,
+    entry.zooplanktonId,
     entry.latitude,
     entry.longitude,
     entry.municipality,
+    entry.weatherConditions,
+    entry.pointAccessibility,
     entry.occurrenceType,
     entry.occurrenceDescription,
     entry.followUpNotes,
@@ -357,6 +410,14 @@ function normalizeFollowUp(value: unknown): FieldDiaryFollowUp {
 
 function normalizeStatus(value: unknown): FieldDiaryStatus {
   return fieldDiaryStatusOptions.find((option) => option === value) ?? "Rascunho";
+}
+
+function normalizeWeatherCondition(value: unknown): WeatherCondition | "" {
+  return weatherConditionOptions.find((option) => option === value) ?? "";
+}
+
+function normalizePointAccessibility(value: unknown): PointAccessibility | "" {
+  return pointAccessibilityOptions.find((option) => option === value) ?? "";
 }
 
 function normalizeEntryDate(value: unknown) {

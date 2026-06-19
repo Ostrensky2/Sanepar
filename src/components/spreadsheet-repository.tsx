@@ -24,6 +24,7 @@ import {
   isCloudConnectionError,
   toActionableErrorMessage,
 } from "@/components/operational-feedback";
+import { EmptyState } from "@/components/empty-state";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 import type { LaboratoryRiskPoint, LaboratoryRiskResultRow } from "@/lib/laboratory-risk";
 import type { SpreadsheetPreview } from "@/lib/types";
@@ -486,18 +487,14 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-4 px-2 py-2 lg:px-3">
+    <div className="space-y-4">
       <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="heading-font mb-1 text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
-            {config.title}
-          </h2>
-          <p className="max-w-3xl text-justify text-xs leading-5 text-slate-500">
+          <p className="max-w-3xl text-justify text-sm leading-6 text-[var(--ink-soft)]">
             {config.description}
           </p>
           <p className="mt-2 text-xs font-semibold text-slate-500">
-            Categoria ativa:{" "}
-            <span className="text-[var(--brand-navy-strong)]">{activeCategory}</span>
+            Perfil <span className="text-[var(--brand-navy-strong)]">{activeCategory}</span>
             {" "}· exclusão de planilhas {canDeleteSpreadsheets ? "permitida" : "bloqueada"}
           </p>
         </div>
@@ -508,7 +505,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
           <h3 className="heading-font text-base font-bold text-[var(--brand-navy-strong)]">
             Controle de importação
           </h3>
-          <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+          <span className="text-caption font-semibold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
             {viewSpreadsheets.length} planilhas de {config.metricsLabel} no painel
           </span>
         </div>
@@ -521,10 +518,10 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
         </div>
       </section>
 
-      <section className="glass-panel rounded-[22px] p-3">
+      <section className="glass-panel radius-panel p-3">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <span className="mb-3 inline-block rounded-full bg-[var(--brand-green-soft)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--brand-navy-strong)]">
+            <span className="mb-3 inline-block rounded-full bg-[var(--brand-green-soft)] px-2.5 py-0.5 text-caption font-bold uppercase tracking-[0.18em] text-[var(--brand-navy-strong)]">
               Carga manual
             </span>
             <h3 className="heading-font text-lg font-extrabold text-[var(--brand-navy-strong)]">
@@ -712,26 +709,26 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
           </div>
         </div>
 
-        <div className="glass-panel overflow-hidden rounded-[28px]">
+        <div className="glass-panel overflow-hidden radius-panel">
           <table className="w-full text-left">
             <thead className="bg-slate-50/50">
               <tr>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
                   Planilha
                 </th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
                   Campanha
                 </th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
                   Tipo
                 </th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
                   Data
                 </th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
                   Status
                 </th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
                   Ações
                 </th>
               </tr>
@@ -749,7 +746,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
                         <p className="font-bold text-[var(--brand-navy-strong)]">
                           {sheet.fileName}
                         </p>
-                        <p className="text-[9px] text-slate-500">
+                        <p className="text-caption text-slate-500">
                           {formatBytes(sheet.sizeBytes)}
                           {sheet.rows ? ` • ${sheet.rows} linhas` : ""}
                           {sheet.sheets ? ` • ${sheet.sheets} abas` : ""}
@@ -759,16 +756,16 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
                   </td>
                   <td className="px-6 py-4 text-slate-500">
                     <p className="font-bold">{sheet.campaign}</p>
-                    <p className="text-[10px]">{sheet.scope}</p>
+                    <p className="text-caption">{sheet.scope}</p>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="rounded bg-slate-100 px-2 py-0.5 text-[9px] font-bold">
+                    <span className="rounded bg-slate-100 px-2 py-0.5 text-caption font-bold">
                       {sheet.kind.toUpperCase()}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-slate-500">{sheet.date}</td>
                   <td className="px-6 py-4">
-                    <span className={`rounded-sm border-l-[3px] px-2 py-1 text-[9px] font-bold ${statusClass(sheet.status)}`}>
+                    <span className={`rounded-sm border-l-[3px] px-2 py-1 text-caption font-bold ${statusClass(sheet.status)}`}>
                       {sheet.status}
                     </span>
                   </td>
@@ -801,8 +798,12 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
           </table>
 
           {hasLoaded && !visibleSpreadsheets.length ? (
-            <div className="px-6 py-10 text-center text-sm text-slate-500">
-              {config.emptyTableLabel}
+            <div className="p-4">
+              <EmptyState
+                title={config.emptyTableLabel}
+                description="Use o formulário acima para carregar a primeira planilha desta categoria."
+                compact
+              />
             </div>
           ) : null}
         </div>
@@ -865,8 +866,8 @@ async function deleteSpreadsheetFile(id: string) {
 
 function MetricTile({ label, value }: { label: string; value: string | number }) {
   return (
-    <article className="glass-panel rounded-[18px] p-3">
-      <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+    <article className="glass-panel radius-card p-3">
+      <p className="mb-1 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
         {label}
       </p>
       <p className="heading-font text-2xl font-black text-[var(--brand-navy-strong)]">
@@ -924,3 +925,4 @@ function statusClass(status: SheetStatus) {
 
   return "border-[var(--brand-teal)] bg-cyan-50 text-cyan-700";
 }
+

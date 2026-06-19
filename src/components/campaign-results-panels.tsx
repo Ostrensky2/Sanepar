@@ -1,0 +1,253 @@
+import { BarChart3, ExternalLink, FileSpreadsheet, FlaskConical, Info, X } from "lucide-react";
+import { type ReactNode } from "react";
+import { CampaignHydroMap, type CampaignHydroMapPoint } from "@/components/campaign-hydro-map";
+import {
+  MetabarcodingStagesIndicator,
+  type MetabarcodingStage,
+} from "@/components/metabarcoding-stages";
+import { DashboardSkeleton, ErrorBoundary } from "@/components/operational-feedback";
+import { type CampaignView } from "@/lib/campaign-management";
+
+type CampaignResultsPanelsProps = {
+  children?: ReactNode;
+  isHydrating?: boolean;
+  resultsUnavailable?: boolean;
+  showUnavailableNotice?: boolean;
+  campaign?: CampaignView;
+  stages?: MetabarcodingStage[];
+  stageTitle?: string;
+  points?: CampaignHydroMapPoint[];
+  onDismissUnavailableNotice?: () => void;
+};
+
+export function CampaignResultsPanels({
+  children,
+  isHydrating,
+  resultsUnavailable,
+  showUnavailableNotice,
+  campaign,
+  stages,
+  stageTitle,
+  points,
+  onDismissUnavailableNotice,
+}: CampaignResultsPanelsProps) {
+  if (children) {
+    return <div className="space-y-6">{children}</div>;
+  }
+
+  if (!campaign || !stages || !stageTitle || !points || !onDismissUnavailableNotice) {
+    return null;
+  }
+
+  if (isHydrating) {
+    return <DashboardSkeleton rows={4} />;
+  }
+
+  return (
+    <ErrorBoundary title="Falha nos resultados da campanha">
+      {resultsUnavailable ? (
+        <>
+          <UnavailableResultsNotice
+            campaignName={campaign.title}
+            open={Boolean(showUnavailableNotice)}
+            onClose={onDismissUnavailableNotice}
+          />
+          <ResultsUnavailablePanel campaign={campaign} />
+        </>
+      ) : (
+        <>
+          <MetabarcodingStagesIndicator stages={stages} title={stageTitle} />
+          <AnalyticResultsMap points={points} />
+          <ResultsDashboardSection campaign={campaign} />
+        </>
+      )}
+    </ErrorBoundary>
+  );
+}
+
+function AnalyticResultsMap({ points }: { points: CampaignHydroMapPoint[] }) {
+  if (!points.length) {
+    return (
+      <EmptyCampaignPanel
+        title="Mapa de risco aguardando pontos"
+        description="Os pontos homologados de risco ainda não foram carregados para esta visualização."
+      />
+    );
+  }
+
+  return (
+    <section className="relative h-[500px] overflow-hidden radius-panel border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)]">
+      <CampaignHydroMap
+        points={points}
+        layers={{
+          roadMap: true,
+          basins: true,
+          dailyRoutes: false,
+          dayTransitions: false,
+          planned: false,
+          effective: true,
+          displacement: false,
+        }}
+        markerMode="risk"
+        showPointTooltip
+        clipBaseTilesToBasins
+        caption="Mapa rodoviário OpenStreetMap · Pontos de coleta da campanha"
+      />
+    </section>
+  );
+}
+
+function ResultsUnavailablePanel({ campaign }: { campaign: CampaignView }) {
+  return (
+    <section className="glass-panel flex min-h-[520px] flex-col items-center justify-center radius-panel p-8 text-center">
+      <div className="mb-5 rounded-2xl bg-[var(--surface-soft)] p-4 text-[var(--brand-navy)]">
+        <FlaskConical className="h-9 w-9" />
+      </div>
+      <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+        Resultados indisponíveis
+      </p>
+      <h3 className="heading-font mt-2 max-w-2xl text-2xl font-extrabold text-[var(--brand-navy-strong)]">
+        Ainda não temos resultados publicados para {campaign.title}
+      </h3>
+      <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
+        A campanha pode ser acompanhada nas telas de campo e diário de campo. Esta área será liberada quando a planilha de resultados ou o dashboard eDNA forem publicados.
+      </p>
+    </section>
+  );
+}
+
+function UnavailableResultsNotice({
+  campaignName,
+  open,
+  onClose,
+}: {
+  campaignName: string;
+  open: boolean;
+  onClose: () => void;
+}) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+      <div
+        aria-labelledby="unavailable-results-title"
+        aria-modal="true"
+        className="w-full max-w-lg radius-panel border border-[var(--line-ghost)] bg-white p-5 shadow-[0_30px_90px_-38px_rgba(0,66,98,0.48)]"
+        role="dialog"
+      >
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div className="rounded-2xl bg-[var(--surface-soft)] p-3 text-[var(--brand-navy)]">
+            <Info className="h-6 w-6" />
+          </div>
+          <button
+            aria-label="Fechar aviso de resultados indisponíveis"
+            className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+            type="button"
+            onClick={onClose}
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+          Sem resultados publicados
+        </p>
+        <h3
+          className="heading-font mt-2 text-2xl font-extrabold text-[var(--brand-navy-strong)]"
+          id="unavailable-results-title"
+        >
+          Ainda não temos resultados da {campaignName}
+        </h3>
+        <p className="mt-3 text-sm leading-6 text-slate-500">
+          Esta campanha ainda não possui planilha de resultados ou dashboard eDNA publicados. Assim que os dados forem inseridos, a visualização de resultados ficará disponível.
+        </p>
+        <div className="mt-5 flex justify-end">
+          <button
+            className="inline-flex items-center justify-center rounded-xl bg-[var(--brand-navy-strong)] px-4 py-3 text-xs font-bold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[var(--brand-blue)]"
+            type="button"
+            onClick={onClose}
+          >
+            Entendi
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ResultsDashboardSection({ campaign }: { campaign: CampaignView }) {
+  const hasDashboard = Boolean(campaign.resultsDashboardUrl);
+
+  return (
+    <section className="overflow-hidden radius-panel border border-[#0d3b50] bg-[linear-gradient(160deg,#063044,#04202e)] shadow-[0_34px_90px_-48px_rgba(0,66,98,0.55)]">
+      <div className="flex flex-col gap-3 border-b border-white/10 p-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[rgba(0,182,198,0.14)] text-[#5cd6e0] ring-1 ring-inset ring-[rgba(0,182,198,0.32)]">
+            <BarChart3 className="h-4.5 w-4.5" />
+          </span>
+          <div>
+            <p className="text-caption font-bold uppercase tracking-[0.22em] text-[#5cd6e0]">
+              Resultados Monitoramento
+            </p>
+            <p className="heading-font mt-1 text-2xl font-extrabold text-white">
+              Dashboard de resultados
+            </p>
+            <p className="mt-1 text-sm font-semibold text-[#a6c1d0]">{campaign.title}</p>
+          </div>
+        </div>
+
+        {hasDashboard ? (
+          <a
+            href={campaign.resultsDashboardUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[rgba(0,182,198,0.4)] bg-[rgba(0,182,198,0.1)] px-4 py-3 text-xs font-bold uppercase tracking-[0.14em] text-[#5cd6e0] transition hover:bg-[rgba(0,182,198,0.18)] hover:text-white"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Abrir dashboard
+          </a>
+        ) : null}
+      </div>
+
+      <div className="p-3 sm:p-4">
+        {hasDashboard ? (
+          <iframe
+            src={campaign.resultsDashboardUrl}
+            title={`Dashboard de resultados - ${campaign.title}`}
+            className="h-[760px] w-full radius-panel border border-white/10 bg-[#04202e] md:h-[860px] xl:h-[940px]"
+            loading="lazy"
+          />
+        ) : (
+          <div className="flex h-[760px] flex-col items-center justify-center radius-panel border border-dashed border-white/15 bg-[rgba(255,255,255,0.02)] p-8 text-center md:h-[860px] xl:h-[940px]">
+            <div className="mb-4 rounded-2xl bg-[rgba(0,182,198,0.12)] p-4 text-[#5cd6e0]">
+              <BarChart3 className="h-8 w-8" />
+            </div>
+            <p className="heading-font text-2xl font-extrabold text-white">
+              Dashboard aguardando resultados
+            </p>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-[#a6c1d0]">
+              O espaço desta campanha seguirá o mesmo padrão quando o dashboard de resultados for publicado.
+            </p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function EmptyCampaignPanel({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex min-h-80 flex-col items-center justify-center radius-panel border border-dashed border-slate-300 bg-[var(--surface-soft)] p-8 text-center">
+      <FileSpreadsheet className="mb-4 h-10 w-10 text-slate-400" />
+      <p className="heading-font text-xl font-bold text-[var(--brand-navy-strong)]">{title}</p>
+      <p className="mt-2 max-w-lg text-sm leading-6 text-slate-500">{description}</p>
+    </div>
+  );
+}

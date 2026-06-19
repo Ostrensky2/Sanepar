@@ -5,14 +5,16 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock3,
+  Inbox,
   Mail,
-  MessageSquareText,
   Plus,
   Save,
   Send,
 } from "lucide-react";
+import { EmptyState } from "@/components/empty-state";
 import { cn } from "@/lib/utils";
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
+import { SYNC_STATUS_EVENT, readSyncStatusSnapshot, type SyncState } from "@/lib/sync-status";
 import {
   DEFAULT_ATGC_EMAIL,
   getRequestRecipient,
@@ -67,6 +69,17 @@ export default function SolicitacoesPage() {
   const [responseDraftById, setResponseDraftById] = useState<Record<string, string>>({});
   const [savedResponseId, setSavedResponseId] = useState<string | null>(null);
   const [notifyFeedback, setNotifyFeedback] = useState<NotifyFeedback | null>(null);
+  const [syncState, setSyncState] = useState<SyncState>(() => readSyncStatusSnapshot().state);
+
+  useEffect(() => {
+    function syncStatus() {
+      setSyncState(readSyncStatusSnapshot().state);
+    }
+
+    syncStatus();
+    window.addEventListener(SYNC_STATUS_EVENT, syncStatus);
+    return () => window.removeEventListener(SYNC_STATUS_EVENT, syncStatus);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -195,25 +208,10 @@ export default function SolicitacoesPage() {
     : `mailto:${DEFAULT_ATGC_EMAIL}`;
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-5">
-      <section className="rounded-2xl border border-[var(--line-ghost)] bg-white/92 p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-3xl">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--brand-teal)]">
-              Demandas e retornos
-            </p>
-            <h1 className="heading-font mt-1 text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
-              Solicitações Sanepar
-            </h1>
-            <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">
-              Demandas entre Sanepar e ATGC, com status e respostas registradas no sistema.
-            </p>
-          </div>
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--brand-teal-soft)] text-[var(--brand-teal)]">
-            <MessageSquareText className="h-5 w-5" />
-          </div>
-        </div>
-      </section>
+    <div className="space-y-5">
+      <p className="max-w-3xl text-sm leading-6 text-[var(--ink-soft)]">
+        Demandas entre Sanepar e ATGC, com status e respostas registradas no sistema.
+      </p>
 
       <section className="grid gap-4 md:grid-cols-3">
         <Metric icon={<Clock3 className="h-4 w-4" />} label="Em aberto" value={openRequests.toString()} />
@@ -363,9 +361,20 @@ export default function SolicitacoesPage() {
                   </button>
                 ))
               ) : (
-                <div className="rounded-xl border border-dashed border-[var(--line-strong)] bg-[var(--surface-soft)] p-5 text-sm font-semibold text-[var(--ink-soft)]">
-                  Nenhuma solicitação encontrada para o filtro selecionado.
-                </div>
+                <EmptyState
+                  icon={Inbox}
+                  title={
+                    syncState !== "synced" && !requests.length
+                      ? "Solicitações disponíveis apenas com a nuvem"
+                      : "Nenhuma solicitação encontrada"
+                  }
+                  description={
+                    syncState !== "synced" && !requests.length
+                      ? "As solicitações ficam na nuvem e este dispositivo está em modo local. Elas voltam a aparecer quando a conexão for restabelecida."
+                      : "Ajuste o filtro ou registre uma nova solicitação no formulário ao lado."
+                  }
+                  compact
+                />
               )}
             </div>
           </section>
@@ -375,7 +384,7 @@ export default function SolicitacoesPage() {
               <article className="rounded-2xl border border-[var(--line-ghost)] bg-white/92 p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--line-ghost)] pb-4">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--brand-teal)]">
+                    <p className="text-caption font-black uppercase tracking-[0.18em] text-[var(--brand-teal)]">
                       Solicitação selecionada
                     </p>
                     <h2 className="heading-font mt-1 text-xl font-black text-[var(--brand-navy-strong)]">
@@ -396,14 +405,14 @@ export default function SolicitacoesPage() {
                 </dl>
 
                 <div className="mt-4 rounded-xl border border-[var(--line-ghost)] bg-[var(--surface-soft)] p-4">
-                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">Descrição</p>
+                  <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">Descrição</p>
                   <p className="mt-2 whitespace-pre-wrap text-justify text-sm leading-6 text-[var(--brand-navy-strong)]">
                     {activeRequest.description}
                   </p>
                 </div>
 
                 <div className="mt-4">
-                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">Status</p>
+                  <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">Status</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {statusOptions.map((status) => (
                       <button
@@ -426,7 +435,7 @@ export default function SolicitacoesPage() {
                 <div className="mt-4 rounded-xl border border-[var(--line-ghost)] bg-white p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+                      <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
                         Resposta registrada
                       </p>
                       <p className="mt-1 text-xs font-semibold text-[var(--ink-soft)]">
@@ -493,7 +502,7 @@ export default function SolicitacoesPage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="grid gap-1.5">
-      <span className="text-[11px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">{label}</span>
+      <span className="text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">{label}</span>
       {children}
     </label>
   );
@@ -514,7 +523,7 @@ function Metric({
     <article className="rounded-2xl border border-[var(--line-ghost)] bg-white/90 p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">{label}</p>
+          <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">{label}</p>
           <p className="heading-font mt-1 text-2xl font-black text-[var(--brand-navy-strong)]">{value}</p>
         </div>
         <div
@@ -533,7 +542,7 @@ function Metric({
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-[var(--line-ghost)] bg-white p-3">
-      <dt className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">{label}</dt>
+      <dt className="text-caption font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">{label}</dt>
       <dd className="mt-1 text-sm font-bold text-[var(--brand-navy-strong)]">{value}</dd>
     </div>
   );
@@ -545,7 +554,7 @@ function StatusChip({ label, kind = "status" }: { label: string; kind?: "status"
   return (
     <span
       className={cn(
-        "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-black",
+        "inline-flex h-7 items-center rounded-full px-3 text-label font-black",
         kind === "priority"
           ? isUrgent
             ? "bg-[rgba(197,122,0,0.12)] text-[var(--brand-amber)]"
@@ -584,3 +593,4 @@ function formatDate(value: string) {
     minute: "2-digit",
   }).format(new Date(value));
 }
+

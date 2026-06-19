@@ -1,4 +1,11 @@
 import { NextResponse } from "next/server";
+import {
+  applySessionCookie,
+  checkRateLimit,
+  createSessionToken,
+  errorDetails,
+  getClientKey,
+} from "@/lib/api-auth";
 import { INITIAL_PASSWORD } from "@/lib/auth-users";
 import { AuthUserRow, formatAccessLabel, rowToUser } from "@/lib/auth-users-server";
 import { hashPassword, verifyPassword } from "@/lib/password";
@@ -26,10 +33,17 @@ export async function POST(request: Request) {
     typeof payload.currentPassword === "string" ? payload.currentPassword : "";
   const newPassword = typeof payload.newPassword === "string" ? payload.newPassword : "";
 
-  if (newPassword.length < 6) {
+  if (newPassword.length < 10) {
     return NextResponse.json(
-      { error: "A nova senha deve ter pelo menos 6 caracteres." },
+      { error: "A nova senha deve ter pelo menos 10 caracteres." },
       { status: 400 },
+    );
+  }
+
+  if (!checkRateLimit(`change-password:${getClientKey(request)}:${email}`, 10, 15 * 60 * 1000)) {
+    return NextResponse.json(
+      { error: "Muitas tentativas. Aguarde 15 minutos e tente novamente." },
+      { status: 429 },
     );
   }
 
@@ -49,7 +63,7 @@ export async function POST(request: Request) {
 
   if (error) {
     return NextResponse.json(
-      { error: "Nao foi possivel validar o acesso.", details: error.message },
+      { error: "Nao foi possivel validar o acesso.", details: errorDetails(error.message) },
       { status: 500 },
     );
   }
@@ -73,16 +87,27 @@ export async function POST(request: Request) {
 
   if (updateError) {
     return NextResponse.json(
-      { error: "Nao foi possivel salvar a senha.", details: updateError.message },
+      { error: "Nao foi possivel salvar a senha.", details: errorDetails(updateError.message) },
       { status: 500 },
     );
   }
 
-  return NextResponse.json({
-    user: rowToUser({
-      ...row,
-      must_change_password: false,
-      last_access: lastAccess,
-    }),
+  const user = rowToUser({
+    ...row,
+    must_change_password: false,
+    last_access: lastAccess,
   });
+  const response = NextResponse.json({ user });
+  const token = createSessionToken({
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+  });
+
+  if (token) {
+    applySessionCookie(response, token);
+  }
+
+  return response;
 }
