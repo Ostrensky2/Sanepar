@@ -1,6 +1,7 @@
 export type UserCategory =
   | "Admin"
   | "Sanepar"
+  | "Tecpar"
   | "UFPR"
   | "ATGC";
 
@@ -37,6 +38,7 @@ export const ACCESS_PRIVILEGE_MATRIX_COOKIE_NAME = "yvae_access_privilege_matrix
 export const userCategories: UserCategory[] = [
   "Admin",
   "Sanepar",
+  "Tecpar",
   "UFPR",
   "ATGC",
 ];
@@ -68,6 +70,21 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "settings.diagnostics",
   ],
   Sanepar: [
+    "nav.home",
+    "nav.campaigns",
+    "nav.results",
+    "nav.data",
+    "nav.documents",
+    "nav.requests",
+    "nav.settings",
+    "nav.help",
+    "dashboard.view",
+    "campaigns.view",
+    "data.view",
+    "documents.view",
+    "users.manage",
+  ],
+  Tecpar: [
     "nav.home",
     "nav.campaigns",
     "nav.results",
@@ -121,6 +138,8 @@ export const categoryDescriptions: Record<UserCategory, string> = {
     "Controle total do app, incluindo usuários, backups, importações e exclusões.",
   Sanepar:
     "Coordenação institucional Sanepar com leitura operacional, Entrada de dados sem edição e cadastro restrito de pessoas Sanepar.",
+  Tecpar:
+    "Coordenação institucional Tecpar com leitura operacional, Entrada de dados sem edição e cadastro restrito de pessoas Tecpar.",
   UFPR:
     "Equipe UFPR com curadoria técnica, importação de dados e gestão documental.",
   ATGC:
@@ -214,6 +233,10 @@ export function normalizeUserCategory(value: string | null | undefined): UserCat
     return "Sanepar";
   }
 
+  if (value === "Tecpar") {
+    return "Tecpar";
+  }
+
   if (value === "Curador" || value === "UFPR") {
     return "UFPR";
   }
@@ -239,15 +262,7 @@ export function normalizePrivilegesForCategory(
     return categoryPrivileges.Admin;
   }
 
-  const normalizedPrivileges = sanitizePrivileges(privileges ?? categoryPrivileges[category]);
-  const allowedPrivileges = new Set(categoryPrivileges[category]);
-
-  return Array.from(
-    new Set([
-      ...normalizedPrivileges.filter((privilege) => allowedPrivileges.has(privilege)),
-      ...categoryPrivileges[category],
-    ]),
-  );
+  return sanitizePrivileges(privileges ?? categoryPrivileges[category]);
 }
 
 function expandLegacyPrivileges(privileges: PrivilegeKey[]) {

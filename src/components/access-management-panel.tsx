@@ -65,9 +65,12 @@ const PRIMARY_ADMIN_EMAIL = "ostrensky@ufpr.br";
 const roleToneClasses: Record<UserCategory, string> = {
   Admin: "border-purple-200 bg-purple-100 text-purple-800",
   Sanepar: "border-amber-200 bg-amber-100 text-amber-800",
+  Tecpar: "border-blue-200 bg-blue-100 text-blue-800",
   UFPR: "border-emerald-200 bg-emerald-100 text-emerald-800",
   ATGC: "border-cyan-200 bg-cyan-100 text-cyan-800",
 };
+
+const selfManagedUserCategories: UserCategory[] = ["Sanepar", "Tecpar", "ATGC"];
 
 type AccessManagementSection = "stats" | "privileges" | "people" | "audit";
 
@@ -166,7 +169,7 @@ export function useAccessManagement() {
   const canManageUsers = hasPrivilege(sessionCategory, "users.manage");
   const canAddUsers =
     canManageUsers &&
-    (canManageAdminAuthority || sessionCategory === "Sanepar" || sessionCategory === "ATGC");
+    (canManageAdminAuthority || selfManagedUserCategories.includes(sessionCategory));
   const canManagePermissions = hasPrivilege(sessionCategory, "permissions.manage");
   const isSaving = savingAction !== null;
 
@@ -354,7 +357,7 @@ export function useAccessManagement() {
       isSaving ||
       !canAddUsers ||
       (role === "Admin" && !canManageAdminAuthority) ||
-      (!canManageAdminAuthority && role !== "Sanepar" && role !== "ATGC")
+      (!canManageAdminAuthority && !selfManagedUserCategories.includes(role))
     ) {
       return;
     }
