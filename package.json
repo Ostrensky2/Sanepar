@@ -1,6 +1,6 @@
 {
   "name": "yvae-monitoramento",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "scripts": {
     "sync:version": "node scripts/update-app-version.mjs",
@@ -10,6 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "migrate:storage": "node scripts/migrate-external-files-to-storage.mjs",
+    "migrate:campaign-photos": "node scripts/migrate-campaign-photos-to-storage.mjs",
     "test": "vitest run",
     "typecheck": "next typegen && tsc --noEmit"
   },

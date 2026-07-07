@@ -42,7 +42,7 @@ type DocumentSortMode =
 
 type InsertLinkFormState = {
   title: string;
-  dropboxUrl: string;
+  file: File | null;
   campaign: string;
   point: string;
   type: DocumentType;
@@ -69,7 +69,7 @@ export function DocumentRepository() {
   const [formError, setFormError] = useState<string | null>(null);
   const [formState, setFormState] = useState<InsertLinkFormState>({
     title: "",
-    dropboxUrl: "",
+    file: null,
     campaign: "",
     point: "",
     type: "Plano de trabalho" as DocumentType,
@@ -189,7 +189,7 @@ export function DocumentRepository() {
   );
   const archivedDocumentsCount = documents.length - activeDocumentsCount;
   const insertedDocumentsCount = useMemo(
-    () => documents.filter((document) => document.source === "link" || document.status === "INSERIDO").length,
+    () => documents.filter((document) => document.source === "storage" || document.status === "INSERIDO").length,
     [documents],
   );
   const latestDocument = documents[0];
@@ -216,59 +216,38 @@ export function DocumentRepository() {
     return () => window.clearTimeout(timeout);
   }, [shareNotice]);
 
-  async function insertDropboxLink(event: FormEvent<HTMLFormElement>) {
+  async function uploadDocumentFile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
 
-    const trimmedUrl = formState.dropboxUrl.trim();
-    const trimmedTitle = formState.title.trim() || inferTitleFromUrl(trimmedUrl);
-
-    if (!isValidDropboxUrl(trimmedUrl)) {
-      setFormError("Um link válido do Dropbox deve ser informado.");
+    if (!formState.file) {
+      setFormError("Selecione um arquivo PDF, DOCX, PPTX ou planilha.");
       return;
     }
 
-    const today = new Intl.DateTimeFormat("pt-BR", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    }).format(new Date());
-    const now = new Date().toISOString();
-
-    const newDocument: StoredDocument = {
-      id: `${trimmedUrl}-${crypto.randomUUID()}`,
-      title: trimmedTitle,
-      dropboxUrl: trimmedUrl,
-      campaign: formState.campaign.trim() || "Documento inserido",
-      point: formState.point.trim() || "Repositório oficial",
-      date: today,
-      updatedAt: now,
-      type: formState.type,
-      status: "INSERIDO",
-      source: "link",
-    };
-
-    const nextDocuments = [newDocument, ...documents];
-
-    if (persistenceMode === "cloud") {
-      try {
-        await saveDocumentsToCloud(nextDocuments);
-      } catch {
-        setFormError("A nuvem não confirmou a gravação. O documento não foi publicado para outros usuários.");
-        return;
-      }
-    } else if (!canUseBrowserOnlyPersistence()) {
+    if (persistenceMode !== "cloud") {
       setFormError("A nuvem não está disponível. O documento não foi publicado para outros usuários.");
       return;
     }
 
-    setDocuments(nextDocuments);
-    recordActivity(getStoredSession(), "document.change", newDocument.title, "Documento adicionado");
-    setActiveTab(newDocument.type);
+    try {
+      const newDocument = await uploadDocumentToCloud(formState);
+      setDocuments((current) => [newDocument, ...current]);
+      recordActivity(getStoredSession(), "document.change", newDocument.title, "Documento enviado");
+      setActiveTab(newDocument.type);
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível enviar o documento para a nuvem.",
+      );
+      return;
+    }
+
     closeInsertDialog();
     setFormState({
       title: "",
-      dropboxUrl: "",
+      file: null,
       campaign: "",
       point: "",
       type: "Plano de trabalho",
@@ -334,7 +313,7 @@ export function DocumentRepository() {
 
     setShareNotice(null);
     const sharedText = selectedDocuments
-      .map((document) => `${document.title}: ${document.dropboxUrl}`)
+      .map((document) => `${document.title}: ${documentAccessUrl(document)}`)
       .join("\n");
 
     try {
@@ -363,7 +342,7 @@ export function DocumentRepository() {
     }
 
     await navigator.clipboard.writeText(
-      selectedDocuments.map((document) => document.dropboxUrl).join("\n"),
+      selectedDocuments.map((document) => documentAccessUrl(document)).join("\n"),
     );
     setShareNotice("Links selecionados copiados para a área de transferência.");
   }
@@ -413,13 +392,13 @@ export function DocumentRepository() {
         await navigator.share({
           title: document.title,
           text: `${document.title} - ${document.campaign}`,
-          url: document.dropboxUrl,
+          url: documentAccessUrl(document),
         });
         return;
       }
 
-      await navigator.clipboard.writeText(document.dropboxUrl);
-      setShareNotice("Link do Dropbox copiado para a área de transferência.");
+      await navigator.clipboard.writeText(documentAccessUrl(document));
+      setShareNotice("Link do documento copiado para a área de transferência.");
     } catch (error) {
       setShareNotice(
         error instanceof Error
@@ -451,7 +430,7 @@ export function DocumentRepository() {
           onClick={openInsertDialog}
         >
           <Upload className="h-4 w-4" />
-          Inserir link
+          Enviar arquivo
         </button>
       </section>
 
@@ -467,7 +446,7 @@ export function DocumentRepository() {
           formState={formState}
           formError={formError}
           onClose={closeInsertDialog}
-          onSubmit={insertDropboxLink}
+          onSubmit={uploadDocumentFile}
           onChange={setFormState}
         />
       ) : null}
@@ -738,15 +717,15 @@ function InsertLinkDialog({
         <div className="flex items-start justify-between gap-4 border-b border-[var(--line-ghost)] px-5 py-4">
           <div>
             <h3 id="insert-link-dialog-title" className="heading-font text-lg font-bold text-[var(--brand-navy-strong)]">
-              Inserir link
+              Enviar arquivo
             </h3>
             <p className="mt-1 text-xs text-slate-500">
-              A referência do documento é cadastrada; o arquivo permanece no Dropbox.
+              O arquivo será salvo no Supabase Storage com metadados no repositório.
             </p>
           </div>
           <button
             type="button"
-            aria-label="Fechar formulário de link"
+            aria-label="Fechar formulário de arquivo"
             className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100"
             onClick={onClose}
           >
@@ -766,10 +745,10 @@ function InsertLinkDialog({
           />
           <input
             className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs lg:col-span-2"
-            placeholder="Link do Dropbox"
-            value={formState.dropboxUrl}
+            type="file"
+            accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
             onChange={(event) =>
-              onChange((current) => ({ ...current, dropboxUrl: event.target.value }))
+              onChange((current) => ({ ...current, file: event.target.files?.[0] ?? null }))
             }
           />
           <select
@@ -792,7 +771,7 @@ function InsertLinkDialog({
             type="submit"
             className="rounded-lg bg-[var(--brand-navy-strong)] px-4 py-2 text-xs font-bold text-white transition-opacity hover:opacity-90"
           >
-            Inserir link
+            Enviar
           </button>
           <input
             className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs lg:col-span-2"
@@ -850,6 +829,38 @@ async function deleteDocumentsFromCloud(ids: string[]) {
   return response.json() as Promise<{ ids?: unknown; persistence?: string }>;
 }
 
+async function uploadDocumentToCloud(formState: InsertLinkFormState) {
+  if (!formState.file) {
+    throw new Error("Arquivo não informado.");
+  }
+
+  const formData = new FormData();
+  formData.set("file", formState.file);
+  formData.set("title", formState.title);
+  formData.set("campaign", formState.campaign);
+  formData.set("point", formState.point);
+  formData.set("type", formState.type);
+
+  const response = await fetch("/api/documents/upload", {
+    method: "POST",
+    body: formData,
+  });
+  const payload = (await response.json()) as { document?: unknown; error?: string };
+
+  if (!response.ok) {
+    throw new Error(payload.error ?? "A nuvem não confirmou o envio do arquivo.");
+  }
+
+  const normalized = normalizeStoredDocuments([payload.document]);
+  const document = normalized[0];
+
+  if (!document) {
+    throw new Error("A nuvem retornou metadados inválidos para o documento.");
+  }
+
+  return document;
+}
+
 function DocumentRow({
   document,
   selected,
@@ -886,7 +897,7 @@ function DocumentRow({
               {document.title}
             </button>
             <p className="text-caption text-slate-500">
-              Link Dropbox • Inserido
+              {document.source === "storage" ? "Supabase Storage" : "Link externo"} • Inserido
             </p>
           </div>
         </div>
@@ -941,7 +952,7 @@ function DocumentRow({
             className="rounded p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
             type="button"
             onClick={async () => {
-              await navigator.clipboard.writeText(document.dropboxUrl);
+              await navigator.clipboard.writeText(documentAccessUrl(document));
             }}
           >
             <Link2 className="h-4 w-4" />
@@ -975,11 +986,33 @@ function DocumentTypeIcon({ document }: { document: StoredDocument }) {
 }
 
 async function openDocument(document: StoredDocument) {
-  window.open(document.dropboxUrl, "_blank", "noopener,noreferrer");
+  window.open(documentAccessUrl(document), "_blank", "noopener,noreferrer");
 }
 
 function downloadDocument(document: StoredDocument) {
-  window.open(toDropboxDownloadUrl(document.dropboxUrl), "_blank", "noopener,noreferrer");
+  if (document.storageBucket && document.storagePath) {
+    window.open(documentAccessUrl(document, true), "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  window.open(toDropboxDownloadUrl(documentAccessUrl(document)), "_blank", "noopener,noreferrer");
+}
+
+function documentAccessUrl(document: StoredDocument, download = false) {
+  if (document.storageBucket && document.storagePath) {
+    const params = new URLSearchParams({
+      bucket: document.storageBucket,
+      path: document.storagePath,
+    });
+
+    if (download) {
+      params.set("download", "1");
+    }
+
+    return `/api/documents/file?${params.toString()}`;
+  }
+
+  return document.dropboxUrl ?? document.originalUrl ?? "";
 }
 
 function iconClassForDocument(document: StoredDocument) {
@@ -1073,15 +1106,6 @@ function normalize(value: string) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-function isValidDropboxUrl(value: string) {
-  try {
-    const url = new URL(value);
-    return url.hostname.endsWith("dropbox.com") || url.hostname.endsWith("dropboxusercontent.com");
-  } catch {
-    return false;
-  }
-}
-
 function toDropboxDownloadUrl(value: string) {
   try {
     const url = new URL(value);
@@ -1093,19 +1117,6 @@ function toDropboxDownloadUrl(value: string) {
     return url.toString();
   } catch {
     return value;
-  }
-}
-
-function inferTitleFromUrl(value: string) {
-  try {
-    const url = new URL(value);
-    const lastSegment = decodeURIComponent(
-      url.pathname.split("/").filter(Boolean).pop() ?? "Documento Dropbox",
-    );
-
-    return lastSegment || "Documento Dropbox";
-  } catch {
-    return "Documento Dropbox";
   }
 }
 

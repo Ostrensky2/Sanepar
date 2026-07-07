@@ -11,10 +11,12 @@ const isVercelRuntime = sanitizeEnvValue(process.env.VERCEL) === "1";
 const isDbDisabled = !isVercelRuntime && sanitizeEnvValue(process.env.NEXT_PUBLIC_DISABLE_DB) === "true";
 
 const supabaseUrl = isDbDisabled ? "" : sanitizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_URL);
-const supabaseAnonKey = isDbDisabled
+const supabaseServerKey = isDbDisabled
   ? ""
   : sanitizeEnvValue(
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+      process.env.SUPABASE_SECRET_KEY ??
+        process.env.SUPABASE_SERVICE_ROLE_KEY ??
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     );
 
@@ -42,15 +44,15 @@ type JsonSnapshotRow = {
 };
 
 export function getCloudRuntimeMode() {
-  return supabaseUrl && supabaseAnonKey ? "nuvem pronta" : "modo local";
+  return supabaseUrl && supabaseServerKey ? "nuvem pronta" : "modo local";
 }
 
 export function createOptionalSupabaseClient() {
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!supabaseUrl || !supabaseServerKey) {
     return null;
   }
 
-  return createClient(supabaseUrl, supabaseAnonKey, {
+  return createClient(supabaseUrl, supabaseServerKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,

@@ -125,7 +125,7 @@ export function PointActionsPageContent() {
           </h2>
           {selectedAction.document ? (
             <a
-              href={selectedAction.document.dropboxUrl}
+              href={pointActionDocumentUrl(selectedAction.document)}
               target="_blank"
               rel="noreferrer"
               className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[var(--surface-soft)] px-3 py-2 text-xs font-bold text-[var(--brand-navy-strong)] transition-colors hover:bg-[var(--surface-muted)]"
@@ -280,7 +280,7 @@ function PointActionCard({
 
       {document ? (
         <a
-          href={document.dropboxUrl}
+          href={pointActionDocumentUrl(document)}
           target="_blank"
           rel="noreferrer"
           className="flex items-center justify-between gap-3 radius-card border border-blue-100 bg-white p-4 text-sm font-bold text-blue-700 transition-colors hover:border-blue-200 hover:bg-blue-50"
@@ -517,6 +517,19 @@ function toMapPoint(point: PointActionSamplePoint): CampaignHydroMapPoint {
     problems: "Não informado",
     photoUrl: point.photos[0]?.url ?? "",
   };
+}
+
+function pointActionDocumentUrl(document: NonNullable<PointActionEvent["document"]>) {
+  if (document.storageBucket && document.storagePath) {
+    const params = new URLSearchParams({
+      bucket: document.storageBucket,
+      path: document.storagePath,
+    });
+
+    return `/api/documents/file?${params.toString()}`;
+  }
+
+  return document.dropboxUrl ?? document.originalUrl ?? "#";
 }
 
 function toDropboxPreviewUrl(url: string) {

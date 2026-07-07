@@ -15,13 +15,19 @@ export const runtime = "nodejs";
 type AppDocumentRow = {
   id: string;
   title: string;
-  dropbox_url: string;
+  dropbox_url: string | null;
+  original_url: string | null;
   campaign: string;
   point: string;
   date_label: string;
   type: DocumentType;
   status: string;
-  source: "link";
+  source: "link" | "storage";
+  original_name: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  storage_bucket: string | null;
+  storage_path: string | null;
   updated_at: string;
 };
 
@@ -218,14 +224,20 @@ function fromRow(row: AppDocumentRow): StoredDocument {
   return {
     id: row.id,
     title: row.title,
-    dropboxUrl: row.dropbox_url,
+    dropboxUrl: row.dropbox_url ?? undefined,
+    originalUrl: row.original_url ?? row.dropbox_url ?? undefined,
     campaign: row.campaign,
     point: row.point,
     date: row.date_label,
     updatedAt: row.updated_at,
     type: row.type,
     status: row.status,
-    source: "link",
+    source: row.source === "storage" ? "storage" : "link",
+    originalName: row.original_name ?? undefined,
+    mimeType: row.mime_type ?? undefined,
+    size: row.size_bytes ?? undefined,
+    storageBucket: row.storage_bucket ?? undefined,
+    storagePath: row.storage_path ?? undefined,
   };
 }
 
@@ -233,13 +245,19 @@ function toRow(document: StoredDocument) {
   return {
     id: document.id,
     title: document.title,
-    dropbox_url: document.dropboxUrl,
+    dropbox_url: document.dropboxUrl ?? document.originalUrl ?? null,
+    original_url: document.originalUrl ?? document.dropboxUrl ?? null,
     campaign: document.campaign,
     point: document.point,
     date_label: document.date,
     type: document.type,
     status: document.status,
     source: document.source,
+    original_name: document.originalName ?? null,
+    mime_type: document.mimeType ?? null,
+    size_bytes: document.size ?? null,
+    storage_bucket: document.storageBucket ?? null,
+    storage_path: document.storagePath ?? null,
     updated_at: new Date().toISOString(),
   };
 }

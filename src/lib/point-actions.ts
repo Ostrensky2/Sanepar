@@ -6,6 +6,12 @@ const POINT_ACTIONS_UPDATED_EVENT = "yvae:point-actions-updated";
 export type PointActionPhoto = {
   id: string;
   url: string;
+  originalUrl?: string;
+  storageBucket?: string;
+  storagePath?: string;
+  originalName?: string;
+  mimeType?: string;
+  size?: number;
   caption: string;
 };
 
@@ -27,7 +33,10 @@ export type PointActionEvent = {
   document?: {
     id: string;
     title: string;
-    dropboxUrl: string;
+    dropboxUrl?: string;
+    originalUrl?: string;
+    storageBucket?: string;
+    storagePath?: string;
     type: string;
   } | null;
   createdAt: string;
