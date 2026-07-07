@@ -14,6 +14,9 @@ export function FieldDiaryView({
   onClose: () => void;
   onEdit?: () => void;
 }) {
+  const fieldTeamMembers = entry.fieldTeamMembers ?? [];
+  const photos = entry.photos ?? [];
+
   return (
     <Dialog title="Visualizar registro" onClose={onClose}>
       <div className="space-y-5">
@@ -21,6 +24,8 @@ export function FieldDiaryView({
           <Info label="Data" value={formatDate(entry.entryDate)} />
           <Info label="Campanha" value={entry.campaignName} />
           <Info label="Dia" value={String(entry.campaignDay)} />
+          <Info label="Equipe em campo" value={entry.fieldTeamName || "Não informado"} />
+          <Info label="Membros" value={fieldTeamMembers.join(", ") || "Não informado"} />
           <Info label="Hora da coleta" value={entry.collectionTime || "Não informado"} />
           <Info label="Local / SIA" value={[entry.locationName, entry.sia].filter(Boolean).join(" · ")} />
           <Info label="Amostras e Réplicas (eDNA)" value={entry.samplesReplicasEdna || "Não informado"} />
@@ -46,6 +51,31 @@ export function FieldDiaryView({
         ) : null}
         <DetailBlock label="Pendência ou encaminhamento" value={entry.followUpNotes || "Sem pendência registrada"} />
         <DetailBlock label="Resumo do dia" value={entry.dailySummary} />
+
+        {photos.length ? (
+          <div className="rounded-2xl border border-[var(--line-ghost)] bg-white p-4">
+            <p className="text-caption font-bold uppercase tracking-[0.18em] text-slate-400">Imagens da coleta</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {photos.map((photo, index) => (
+                <figure key={photo.id} className="overflow-hidden rounded-xl border border-[var(--line-ghost)] bg-[var(--surface-soft)]">
+                  <a href={photo.url} target="_blank" rel="noreferrer" className="block">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={photo.url}
+                      alt={photo.caption || `Imagem da coleta ${index + 1}`}
+                      className="aspect-video w-full object-cover"
+                    />
+                  </a>
+                  <figcaption className="px-3 py-2 text-xs font-semibold text-slate-600">
+                    {photo.caption || `Imagem ${index + 1}`}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <DetailBlock label="Imagens da coleta" value="Nenhuma imagem vinculada." />
+        )}
 
         <div className="flex justify-end gap-3">
           <button

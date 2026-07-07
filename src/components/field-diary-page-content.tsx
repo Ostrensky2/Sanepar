@@ -275,6 +275,8 @@ export function FieldDiaryPageContent({
             entry.sia,
             entry.municipality,
             entry.createdByName,
+            entry.fieldTeamName,
+            (entry.fieldTeamMembers ?? []).join(" "),
             entry.occurrenceType,
             entry.occurrenceDescription,
             entry.followUpNotes,
@@ -382,6 +384,8 @@ export function FieldDiaryPageContent({
       campaignDay: entry.campaignDay,
       entryDate: entry.entryDate,
       collectionTime: entry.collectionTime,
+      fieldTeamName: entry.fieldTeamName,
+      fieldTeamMembers: entry.fieldTeamMembers ?? [],
       locationName: entry.locationName,
       sia: entry.sia,
       samplesReplicasEdna: entry.samplesReplicasEdna,
@@ -402,6 +406,7 @@ export function FieldDiaryPageContent({
       status: entry.status,
       createdBy: entry.createdBy,
       createdByName: entry.createdByName,
+      photos: entry.photos ?? [],
     });
   }
 
@@ -906,8 +911,10 @@ export function FieldDiaryPageContent({
                   <th className="px-3 py-3">Local / SIA</th>
                   <th className="px-3 py-3">Coordenadas</th>
                   <th className="px-3 py-3">Município</th>
+                  <th className="px-3 py-3">Equipe</th>
                   <th className="px-3 py-3">Situação</th>
                   <th className="px-3 py-3">Responsável</th>
+                  <th className="px-3 py-3">Fotos</th>
                   <th className="px-3 py-3">Status</th>
                   <th className="px-3 py-3">Ações</th>
                 </tr>
@@ -930,9 +937,16 @@ export function FieldDiaryPageContent({
                       </td>
                       <td className="px-3 py-4">{entry.municipality || "Não informado"}</td>
                       <td className="px-3 py-4">
+                        <span className="block font-semibold">{entry.fieldTeamName || "Não informado"}</span>
+                        {(entry.fieldTeamMembers ?? []).length ? (
+                          <span className="text-xs text-slate-500">{(entry.fieldTeamMembers ?? []).join(", ")}</span>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-4">
                         <StageBadge stage={stage} />
                       </td>
                       <td className="px-3 py-4">{entry.createdByName || "Não informado"}</td>
+                      <td className="px-3 py-4">{(entry.photos ?? []).length}</td>
                       <td className="px-3 py-4">{entry.status}</td>
                       <td className="px-3 py-4">
                         <div className="flex gap-2">

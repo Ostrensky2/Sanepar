@@ -124,6 +124,7 @@ export function validateEntry(entry: FieldDiaryPayload) {
   const hasOperationalData = [
     entry.locationName,
     entry.sia,
+    entry.fieldTeamName,
     entry.latitude,
     entry.longitude,
     entry.municipality,
@@ -133,7 +134,9 @@ export function validateEntry(entry: FieldDiaryPayload) {
     entry.followUpNotes,
   ].some((value) => String(value ?? "").trim()) ||
     entry.activities.length > 0 ||
-    entry.waterVisualConditions.length > 0;
+    entry.waterVisualConditions.length > 0 ||
+    (entry.fieldTeamMembers ?? []).length > 0 ||
+    (entry.photos ?? []).length > 0;
 
   if (!hasOperationalData) return "Informe ao menos um dado operacional do registro.";
   return "";

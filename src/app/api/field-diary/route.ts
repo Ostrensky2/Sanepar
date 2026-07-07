@@ -14,6 +14,8 @@ type FieldDiaryRow = {
   campaign_name: string;
   campaign_day: number;
   entry_date: string;
+  field_team_name: string | null;
+  field_team_members: string[];
   collection_time: string | null;
   location_name: string;
   sia: string | null;
@@ -37,6 +39,7 @@ type FieldDiaryRow = {
   created_by_name: string | null;
   created_at: string;
   updated_at: string;
+  photos: unknown;
 };
 
 export async function GET(request: Request) {
@@ -133,6 +136,8 @@ function fromRow(row: FieldDiaryRow): FieldDiaryEntry {
     campaignName: row.campaign_name,
     campaignDay: row.campaign_day,
     entryDate: row.entry_date,
+    fieldTeamName: row.field_team_name ?? "",
+    fieldTeamMembers: row.field_team_members ?? [],
     collectionTime: row.collection_time ?? "",
     locationName: row.location_name,
     sia: row.sia,
@@ -156,6 +161,7 @@ function fromRow(row: FieldDiaryRow): FieldDiaryEntry {
     createdByName: row.created_by_name,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    photos: Array.isArray(row.photos) ? row.photos as FieldDiaryEntry["photos"] : [],
   };
 }
 
@@ -166,6 +172,8 @@ function toRow(entry: FieldDiaryEntry) {
     campaign_name: entry.campaignName,
     campaign_day: entry.campaignDay,
     entry_date: entry.entryDate,
+    field_team_name: entry.fieldTeamName || null,
+    field_team_members: entry.fieldTeamMembers,
     collection_time: entry.collectionTime || null,
     location_name: entry.locationName,
     sia: entry.sia || null,
@@ -189,5 +197,6 @@ function toRow(entry: FieldDiaryEntry) {
     created_by_name: entry.createdByName || null,
     created_at: entry.createdAt,
     updated_at: new Date().toISOString(),
+    photos: entry.photos,
   };
 }

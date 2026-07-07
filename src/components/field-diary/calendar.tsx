@@ -210,9 +210,11 @@ export function SelectedFieldDiaryDay({
               <tr className="border-b border-[var(--line-ghost)] text-caption uppercase tracking-[0.16em] text-slate-500">
                 <th className="px-3 py-3">Ponto / SIA</th>
                 <th className="px-3 py-3">Município</th>
+                <th className="px-3 py-3">Equipe</th>
                 <th className="px-3 py-3">Responsável</th>
                 <th className="px-3 py-3">Situação</th>
                 <th className="px-3 py-3">Resumo operacional</th>
+                <th className="px-3 py-3">Fotos</th>
                 <th className="px-3 py-3">Ações</th>
               </tr>
             </thead>
@@ -256,6 +258,8 @@ export function OperationalEntryRow({
   onEdit?: () => void;
 }) {
   const stage = getOperationalStage(entry);
+  const fieldTeamMembers = entry.fieldTeamMembers ?? [];
+  const photos = entry.photos ?? [];
 
   return (
     <tr className="border-b border-[var(--line-ghost)] align-top last:border-0">
@@ -264,11 +268,18 @@ export function OperationalEntryRow({
         {entry.sia ? <span className="text-xs font-semibold text-slate-500">{entry.sia}</span> : null}
       </td>
       <td className="px-3 py-4">{entry.municipality || "Não informado"}</td>
+      <td className="px-3 py-4">
+        <span className="block font-semibold">{entry.fieldTeamName || "Não informado"}</span>
+        {fieldTeamMembers.length ? (
+          <span className="text-xs text-slate-500">{fieldTeamMembers.join(", ")}</span>
+        ) : null}
+      </td>
       <td className="px-3 py-4">{entry.createdByName || "Não informado"}</td>
       <td className="px-3 py-4">
         <StageBadge stage={stage} />
       </td>
       <td className="max-w-md px-3 py-4 text-sm leading-6 text-slate-600">{getOperationalSummary(entry)}</td>
+      <td className="px-3 py-4">{photos.length}</td>
       <td className="px-3 py-4">
         <div className="flex gap-2">
           <IconButton label="Visualizar" onClick={onView} icon={Eye} />

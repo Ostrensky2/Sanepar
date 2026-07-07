@@ -71,6 +71,8 @@ export type FieldDiaryEntry = {
   campaignName: string;
   campaignDay: number;
   entryDate: string;
+  fieldTeamName?: string | null;
+  fieldTeamMembers: string[];
   collectionTime: string;
   locationName: string;
   sia?: string | null;
@@ -94,6 +96,19 @@ export type FieldDiaryEntry = {
   createdByName?: string | null;
   createdAt: string;
   updatedAt: string;
+  photos: FieldDiaryPhoto[];
+};
+
+export type FieldDiaryPhoto = {
+  id: string;
+  url: string;
+  caption?: string | null;
+  bucket?: string | null;
+  path?: string | null;
+  fileName?: string | null;
+  width?: number | null;
+  height?: number | null;
+  uploadedAt?: string | null;
 };
 
 export type FieldDiaryPayload = Omit<FieldDiaryEntry, "id" | "createdAt" | "updatedAt"> & {
@@ -110,6 +125,8 @@ export function createEmptyFieldDiaryPayload(): FieldDiaryPayload {
     campaignName: "1ª Campanha - Verão 2026",
     campaignDay: 1,
     entryDate: todayIsoDate(),
+    fieldTeamName: "",
+    fieldTeamMembers: [],
     collectionTime: "",
     locationName: "",
     sia: "",
@@ -131,6 +148,7 @@ export function createEmptyFieldDiaryPayload(): FieldDiaryPayload {
     status: "Rascunho",
     createdBy: "",
     createdByName: "",
+    photos: [],
   };
 }
 
@@ -199,6 +217,8 @@ export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
     ...payload,
     id: payload.id ?? crypto.randomUUID(),
     campaignId: payload.campaignId ?? null,
+    fieldTeamName: payload.fieldTeamName ?? "",
+    fieldTeamMembers: toStringArray(payload.fieldTeamMembers),
     sia: payload.sia ?? "",
     collectionTime: payload.collectionTime ?? "",
     samplesReplicasEdna: payload.samplesReplicasEdna ?? "",
@@ -210,6 +230,7 @@ export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
     pointAccessibility: payload.pointAccessibility ?? "",
     createdBy: payload.createdBy ?? "",
     createdByName: payload.createdByName ?? "",
+    photos: normalizeFieldDiaryPhotos(payload.photos),
     createdAt: localEntries.find((item) => item.id === payload.id)?.createdAt ?? now,
     updatedAt: now,
   };
@@ -285,6 +306,8 @@ export function normalizeFieldDiaryEntry(value: unknown): FieldDiaryEntry | null
     campaignName,
     campaignDay: Number(candidate.campaignDay) || 1,
     entryDate,
+    fieldTeamName: candidate.fieldTeamName ? String(candidate.fieldTeamName) : "",
+    fieldTeamMembers: toStringArray(candidate.fieldTeamMembers),
     collectionTime: candidate.collectionTime ? String(candidate.collectionTime) : "",
     locationName,
     sia: candidate.sia ? String(candidate.sia) : "",
@@ -308,6 +331,7 @@ export function normalizeFieldDiaryEntry(value: unknown): FieldDiaryEntry | null
     createdByName: candidate.createdByName ? String(candidate.createdByName) : "",
     createdAt: String(candidate.createdAt ?? new Date().toISOString()),
     updatedAt: String(candidate.updatedAt ?? candidate.createdAt ?? new Date().toISOString()),
+    photos: normalizeFieldDiaryPhotos(candidate.photos),
   };
 }
 
@@ -390,9 +414,45 @@ function scoreFieldDiaryEntry(entry: FieldDiaryEntry) {
     entry.followUpNotes,
     entry.dailySummary,
     entry.createdByName,
+    entry.fieldTeamName,
   ].filter((value) => String(value ?? "").trim()).length +
     entry.activities.length +
-    entry.waterVisualConditions.length;
+    entry.waterVisualConditions.length +
+    (entry.fieldTeamMembers ?? []).length +
+    (entry.photos ?? []).length;
+}
+
+export function normalizeFieldDiaryPhotos(value: unknown): FieldDiaryPhoto[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item): FieldDiaryPhoto | null => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const candidate = item as Partial<FieldDiaryPhoto>;
+      const url = String(candidate.url ?? "").trim();
+
+      if (!url) {
+        return null;
+      }
+
+      return {
+        id: String(candidate.id || crypto.randomUUID()),
+        url,
+        caption: candidate.caption ? String(candidate.caption) : "",
+        bucket: candidate.bucket ? String(candidate.bucket) : null,
+        path: candidate.path ? String(candidate.path) : null,
+        fileName: candidate.fileName ? String(candidate.fileName) : null,
+        width: Number.isFinite(candidate.width) ? Number(candidate.width) : null,
+        height: Number.isFinite(candidate.height) ? Number(candidate.height) : null,
+        uploadedAt: candidate.uploadedAt ? String(candidate.uploadedAt) : null,
+      };
+    })
+    .filter((photo): photo is FieldDiaryPhoto => photo !== null);
 }
 
 function normalizeKeyPart(value: unknown) {

@@ -38,6 +38,8 @@ type FieldDiaryImportRow = {
   campaign_name: string;
   campaign_day: number;
   entry_date: string;
+  field_team_name?: string | null;
+  field_team_members?: string[];
   collection_time?: string | null;
   location_name: string;
   sia?: string | null;
@@ -61,6 +63,7 @@ type FieldDiaryImportRow = {
   updated_at: string;
   latitude?: string | null;
   longitude?: string | null;
+  photos?: unknown;
 };
 
 function cellText(row: ExcelJS.Row, col: number): string {
@@ -173,6 +176,8 @@ export async function POST(request: Request) {
       campaignName: cellText(row, COL.campaignName),
       campaignDay,
       entryDate,
+      fieldTeamName: "",
+      fieldTeamMembers: [],
       collectionTime: "",
       createdByName: cellText(row, COL.createdByName) || null,
       locationName: cellText(row, COL.locationName),
@@ -194,6 +199,7 @@ export async function POST(request: Request) {
       dailySummary: cellText(row, COL.dailySummary),
       status,
       createdBy: null,
+      photos: [],
     });
   });
 
@@ -290,6 +296,8 @@ function toRow(entry: FieldDiaryEntry): FieldDiaryImportRow {
     campaign_name: entry.campaignName,
     campaign_day: entry.campaignDay,
     entry_date: entry.entryDate,
+    field_team_name: entry.fieldTeamName || null,
+    field_team_members: entry.fieldTeamMembers,
     collection_time: entry.collectionTime || null,
     location_name: entry.locationName,
     sia: entry.sia || null,
@@ -313,6 +321,7 @@ function toRow(entry: FieldDiaryEntry): FieldDiaryImportRow {
     created_by_name: entry.createdByName || null,
     created_at: entry.createdAt,
     updated_at: entry.updatedAt,
+    photos: entry.photos,
   };
 }
 
@@ -334,6 +343,10 @@ function mergeRows(existing: FieldDiaryImportRow, incoming: FieldDiaryImportRow)
     campaign_name: incoming.campaign_name || existing.campaign_name,
     campaign_day: incoming.campaign_day || existing.campaign_day,
     entry_date: incoming.entry_date || existing.entry_date,
+    field_team_name: incoming.field_team_name || existing.field_team_name,
+    field_team_members: incoming.field_team_members?.length
+      ? incoming.field_team_members
+      : existing.field_team_members,
     collection_time: incoming.collection_time || existing.collection_time,
     location_name: incoming.location_name || existing.location_name,
     sia: incoming.sia || existing.sia,
@@ -359,6 +372,7 @@ function mergeRows(existing: FieldDiaryImportRow, incoming: FieldDiaryImportRow)
     created_by_name: incoming.created_by_name || existing.created_by_name,
     created_at: existing.created_at || incoming.created_at,
     updated_at: incoming.updated_at,
+    photos: Array.isArray(incoming.photos) && incoming.photos.length ? incoming.photos : existing.photos,
   };
 }
 
