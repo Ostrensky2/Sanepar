@@ -38,25 +38,38 @@ import {
 } from "@/lib/auth-users";
 import { cn } from "@/lib/utils";
 
-const privilegeGroups: Array<{ title: string; privileges: PrivilegeKey[] }> = [
+const generalVisualizationLabels = [
+  "Início",
+  "Campanhas",
+  "Resultados",
+  "Ações Pontuais",
+  "Solicitações",
+  "Ajuda",
+];
+
+const privilegeGroups: Array<{ title: string; description: string; privileges: PrivilegeKey[] }> = [
   {
-    title: "Módulos",
+    title: "Dados e documentos",
+    description: "Permissões para inserir, importar, excluir ou gerenciar acervos.",
     privileges: [
-      "nav.home",
-      "nav.campaigns",
-      "nav.results",
       "nav.data",
-      "nav.documents",
-      "nav.requests",
-      "nav.settings",
-      "nav.help",
+      "data.import",
+      "data.delete",
+      "documents.manage",
     ],
   },
   {
-    title: "Ações internas",
-    privileges: (Object.keys(privilegeLabels) as PrivilegeKey[]).filter(
-      (privilege) => !privilege.startsWith("nav."),
-    ),
+    title: "Administração",
+    description: "Permissões para usuários, perfis, backups e áreas sensíveis de configuração.",
+    privileges: [
+      "users.manage",
+      "permissions.manage",
+      "backups.manage",
+      "settings.buildSync",
+      "settings.activity",
+      "settings.rules",
+      "settings.diagnostics",
+    ],
   },
 ];
 const PRIMARY_ADMIN_ID = "usr-antonio-ostrensky";
@@ -273,7 +286,7 @@ export function useAccessManagement() {
     }
 
     if (duplicatedEmail) {
-      setNotice({ kind: "error", text: "Ja existe uma pessoa autorizada com este email." });
+      setNotice({ kind: "error", text: "Ja existe um usuário autorizado com este email." });
       return;
     }
 
@@ -337,7 +350,7 @@ export function useAccessManagement() {
       return;
     }
 
-    if (!window.confirm(`Remover ${target.name} da lista de pessoas autorizadas?`)) {
+    if (!window.confirm(`Remover ${target.name} da lista de usuários autorizados?`)) {
       return;
     }
 
@@ -368,7 +381,7 @@ export function useAccessManagement() {
     }
 
     if (users.some((user) => user.email.toLowerCase() === email)) {
-      setNotice({ kind: "error", text: "Ja existe uma pessoa autorizada com este email." });
+      setNotice({ kind: "error", text: "Ja existe um usuário autorizado com este email." });
       return;
     }
 
@@ -554,10 +567,15 @@ export function AccessManagementPanel({
 
       {showSection("privileges") ? (
       <section className="overflow-hidden rounded-xl border border-[var(--line-ghost)] bg-white/84">
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--line-ghost)] p-4">
-          <p className="text-xs font-bold text-[var(--ink-soft)]">
-            Controle quais módulos e ações aparecem para cada tipo de usuário.
-          </p>
+        <header className="grid gap-4 border-b border-[var(--line-ghost)] p-4 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div>
+            <p className="text-sm font-black text-[var(--brand-navy-strong)]">
+              Visualização geral disponível para todos
+            </p>
+            <p className="mt-1 text-xs leading-5 text-[var(--ink-soft)]">
+              {generalVisualizationLabels.join(", ")} ficam liberados como consulta comum. A matriz abaixo controla só funções específicas.
+            </p>
+          </div>
           <button
             type="button"
             onClick={applyRecommendedMatrix}
@@ -573,7 +591,7 @@ export function AccessManagementPanel({
           <table className="w-full min-w-[900px] text-sm">
             <thead>
               <tr className="border-b border-[var(--line-ghost)] bg-[var(--surface-soft)]/70 text-left text-label font-black uppercase tracking-[0.12em] text-[var(--ink-soft)]">
-                <th className="w-[34%] px-4 py-3">Privilegio</th>
+                <th className="w-[34%] px-4 py-3">Função restrita</th>
                 {visibleCategories.map((category) => (
                   <th key={category} className="px-3 py-3 text-center">
                     {category}
@@ -587,9 +605,12 @@ export function AccessManagementPanel({
                   <tr key={privilege}>
                     <td className="px-4 py-3">
                       {index === 0 ? (
-                        <p className="mb-2 text-label font-black uppercase tracking-[0.14em] text-[var(--brand-teal)]">
-                          {group.title}
-                        </p>
+                        <div className="mb-2">
+                          <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--brand-teal)]">
+                            {group.title}
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--ink-soft)]">{group.description}</p>
+                        </div>
                       ) : null}
                       <p className="text-sm font-black text-[var(--brand-navy-strong)]">{privilegeLabels[privilege]}</p>
                       <p className="mt-1 text-xs text-[var(--ink-soft)]">{privilege}</p>
@@ -701,7 +722,7 @@ export function AccessManagementPanel({
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--brand-teal)]">
-                  Editar pessoa autorizada
+                  Editar usuário autorizado
                 </p>
                 <h3 className="heading-font mt-1 text-lg font-black text-[var(--brand-navy-strong)]">
                   {editingUser.name || "Cadastro selecionado"}

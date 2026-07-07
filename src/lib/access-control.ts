@@ -43,6 +43,18 @@ export const userCategories: UserCategory[] = [
   "ATGC",
 ];
 
+const generalViewPrivileges: PrivilegeKey[] = [
+  "nav.home",
+  "nav.campaigns",
+  "nav.results",
+  "nav.documents",
+  "nav.requests",
+  "nav.help",
+  "dashboard.view",
+  "campaigns.view",
+  "documents.view",
+];
+
 export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
   Admin: [
     "nav.home",
@@ -137,13 +149,13 @@ export const categoryDescriptions: Record<UserCategory, string> = {
   Admin:
     "Controle total do app, incluindo usuários, backups, importações e exclusões.",
   Sanepar:
-    "Coordenação institucional Sanepar com leitura operacional, Entrada de dados sem edição e cadastro restrito de pessoas Sanepar.",
+    "Coordenação institucional Sanepar com leitura operacional, Entrada de dados sem edição e cadastro restrito de usuários Sanepar.",
   Tecpar:
-    "Coordenação institucional Tecpar com leitura operacional, Entrada de dados sem edição e cadastro restrito de pessoas Tecpar.",
+    "Coordenação institucional Tecpar com leitura operacional, Entrada de dados sem edição e cadastro restrito de usuários Tecpar.",
   UFPR:
     "Equipe UFPR com curadoria técnica, importação de dados e gestão documental.",
   ATGC:
-    "Equipe ATGC com operação da Entrada de dados e cadastro restrito de pessoas ATGC.",
+    "Equipe ATGC com operação da Entrada de dados e cadastro restrito de usuários ATGC.",
 };
 
 export const privilegeLabels: Record<PrivilegeKey, string> = {
@@ -164,7 +176,7 @@ export const privilegeLabels: Record<PrivilegeKey, string> = {
   "documents.manage": "Gerenciar Documentos",
   "settings.manage": "Configurações",
   "backups.manage": "Backups",
-  "users.manage": "Pessoas autorizadas",
+  "users.manage": "Usuários autorizados",
   "permissions.manage": "Alterar matriz de permissões",
   "settings.buildSync": "Build e sincronização",
   "settings.activity": "Atividade dos membros",
@@ -262,18 +274,24 @@ export function normalizePrivilegesForCategory(
     return categoryPrivileges.Admin;
   }
 
-  return sanitizePrivileges(privileges ?? categoryPrivileges[category]);
+  return sanitizePrivileges([
+    ...generalViewPrivileges,
+    ...(privileges ?? categoryPrivileges[category]),
+  ]);
 }
 
 function expandLegacyPrivileges(privileges: PrivilegeKey[]) {
   const expanded = new Set(privileges);
 
-  if (privileges.some((privilege) => privilege.startsWith("nav."))) {
-    return Array.from(expanded);
-  }
-
   expanded.add("nav.help");
   expanded.add("nav.requests");
+  expanded.add("nav.home");
+  expanded.add("nav.campaigns");
+  expanded.add("nav.results");
+  expanded.add("nav.documents");
+  expanded.add("dashboard.view");
+  expanded.add("campaigns.view");
+  expanded.add("documents.view");
 
   if (expanded.has("dashboard.view")) {
     expanded.add("nav.home");
@@ -293,6 +311,18 @@ function expandLegacyPrivileges(privileges: PrivilegeKey[]) {
   }
 
   if (expanded.has("settings.manage")) {
+    expanded.add("nav.settings");
+  }
+
+  if (
+    expanded.has("users.manage") ||
+    expanded.has("permissions.manage") ||
+    expanded.has("backups.manage") ||
+    expanded.has("settings.buildSync") ||
+    expanded.has("settings.activity") ||
+    expanded.has("settings.rules") ||
+    expanded.has("settings.diagnostics")
+  ) {
     expanded.add("nav.settings");
   }
 
