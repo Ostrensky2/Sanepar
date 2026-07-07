@@ -28,6 +28,11 @@ export type CampaignHydroMapPoint = {
   driveUrl?: string;
   dropboxUrl?: string;
   photoUrl: string;
+  photos?: Array<{
+    id: string;
+    url: string;
+    caption?: string | null;
+  }>;
   riskLevel?: LaboratoryRiskLevel;
 };
 

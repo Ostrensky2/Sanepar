@@ -2,6 +2,8 @@
 
 import {
   BarChart3,
+  ChevronLeft,
+  ChevronRight,
   FileText,
   Layers3,
   ImageIcon,
@@ -34,8 +36,10 @@ export function CampaignMapSection({
   const [selectedPointId, setSelectedPointId] = useState(points[0]?.id);
   const [isDetailsPanelOpen, setIsDetailsPanelOpen] = useState(true);
   const [localImportLabel, setLocalImportLabel] = useState<string | null>(null);
-  const [expandedPhotoPoint, setExpandedPhotoPoint] =
-    useState<CampaignHydroMapPoint | null>(null);
+  const [expandedPhoto, setExpandedPhoto] = useState<{
+    point: CampaignHydroMapPoint;
+    index: number;
+  } | null>(null);
   const [layers, setLayers] = useState<CampaignMapLayerVisibility>({
     roadMap: true,
     basins: true,
@@ -225,6 +229,8 @@ export function CampaignMapSection({
           clipBaseTilesToBasins
           caption="Mapa rodoviário OpenStreetMap · Diário de Campo · Sanepar"
           onSelectPoint={(point) => {
+            // Clicar no marcador apenas seleciona e dá zoom (zoomOnSelect); as
+            // fotos são exibidas no card lateral do ponto, não no mapa.
             setSelectedPointId(point.id);
             setIsDetailsPanelOpen(true);
           }}
@@ -290,8 +296,11 @@ export function CampaignMapSection({
             </div>
 
             <PointPhotoPreview
+              key={selectedPoint?.id}
               point={selectedPoint}
-              onExpand={() => selectedPoint && setExpandedPhotoPoint(selectedPoint)}
+              onExpand={(index) =>
+                selectedPoint && setExpandedPhoto({ point: selectedPoint, index })
+              }
             />
 
             <div className="grid grid-cols-2 gap-1.5">
@@ -318,10 +327,12 @@ export function CampaignMapSection({
       )}
       </aside>
 
-      {expandedPhotoPoint ? (
+      {expandedPhoto ? (
         <PhotoModal
-          point={expandedPhotoPoint}
-          onClose={() => setExpandedPhotoPoint(null)}
+          key={expandedPhoto.point.id}
+          point={expandedPhoto.point}
+          initialIndex={expandedPhoto.index}
+          onClose={() => setExpandedPhoto(null)}
         />
       ) : null}
     </section>
@@ -419,9 +430,13 @@ function PointPhotoPreview({
   onExpand,
 }: {
   point?: CampaignHydroMapPoint;
-  onExpand: () => void;
+  onExpand: (index: number) => void;
 }) {
-  const preview = getPhotoPreview(point?.photoUrl);
+  const photos = getPointPhotos(point);
+  const [index, setIndex] = useState(0);
+  const safeIndex = Math.min(index, Math.max(photos.length - 1, 0));
+  const activePhoto = photos[safeIndex];
+  const preview = getPhotoPreview(activePhoto?.url);
   const [photoState, setPhotoState] = useState<{
     previewKey?: string;
     candidateIndex: number;
@@ -434,77 +449,116 @@ function PointPhotoPreview({
       : { candidateIndex: 0, hasError: false };
   const activeSrc = preview?.candidates[activeState.candidateIndex] ?? preview?.src;
   const imageFailed = activeState.hasError;
+  const hasMultiple = photos.length > 1;
+
+  // Troca a foto exibida no card e zera o fallback de candidatos da nova imagem.
+  function goToPhoto(nextIndex: number) {
+    if (!photos.length) {
+      return;
+    }
+
+    setIndex((nextIndex + photos.length) % photos.length);
+    setPhotoState({ candidateIndex: 0, hasError: false });
+  }
 
   return (
-    <button
-      type="button"
-      className="relative h-24 w-full overflow-hidden rounded border border-slate-200 bg-slate-100 text-slate-400 transition hover:brightness-95"
-      onClick={onExpand}
-      disabled={!preview || imageFailed}
-      aria-label="Expandir foto representativa do ponto"
-    >
-      {preview?.kind === "image" && !imageFailed ? (
-        // Google Drive thumbnails need a regular image element.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          alt={`Foto representativa do ponto ${point?.code ?? ""}`}
-          className="h-full w-full object-cover"
-          onError={() => {
-            setPhotoState((current) => {
-              const candidateIndex =
-                current.previewKey === previewKey ? current.candidateIndex : 0;
-              const nextCandidateIndex = candidateIndex + 1;
+    <div className="relative">
+      <button
+        type="button"
+        className="relative h-24 w-full overflow-hidden rounded border border-slate-200 bg-slate-100 text-slate-400 transition hover:brightness-95"
+        onClick={() => onExpand(safeIndex)}
+        disabled={!preview || imageFailed}
+        aria-label="Expandir fotos do ponto"
+      >
+        {preview?.kind === "image" && !imageFailed ? (
+          // Google Drive thumbnails need a regular image element.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            alt={activePhoto?.caption || `Foto do ponto ${point?.code ?? ""}`}
+            className="h-full w-full object-cover"
+            onError={() => {
+              setPhotoState((current) => {
+                const candidateIndex =
+                  current.previewKey === previewKey ? current.candidateIndex : 0;
+                const nextCandidateIndex = candidateIndex + 1;
 
-              if (nextCandidateIndex < preview.candidates.length) {
+                if (nextCandidateIndex < preview.candidates.length) {
+                  return {
+                    previewKey,
+                    candidateIndex: nextCandidateIndex,
+                    hasError: false,
+                  };
+                }
+
                 return {
                   previewKey,
-                  candidateIndex: nextCandidateIndex,
-                  hasError: false,
+                  candidateIndex,
+                  hasError: true,
                 };
-              }
+              });
+            }}
+            src={activeSrc}
+          />
+        ) : preview?.kind === "folder" ? (
+          <iframe
+            className="h-full w-full border-0"
+            src={preview.src}
+            title={`Fotos do ponto ${point?.code ?? ""}`}
+          />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-1 px-3 text-center">
+            <ImageIcon className="h-8 w-8 text-slate-300" />
+            {imageFailed ? (
+              <span className="text-caption font-bold text-slate-500">
+                Foto indisponível — verifique o Drive
+              </span>
+            ) : null}
+          </div>
+        )}
+        {preview && !imageFailed ? (
+          <span className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-1 text-caption font-bold uppercase tracking-[0.14em] text-white">
+            {hasMultiple ? `${safeIndex + 1}/${photos.length}` : "ampliar"}
+          </span>
+        ) : null}
+      </button>
 
-              return {
-                previewKey,
-                candidateIndex,
-                hasError: true,
-              };
-            });
-          }}
-          src={activeSrc}
-        />
-      ) : preview?.kind === "folder" ? (
-        <iframe
-          className="h-full w-full border-0"
-          src={preview.src}
-          title={`Foto representativa do ponto ${point?.code ?? ""}`}
-        />
-      ) : (
-        <div className="flex h-full flex-col items-center justify-center gap-1 px-3 text-center">
-          <ImageIcon className="h-8 w-8 text-slate-300" />
-          {imageFailed ? (
-            <span className="text-caption font-bold text-slate-500">
-              Foto indisponível — verifique o Drive
-            </span>
-          ) : null}
-        </div>
-      )}
-      {preview && !imageFailed ? (
-        <span className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-1 text-caption font-bold uppercase tracking-[0.14em] text-white">
-          ampliar
-        </span>
+      {hasMultiple ? (
+        <>
+          <button
+            type="button"
+            aria-label="Foto anterior"
+            onClick={() => goToPhoto(safeIndex - 1)}
+            className="absolute left-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white shadow transition hover:bg-black/75"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            aria-label="Próxima foto"
+            onClick={() => goToPhoto(safeIndex + 1)}
+            className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white shadow transition hover:bg-black/75"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </>
       ) : null}
-    </button>
+    </div>
   );
 }
 
 function PhotoModal({
   point,
   onClose,
+  initialIndex = 0,
 }: {
   point: CampaignHydroMapPoint;
   onClose: () => void;
+  initialIndex?: number;
 }) {
-  const preview = getPhotoPreview(point.photoUrl);
+  const photos = getPointPhotos(point);
+  const [photoIndex, setPhotoIndex] = useState(initialIndex);
+  const activePhoto = photos[Math.min(photoIndex, Math.max(photos.length - 1, 0))];
+  const preview = getPhotoPreview(activePhoto?.url);
   const [candidateIndex, setCandidateIndex] = useState(0);
 
   if (!preview) {
@@ -517,7 +571,7 @@ function PhotoModal({
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div>
             <p className="text-caption font-bold uppercase tracking-[0.18em] text-slate-400">
-              Foto representativa
+              Fotos da campanha
             </p>
             <h3 className="heading-font text-lg font-black text-[var(--brand-navy-strong)]">
               {point.code} · {point.municipality}
@@ -533,30 +587,66 @@ function PhotoModal({
           </button>
         </div>
 
-        <div className="h-[calc(100%-76px)] bg-slate-100">
-          {preview.kind === "image" ? (
-            // Google Drive thumbnails need a regular image element.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              alt={`Foto representativa do ponto ${point.code}`}
-              className="h-full w-full object-contain"
-              onError={() =>
-                setCandidateIndex((current) =>
-                  current + 1 < preview.candidates.length ? current + 1 : current,
-                )
-              }
-              src={preview.candidates[candidateIndex] ?? preview.src}
-            />
-          ) : (
-            <iframe
-              className="h-full w-full border-0"
-              src={preview.src}
-              title={`Foto representativa do ponto ${point.code}`}
-            />
-          )}
+        <div className="grid h-[calc(100%-76px)] grid-rows-[minmax(0,1fr)_auto] bg-slate-100">
+          <div className="min-h-0">
+            {preview.kind === "image" ? (
+              // Google Drive thumbnails need a regular image element.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                alt={activePhoto?.caption || `Foto do ponto ${point.code}`}
+                className="h-full w-full object-contain"
+                onError={() =>
+                  setCandidateIndex((current) =>
+                    current + 1 < preview.candidates.length ? current + 1 : current,
+                  )
+                }
+                src={preview.candidates[candidateIndex] ?? preview.src}
+              />
+            ) : (
+              <iframe
+                className="h-full w-full border-0"
+                src={preview.src}
+                title={`Fotos do ponto ${point.code}`}
+              />
+            )}
+          </div>
+          {photos.length > 1 ? (
+            <div className="flex gap-2 overflow-x-auto border-t border-slate-200 bg-white p-3">
+              {photos.map((photo, index) => (
+                <button
+                  key={photo.id || `${photo.url}-${index}`}
+                  type="button"
+                  className={[
+                    "shrink-0 rounded border px-3 py-2 text-xs font-bold transition",
+                    index === photoIndex
+                      ? "border-[var(--brand-navy-strong)] bg-[var(--brand-navy-strong)] text-white"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                  ].join(" ")}
+                  onClick={() => {
+                    setPhotoIndex(index);
+                    setCandidateIndex(0);
+                  }}
+                >
+                  {photo.caption || `Foto ${index + 1}`}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
   );
+}
+
+function getPointPhotos(point?: CampaignHydroMapPoint | null) {
+  const photos = point?.photos?.filter((photo) => photo.url) ?? [];
+
+  if (photos.length) {
+    return photos;
+  }
+
+  return point?.photoUrl
+    ? [{ id: `${point.id}-photo`, url: point.photoUrl, caption: "Foto representativa" }]
+    : [];
 }
 

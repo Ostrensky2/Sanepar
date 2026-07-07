@@ -700,6 +700,7 @@ function mergeDiaryMapPointWithImportedFieldPoint(
     driveUrl: diaryPoint.driveUrl || importedPoint.driveUrl,
     dropboxUrl: diaryPoint.dropboxUrl || importedPoint.dropboxUrl,
     photoUrl: diaryPoint.photoUrl || importedPoint.photoUrl,
+    photos: pointPhotos(diaryPoint).length ? pointPhotos(diaryPoint) : pointPhotos(importedPoint),
   };
 }
 
@@ -833,6 +834,8 @@ function diaryEntryToMapPoint(
   if (!original && !effective) return null;
 
   const code = formatDiarySiaCode(entry.sia) || referencePoint?.code || entry.locationName;
+  const photos = entry.photos ?? [];
+  const firstPhotoUrl = photos[0]?.url || referencePoint?.photoUrl || "";
 
   return {
     id: `diary-${entry.id}`,
@@ -851,8 +854,13 @@ function diaryEntryToMapPoint(
     problems: entry.hasOccurrence ? (entry.occurrenceDescription ?? "") : "",
     driveUrl: referencePoint?.driveUrl || "",
     dropboxUrl: referencePoint?.dropboxUrl || "",
-    photoUrl: referencePoint?.photoUrl || "",
+    photoUrl: firstPhotoUrl,
+    photos,
   };
+}
+
+function pointPhotos(point?: CampaignHydroMapPoint | null) {
+  return point?.photos?.filter((photo) => photo.url) ?? [];
 }
 
 function findKnownPointForDiaryEntry(

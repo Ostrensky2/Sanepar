@@ -9,6 +9,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   ACCESS_CATEGORY_STORAGE_KEY,
   hasPrivilege,
@@ -117,6 +118,21 @@ type CampaignPublishPayload = {
     mode: "cloud" | "browser";
     message: string;
   };
+  unifiedImport?: {
+    mode: "cloud" | "browser";
+    batchId?: string;
+    summary: {
+      novos: number;
+      identicos: number;
+      aditivos: number;
+      conflitos: number;
+      fotos: {
+        baixadas: number;
+        avisos: number;
+      };
+    };
+    photoWarnings?: Array<{ pointId: string; sourceUrl: string; message: string }>;
+  };
 };
 
 type LaboratoryResultsPayload = {
@@ -165,6 +181,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [conflictHref, setConflictHref] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [activeCategory, setActiveCategory] = useState<UserCategory>("Admin");
@@ -259,6 +276,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
     event.preventDefault();
     setError(null);
     setMessage(null);
+    setConflictHref(null);
 
     if (!canImportSpreadsheets) {
       setError("A categoria ativa pode consultar Dados, mas não pode importar planilhas.");
@@ -339,7 +357,10 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
         status = "PUBLICADA";
         rowCount = payload.rowCount;
         sheetCount = payload.preview.sheetCount;
-        statusMessage = payload.persistence.message;
+        statusMessage = formatFieldImportMessage(payload);
+        if (payload.unifiedImport?.summary.conflitos) {
+          setConflictHref("/dados/pendencias");
+        }
       } else if (formState.kind === "Laboratório") {
         const resultsData = new FormData();
         resultsData.append("file", file);
@@ -667,9 +688,17 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
         </form>
 
         {message ? (
-          <p className="mt-4 rounded-lg bg-[rgba(0,168,107,0.08)] px-4 py-3 text-xs font-semibold text-[#0b5f40]">
-            {message}
-          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[rgba(0,168,107,0.08)] px-4 py-3 text-xs font-semibold text-[#0b5f40]">
+            <span>{message}</span>
+            {conflictHref ? (
+              <Link
+                href={conflictHref}
+                className="rounded-md bg-white px-3 py-1.5 font-bold text-[var(--brand-navy-strong)] shadow-sm"
+              >
+                Resolver agora
+              </Link>
+            ) : null}
+          </div>
         ) : null}
         {error ? (
           <p className="mt-4 rounded-lg bg-[rgba(186,26,26,0.08)] px-4 py-3 text-xs font-semibold text-[var(--brand-danger)]">
@@ -924,5 +953,30 @@ function statusClass(status: SheetStatus) {
   }
 
   return "border-[var(--brand-teal)] bg-cyan-50 text-cyan-700";
+}
+
+function formatFieldImportMessage(payload: CampaignPublishPayload) {
+  const unified = payload.unifiedImport;
+
+  if (!unified) {
+    return payload.persistence.message;
+  }
+
+  const parts = [
+    payload.persistence.message,
+    `Diário: ${unified.summary.novos} novos, ${unified.summary.aditivos} aditivos, ${unified.summary.identicos} idênticos`,
+  ];
+
+  if (unified.summary.conflitos) {
+    parts.push(`${unified.summary.conflitos} conflitos em Pendências`);
+  }
+
+  parts.push(
+    `Fotos: ${unified.summary.fotos.baixadas} convertidas${
+      unified.summary.fotos.avisos ? `, ${unified.summary.fotos.avisos} avisos` : ""
+    }`,
+  );
+
+  return parts.join(" · ");
 }
 

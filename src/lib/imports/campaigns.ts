@@ -23,9 +23,33 @@ export type CampaignMapPoint = {
   waterAspect: string;
   weatherConditions: string;
   problems: string;
+  samplesReplicasEdna?: string;
+  zooplanktonId?: string;
+  collectionTime?: string;
+  createdByName?: string;
+  activities?: string[];
+  hasOccurrence?: boolean;
+  occurrenceType?: string;
+  occurrenceDescription?: string;
+  requiresFollowUp?: string;
+  followUpNotes?: string;
+  dailySummary?: string;
+  status?: string;
   driveUrl: string;
   dropboxUrl: string;
   photoUrl: string;
+  photos?: Array<{
+    id: string;
+    url: string;
+    caption?: string | null;
+    bucket?: string | null;
+    path?: string | null;
+    fileName?: string | null;
+    width?: number | null;
+    height?: number | null;
+    uploadedAt?: string | null;
+  }>;
+  photoWarnings?: string[];
 };
 
 export type CampaignWorkbookImport = {
@@ -53,6 +77,18 @@ const REQUIRED_FIELD_ALIASES = {
   waterAspect: ["aspecto da agua", "aspecto da água"],
   weatherConditions: ["condicoes climaticas", "condições climaticas", "condições climáticas"],
   problems: ["problemas enfrentados", "problemas"],
+  samplesReplicasEdna: ["amostras e replicas", "amostras e réplicas", "amostras"],
+  zooplanktonId: ["id zooplancton", "id zooplâncton", "id zooplacton"],
+  collectionTime: ["hora de coleta", "horario de coleta", "horário de coleta"],
+  createdByName: ["responsavel", "responsável"],
+  activities: ["atividades realizadas", "atividades"],
+  hasOccurrence: ["houve ocorrencia", "houve ocorrência"],
+  occurrenceType: ["tipo de ocorrencia", "tipo de ocorrência"],
+  occurrenceDescription: ["descricao da ocorrencia", "descrição da ocorrência"],
+  requiresFollowUp: ["exige acompanhamento"],
+  followUpNotes: ["pendencia encaminhamento", "pendência encaminhamento", "pendencia", "pendência"],
+  dailySummary: ["resumo do dia"],
+  status: ["status"],
   driveUrl: ["drive", "google drive", "link drive"],
   dropboxUrl: ["dropbox", "link dropbox"],
   photoUrl: [
@@ -82,9 +118,21 @@ const FALLBACK_COLUMNS = {
   waterAspect: 13,
   weatherConditions: 14,
   problems: 15,
-  driveUrl: 18,
-  dropboxUrl: 19,
-  photoUrl: 19,
+  samplesReplicasEdna: 16,
+  zooplanktonId: 17,
+  collectionTime: 18,
+  createdByName: 19,
+  activities: 20,
+  hasOccurrence: 21,
+  occurrenceType: 22,
+  occurrenceDescription: 23,
+  requiresFollowUp: 24,
+  followUpNotes: 25,
+  dailySummary: 26,
+  status: 27,
+  driveUrl: 28,
+  dropboxUrl: 29,
+  photoUrl: 29,
 } satisfies Record<keyof typeof REQUIRED_FIELD_ALIASES, number>;
 
 const paranaBounds = {
@@ -165,6 +213,7 @@ function parseCampaignWorksheet(
     const dropboxUrl = readMappedCell(row, columns.dropboxUrl, FALLBACK_COLUMNS.dropboxUrl);
     const fieldPhotoUrl = readMappedCell(row, columns.photoUrl, FALLBACK_COLUMNS.photoUrl);
     const photoUrl = fieldPhotoUrl || dropboxUrl || driveUrl;
+    const occurrenceText = readMappedCell(row, columns.hasOccurrence, FALLBACK_COLUMNS.hasOccurrence);
 
     points.push({
       id: `${campaign || "campanha"}-${code}-${rowNumber}`,
@@ -196,6 +245,27 @@ function parseCampaignWorksheet(
       problems:
         readMappedCell(row, columns.problems, FALLBACK_COLUMNS.problems) ||
         "Não informado",
+      samplesReplicasEdna: readMappedCell(
+        row,
+        columns.samplesReplicasEdna,
+        FALLBACK_COLUMNS.samplesReplicasEdna,
+      ),
+      zooplanktonId: readMappedCell(row, columns.zooplanktonId, FALLBACK_COLUMNS.zooplanktonId),
+      collectionTime: readMappedCell(row, columns.collectionTime, FALLBACK_COLUMNS.collectionTime),
+      createdByName: readMappedCell(row, columns.createdByName, FALLBACK_COLUMNS.createdByName),
+      activities: splitList(readMappedCell(row, columns.activities, FALLBACK_COLUMNS.activities)),
+      hasOccurrence: /^sim$/i.test(occurrenceText.trim()),
+      occurrenceType: readMappedCell(row, columns.occurrenceType, FALLBACK_COLUMNS.occurrenceType),
+      occurrenceDescription: readMappedCell(
+        row,
+        columns.occurrenceDescription,
+        FALLBACK_COLUMNS.occurrenceDescription,
+      ),
+      requiresFollowUp:
+        readMappedCell(row, columns.requiresFollowUp, FALLBACK_COLUMNS.requiresFollowUp) || "Não",
+      followUpNotes: readMappedCell(row, columns.followUpNotes, FALLBACK_COLUMNS.followUpNotes),
+      dailySummary: readMappedCell(row, columns.dailySummary, FALLBACK_COLUMNS.dailySummary),
+      status: readMappedCell(row, columns.status, FALLBACK_COLUMNS.status) || "Rascunho",
       driveUrl,
       dropboxUrl,
       photoUrl,
@@ -210,6 +280,13 @@ function parseCampaignWorksheet(
     effectivePointCount: points.filter((point) => point.effective).length,
     missingFields,
   };
+}
+
+function splitList(value: string) {
+  return value
+    .split(";")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function buildColumnMap(worksheet: ExcelJS.Worksheet) {

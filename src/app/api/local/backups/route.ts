@@ -4,6 +4,7 @@ import {
   createDatabaseBackup,
   createLocalAppBackup,
   enforceRetentionPolicy,
+  getBackupAutomationStatus,
   getOperationLogs,
   isLocalBackupRequestAllowed,
   listBackupHistory,
@@ -18,9 +19,13 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [backups, logs] = await Promise.all([listBackupHistory(), getOperationLogs()]);
+    const [backups, logs, automationStatus] = await Promise.all([
+      listBackupHistory(),
+      getOperationLogs(),
+      getBackupAutomationStatus(),
+    ]);
 
-    return NextResponse.json({ ok: true, backups, logs });
+    return NextResponse.json({ ok: true, backups, logs, automationStatus });
   } catch (error) {
     return errorResponse(error);
   }
