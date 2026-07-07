@@ -30,7 +30,7 @@ export function YvaeMasthead({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/brand/yvae-logo-completa.png"
+          src="/brand/yvae-logo.svg"
           alt="Yva'e Monitoramento"
           className="h-full w-full object-contain"
         />
