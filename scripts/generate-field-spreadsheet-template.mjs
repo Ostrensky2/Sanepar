@@ -83,7 +83,7 @@ const columns = [
   { header: "Amostras e Réplicas", key: "samples", width: 36 },
   { header: "ID Zooplacton", key: "zooplacktonId", width: 18 },
   { header: "Hora de coleta", key: "collectionTime", width: 16 },
-  { header: "Responsável", key: "createdByName", width: 24 },
+  { header: "Equipe", key: "createdByName", width: 24 },
   { header: "Atividades realizadas (;)", key: "activities", width: 34 },
   { header: "Houve ocorrência?", key: "hasOccurrence", width: 18 },
   { header: "Tipo de ocorrência", key: "occurrenceType", width: 28 },

@@ -42,8 +42,6 @@ export function FieldDiaryView({
           <Info label="Data" value={formatDate(entry.entryDate)} />
           <Info label="Campanha" value={entry.campaignName} />
           <Info label="Dia" value={String(entry.campaignDay)} />
-          <Info label="Equipe em campo" value={entry.fieldTeamName || "Não informado"} />
-          <Info label="Membros" value={fieldTeamMembers.join(", ") || "Não informado"} />
           <Info label="Hora da coleta" value={entry.collectionTime || "Não informado"} />
           <Info label="Local / SIA" value={[entry.locationName, entry.sia].filter(Boolean).join(" · ")} />
           <Info label="Amostras e Réplicas (eDNA)" value={entry.samplesReplicasEdna || "Não informado"} />
@@ -53,7 +51,10 @@ export function FieldDiaryView({
           <Info label="Município" value={entry.municipality} />
           <Info label="Condições climáticas" value={entry.weatherConditions || "Não informado"} />
           <Info label="Acessibilidade" value={entry.pointAccessibility || "Não informado"} />
-          <Info label="Responsável" value={entry.createdByName || "Não informado"} />
+          <Info label="Equipe" value={entry.createdByName || "Não informado"} />
+          {fieldTeamMembers.length ? (
+            <Info label="Membros da equipe" value={fieldTeamMembers.join(", ")} />
+          ) : null}
           <Info label="Ocorrência" value={entry.hasOccurrence ? "Sim" : "Não"} />
           <Info label="Acompanhamento" value={entry.requiresFollowUp} />
           <Info label="Status" value={entry.status} />

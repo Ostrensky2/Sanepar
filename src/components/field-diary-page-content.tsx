@@ -999,9 +999,8 @@ export function FieldDiaryPageContent({
                   <th className="px-3 py-3">Local / SIA</th>
                   <th className="px-3 py-3">Coordenadas</th>
                   <th className="px-3 py-3">Município</th>
-                  <th className="px-3 py-3">Equipe</th>
                   <th className="px-3 py-3">Situação</th>
-                  <th className="px-3 py-3">Responsável</th>
+                  <th className="px-3 py-3">Equipe</th>
                   <th className="px-3 py-3">Fotos</th>
                   <th className="px-3 py-3">Status</th>
                   <th className="px-3 py-3">Ações</th>
@@ -1024,12 +1023,6 @@ export function FieldDiaryPageContent({
                         {formatCoordinatePair(entry.latitude, entry.longitude)}
                       </td>
                       <td className="px-3 py-4">{entry.municipality || "Não informado"}</td>
-                      <td className="px-3 py-4">
-                        <span className="block font-semibold">{entry.fieldTeamName || "Não informado"}</span>
-                        {(entry.fieldTeamMembers ?? []).length ? (
-                          <span className="text-xs text-slate-500">{(entry.fieldTeamMembers ?? []).join(", ")}</span>
-                        ) : null}
-                      </td>
                       <td className="px-3 py-4">
                         <StageBadge stage={stage} />
                       </td>

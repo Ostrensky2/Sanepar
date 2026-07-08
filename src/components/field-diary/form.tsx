@@ -281,24 +281,6 @@ export function FieldDiaryForm({
               className={inputClassName}
             />
           </Field>
-          <Field label="Equipe em campo">
-            <input
-              value={entry.fieldTeamName ?? ""}
-              onChange={(event) => update({ fieldTeamName: event.target.value })}
-              className={inputClassName}
-              placeholder="Ex: Equipe Curitiba / Rota 1"
-              maxLength={120}
-            />
-          </Field>
-          <Field label="Membros da equipe">
-            <textarea
-              value={(entry.fieldTeamMembers ?? []).join("\n")}
-              onChange={(event) => update({ fieldTeamMembers: parseTeamMembers(event.target.value) })}
-              className={textareaClassName}
-              placeholder="Um nome por linha"
-              maxLength={500}
-            />
-          </Field>
           <Field label="Hora da coleta">
             <input
               type="time"
@@ -307,12 +289,12 @@ export function FieldDiaryForm({
               className={inputClassName}
             />
           </Field>
-          <Field label="Responsável pelo registro">
+          <Field label="Equipe">
             <input
               value={entry.createdByName ?? ""}
               onChange={(event) => update({ createdByName: event.target.value })}
               className={inputClassName}
-              placeholder="Nome do responsável"
+              placeholder="Nome da equipe"
             />
           </Field>
           <Field label="Amostras e Réplicas (eDNA)">
@@ -574,13 +556,6 @@ export function FieldDiaryForm({
       </form>
     </Dialog>
   );
-}
-
-function parseTeamMembers(value: string) {
-  return value
-    .split(/\r?\n|;/)
-    .map((item) => item.trim())
-    .filter(Boolean);
 }
 
 async function resizeImageForFieldDiary(file: File) {

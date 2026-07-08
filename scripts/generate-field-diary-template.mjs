@@ -59,7 +59,7 @@ const columns = [
   { header: "Campanha *", key: "campaignName", width: 32 },
   { header: "Dia da campanha *", key: "campaignDay", width: 17 },
   { header: "Data * (AAAA-MM-DD)", key: "entryDate", width: 20 },
-  { header: "Responsável *", key: "createdByName", width: 26 },
+  { header: "Equipe *", key: "createdByName", width: 26 },
   { header: "Local / Reservatório *", key: "locationName", width: 32 },
   { header: "SIA", key: "sia", width: 14 },
   { header: "Latitude", key: "latitude", width: 14 },
@@ -218,7 +218,7 @@ const instructions = [
   ["  • Campanha — use exatamente os nomes da aba Valores válidos, coluna A"],
   ["  • Dia da campanha — número inteiro ≥ 1"],
   ["  • Data — formato AAAA-MM-DD (ex: 2026-05-20)"],
-  ["  • Responsável — nome completo do técnico de campo"],
+  ["  • Equipe — nome completo do técnico ou equipe de campo"],
   ["  • Local / Reservatório — nome do ponto de coleta"],
   ["  • Município — nome do município"],
   ["  • Atividades realizadas — veja aba Valores válidos, coluna B; separe múltiplos valores com ponto e vírgula (;)"],
@@ -240,7 +240,7 @@ const instructions = [
   ["  • Não altere os nomes das colunas na linha 1"],
   ["  • Linhas completamente vazias são ignoradas na importação"],
   ["  • O separador para múltiplos valores em Atividades e Condições é ponto e vírgula (;)"],
-  ["  • Registros duplicados (mesmo Local + Data + Campanha + Responsável) podem ser re-importados"],
+  ["  • Registros duplicados (mesmo Local + Data + Campanha + Equipe) podem ser re-importados"],
 ];
 
 instructions.forEach(([text, bold], i) => {

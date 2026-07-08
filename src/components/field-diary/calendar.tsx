@@ -122,6 +122,7 @@ export function FieldDiaryMonthCalendar({
           const dayEntries = day.inMonth ? entriesByDate.get(day.date) ?? [] : [];
           const collectionDay = collectionDaysByDate.get(day.date);
           const isSelected = day.date === selectedDate;
+          const hasOccurrence = dayEntries.some((entry) => entry.hasOccurrence);
 
           return (
             <button
@@ -134,16 +135,30 @@ export function FieldDiaryMonthCalendar({
                   ? isSelected
                     ? "border-[var(--brand-blue)] bg-[var(--brand-navy-strong)] text-white shadow"
                     : dayEntries.length
-                      ? "border-[var(--brand-teal)]/40 bg-[var(--brand-green-soft)] text-[var(--brand-navy-strong)] hover:border-[var(--brand-blue)] hover:bg-white"
-                    : "border-[var(--line-ghost)] bg-white text-[var(--brand-navy-strong)] hover:border-[var(--brand-blue)] hover:bg-[var(--surface-soft)]"
+                      ? hasOccurrence
+                        ? "border-[var(--brand-danger)]/40 bg-red-50 text-[var(--brand-danger)] hover:border-[var(--brand-blue)] hover:bg-white"
+                        : "border-[var(--brand-teal)]/40 bg-[var(--brand-green-soft)] text-[var(--brand-navy-strong)] hover:border-[var(--brand-blue)] hover:bg-white"
+                      : "border-[var(--line-ghost)] bg-white text-[var(--brand-navy-strong)] hover:border-[var(--brand-blue)] hover:bg-[var(--surface-soft)]"
                   : "border-transparent bg-slate-50/60 text-slate-300"
               }`}
             >
               <span className="text-base font-black leading-none">{Number(day.date.slice(8, 10))}</span>
-              <span className={`mt-1 h-3 text-caption font-black leading-none ${isSelected ? "text-white/80" : "text-[var(--brand-teal)]"}`}>
+              <span className={`mt-1 h-3 text-caption font-black leading-none ${
+                isSelected
+                  ? "text-white/80"
+                  : hasOccurrence
+                    ? "text-[var(--brand-danger)]"
+                    : "text-[var(--brand-teal)]"
+              }`}>
                 {collectionDay ? collectionDay : ""}
               </span>
-              <span className={`mt-0.5 h-3 text-caption font-bold leading-none ${isSelected ? "text-white/80" : "text-slate-500"}`}>
+              <span className={`mt-0.5 h-3 text-caption font-bold leading-none ${
+                isSelected
+                  ? "text-white/80"
+                  : hasOccurrence
+                    ? "text-[var(--brand-danger)]/80"
+                    : "text-slate-500"
+              }`}>
                 {dayEntries.length ? `(${dayEntries.length})` : ""}
               </span>
             </button>
@@ -211,7 +226,6 @@ export function SelectedFieldDiaryDay({
                 <th className="px-3 py-3">Ponto / SIA</th>
                 <th className="px-3 py-3">Município</th>
                 <th className="px-3 py-3">Equipe</th>
-                <th className="px-3 py-3">Responsável</th>
                 <th className="px-3 py-3">Situação</th>
                 <th className="px-3 py-3">Resumo operacional</th>
                 <th className="px-3 py-3">Fotos</th>
@@ -258,7 +272,6 @@ export function OperationalEntryRow({
   onEdit?: () => void;
 }) {
   const stage = getOperationalStage(entry);
-  const fieldTeamMembers = entry.fieldTeamMembers ?? [];
   const photos = entry.photos ?? [];
 
   return (
@@ -268,12 +281,6 @@ export function OperationalEntryRow({
         {entry.sia ? <span className="text-xs font-semibold text-slate-500">{entry.sia}</span> : null}
       </td>
       <td className="px-3 py-4">{entry.municipality || "Não informado"}</td>
-      <td className="px-3 py-4">
-        <span className="block font-semibold">{entry.fieldTeamName || "Não informado"}</span>
-        {fieldTeamMembers.length ? (
-          <span className="text-xs text-slate-500">{fieldTeamMembers.join(", ")}</span>
-        ) : null}
-      </td>
       <td className="px-3 py-4">{entry.createdByName || "Não informado"}</td>
       <td className="px-3 py-4">
         <StageBadge stage={stage} />
