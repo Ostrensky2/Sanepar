@@ -12,10 +12,23 @@ import {
 import { Dialog } from "@/components/field-diary/ui";
 import type { FieldDiaryEntry } from "@/lib/field-diary";
 
+type ImportReport = {
+  novos: number;
+  atualizados: number;
+  inalterados: number;
+  conflitantes: number;
+  ausentes: number;
+  detalhes: {
+    conflitantes: string[];
+    ausentes: string[];
+  };
+};
+
 type ImportResult = {
   saved: number;
   errors: string[];
   entries: FieldDiaryEntry[];
+  report?: ImportReport;
 };
 
 export function FieldDiaryImport({
@@ -199,6 +212,7 @@ export function FieldDiaryImport({
                 </button>
               ) : null}
             </div>
+            {result.report ? <ImportReportPanel report={result.report} /> : null}
             {result.errors.length > 0 ? (
               <div className="rounded-2xl bg-[rgba(234,179,8,0.12)] p-4">
                 <p className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-amber-800">
@@ -215,5 +229,61 @@ export function FieldDiaryImport({
         ) : null}
       </div>
     </Dialog>
+  );
+}
+
+function ImportReportPanel({ report }: { report: ImportReport }) {
+  const chips: Array<{ label: string; value: number; tone: string }> = [
+    { label: "Novos", value: report.novos, tone: "text-emerald-800 bg-[rgba(5,150,105,0.10)]" },
+    { label: "Atualizados", value: report.atualizados, tone: "text-sky-800 bg-[rgba(2,132,199,0.10)]" },
+    { label: "Inalterados", value: report.inalterados, tone: "text-slate-600 bg-[var(--surface-soft)]" },
+    { label: "Conflitantes", value: report.conflitantes, tone: "text-amber-900 bg-[rgba(234,179,8,0.14)]" },
+    { label: "Ausentes", value: report.ausentes, tone: "text-rose-900 bg-[rgba(190,18,60,0.10)]" },
+  ];
+
+  return (
+    <div className="rounded-2xl border border-[var(--line-ghost)] bg-white p-4">
+      <p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-[var(--brand-navy-strong)]">
+        Relatório da importação
+      </p>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {chips.map((chip) => (
+          <div key={chip.label} className={`rounded-xl px-3 py-2 ${chip.tone}`}>
+            <div className="text-lg font-black leading-none">{chip.value}</div>
+            <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.1em]">{chip.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {report.conflitantes > 0 ? (
+        <ImportReportList
+          title="Conflitos (dado do app mantido — resolva manualmente)"
+          items={report.detalhes.conflitantes}
+        />
+      ) : null}
+      {report.ausentes > 0 ? (
+        <ImportReportList
+          title="Ausentes nesta planilha (não apagados — marcados para revisão)"
+          items={report.detalhes.ausentes}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ImportReportList({ title, items }: { title: string; items: string[] }) {
+  const shown = items.slice(0, 12);
+  const rest = items.length - shown.length;
+
+  return (
+    <div className="mt-3">
+      <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">{title}</p>
+      <ul className="space-y-0.5">
+        {shown.map((item, i) => (
+          <li key={i} className="text-xs text-[var(--ink-soft)]">• {item}</li>
+        ))}
+        {rest > 0 ? <li className="text-xs font-semibold text-[var(--ink-soft)]">…e mais {rest}.</li> : null}
+      </ul>
+    </div>
   );
 }

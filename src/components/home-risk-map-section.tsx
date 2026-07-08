@@ -126,9 +126,11 @@ export function HomeRiskMapSection({
       )
       .slice(0, 5);
   }, [filteredPoints, pointSearch]);
+  const mapHeightClass = "h-[clamp(420px,52vh,620px)]";
+  const sidePanelHeightClass = "h-[calc(clamp(420px,52vh,620px)+20rem)]";
 
   return (
-    <section className="space-y-[var(--space-3)]">
+    <section className="relative space-y-[var(--space-3)] overflow-visible">
       <div className="glass-panel radius-panel border border-[var(--line-ghost)] p-4">
         <div className="flex flex-col gap-[var(--space-3)] xl:flex-row xl:items-center xl:justify-between">
           <div>
@@ -196,8 +198,8 @@ export function HomeRiskMapSection({
         </div>
       </div>
 
-      <div className="grid items-stretch gap-[var(--layout-gutter)] lg:grid-cols-[minmax(0,1.86fr)_minmax(0,0.8fr)]">
-        <div className="relative h-[clamp(420px,52vh,620px)] overflow-hidden radius-panel border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)]">
+      <div className="relative grid items-stretch gap-[var(--layout-gutter)] overflow-visible lg:grid-cols-[minmax(0,1.86fr)_minmax(0,0.8fr)]">
+        <div className={`relative overflow-hidden radius-panel border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)] ${mapHeightClass}`}>
           {filteredPoints.length ? (
             <CampaignHydroMap
               points={filteredPoints}
@@ -236,7 +238,7 @@ export function HomeRiskMapSection({
           </div>
         </div>
 
-        <aside className="h-[clamp(420px,52vh,620px)] min-h-0">
+        <aside className={`min-h-0 lg:absolute lg:right-0 lg:top-0 lg:z-10 lg:w-[30%] ${sidePanelHeightClass}`}>
           <div
             className="flex h-full min-h-0 flex-col overflow-hidden radius-panel border bg-white shadow-[0_34px_90px_-42px_rgba(0,66,98,0.46)]"
             style={{ borderColor: `${riskHexColor(selectedPoint?.riskLevel ?? "baixo")}33` }}
@@ -247,7 +249,7 @@ export function HomeRiskMapSection({
                   className="h-1.5 flex-shrink-0"
                   style={{ backgroundColor: riskHexColor(selectedPoint.riskLevel) }}
                 />
-                <div className="flex flex-col gap-[var(--space-3)] p-4">
+                <div className="flex flex-col gap-2.5 p-3">
                   <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1">
                     <p className="text-caption font-bold uppercase tracking-[0.22em] text-slate-400">
                       Ponto em destaque
@@ -277,7 +279,7 @@ export function HomeRiskMapSection({
                   onExpand={() => setExpandedPhotoPoint(selectedPoint)}
                 />
 
-                <div className="grid gap-[var(--space-2)] text-xs">
+                <div className="grid gap-2 text-xs">
                   <RiskRows
                     rows={[
                       {
@@ -299,7 +301,7 @@ export function HomeRiskMapSection({
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 border-t border-[var(--line-ghost)] pt-3 text-caption font-semibold text-slate-500">
+                <div className="grid grid-cols-2 gap-2 border-t border-[var(--line-ghost)] pt-2 text-caption font-semibold text-slate-500">
                   <span>Latitude {selectedPoint.effective?.lat.toFixed(5) ?? "Não informado"}</span>
                   <span>Longitude {selectedPoint.effective?.lon.toFixed(5) ?? "Não informado"}</span>
                 </div>

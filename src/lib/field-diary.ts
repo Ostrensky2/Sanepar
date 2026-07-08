@@ -97,7 +97,36 @@ export type FieldDiaryEntry = {
   createdAt: string;
   updatedAt: string;
   photos: FieldDiaryPhoto[];
+  // Governança de importação (ver import-governance): decide se uma nova planilha
+  // da campanha pode sobrescrever este registro.
+  governanceStatus?: FieldDiaryGovernanceStatus;
+  // Ordem de coleta = ordem das linhas da planilha dentro do dia (afeta o traçado).
+  collectionOrder?: number | null;
+  // Marca registros que existem no app mas não vieram na última planilha importada
+  // (nunca apagamos automaticamente).
+  missingInImport?: boolean;
 };
+
+export const fieldDiaryGovernanceStatuses = [
+  "importado",
+  "em_revisao",
+  "consolidado",
+  "corrigido",
+] as const;
+
+export type FieldDiaryGovernanceStatus = (typeof fieldDiaryGovernanceStatuses)[number];
+
+export function normalizeGovernanceStatus(value: unknown): FieldDiaryGovernanceStatus {
+  return fieldDiaryGovernanceStatuses.includes(value as FieldDiaryGovernanceStatus)
+    ? (value as FieldDiaryGovernanceStatus)
+    : "importado";
+}
+
+// Um registro está protegido contra sobrescrita automática por planilha quando já
+// saiu do estado preliminar "importado".
+export function isGovernanceProtected(status: unknown): boolean {
+  return normalizeGovernanceStatus(status) !== "importado";
+}
 
 export type FieldDiaryPhoto = {
   id: string;
@@ -332,6 +361,12 @@ export function normalizeFieldDiaryEntry(value: unknown): FieldDiaryEntry | null
     createdAt: String(candidate.createdAt ?? new Date().toISOString()),
     updatedAt: String(candidate.updatedAt ?? candidate.createdAt ?? new Date().toISOString()),
     photos: normalizeFieldDiaryPhotos(candidate.photos),
+    governanceStatus: normalizeGovernanceStatus(candidate.governanceStatus),
+    collectionOrder:
+      candidate.collectionOrder === null || candidate.collectionOrder === undefined
+        ? null
+        : Number(candidate.collectionOrder) || null,
+    missingInImport: Boolean(candidate.missingInImport),
   };
 }
 
@@ -356,9 +391,8 @@ export function dedupeFieldDiaryEntries(entries: FieldDiaryEntry[]) {
 }
 
 export function fieldDiaryEntryKey(entry: Pick<FieldDiaryEntry, "campaignName" | "entryDate" | "locationName" | "sia">) {
-  const pointKey = normalizeKeyPart(entry.sia) || normalizeKeyPart(entry.locationName);
+  const pointKey = normalizePointKey(entry.sia) || normalizePointKey(entry.locationName);
   return [
-    normalizeKeyPart(entry.campaignName),
     String(entry.entryDate ?? "").slice(0, 10),
     pointKey,
   ].join("|");
@@ -462,6 +496,17 @@ function normalizeKeyPart(value: unknown) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ");
+}
+
+function normalizePointKey(value: unknown) {
+  const normalized = normalizeKeyPart(value);
+  const siaDigits = normalized.match(/^sia[\s-]*(\d+)$/)?.[1];
+
+  if (siaDigits) {
+    return `sia-${siaDigits.padStart(4, "0")}`;
+  }
+
+  return /^\d+$/.test(normalized) ? `sia-${normalized.padStart(4, "0")}` : normalized;
 }
 
 function normalizeFollowUp(value: unknown): FieldDiaryFollowUp {

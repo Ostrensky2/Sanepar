@@ -1,4 +1,4 @@
-import type { FieldDiaryEntry } from "@/lib/field-diary";
+import { isGovernanceProtected, type FieldDiaryEntry } from "@/lib/field-diary";
 
 export type ImportConflict = {
   entityType: "diario";
@@ -55,6 +55,10 @@ export function classifyFieldDiaryImport(
   };
   const conflicts: ImportConflict[] = [];
   let changed = false;
+  // Enquanto o registro está "importado" (preliminar), a planilha oficial da
+  // campanha vence e sobrescreve. Depois de consolidado/revisado/corrigido no
+  // app, divergências viram conflito e o dado do app é mantido.
+  const protectedEntry = isGovernanceProtected(existing.governanceStatus);
 
   for (const fieldName of COMPARED_FIELDS) {
     const appValue = existing[fieldName];
@@ -74,13 +78,20 @@ export function classifyFieldDiaryImport(
       continue;
     }
 
-    conflicts.push({
-      entityType: "diario",
-      entityKey,
-      fieldName,
-      appValue,
-      sheetValue,
-    });
+    if (protectedEntry) {
+      conflicts.push({
+        entityType: "diario",
+        entityKey,
+        fieldName,
+        appValue,
+        sheetValue,
+      });
+      continue;
+    }
+
+    // Preliminar: a planilha da campanha é a verdade — sobrescreve o campo.
+    (merged as Record<keyof FieldDiaryEntry, unknown>)[fieldName] = sheetValue;
+    changed = true;
   }
 
   if (conflicts.length) {

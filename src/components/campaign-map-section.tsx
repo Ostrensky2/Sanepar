@@ -7,7 +7,7 @@ import {
   FileText,
   Layers3,
   ImageIcon,
-  Route,
+  Pencil,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -25,12 +25,14 @@ export function CampaignMapSection({
   useLocalImportCache = true,
   selectedCampaignId,
   selectedCampaignTitle,
+  onEditPointPhotos,
 }: {
   points: CampaignHydroMapPoint[];
   compact?: boolean;
   useLocalImportCache?: boolean;
   selectedCampaignId?: string;
   selectedCampaignTitle?: string;
+  onEditPointPhotos?: (point: CampaignHydroMapPoint) => void;
 }) {
   const [cachedPoints, setCachedPoints] = useState<CampaignHydroMapPoint[] | null>(null);
   const [selectedPointId, setSelectedPointId] = useState(points[0]?.id);
@@ -93,8 +95,6 @@ export function CampaignMapSection({
     { key: "effective", label: "Pontos efetivos" },
     { key: "displacement", label: "Deslocamento" },
   ];
-  const routeLegend = useMemo(() => buildRouteLegend(activePoints), [activePoints]);
-
   useEffect(() => {
     const timer = window.setTimeout(() => {
       if (!useLocalImportCache) {
@@ -141,11 +141,14 @@ export function CampaignMapSection({
   }, [useLocalImportCache]);
 
   const mapHeightClass = compact ? "h-[460px]" : "h-[520px]";
-  const panelMaxHeightClass = compact ? "max-h-[460px]" : "max-h-[520px]";
+  const sidePanelHeightClass = compact ? "h-[460px]" : "h-[calc(520px+13rem)]";
+  const sidePanelPlacementClass = compact
+    ? ""
+    : "lg:absolute lg:right-0 lg:top-0 lg:z-10 lg:w-[18rem]";
 
   return (
-    <section className="grid items-start gap-4 lg:grid-cols-[14rem_minmax(0,1fr)_18rem]">
-      <aside className={`flex flex-col gap-4 overflow-y-auto pr-1 ${panelMaxHeightClass}`}>
+    <section className="relative grid items-start gap-4 overflow-visible lg:grid-cols-[14rem_minmax(0,1fr)_18rem]">
+      <aside className={`flex flex-col gap-4 overflow-y-auto pr-1 ${mapHeightClass}`}>
         {localImportLabel && cacheMatchesSelectedCampaign ? (
           <div className="radius-card border border-emerald-200 bg-white px-4 py-3 text-label font-bold uppercase tracking-[0.12em] text-emerald-800 shadow">
             {localImportLabel}
@@ -180,42 +183,23 @@ export function CampaignMapSection({
               </label>
             ))}
           </div>
-          <div className="grid grid-cols-2 gap-1 border-t border-[var(--line-ghost)] px-3 py-2 text-caption font-bold uppercase tracking-[0.12em] text-slate-500">
-            <span className="flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-full border border-slate-900 bg-[#eaff00]" />
-              Apoio
-            </span>
-            <span className="flex items-center gap-1">
+          <div className="flex flex-col gap-1 border-t border-[var(--line-ghost)] px-3 py-2 text-caption font-bold uppercase tracking-[0.12em] text-slate-500">
+            <span className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full border border-white bg-black shadow" />
-              Efet.
+              Ponto de coleta
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-0.5 w-4 rounded bg-[#00579f]" />
+              Percurso do dia
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span
+                className="h-0.5 w-4 rounded"
+                style={{ backgroundImage: "repeating-linear-gradient(90deg,#475569 0 3px,transparent 3px 6px)" }}
+              />
+              Ligação entre dias
             </span>
           </div>
-          {routeLegend.length > 0 ? (
-            <div className="max-h-64 overflow-y-auto border-t border-[var(--line-ghost)] px-3 py-2">
-              <div className="mb-1 flex items-center gap-1 text-caption font-black uppercase tracking-[0.14em] text-slate-400">
-                <Route className="h-3 w-3" />
-                Rotas
-              </div>
-              <div className="mb-1.5 flex items-center gap-2 text-caption font-semibold text-slate-600">
-                <span className="h-0 w-5 border-t border-dashed border-slate-500" />
-                <span className="truncate">Ligação entre dias</span>
-              </div>
-              <div className="space-y-1">
-                {routeLegend.map((item) => (
-                  <div
-                    key={item.key}
-                    className="flex items-center gap-2 text-caption font-semibold text-slate-600"
-                  >
-                    <span
-                      className="h-1.5 w-5 rounded-full"
-                      style={{ backgroundColor: item.color }}
-                    />
-                    <span className="truncate">{item.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </div>
       </aside>
 
@@ -237,10 +221,10 @@ export function CampaignMapSection({
         />
       </div>
 
-      <aside className={`flex flex-col gap-4 overflow-y-auto pr-1 ${panelMaxHeightClass}`}>
+      <aside className={`flex min-h-0 flex-col gap-4 pr-1 ${sidePanelHeightClass} ${sidePanelPlacementClass}`}>
         {isDetailsPanelOpen ? (
-        <div className="overflow-hidden radius-card border border-[var(--line-ghost)] bg-white shadow-[0_30px_80px_-42px_rgba(0,66,98,0.34)]">
-          <div className="bg-[var(--brand-navy-strong)] p-3 text-white">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden radius-card border border-[var(--line-ghost)] bg-white shadow-[0_30px_80px_-42px_rgba(0,66,98,0.34)]">
+          <div className="flex-shrink-0 bg-[var(--brand-navy-strong)] p-2.5 text-white">
             <div className="mb-1.5 flex items-start justify-between">
               <h3 className="heading-font text-lg font-black tracking-tight">
                 {selectedPoint?.code ?? "SIA"}
@@ -260,7 +244,25 @@ export function CampaignMapSection({
             </div>
           </div>
 
-          <div className="space-y-3 overflow-y-auto p-3">
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
+            <PointPhotoPreview
+              key={selectedPoint?.id}
+              point={selectedPoint}
+              onExpand={(index) =>
+                selectedPoint && setExpandedPhoto({ point: selectedPoint, index })
+              }
+            />
+            {selectedPoint && onEditPointPhotos ? (
+              <button
+                type="button"
+                onClick={() => onEditPointPhotos(selectedPoint)}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--line-strong)] bg-white px-3 py-2 text-caption font-black uppercase tracking-[0.12em] text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)]"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Editar fotos
+              </button>
+            ) : null}
+
             <div className="grid grid-cols-2 gap-1.5 text-xs">
               <InfoTile label="Campanha" value={selectedPoint?.campaign} />
               <InfoTile label="SIA" value={selectedPoint?.code} />
@@ -294,14 +296,6 @@ export function CampaignMapSection({
                 }
               />
             </div>
-
-            <PointPhotoPreview
-              key={selectedPoint?.id}
-              point={selectedPoint}
-              onExpand={(index) =>
-                selectedPoint && setExpandedPhoto({ point: selectedPoint, index })
-              }
-            />
 
             <div className="grid grid-cols-2 gap-1.5">
               <button className="flex flex-col items-center gap-1 rounded border border-slate-100 bg-slate-50 p-1.5 text-caption font-bold uppercase text-slate-500 transition-colors hover:bg-slate-100">
@@ -339,88 +333,24 @@ export function CampaignMapSection({
   );
 }
 
-const routeLegendColors = [
-  "#00579f",
-  "#c57a00",
-  "#008e9c",
-  "#8b5cf6",
-  "#dc2626",
-  "#0f766e",
-  "#b45309",
-  "#2563eb",
-];
-
-function buildRouteLegend(points: CampaignHydroMapPoint[]) {
-  const items: Array<{ key: string; label: string }> = [];
-  const knownLabels = new Set<string>();
-  const inferredDayLabels = new Map<string, string>();
-
-  for (const point of points) {
-    if (!point.effective && !point.original) {
-      continue;
-    }
-
-    const label = formatRouteDayLabel(point, inferredDayLabels);
-    const key = `${point.campaign || "campanha"}-${label}`;
-
-    if (!knownLabels.has(key)) {
-      knownLabels.add(key);
-      items.push({ key, label });
-    }
-  }
-
-  return items.map((item, index) => ({
-    key: item.key,
-    label: item.label,
-    color: routeLegendColors[index % routeLegendColors.length],
-  }));
-}
-
-function formatRouteDayLabel(
-  point: CampaignHydroMapPoint,
-  inferredDayLabels: Map<string, string>,
-) {
-  if (point.day) {
-    const trimmed = String(point.day).trim();
-    const numberMatch = trimmed.match(/\d+/);
-
-    if (numberMatch) {
-      return `Dia ${Number(numberMatch[0])}`;
-    }
-
-    return trimmed.toLowerCase().startsWith("dia ") ? trimmed : `Dia ${trimmed}`;
-  }
-
-  const key = point.date || "sem-data";
-  const existing = inferredDayLabels.get(key);
-
-  if (existing) {
-    return existing;
-  }
-
-  const label = `Dia ${inferredDayLabels.size + 1}`;
-  inferredDayLabels.set(key, label);
-  return label;
-}
-
 function InfoTile({ label, value }: { label: string; value?: string }) {
   return (
-    <div className="rounded border border-slate-100 bg-slate-50 px-2 py-1.5">
-      <span className="block text-caption font-bold uppercase tracking-[0.12em] text-slate-400">
+    <div className="rounded border border-slate-100 bg-slate-50 px-2 py-1">
+      <span className="block text-[9px] font-bold uppercase leading-3 tracking-[0.12em] text-slate-400">
         {label}
       </span>
-      <span className="font-semibold text-slate-700">{value || "Não informado"}</span>
+      <span className="block truncate text-[11px] font-semibold leading-4 text-slate-700">{value || "Não informado"}</span>
     </div>
   );
 }
 
 function InfoBlock({ label, value }: { label: string; value?: string }) {
   return (
-    <div className="rounded border border-slate-100 bg-white px-2 py-1.5 text-xs">
-      <span className="mb-0.5 block text-caption font-bold uppercase tracking-[0.16em] text-slate-400">
+    <div className="rounded border border-slate-100 bg-white px-2 py-1 text-xs">
+      <span className="mb-0.5 block text-[9px] font-bold uppercase leading-3 tracking-[0.14em] text-slate-400">
         {label}
       </span>
-      <p className="font-medium leading-4 text-slate-700">{value || "Não informado"}</p>
+      <p className="text-[11px] font-medium leading-4 text-slate-700">{value || "Não informado"}</p>
     </div>
   );
 }
@@ -465,7 +395,7 @@ function PointPhotoPreview({
     <div className="relative">
       <button
         type="button"
-        className="relative h-24 w-full overflow-hidden rounded border border-slate-200 bg-slate-100 text-slate-400 transition hover:brightness-95"
+        className="relative aspect-[4/3] h-[clamp(148px,20vh,220px)] w-full overflow-hidden radius-card border border-slate-200 bg-slate-100 text-slate-400 transition hover:brightness-95"
         onClick={() => onExpand(safeIndex)}
         disabled={!preview || imageFailed}
         aria-label="Expandir fotos do ponto"

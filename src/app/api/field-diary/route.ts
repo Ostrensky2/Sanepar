@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/api-auth";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 import {
+  fieldDiaryEntryKey,
   normalizeFieldDiaryEntry,
+  normalizeGovernanceStatus,
   type FieldDiaryEntry,
 } from "@/lib/field-diary";
+import { classifyFieldDiaryImport } from "@/lib/imports/conflict-detection";
 
 export const runtime = "nodejs";
 
@@ -40,6 +43,9 @@ type FieldDiaryRow = {
   created_at: string;
   updated_at: string;
   photos: unknown;
+  governance_status?: string | null;
+  collection_order?: number | null;
+  missing_in_import?: boolean | null;
 };
 
 export async function GET(request: Request) {
@@ -100,19 +106,29 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
   }
 
   const payload = (await request.json()) as { entry?: unknown };
-  const entry = normalizeFieldDiaryEntry(payload.entry);
+  const normalized = normalizeFieldDiaryEntry(payload.entry);
 
-  if (!entry) {
+  if (!normalized) {
     return NextResponse.json(
       { error: "O registro do Diário de Campo é inválido." },
       { status: 400 },
     );
   }
 
+  // Edição manual no app promove o registro a "corrigido": passa a ter prioridade
+  // sobre futuras importações da planilha da campanha.
+  const entry: FieldDiaryEntry = { ...normalized, governanceStatus: "corrigido" };
+
+  const rowToSave = mode === "insert" ? await prepareInsertRow(supabase, entry) : toRow(entry);
+
+  if ("error" in rowToSave) {
+    return NextResponse.json({ error: rowToSave.error }, { status: rowToSave.status });
+  }
+
   const result =
     mode === "insert"
-      ? await supabase.from("field_diary_entries").insert(toRow(entry)).select("*").single<FieldDiaryRow>()
-      : await supabase.from("field_diary_entries").upsert(toRow(entry), { onConflict: "id" }).select("*").single<FieldDiaryRow>();
+      ? await supabase.from("field_diary_entries").upsert(rowToSave, { onConflict: "id" }).select("*").single<FieldDiaryRow>()
+      : await supabase.from("field_diary_entries").upsert(rowToSave, { onConflict: "id" }).select("*").single<FieldDiaryRow>();
 
   const { data, error } = result;
 
@@ -127,6 +143,40 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
     entry: fromRow(data),
     persistence: "cloud",
   });
+}
+
+async function prepareInsertRow(
+  supabase: NonNullable<ReturnType<typeof createOptionalSupabaseClient>>,
+  entry: FieldDiaryEntry,
+) {
+  const { data, error } = await supabase
+    .from("field_diary_entries")
+    .select("*")
+    .eq("entry_date", entry.entryDate)
+    .returns<FieldDiaryRow[]>();
+
+  if (error || !Array.isArray(data)) {
+    return toRow(entry);
+  }
+
+  const existing = data
+    .map(fromRow)
+    .find((candidate) => fieldDiaryEntryKey(candidate) === fieldDiaryEntryKey(entry));
+
+  if (!existing) {
+    return toRow(entry);
+  }
+
+  const classification = classifyFieldDiaryImport(entry, existing, fieldDiaryEntryKey(entry));
+
+  if (classification.status === "conflict") {
+    return {
+      error: "Já existe um registro para este ponto e data com dados diferentes. O registro do aplicativo foi mantido.",
+      status: 409,
+    } as const;
+  }
+
+  return toRow({ ...classification.entry, id: existing.id });
 }
 
 function fromRow(row: FieldDiaryRow): FieldDiaryEntry {
@@ -162,6 +212,9 @@ function fromRow(row: FieldDiaryRow): FieldDiaryEntry {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     photos: Array.isArray(row.photos) ? row.photos as FieldDiaryEntry["photos"] : [],
+    governanceStatus: normalizeGovernanceStatus(row.governance_status),
+    collectionOrder: row.collection_order ?? null,
+    missingInImport: Boolean(row.missing_in_import),
   };
 }
 
@@ -198,5 +251,10 @@ function toRow(entry: FieldDiaryEntry) {
     created_at: entry.createdAt,
     updated_at: new Date().toISOString(),
     photos: entry.photos,
+    // Edição/salvamento manual no app: o registro passa a ter prioridade sobre
+    // futuras importações de planilha (ver import-governance).
+    governance_status: normalizeGovernanceStatus(entry.governanceStatus),
+    collection_order: entry.collectionOrder ?? null,
+    missing_in_import: entry.missingInImport ?? false,
   };
 }

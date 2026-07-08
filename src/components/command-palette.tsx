@@ -101,7 +101,7 @@ export function CommandPalette() {
         className="hidden items-center gap-2 rounded-full border border-[var(--line-ghost)] bg-white px-3 py-2 text-xs font-bold text-[var(--ink-soft)] transition hover:text-[var(--brand-navy-strong)] md:inline-flex"
       >
         <Search className="h-4 w-4" />
-        <span>Ctrl+K</span>
+        <span>Buscar</span>
       </button>
 
       {open ? (

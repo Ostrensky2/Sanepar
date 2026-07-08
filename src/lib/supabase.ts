@@ -91,9 +91,17 @@ export async function getAggregatedPublishedCampaignImports() {
     return null;
   }
 
+  const campaignRows = data.filter((row) =>
+    (row.point_count ?? 0) > 0 && Array.isArray(row.points) && row.points.length > 0,
+  );
+
+  if (!campaignRows.length) {
+    return null;
+  }
+
   const latestByCampaign = new Map<string, CampaignImportRow>();
 
-  for (const row of data) {
+  for (const row of campaignRows) {
     const campaignKey = inferCampaignKeyFromRow(row);
 
     if (!latestByCampaign.has(campaignKey)) {

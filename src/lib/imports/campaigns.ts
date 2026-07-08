@@ -74,7 +74,12 @@ const REQUIRED_FIELD_ALIASES = {
   effectiveLat: ["latitude efetiva"],
   effectiveLon: ["longitude efetiva"],
   accessibility: ["acessibilidade do ponto", "acessibilidade"],
-  waterAspect: ["aspecto da agua", "aspecto da água"],
+  waterAspect: [
+    "condicoes visuais da agua",
+    "condições visuais da água",
+    "aspecto da agua",
+    "aspecto da água",
+  ],
   weatherConditions: ["condicoes climaticas", "condições climaticas", "condições climáticas"],
   problems: ["problemas enfrentados", "problemas"],
   samplesReplicasEdna: ["amostras e replicas", "amostras e réplicas", "amostras"],

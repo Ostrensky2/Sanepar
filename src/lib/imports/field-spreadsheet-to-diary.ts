@@ -34,7 +34,7 @@ export function campaignPointToFieldDiaryPayload(point: CampaignMapPoint): Field
     longitude: coordinates ? String(coordinates.lon) : null,
     municipality: point.municipality || "Paraná",
     activities: point.activities?.length ? point.activities : ["Coleta realizada"],
-    waterVisualConditions: point.waterAspect && point.waterAspect !== "Não informado" ? [point.waterAspect] : [],
+    waterVisualConditions: splitWaterVisualConditions(point.waterAspect),
     hasOccurrence: Boolean(point.hasOccurrence),
     occurrenceType: point.hasOccurrence ? point.occurrenceType || null : null,
     occurrenceDescription: point.hasOccurrence ? point.occurrenceDescription || null : null,
@@ -47,6 +47,14 @@ export function campaignPointToFieldDiaryPayload(point: CampaignMapPoint): Field
     createdBy: null,
     photos: point.photos ?? [],
   };
+}
+
+// Coluna "Condições visuais da água (;)": multisseleção separada por ";".
+function splitWaterVisualConditions(value: string | undefined) {
+  return String(value ?? "")
+    .split(";")
+    .map((item) => item.trim())
+    .filter((item) => item && item !== "Não informado");
 }
 
 function normalizeSia(value: string) {

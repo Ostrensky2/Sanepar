@@ -122,23 +122,24 @@ async function applyUnifiedFieldImport(campaignImport: Awaited<ReturnType<typeof
     .map(campaignPointToFieldDiaryPayload)
     .filter((payload): payload is FieldDiaryPayload => payload !== null)
     .map(createEntry);
+  const uniqueIncomingEntries = dedupeIncomingFieldEntries(incomingEntries, summary, conflicts);
 
   if (!supabase) {
-    summary.novos = incomingEntries.length;
+    summary.novos = uniqueIncomingEntries.length;
     return {
       mode: "browser" as const,
       summary,
       conflicts,
       photoWarnings,
-      entries: incomingEntries,
+      entries: uniqueIncomingEntries,
     };
   }
 
-  const existingEntries = await readExistingFieldDiaryEntries(supabase, incomingEntries);
+  const existingEntries = await readExistingFieldDiaryEntries(supabase, uniqueIncomingEntries);
   const rowsToUpsert: FieldDiaryEntry[] = [];
   const batchId = crypto.randomUUID();
 
-  for (const incoming of incomingEntries) {
+  for (const incoming of uniqueIncomingEntries) {
     const key = fieldDiaryEntryKey(incoming);
     const existing = existingEntries.get(key) ?? null;
     const classification = classifyFieldDiaryImport(incoming, existing, key);
@@ -186,6 +187,58 @@ async function applyUnifiedFieldImport(campaignImport: Awaited<ReturnType<typeof
     conflicts,
     photoWarnings,
   };
+}
+
+function dedupeIncomingFieldEntries(
+  entries: FieldDiaryEntry[],
+  summary: { identicos: number; aditivos: number; conflitos: number },
+  conflicts: Array<{
+    entityType: "diario";
+    entityKey: string;
+    fieldName: string;
+    appValue: unknown;
+    sheetValue: unknown;
+  }>,
+) {
+  const entriesByKey = new Map<string, FieldDiaryEntry>();
+
+  for (const entry of entries) {
+    const key = fieldDiaryEntryKey(entry);
+    const existing = entriesByKey.get(key);
+
+    if (!existing) {
+      entriesByKey.set(key, entry);
+      continue;
+    }
+
+    const classification = classifyFieldDiaryImport(entry, existing, key);
+
+    if (classification.status === "identical") {
+      summary.identicos += 1;
+      continue;
+    }
+
+    if (classification.status === "additive") {
+      summary.aditivos += 1;
+      entriesByKey.set(key, classification.entry);
+      continue;
+    }
+
+    if (classification.status === "conflict") {
+      summary.conflitos += 1;
+      conflicts.push(
+        ...classification.conflicts.map((conflict) => ({
+          entityType: conflict.entityType,
+          entityKey: conflict.entityKey,
+          fieldName: String(conflict.fieldName),
+          appValue: conflict.appValue,
+          sheetValue: conflict.sheetValue,
+        })),
+      );
+    }
+  }
+
+  return [...entriesByKey.values()];
 }
 
 async function attachStoredPhotos(

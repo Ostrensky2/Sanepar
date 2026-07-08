@@ -30,10 +30,15 @@ export const METABARCODING_STAGE_COLORS: Record<MetabarcodingStageStatus, string
 export function MetabarcodingStagesIndicator({
   stages = DEFAULT_STAGES,
   title = "Processo de análise por metabarcoding",
+  progress,
 }: {
   stages?: MetabarcodingStage[];
   title?: string;
+  progress?: number;
 }) {
+  const normalizedProgress =
+    typeof progress === "number" ? Math.max(0, Math.min(100, Math.round(progress))) : null;
+
   return (
     <section className="glass-panel radius-panel p-6">
       <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
@@ -45,7 +50,14 @@ export function MetabarcodingStagesIndicator({
             {title}
           </h2>
         </div>
-        <StageLegend />
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {normalizedProgress !== null ? (
+            <span className="rounded-full border border-[var(--line-ghost)] bg-white/80 px-3 py-1.5 text-caption font-black uppercase tracking-[0.14em] text-[var(--brand-navy-strong)] shadow-[0_10px_24px_-20px_rgba(0,66,98,0.35)]">
+              Andamento {normalizedProgress}%
+            </span>
+          ) : null}
+          <StageLegend />
+        </div>
       </header>
 
       <ol

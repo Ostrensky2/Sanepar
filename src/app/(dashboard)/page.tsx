@@ -24,7 +24,7 @@ export default async function DashboardPage() {
         campaignPoints={campaignPoints}
         points={laboratoryRiskPoints}
       />
-      <ProjectStatusPanel />
+      <ProjectStatusPanel compact reserveRightRail />
       <HomeProjectSummary pointSummary={pointSummary} />
     </div>
   );

@@ -29,21 +29,30 @@ const campaigns = [
 ];
 
 const accessibilityOptions = ["Fácil", "Moderado", "Difícil", "Inacessível"];
-const waterAspectOptions = [
-  "Incolor / transparente",
-  "Levemente amarelada",
-  "Amarelada",
-  "Amarronzada / Turva",
-  "Esverdeada",
-  "Acinzentada",
-  "Não informado",
+// Deve espelhar waterVisualConditionOptions em src/lib/field-diary.ts.
+// Campo de multisseleção no Diário: vários valores separados por ";" na planilha.
+const waterVisualConditionOptions = [
+  "Aparentemente normal",
+  "Alteração de cor",
+  "Turbidez visual elevada",
+  "Espuma",
+  "Material flutuante",
+  "Odor perceptível",
+  "Presença aparente de floração",
+  "Resíduos",
+  "Peixes ou organismos mortos",
+  "Nível de água visualmente baixo",
+  "Outra condição",
 ];
+// Deve espelhar EXATAMENTE weatherConditionOptions em src/lib/field-diary.ts.
+// Valores fora dessa lista são descartados na importação (field-spreadsheet-to-diary.ts).
 const weatherOptions = [
   "Sol",
   "Sol entre nuvens",
-  "Nublado",
   "Nublado Pós Chuva",
   "Chuvoso",
+  "Chuva forte",
+  "Tempestade",
   "Garoando",
   "Nublado / Neblina",
   "Não informado",
@@ -68,7 +77,7 @@ const columns = [
   { header: " Latitude efetiva", key: "effectiveLat", width: 16 },
   { header: "Longitude Efetiva", key: "effectiveLon", width: 17 },
   { header: "Acessibilidade do Ponto", key: "accessibility", width: 24 },
-  { header: "Aspecto da água", key: "waterAspect", width: 26 },
+  { header: "Condições visuais da água (;)", key: "waterAspect", width: 30 },
   { header: "Condições Climaticas", key: "weatherConditions", width: 26 },
   { header: "Problemas Enfrentados", key: "problems", width: 34 },
   { header: "Amostras e Réplicas", key: "samples", width: 36 },
@@ -116,7 +125,7 @@ const exampleRows = [
     effectiveLat: "-25.481933",
     effectiveLon: "-49.192517",
     accessibility: "Fácil",
-    waterAspect: "Amarronzada / Turva",
+    waterAspect: "Turbidez visual elevada",
     weatherConditions: "Nublado Pós Chuva",
     problems: "",
     samples: "C1770R1 / C1770R2 / C1770R3 / C1770R4 / C1770R5 / C1770B",
@@ -147,8 +156,8 @@ const exampleRows = [
     effectiveLat: "-25.4852",
     effectiveLon: "-49.176417",
     accessibility: "Moderado",
-    waterAspect: "Amarronzada / Turva",
-    weatherConditions: "Sol - Pos chuva",
+    waterAspect: "Espuma; Resíduos",
+    weatherConditions: "Sol entre nuvens",
     problems: "",
     samples: "C1771R1 / C1771R2 / C1771R3 / C1771R4 / C1771R5 / C1771B",
     zooplacktonId: "1312811",
@@ -209,7 +218,7 @@ const wsRef = wb.addWorksheet("Valores válidos");
 const refColumns = [
   { header: "Campanhas", values: campaigns, width: 32 },
   { header: "Acessibilidade", values: accessibilityOptions, width: 24 },
-  { header: "Aspecto da água", values: waterAspectOptions, width: 30 },
+  { header: "Condições visuais da água", values: waterVisualConditionOptions, width: 32 },
   { header: "Condições climáticas", values: weatherOptions, width: 28 },
   { header: "Status", values: statusOptions, width: 18 },
   { header: "Sim/Não", values: yesNoOptions, width: 14 },
@@ -247,8 +256,7 @@ for (let r = 0; r < maxRefRows; r++) {
 const validations = [
   ["A", "$A$2:$A$10"],
   ["L", "$B$2:$B$5"],
-  ["M", "$C$2:$C$8"],
-  ["N", "$D$2:$D$9"],
+  ["N", "$D$2:$D$10"],
   ["U", "$F$2:$F$3"],
   ["X", "$G$2:$G$4"],
   ["AA", "$E$2:$E$4"],
@@ -300,6 +308,7 @@ const instructions = [
   ["  • Use links de arquivo do Google Drive; links de pasta não são suportados nesta fase."],
   ["  • Para várias fotos do mesmo ponto, separe os links por ponto-e-vírgula (;)."],
   ["  • Amostras e Réplicas e ID Zooplacton podem ser preenchidos manualmente ou via fórmula."],
+  ["  • Condições visuais da água aceitam vários valores separados por ponto-e-vírgula (;), usando a lista da aba Valores válidos."],
 ];
 
 instructions.forEach(([text, bold], index) => {

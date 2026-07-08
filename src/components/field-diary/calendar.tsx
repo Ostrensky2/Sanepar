@@ -178,7 +178,7 @@ export function SelectedFieldDiaryDay({
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--line-ghost)] pb-3">
         <div>
           <p className="text-label font-black uppercase tracking-[0.16em] text-slate-500">
-            Diário por dia
+            Diário
           </p>
           <h2 className="heading-font mt-1 text-xl font-black text-[var(--brand-navy-strong)]">
             {selectedDate ? formatDate(selectedDate) : "Selecione uma data"}

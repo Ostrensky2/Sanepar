@@ -4,9 +4,11 @@ import { requireApiSession } from "@/lib/api-auth";
 import {
   fieldDiaryEntryKey,
   normalizeFieldDiaryEntry,
+  normalizeGovernanceStatus,
   type FieldDiaryEntry,
   type FieldDiaryPayload,
 } from "@/lib/field-diary";
+import { classifyFieldDiaryImport } from "@/lib/imports/conflict-detection";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 
 export const runtime = "nodejs";
@@ -64,6 +66,9 @@ type FieldDiaryImportRow = {
   latitude?: string | null;
   longitude?: string | null;
   photos?: unknown;
+  governance_status?: string | null;
+  collection_order?: number | null;
+  missing_in_import?: boolean | null;
 };
 
 function cellText(row: ExcelJS.Row, col: number): string {
@@ -147,6 +152,9 @@ export async function POST(request: Request) {
 
   const errors: string[] = [];
   const payloads: FieldDiaryPayload[] = [];
+  // Sequência de coleta = ordem das linhas da planilha dentro de cada dia da
+  // campanha. Preservá-la é o que faz o traçado do percurso sair na ordem certa.
+  const orderCounters = new Map<string, number>();
 
   ws.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return; // header
@@ -172,9 +180,16 @@ export async function POST(request: Request) {
       ["Não", "Sim", "Avaliar posteriormente"].includes(rawFollowUp) ? rawFollowUp : "Não"
     ) as FieldDiaryPayload["requiresFollowUp"];
 
+    const campaignName = cellText(row, COL.campaignName);
+    const orderKey = `${campaignName}|${campaignDay}`;
+    const collectionOrder = (orderCounters.get(orderKey) ?? 0) + 1;
+    orderCounters.set(orderKey, collectionOrder);
+
     payloads.push({
-      campaignName: cellText(row, COL.campaignName),
+      campaignName,
       campaignDay,
+      collectionOrder,
+      governanceStatus: "importado",
       entryDate,
       fieldTeamName: "",
       fieldTeamMembers: [],
@@ -207,10 +222,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A planilha não contém registros para importar." }, { status: 400 });
   }
 
-  const entries = payloads.map(createEntry);
+  const incomingPlan = dedupeIncomingEntries(payloads.map(createEntry));
+  const entries = incomingPlan.entries;
+  errors.push(...incomingPlan.warnings);
   const supabase = createOptionalSupabaseClient();
   const allowBrowserFallback = isLocalRequest(request);
   let saved = entries;
+  let report: ImportReport = { ...emptyReport(), novos: entries.length };
   const saveErrors: string[] = [];
 
   if (!supabase && !allowBrowserFallback) {
@@ -221,28 +239,37 @@ export async function POST(request: Request) {
   }
 
   if (supabase) {
-    const rows = await prepareRowsForUpsert(entries);
-    const { error } = await supabase
-      .from("field_diary_entries")
-      .upsert(rows, { onConflict: "id" });
+    const importPlan = await prepareRowsForUpsert(entries);
+    const rows = importPlan.rows;
+    errors.push(...importPlan.warnings);
+    report = importPlan.report;
 
-    if (error) {
-      if (!allowBrowserFallback) {
-        return NextResponse.json(
-          { error: "O banco recusou a importação do Diário de Campo." },
-          { status: 500 },
-        );
+    saved = rows.map(fromRow);
+
+    if (rows.length) {
+      const { error } = await supabase
+        .from("field_diary_entries")
+        .upsert(rows, { onConflict: "id" });
+
+      if (error) {
+        if (!allowBrowserFallback) {
+          return NextResponse.json(
+            { error: "O banco recusou a importação do Diário de Campo." },
+            { status: 500 },
+          );
+        }
+
+        saved = entries;
+        saveErrors.push("O banco recusou a gravação agora, mas os registros foram importados neste navegador.");
       }
-
-      saved = entries;
-      saveErrors.push("O banco recusou a gravação agora, mas os registros foram importados neste navegador.");
     }
   }
 
   return NextResponse.json({
-    saved: saved.length,
+    saved: report.novos + report.atualizados,
     errors: [...errors, ...saveErrors],
     entries: saved,
+    report,
   });
 }
 
@@ -251,18 +278,45 @@ function isLocalRequest(request: Request) {
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
+export type ImportReport = {
+  novos: number;
+  atualizados: number;
+  inalterados: number;
+  conflitantes: number;
+  ausentes: number;
+  detalhes: {
+    conflitantes: string[];
+    ausentes: string[];
+  };
+};
+
+function emptyReport(): ImportReport {
+  return {
+    novos: 0,
+    atualizados: 0,
+    inalterados: 0,
+    conflitantes: 0,
+    ausentes: 0,
+    detalhes: { conflitantes: [], ausentes: [] },
+  };
+}
+
 async function prepareRowsForUpsert(entries: FieldDiaryEntry[]) {
   const rows = entries.map((entry) => toRow(entry));
   const supabase = createOptionalSupabaseClient();
+  const warnings: string[] = [];
+  const report = emptyReport();
 
   if (!supabase) {
-    return rows;
+    report.novos = rows.length;
+    return { rows, warnings, report };
   }
 
   const campaignNames = [...new Set(entries.map((entry) => entry.campaignName).filter(Boolean))];
 
   if (!campaignNames.length) {
-    return rows;
+    report.novos = rows.length;
+    return { rows, warnings, report };
   }
 
   const { data, error } = await supabase
@@ -271,22 +325,88 @@ async function prepareRowsForUpsert(entries: FieldDiaryEntry[]) {
     .in("campaign_name", campaignNames)
     .returns<FieldDiaryImportRow[]>();
 
-  if (error || !data?.length) {
-    return rows;
+  if (error) {
+    report.novos = rows.length;
+    return { rows, warnings, report };
   }
 
   const existingByKey = new Map<string, FieldDiaryImportRow>();
 
-  for (const row of data) {
+  for (const row of data ?? []) {
     const key = rowKey(row);
     const existing = existingByKey.get(key);
     existingByKey.set(key, existing ? mergeRows(existing, row) : row);
   }
 
-  return rows.map((row) => {
-    const existing = existingByKey.get(rowKey(row));
-    return existing ? mergeRows(existing, { ...row, id: existing.id }) : row;
-  });
+  const plannedRows: FieldDiaryImportRow[] = [];
+  const seenKeys = new Set<string>();
+
+  for (const entry of entries) {
+    const key = fieldDiaryEntryKey(entry);
+    seenKeys.add(key);
+    const existingRow = existingByKey.get(key);
+
+    // Registro novo: entra como preliminar ("importado").
+    if (!existingRow) {
+      plannedRows.push(toRow(entry));
+      report.novos += 1;
+      continue;
+    }
+
+    const existingEntry = normalizeFieldDiaryEntry(fromRow(existingRow));
+    const classification = classifyFieldDiaryImport(entry, existingEntry, key);
+
+    // Protegido (consolidado/revisado/corrigido) e divergente: mantém o app,
+    // gera pendência. Só limpamos a marca de "ausente" (o ponto veio na planilha).
+    if (classification.status === "conflict") {
+      report.conflitantes += 1;
+      report.detalhes.conflitantes.push(
+        `${entry.locationName || entry.sia || "ponto"} · Dia ${entry.campaignDay} · ${entry.entryDate}`,
+      );
+      warnings.push(
+        `Conflito para ${entry.locationName || entry.sia} em ${entry.entryDate}. ` +
+          "O dado revisado/consolidado no aplicativo foi mantido; resolva a pendência manualmente.",
+      );
+      if (existingRow.missing_in_import) {
+        plannedRows.push({ ...existingRow, missing_in_import: false });
+      }
+      continue;
+    }
+
+    // Preliminar: a planilha da campanha atualiza o registro (mantém a sequência
+    // de coleta vinda da planilha e limpa a marca de ausente).
+    const base = classification.status === "additive" ? classification.entry : existingEntry ?? entry;
+    const updatedRow: FieldDiaryImportRow = {
+      ...toRow({ ...base, id: existingRow.id }),
+      collection_order: entry.collectionOrder ?? existingRow.collection_order ?? null,
+      governance_status: normalizeGovernanceStatus(existingRow.governance_status),
+      missing_in_import: false,
+      created_at: existingRow.created_at,
+    };
+    plannedRows.push(updatedRow);
+
+    if (classification.status === "additive") {
+      report.atualizados += 1;
+    } else {
+      report.inalterados += 1;
+    }
+  }
+
+  // Linhas que existem no app mas não vieram nesta planilha: NUNCA apagamos —
+  // marcamos como "ausente na importação" para revisão do usuário.
+  for (const [key, row] of existingByKey) {
+    if (seenKeys.has(key) || row.missing_in_import) {
+      continue;
+    }
+
+    plannedRows.push({ ...row, missing_in_import: true });
+    report.ausentes += 1;
+    report.detalhes.ausentes.push(
+      `${row.location_name || row.sia || "ponto"} · Dia ${row.campaign_day} · ${row.entry_date}`,
+    );
+  }
+
+  return { rows: plannedRows, warnings, report };
 }
 
 function toRow(entry: FieldDiaryEntry): FieldDiaryImportRow {
@@ -322,6 +442,48 @@ function toRow(entry: FieldDiaryEntry): FieldDiaryImportRow {
     created_at: entry.createdAt,
     updated_at: entry.updatedAt,
     photos: entry.photos,
+    governance_status: entry.governanceStatus ?? "importado",
+    collection_order: entry.collectionOrder ?? null,
+    missing_in_import: entry.missingInImport ?? false,
+  };
+}
+
+function fromRow(row: FieldDiaryImportRow): FieldDiaryEntry {
+  return {
+    id: row.id,
+    campaignId: row.campaign_id ?? null,
+    campaignName: row.campaign_name,
+    campaignDay: row.campaign_day,
+    entryDate: row.entry_date,
+    fieldTeamName: row.field_team_name ?? "",
+    fieldTeamMembers: row.field_team_members ?? [],
+    collectionTime: row.collection_time ?? "",
+    locationName: row.location_name,
+    sia: row.sia ?? "",
+    samplesReplicasEdna: row.samples_replicas_edna ?? "",
+    zooplanktonId: row.zooplankton_id ?? "",
+    latitude: row.latitude ?? "",
+    longitude: row.longitude ?? "",
+    municipality: row.municipality,
+    activities: row.activities,
+    waterVisualConditions: row.water_visual_conditions,
+    hasOccurrence: row.has_occurrence,
+    occurrenceType: row.occurrence_type ?? "",
+    occurrenceDescription: row.occurrence_description ?? "",
+    requiresFollowUp: row.requires_follow_up as FieldDiaryEntry["requiresFollowUp"],
+    followUpNotes: row.follow_up_notes ?? "",
+    weatherConditions: (row.weather_conditions ?? "") as FieldDiaryEntry["weatherConditions"],
+    pointAccessibility: (row.point_accessibility ?? "") as FieldDiaryEntry["pointAccessibility"],
+    dailySummary: row.daily_summary,
+    status: row.status as FieldDiaryEntry["status"],
+    createdBy: row.created_by ?? "",
+    createdByName: row.created_by_name ?? "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    photos: Array.isArray(row.photos) ? row.photos as FieldDiaryEntry["photos"] : [],
+    governanceStatus: normalizeGovernanceStatus(row.governance_status),
+    collectionOrder: row.collection_order ?? null,
+    missingInImport: Boolean(row.missing_in_import),
   };
 }
 
@@ -332,6 +494,38 @@ function rowKey(row: Pick<FieldDiaryImportRow, "campaign_name" | "entry_date" | 
     locationName: row.location_name,
     sia: row.sia,
   });
+}
+
+function dedupeIncomingEntries(entries: FieldDiaryEntry[]) {
+  const entriesByKey = new Map<string, FieldDiaryEntry>();
+  const warnings: string[] = [];
+
+  for (const entry of entries) {
+    const key = fieldDiaryEntryKey(entry);
+    const existing = entriesByKey.get(key);
+
+    if (!existing) {
+      entriesByKey.set(key, entry);
+      continue;
+    }
+
+    const classification = classifyFieldDiaryImport(entry, existing, key);
+
+    if (classification.status === "conflict") {
+      warnings.push(
+        `Duplicidade contraditória na planilha para ${entry.locationName || entry.sia} em ${entry.entryDate}. ` +
+          "O registro já existente no aplicativo/primeira linha foi mantido e a linha repetida não foi gravada.",
+      );
+      continue;
+    }
+
+    entriesByKey.set(key, classification.entry);
+  }
+
+  return {
+    entries: [...entriesByKey.values()],
+    warnings,
+  };
 }
 
 function mergeRows(existing: FieldDiaryImportRow, incoming: FieldDiaryImportRow): FieldDiaryImportRow {

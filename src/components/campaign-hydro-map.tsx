@@ -17,6 +17,8 @@ export type CampaignHydroMapPoint = {
   day?: string;
   campaign: string;
   date?: string;
+  // Sequência de coleta persistida (ordem das linhas da planilha no dia).
+  collectionOrder?: number | null;
   municipality: string;
   waterBody: string;
   original: Coordinate | null;
@@ -108,7 +110,7 @@ const basinColors = [
   "rgba(0, 135, 193, 0.24)",
   "rgba(64, 116, 92, 0.22)",
 ];
-const dailyRouteColors = [
+export const dailyRouteColors = [
   "#00579f",
   "#c57a00",
   "#008e9c",
@@ -119,6 +121,18 @@ const dailyRouteColors = [
   "#2563eb",
 ];
 const maxStraightDisplacementMeters = 2000;
+// Tipos de polyline que o app pode desenhar na camada de percurso. Qualquer
+// segmento sem um destes tipos é descartado (nunca renderiza linha "solta").
+export const renderableRouteKinds = new Set<RoadRouteSegment["kind"]>([
+  "daily",
+  "transition",
+  "displacement",
+]);
+// Folga aplicada à caixa do Paraná (`paranaBounds`) ao validar coordenadas de
+// rota/deslocamento. Coordenadas fora disso — tipicamente um campo em branco que
+// virou 0,0 — não podem ancorar linha, senão riscam o mapa inteiro rumo a um
+// ponto inexistente. A folga (~0,5°) evita descartar pontos legítimos na divisa.
+const paranaRouteBoundsPaddingDegrees = 0.5;
 
 export function CampaignHydroMap({
   points,
@@ -228,10 +242,14 @@ export function CampaignHydroMap({
   );
   const shouldResolveRoadRoutes =
     layers.dailyRoutes || layers.dayTransitions || layers.displacement;
-  const routeRequests = useMemo(
-    () => (shouldResolveRoadRoutes ? buildRoadRouteRequests(points, layers) : []),
+  const routeBuild = useMemo(
+    () =>
+      shouldResolveRoadRoutes
+        ? buildRoadRouteRequests(points, layers)
+        : { requests: [], diagnostics: emptyRouteDiagnostics(points.length) },
     [layers, points, shouldResolveRoadRoutes],
   );
+  const routeRequests = routeBuild.requests;
   const roadRoutes = useMemo(
     () =>
       routeRequests.map((request) => {
@@ -244,6 +262,30 @@ export function CampaignHydroMap({
       }),
     [resolvedRoadRoutes, routeRequests],
   );
+
+  const routeDiagnostics = useMemo(() => {
+    const dailyRequested = roadRoutes.filter((route) => route.kind === "daily").length;
+    const dailyResolved = roadRoutes.filter(
+      (route) => route.kind === "daily" && route.coordinates && route.coordinates.length >= 2,
+    ).length;
+
+    return {
+      ...routeBuild.diagnostics,
+      dailyLegsRequisitados: dailyRequested,
+      dailyLegsComRota: dailyResolved,
+      dailyLegsSemRota: Math.max(0, dailyRequested - dailyResolved),
+    };
+  }, [roadRoutes, routeBuild.diagnostics]);
+
+  useEffect(() => {
+    // Diagnóstico de rota no console (só em desenvolvimento): total de pontos,
+    // datas com rota, trechos diários esperados/com rota/sem rota, ligações entre
+    // dias desenhadas e ignoradas por intervalo de datas.
+    if (process.env.NODE_ENV !== "production" && markerMode === "campaign" && points.length) {
+      console.info("[mapa-percurso] diagnóstico de rota", routeDiagnostics);
+    }
+  }, [markerMode, points.length, routeDiagnostics]);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -471,6 +513,12 @@ export function CampaignHydroMap({
         roadRoutes.filter((route) => route.coordinates && route.coordinates.length >= 2).length
       }
       data-route-request-count={routeRequests.length}
+      data-route-dates={routeDiagnostics.routeDates}
+      data-daily-legs-expected={routeDiagnostics.dailyLegsExpected}
+      data-daily-legs-com-rota={routeDiagnostics.dailyLegsComRota}
+      data-daily-legs-sem-rota={routeDiagnostics.dailyLegsSemRota}
+      data-interday-drawn={routeDiagnostics.interdayDrawn}
+      data-interday-ignored-gap={routeDiagnostics.interdayIgnoredGap}
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
         dragRef.current = { x: event.clientX, y: event.clientY, center: constrainedCenter };
@@ -663,17 +711,52 @@ function PointTooltip({
       style={{ left, top }}
     >
       <p className="text-caption font-black uppercase tracking-[0.18em] text-slate-400">
-        Ponto SIA
+        {point.campaign || "Campanha"}
       </p>
-      <p className="mt-0.5 font-black text-[var(--brand-navy-strong)]">
-        {point.municipality}
-      </p>
-      <p className="mt-0.5 font-semibold text-slate-600">{point.code}</p>
-      <p className="mt-1 max-w-56 text-label font-medium leading-4 text-slate-500">
-        {point.waterBody || "Manancial não informado"}
-      </p>
+      <p className="mt-0.5 font-black text-[var(--brand-navy-strong)]">{point.code}</p>
+      {point.point ? (
+        <p className="mt-0.5 text-label font-semibold leading-4 text-slate-600">{point.point}</p>
+      ) : null}
+      {point.day || point.date || point.collectionOrder != null ? (
+        <p className="mt-1.5 inline-flex flex-wrap items-center gap-1 rounded bg-[var(--surface-soft)] px-1.5 py-0.5 text-caption font-black uppercase tracking-[0.08em] text-[var(--brand-navy-strong)]">
+          {point.day ? formatCollectionDayLabel(point.day) : null}
+          {point.date ? `${point.day ? " · " : ""}${formatCollectionDate(point.date)}` : null}
+          {point.collectionOrder != null ? ` · Coleta ${point.collectionOrder}` : null}
+        </p>
+      ) : null}
+      <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-label leading-4">
+        <dt className="font-bold text-slate-400">Município</dt>
+        <dd className="font-medium text-slate-600">{point.municipality || "—"}</dd>
+        <dt className="font-bold text-slate-400">Rio</dt>
+        <dd className="max-w-40 font-medium text-slate-600">{point.waterBody || "—"}</dd>
+      </dl>
     </div>
   );
+}
+
+function formatCollectionDayLabel(day: string) {
+  const trimmed = String(day).trim();
+  const number = trimmed.match(/\d+/);
+
+  if (number) {
+    return `Dia ${Number(number[0])}`;
+  }
+
+  return trimmed.toLowerCase().startsWith("dia") ? trimmed : `Dia ${trimmed}`;
+}
+
+// Data de coleta em DD/MM/AAAA, aceitando ISO "AAAA-MM-DD" ou já em BR.
+function formatCollectionDate(value: string) {
+  const text = String(value).trim();
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+  if (iso) {
+    return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  }
+
+  const br = text.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+
+  return br ? `${br[1]}/${br[2]}/${br[3]}` : text;
 }
 
 function tooltipCoordinate(
@@ -1143,10 +1226,24 @@ function drawPoints(
     }
   }
 
+  // O mapa de campanha é um mapa de PERCURSO (sem resultados): todos os pontos
+  // são pretos. O amarelo de "apoio" só faz sentido fora do modo campanha.
+  const campaignRoute = markerMode === "campaign";
+
   for (const point of points) {
     if (point.original && layers.planned) {
       const original = lonLatToScreen(point.original.lon, point.original.lat, center, zoom, size);
-      drawMarkerAt(context, original.x, original.y, "original", point.id === selectedPointId);
+      drawMarkerAt(
+        context,
+        original.x,
+        original.y,
+        "original",
+        point.id === selectedPointId,
+        undefined,
+        false,
+        undefined,
+        campaignRoute,
+      );
     }
 
     if (point.effective && layers.effective) {
@@ -1160,6 +1257,7 @@ function drawPoints(
         markerMode === "risk" ? point.riskLevel : undefined,
         markerMode === "pointAction",
         effectivePointColor,
+        campaignRoute,
       );
     }
   }
@@ -1178,6 +1276,13 @@ function drawRoadRoutes(
   context.lineJoin = "round";
 
   routes.forEach((route) => {
+    // Toda polyline criada pelo app tem tipo explícito (daily / transition /
+    // displacement). Tipo não reconhecido NÃO é renderizado — garante que nenhuma
+    // linha "solta" (potencialmente preta contínua) apareça na camada de percurso.
+    if (!renderableRouteKinds.has(route.kind)) {
+      return;
+    }
+
     const visible =
       route.kind === "daily"
         ? layers.dailyRoutes
@@ -1185,11 +1290,23 @@ function drawRoadRoutes(
           ? layers.dayTransitions
           : layers.displacement;
 
-    if (!visible || !route.coordinates || route.coordinates.length < 2) {
+    // Regra do usuário: o mapa NÃO adivinha trajeto. Rotas diárias e as
+    // transições entre dias (último ponto de um dia → primeiro ponto do dia
+    // seguinte, mesmo com dias de intervalo) só existem sobre a malha rodoviária
+    // (OSRM). Enquanto a rota não resolve — ou se falha de vez — não traçamos
+    // nenhuma reta "chutada" entre os pontos; era isso que produzia as linhas
+    // cruzando o mapa sem sentido. O deslocamento (original → efetivo) continua
+    // reto, pois representa a própria correção do ponto, não um trecho de via.
+    const roadGeometry =
+      route.coordinates && route.coordinates.length >= 2 ? route.coordinates : null;
+    const geometry =
+      roadGeometry ?? (route.kind === "displacement" ? route.waypoints : null);
+
+    if (!visible || !geometry || geometry.length < 2) {
       return;
     }
 
-    const screens = route.coordinates.map((coordinate) =>
+    const screens = geometry.map((coordinate) =>
       lonLatToScreen(coordinate.lon, coordinate.lat, center, zoom, size),
     );
     const color =
@@ -1199,20 +1316,7 @@ function drawRoadRoutes(
           ? "rgba(0, 66, 98, 0.48)"
         : route.color;
 
-    context.setLineDash(route.kind === "transition" ? [5, 7] : []);
-    context.beginPath();
-    screens.forEach((screen, pointIndex) => {
-      if (pointIndex === 0) {
-        context.moveTo(screen.x, screen.y);
-      } else {
-        context.lineTo(screen.x, screen.y);
-      }
-    });
-    context.strokeStyle = "rgba(255, 255, 255, 0.86)";
-    context.lineWidth =
-      route.kind === "daily" ? 7 : route.kind === "transition" ? 3 : 2.8;
-    context.stroke();
-
+    context.setLineDash(route.kind === "transition" ? [6, 8] : []);
     context.beginPath();
     screens.forEach((screen, pointIndex) => {
       if (pointIndex === 0) {
@@ -1223,33 +1327,49 @@ function drawRoadRoutes(
     });
     context.strokeStyle = color;
     context.lineWidth =
-      route.kind === "daily" ? 4.2 : route.kind === "transition" ? 1.6 : 1.4;
+      route.kind === "daily" ? 3.2 : route.kind === "transition" ? 2 : 1.4;
     context.stroke();
-
-    if (zoom >= 9 && route.kind === "daily") {
-      const labelAnchor = screens[Math.floor(screens.length / 2)];
-      context.setLineDash([]);
-      context.font = "800 9px Inter, Arial, sans-serif";
-      context.textAlign = "center";
-      context.textBaseline = "middle";
-      context.lineWidth = 3;
-      context.strokeStyle = "rgba(255, 255, 255, 0.95)";
-      context.strokeText(route.label, labelAnchor.x, labelAnchor.y - 10);
-      context.fillStyle = color;
-      context.fillText(route.label, labelAnchor.x, labelAnchor.y - 10);
-    }
   });
 
   context.restore();
 }
 
-function buildRoadRouteRequests(
+export type RouteDiagnostics = {
+  totalPoints: number;
+  routeDates: number;
+  dailyLegsExpected: number;
+  interdayExpected: number;
+  interdayDrawn: number;
+  interdayIgnoredGap: number;
+};
+
+function emptyRouteDiagnostics(totalPoints = 0): RouteDiagnostics {
+  return {
+    totalPoints,
+    routeDates: 0,
+    dailyLegsExpected: 0,
+    interdayExpected: 0,
+    interdayDrawn: 0,
+    interdayIgnoredGap: 0,
+  };
+}
+
+export function buildRoadRouteRequests(
   points: CampaignHydroMapPoint[],
   layers: CampaignMapLayerVisibility,
-) {
+): {
+  requests: Array<Omit<RoadRouteSegment, "coordinates">>;
+  diagnostics: RouteDiagnostics;
+} {
   const groups = new Map<
     string,
-    { key: string; campaignKey: string; label: string; points: CampaignHydroMapPoint[] }
+    {
+      key: string;
+      campaignKey: string;
+      label: string;
+      dateMs: number | null;
+      points: CampaignHydroMapPoint[];
+    }
   >();
   const inferredDayLabels = new Map<string, string>();
 
@@ -1262,29 +1382,31 @@ function buildRoadRouteRequests(
 
     const label = formatRouteDayLabel(point, inferredDayLabels);
     const campaignKey = normalizeCampaignKey(point.campaign) || "campanha";
-    const key = `${campaignKey}-${label}`;
+    // Chave de rota = campanha + DATA REAL da coleta. O "dia da campanha" é só
+    // rótulo/ordem auxiliar. Sem data confiável, cai para o rótulo do dia.
+    const dateMs = parseRouteDateMs(point.date);
+    const dateKey = dateMs !== null ? `d${dateMs}` : `label-${label}`;
+    const key = `${campaignKey}|${dateKey}`;
     const group = groups.get(key);
 
     if (group) {
       group.points.push(point);
     } else {
-      groups.set(key, {
-        key,
-        campaignKey,
-        label,
-        points: [point],
-      });
+      groups.set(key, { key, campaignKey, label, dateMs, points: [point] });
     }
   }
 
   const orderedGroups = [...groups.values()].sort(
     (a, b) =>
       a.campaignKey.localeCompare(b.campaignKey) ||
+      (a.dateMs ?? Number.MAX_SAFE_INTEGER) - (b.dateMs ?? Number.MAX_SAFE_INTEGER) ||
       dayLabelNumber(a.label) - dayLabelNumber(b.label),
   );
   const dailyRequests: Array<Omit<RoadRouteSegment, "coordinates">> = [];
   const transitionRequests: Array<Omit<RoadRouteSegment, "coordinates">> = [];
   const displacementRequests: Array<Omit<RoadRouteSegment, "coordinates">> = [];
+  const diagnostics = emptyRouteDiagnostics(points.length);
+  diagnostics.routeDates = orderedGroups.length;
 
   orderedGroups.forEach((group, groupIndex) => {
     const color = dailyRouteColors[groupIndex % dailyRouteColors.length];
@@ -1292,35 +1414,57 @@ function buildRoadRouteRequests(
       .map((point) => routeCoordinate(point))
       .filter((coordinate): coordinate is Coordinate => coordinate !== null);
 
-    if (layers.dailyRoutes && waypoints.length > 1) {
-      const waypointKey = roadRouteWaypointsKey(waypoints);
+    // Cada data é dividida em trechos ponto-a-ponto: se o OSRM não resolver UMA
+    // perna (ou o ponto não "snapa" na via), só aquela perna fica sem linha — as
+    // demais continuam sobre a estrada. Nunca desenhamos reta "chutada".
+    if (waypoints.length > 1) {
+      diagnostics.dailyLegsExpected += waypoints.length - 1;
 
-      dailyRequests.push({
-        id: `daily-${group.key}-${waypointKey}`,
-        kind: "daily",
-        label: group.label,
-        color,
-        waypoints,
-      });
+      if (layers.dailyRoutes) {
+        for (let index = 1; index < waypoints.length; index += 1) {
+          const segment = [waypoints[index - 1], waypoints[index]];
+          const waypointKey = roadRouteWaypointsKey(segment);
+
+          dailyRequests.push({
+            id: `daily-${group.key}-${index}-${waypointKey}`,
+            kind: "daily",
+            label: group.label,
+            color,
+            waypoints: segment,
+          });
+        }
+      }
     }
 
     const nextGroup = orderedGroups[groupIndex + 1];
 
-    if (layers.dayTransitions && nextGroup && nextGroup.campaignKey === group.campaignKey) {
-      const from = routeCoordinate(group.points[group.points.length - 1]);
-      const to = routeCoordinate(nextGroup.points[0]);
+    // Ligação entre dias: só entre DATAS ADJACENTES (diferença de exatamente 1
+    // dia). Se houve intervalo, não se liga — a nova data recomeça do zero.
+    if (nextGroup && nextGroup.campaignKey === group.campaignKey) {
+      diagnostics.interdayExpected += 1;
 
-      if (from && to) {
-        const waypoints = [from, to];
-        const waypointKey = roadRouteWaypointsKey(waypoints);
+      if (areAdjacentDateMs(group.dateMs, nextGroup.dateMs)) {
+        const from = lastRouteCoordinate(group.points);
+        const to = firstRouteCoordinate(nextGroup.points);
 
-        transitionRequests.push({
-          id: `transition-${group.key}-${nextGroup.key}-${waypointKey}`,
-          kind: "transition",
-          label: `${group.label} > ${nextGroup.label}`,
-          color: "#334155",
-          waypoints,
-        });
+        if (from && to) {
+          diagnostics.interdayDrawn += 1;
+
+          if (layers.dayTransitions) {
+            const waypoints = [from, to];
+            const waypointKey = roadRouteWaypointsKey(waypoints);
+
+            transitionRequests.push({
+              id: `transition-${group.key}-${nextGroup.key}-${waypointKey}`,
+              kind: "transition",
+              label: `${group.label} > ${nextGroup.label}`,
+              color: "#334155",
+              waypoints,
+            });
+          }
+        }
+      } else {
+        diagnostics.interdayIgnoredGap += 1;
       }
     }
   });
@@ -1328,8 +1472,8 @@ function buildRoadRouteRequests(
   if (layers.displacement) {
     points.forEach((point) => {
       if (
-        !point.original ||
-        !point.effective ||
+        !isWithinParana(point.original) ||
+        !isWithinParana(point.effective) ||
         haversineDistanceMeters(point.original, point.effective) <= maxStraightDisplacementMeters
       ) {
         return;
@@ -1348,7 +1492,14 @@ function buildRoadRouteRequests(
     });
   }
 
-  return [...dailyRequests, ...transitionRequests, ...displacementRequests];
+  return {
+    requests: [...dailyRequests, ...transitionRequests, ...displacementRequests],
+    diagnostics,
+  };
+}
+
+function areAdjacentDateMs(a: number | null, b: number | null): boolean {
+  return a !== null && b !== null && b - a === 86_400_000;
 }
 
 function dayLabelNumber(label: string) {
@@ -1356,8 +1507,66 @@ function dayLabelNumber(label: string) {
   return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER;
 }
 
+// Converte a data do ponto (ISO "AAAA-MM-DD" ou BR "DD/MM/AAAA") em milissegundos
+// UTC no início do dia, para comparar adjacência de datas com segurança.
+function parseRouteDateMs(value?: string): number | null {
+  const text = String(value ?? "").trim();
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+  if (iso) {
+    return Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  }
+
+  const br = text.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+
+  if (br) {
+    return Date.UTC(Number(br[3]), Number(br[2]) - 1, Number(br[1]));
+  }
+
+  return null;
+}
+
 function routeCoordinate(point?: CampaignHydroMapPoint) {
-  return point?.effective ?? point?.original ?? null;
+  const coordinate = point?.effective ?? point?.original ?? null;
+  return isWithinParana(coordinate) ? coordinate : null;
+}
+
+function firstRouteCoordinate(points: CampaignHydroMapPoint[]) {
+  for (const point of points) {
+    const coordinate = routeCoordinate(point);
+
+    if (coordinate) {
+      return coordinate;
+    }
+  }
+
+  return null;
+}
+
+function lastRouteCoordinate(points: CampaignHydroMapPoint[]) {
+  for (let index = points.length - 1; index >= 0; index -= 1) {
+    const coordinate = routeCoordinate(points[index]);
+
+    if (coordinate) {
+      return coordinate;
+    }
+  }
+
+  return null;
+}
+
+function isWithinParana(coordinate: Coordinate | null | undefined): coordinate is Coordinate {
+  const padding = paranaRouteBoundsPaddingDegrees;
+
+  return (
+    !!coordinate &&
+    Number.isFinite(coordinate.lat) &&
+    Number.isFinite(coordinate.lon) &&
+    coordinate.lat <= paranaBounds.north + padding &&
+    coordinate.lat >= paranaBounds.south - padding &&
+    coordinate.lon >= paranaBounds.west - padding &&
+    coordinate.lon <= paranaBounds.east + padding
+  );
 }
 
 function roadRouteWaypointsKey(waypoints: Coordinate[]) {
@@ -1459,6 +1668,7 @@ function drawMarkerAt(
   riskLevel?: CampaignHydroMapPoint["riskLevel"],
   isPointAction = false,
   effectivePointColor?: string,
+  campaignRoute = false,
 ) {
   if (selected) {
     context.beginPath();
@@ -1484,23 +1694,26 @@ function drawMarkerAt(
   }
 
   const hasOverride = type === "effective" && Boolean(effectivePointColor);
+  // No mapa de percurso não há resultado: qualquer ponto (apoio ou efetivo) é preto.
+  const routeBlack = campaignRoute && !hasOverride && !riskLevel;
   context.beginPath();
   context.arc(
     x,
     y,
-    type === "original" ? 5 : hasOverride || riskLevel ? 7 : 5.2,
+    routeBlack ? 5.2 : type === "original" ? 5 : hasOverride || riskLevel ? 7 : 5.2,
     0,
     Math.PI * 2,
   );
-  context.fillStyle =
-    type === "original"
+  context.fillStyle = routeBlack
+    ? "#050505"
+    : type === "original"
       ? "#eaff00"
       : hasOverride
         ? (effectivePointColor as string)
         : riskLevel
           ? riskColor(riskLevel)
           : "#050505";
-  context.strokeStyle = type === "original" ? "#111827" : "#ffffff";
+  context.strokeStyle = routeBlack ? "#ffffff" : type === "original" ? "#111827" : "#ffffff";
   context.lineWidth = selected ? 2.6 : 1.8;
   context.fill();
   context.stroke();
