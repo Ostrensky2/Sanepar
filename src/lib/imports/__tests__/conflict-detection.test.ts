@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { classifyFieldDiaryImport } from "@/lib/imports/conflict-detection";
+import {
+  classifyFieldDiaryImport,
+  diffFieldDiaryEntries,
+} from "@/lib/imports/conflict-detection";
 import type { FieldDiaryEntry } from "@/lib/field-diary";
 
 describe("classifyFieldDiaryImport", () => {
@@ -51,6 +54,41 @@ describe("classifyFieldDiaryImport", () => {
       expect(result.entry.collectionTime).toBe("09:00");
       expect(result.conflicts[0]).toMatchObject({ fieldName: "collectionTime" });
     }
+  });
+
+  it("com force=true, a planilha sobrescreve mesmo um registro protegido", () => {
+    const incoming = entry({ collectionTime: "08:30" });
+    const result = classifyFieldDiaryImport(
+      incoming,
+      entry({ collectionTime: "09:00", governanceStatus: "consolidado" }),
+      "k",
+      { force: true },
+    );
+
+    expect(result.status).toBe("additive");
+    expect(result.entry.collectionTime).toBe("08:30");
+    expect(result.conflicts).toHaveLength(0);
+  });
+});
+
+describe("diffFieldDiaryEntries", () => {
+  it("detecta os campos que mudaram, com valor anterior e novo", () => {
+    const before = entry({ collectionTime: "09:00", municipality: "Curitiba" });
+    const after = entry({ collectionTime: "08:30", municipality: "Curitiba" });
+    const changes = diffFieldDiaryEntries(before, after);
+
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toMatchObject({
+      field: "collectionTime",
+      oldValue: "09:00",
+      newValue: "08:30",
+    });
+  });
+
+  it("não reporta mudança quando os registros são equivalentes", () => {
+    const before = entry({ activities: ["Coleta realizada"] });
+    const after = entry({ activities: ["Coleta realizada"] });
+    expect(diffFieldDiaryEntries(before, after)).toHaveLength(0);
   });
 });
 

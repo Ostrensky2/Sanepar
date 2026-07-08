@@ -44,6 +44,7 @@ export function classifyFieldDiaryImport(
   incoming: FieldDiaryEntry,
   existing: FieldDiaryEntry | null,
   entityKey: string,
+  options?: { force?: boolean },
 ): FieldDiaryImportClassification {
   if (!existing) {
     return { status: "new", entry: incoming, conflicts: [] };
@@ -57,8 +58,9 @@ export function classifyFieldDiaryImport(
   let changed = false;
   // Enquanto o registro está "importado" (preliminar), a planilha oficial da
   // campanha vence e sobrescreve. Depois de consolidado/revisado/corrigido no
-  // app, divergências viram conflito e o dado do app é mantido.
-  const protectedEntry = isGovernanceProtected(existing.governanceStatus);
+  // app, divergências viram conflito e o dado do app é mantido — a menos que o
+  // usuário force explicitamente a planilha (resolução de conflito assumida).
+  const protectedEntry = options?.force ? false : isGovernanceProtected(existing.governanceStatus);
 
   for (const fieldName of COMPARED_FIELDS) {
     const appValue = existing[fieldName];
@@ -139,4 +141,41 @@ function normalizeScalar(value: unknown) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ");
+}
+
+export type FieldDiaryFieldChange = {
+  field: keyof FieldDiaryEntry;
+  oldValue: string;
+  newValue: string;
+};
+
+// Diferença campo a campo entre dois registros (para o histórico de alterações).
+// Só considera os campos comparáveis; ignora diferenças irrelevantes de formato.
+export function diffFieldDiaryEntries(
+  oldEntry: FieldDiaryEntry,
+  newEntry: FieldDiaryEntry,
+): FieldDiaryFieldChange[] {
+  const changes: FieldDiaryFieldChange[] = [];
+
+  for (const field of COMPARED_FIELDS) {
+    if (!equivalent(oldEntry[field], newEntry[field])) {
+      changes.push({
+        field,
+        oldValue: stringifyChangeValue(oldEntry[field]),
+        newValue: stringifyChangeValue(newEntry[field]),
+      });
+    }
+  }
+
+  return changes;
+}
+
+function stringifyChangeValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item ?? "")).join("; ");
+  }
+  if (value === null || value === undefined) {
+    return "";
+  }
+  return String(value);
 }

@@ -107,13 +107,17 @@ resolvidos silenciosamente.*
   sem reta; transição só entre datas adjacentes; tipagem de polyline + guard;
   diagnóstico (console + `data-*`); tooltip completo; sem `original` fabricado
   (fim das linhas de deslocamento indevidas); OSRM estável (`openstreetmap.de`).
-- UI Fase 2: relatório de importação na tela; botão "Consolidar campanha"; badges
-  de status/ausente na lista do Diário.
-- Teste: `campaign-hydro-map.routes.test.ts` garante nenhum segmento preto contínuo
-  do app + agrupamento por data + adjacência.
+- UI Fase 2 (completa): **prévia interativa** antes de gravar (dry-run, `mode=preview`)
+  com relatório + **conflitos lado a lado** (app × planilha) e opção **forçar**
+  (sobrescreve consolidado só com confirmação); botão "Consolidar campanha"; badges
+  de status/ausente na lista e na visualização.
+- **Histórico por-campo persistido** (regra 9): tabela `field_diary_change_log`
+  (valor anterior/novo, origem planilha/app, usuário, data); gravado no import e na
+  edição manual; exibido na visualização do registro.
+- Testes (29): `campaign-hydro-map.routes` (sem segmento preto contínuo + data +
+  adjacência); `conflict-detection` (governança preliminar/protegido, force, diff).
 - Diagnóstico real C2: 77 pontos, 27 datas, 50 trechos diários, 23 tracejados,
   3 intervalos ignorados.
 
-**Pendente:** histórico por-campo persistido (9); tela de prévia interativa antes
-de gravar e resolução de conflito lado a lado (12); aplicar migrations na **nuvem**
-+ **deploy** (só com aprovação; código+migration hoje são locais).
+**Pendente:** aplicar as migrations na **nuvem** + **deploy** (só com aprovação;
+código+migrations/re-sync hoje são apenas locais).

@@ -7,7 +7,7 @@ import {
   normalizeGovernanceStatus,
   type FieldDiaryEntry,
 } from "@/lib/field-diary";
-import { classifyFieldDiaryImport } from "@/lib/imports/conflict-detection";
+import { classifyFieldDiaryImport, diffFieldDiaryEntries } from "@/lib/imports/conflict-detection";
 
 export const runtime = "nodejs";
 
@@ -119,6 +119,19 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
   // sobre futuras importações da planilha da campanha.
   const entry: FieldDiaryEntry = { ...normalized, governanceStatus: "corrigido" };
 
+  // Captura o estado anterior (numa edição) para registrar o histórico por campo.
+  let previousEntry: FieldDiaryEntry | null = null;
+  if (mode === "upsert") {
+    const { data: previousRow } = await supabase
+      .from("field_diary_entries")
+      .select("*")
+      .eq("id", entry.id)
+      .maybeSingle<FieldDiaryRow>();
+    if (previousRow) {
+      previousEntry = normalizeFieldDiaryEntry(fromRow(previousRow));
+    }
+  }
+
   const rowToSave = mode === "insert" ? await prepareInsertRow(supabase, entry) : toRow(entry);
 
   if ("error" in rowToSave) {
@@ -139,8 +152,29 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
     );
   }
 
+  const savedEntry = fromRow(data);
+
+  // Histórico de alterações da edição manual (origem "app").
+  if (previousEntry) {
+    const changes = diffFieldDiaryEntries(previousEntry, savedEntry);
+    if (changes.length) {
+      const changedBy = auth.session?.name || auth.session?.email || null;
+      await supabase.from("field_diary_change_log").insert(
+        changes.map((change) => ({
+          entry_id: entry.id,
+          campaign_name: entry.campaignName,
+          field_name: String(change.field),
+          old_value: change.oldValue,
+          new_value: change.newValue,
+          origin: "app",
+          changed_by: changedBy,
+        })),
+      );
+    }
+  }
+
   return NextResponse.json({
-    entry: fromRow(data),
+    entry: savedEntry,
     persistence: "cloud",
   });
 }

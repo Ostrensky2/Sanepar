@@ -8,7 +8,7 @@ import {
   type FieldDiaryEntry,
   type FieldDiaryPayload,
 } from "@/lib/field-diary";
-import { classifyFieldDiaryImport } from "@/lib/imports/conflict-detection";
+import { classifyFieldDiaryImport, diffFieldDiaryEntries } from "@/lib/imports/conflict-detection";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 
 export const runtime = "nodejs";
@@ -227,8 +227,11 @@ export async function POST(request: Request) {
   errors.push(...incomingPlan.warnings);
   const supabase = createOptionalSupabaseClient();
   const allowBrowserFallback = isLocalRequest(request);
+  const mode = String(formData.get("mode") ?? "apply");
+  const force = String(formData.get("force") ?? "") === "true";
   let saved = entries;
   let report: ImportReport = { ...emptyReport(), novos: entries.length };
+  let conflicts: ImportConflictDetail[] = [];
   const saveErrors: string[] = [];
 
   if (!supabase && !allowBrowserFallback) {
@@ -239,11 +242,23 @@ export async function POST(request: Request) {
   }
 
   if (supabase) {
-    const importPlan = await prepareRowsForUpsert(entries);
+    const importPlan = await prepareRowsForUpsert(entries, force);
     const rows = importPlan.rows;
-    errors.push(...importPlan.warnings);
     report = importPlan.report;
+    conflicts = importPlan.conflicts;
 
+    // PRÉVIA (dry-run): calcula o plano e devolve o relatório SEM gravar nada.
+    if (mode === "preview") {
+      return NextResponse.json({
+        preview: true,
+        wouldWrite: rows.length,
+        errors: [...errors, ...importPlan.warnings],
+        report,
+        conflicts,
+      });
+    }
+
+    errors.push(...importPlan.warnings);
     saved = rows.map(fromRow);
 
     if (rows.length) {
@@ -261,15 +276,29 @@ export async function POST(request: Request) {
 
         saved = entries;
         saveErrors.push("O banco recusou a gravação agora, mas os registros foram importados neste navegador.");
+      } else if (importPlan.changes.length) {
+        // Histórico de alterações (regra 9): valor anterior/novo, origem, quem, quando.
+        const changedBy = auth.session?.name || auth.session?.email || null;
+        const logRows = importPlan.changes.map((change) => ({
+          entry_id: change.entryId,
+          campaign_name: change.campaignName,
+          field_name: change.field,
+          old_value: change.oldValue,
+          new_value: change.newValue,
+          origin: change.origin,
+          changed_by: changedBy,
+        }));
+        await supabase.from("field_diary_change_log").insert(logRows);
       }
     }
   }
 
   return NextResponse.json({
-    saved: report.novos + report.atualizados,
+    saved: report.novos + report.atualizados + report.forcados,
     errors: [...errors, ...saveErrors],
     entries: saved,
     report,
+    conflicts,
   });
 }
 
@@ -283,11 +312,29 @@ export type ImportReport = {
   atualizados: number;
   inalterados: number;
   conflitantes: number;
+  forcados: number;
   ausentes: number;
   detalhes: {
     conflitantes: string[];
     ausentes: string[];
   };
+};
+
+export type ImportConflictDetail = {
+  key: string;
+  location: string;
+  day: number;
+  date: string;
+  fields: Array<{ field: string; app: string; sheet: string }>;
+};
+
+type ImportChange = {
+  entryId: string;
+  campaignName: string;
+  field: string;
+  oldValue: string;
+  newValue: string;
+  origin: string;
 };
 
 function emptyReport(): ImportReport {
@@ -296,27 +343,54 @@ function emptyReport(): ImportReport {
     atualizados: 0,
     inalterados: 0,
     conflitantes: 0,
+    forcados: 0,
     ausentes: 0,
     detalhes: { conflitantes: [], ausentes: [] },
   };
 }
 
-async function prepareRowsForUpsert(entries: FieldDiaryEntry[]) {
+function stringifyConflictValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item ?? "")).join("; ");
+  }
+  if (value === null || value === undefined) {
+    return "";
+  }
+  return String(value);
+}
+
+function buildUpdatedRow(
+  entry: FieldDiaryEntry,
+  existingRow: FieldDiaryImportRow,
+  base: FieldDiaryEntry,
+): FieldDiaryImportRow {
+  return {
+    ...toRow({ ...base, id: existingRow.id }),
+    collection_order: entry.collectionOrder ?? existingRow.collection_order ?? null,
+    governance_status: normalizeGovernanceStatus(existingRow.governance_status),
+    missing_in_import: false,
+    created_at: existingRow.created_at,
+  };
+}
+
+async function prepareRowsForUpsert(entries: FieldDiaryEntry[], force = false) {
   const rows = entries.map((entry) => toRow(entry));
   const supabase = createOptionalSupabaseClient();
   const warnings: string[] = [];
   const report = emptyReport();
+  const conflicts: ImportConflictDetail[] = [];
+  const changes: ImportChange[] = [];
 
   if (!supabase) {
     report.novos = rows.length;
-    return { rows, warnings, report };
+    return { rows, warnings, report, conflicts, changes };
   }
 
   const campaignNames = [...new Set(entries.map((entry) => entry.campaignName).filter(Boolean))];
 
   if (!campaignNames.length) {
     report.novos = rows.length;
-    return { rows, warnings, report };
+    return { rows, warnings, report, conflicts, changes };
   }
 
   const { data, error } = await supabase
@@ -327,7 +401,7 @@ async function prepareRowsForUpsert(entries: FieldDiaryEntry[]) {
 
   if (error) {
     report.novos = rows.length;
-    return { rows, warnings, report };
+    return { rows, warnings, report, conflicts, changes };
   }
 
   const existingByKey = new Map<string, FieldDiaryImportRow>();
@@ -356,19 +430,49 @@ async function prepareRowsForUpsert(entries: FieldDiaryEntry[]) {
     const existingEntry = normalizeFieldDiaryEntry(fromRow(existingRow));
     const classification = classifyFieldDiaryImport(entry, existingEntry, key);
 
-    // Protegido (consolidado/revisado/corrigido) e divergente: mantém o app,
-    // gera pendência. Só limpamos a marca de "ausente" (o ponto veio na planilha).
+    // Protegido (consolidado/revisado/corrigido) e divergente: por padrão mantém
+    // o app e gera pendência. Se o usuário forçar, a planilha sobrescreve.
     if (classification.status === "conflict") {
       report.conflitantes += 1;
       report.detalhes.conflitantes.push(
         `${entry.locationName || entry.sia || "ponto"} · Dia ${entry.campaignDay} · ${entry.entryDate}`,
       );
-      warnings.push(
-        `Conflito para ${entry.locationName || entry.sia} em ${entry.entryDate}. ` +
-          "O dado revisado/consolidado no aplicativo foi mantido; resolva a pendência manualmente.",
-      );
-      if (existingRow.missing_in_import) {
-        plannedRows.push({ ...existingRow, missing_in_import: false });
+      conflicts.push({
+        key,
+        location: entry.locationName || entry.sia || "ponto",
+        day: entry.campaignDay,
+        date: entry.entryDate,
+        fields: classification.conflicts.map((conflict) => ({
+          field: String(conflict.fieldName),
+          app: stringifyConflictValue(conflict.appValue),
+          sheet: stringifyConflictValue(conflict.sheetValue),
+        })),
+      });
+
+      if (force && existingEntry) {
+        const forced = classifyFieldDiaryImport(entry, existingEntry, key, { force: true });
+        const forcedEntry = forced.status === "additive" ? forced.entry : existingEntry;
+        plannedRows.push(buildUpdatedRow(entry, existingRow, forcedEntry));
+        report.forcados += 1;
+
+        for (const change of diffFieldDiaryEntries(existingEntry, forcedEntry)) {
+          changes.push({
+            entryId: existingRow.id,
+            campaignName: entry.campaignName,
+            field: String(change.field),
+            oldValue: change.oldValue,
+            newValue: change.newValue,
+            origin: "planilha (forçado)",
+          });
+        }
+      } else {
+        warnings.push(
+          `Conflito para ${entry.locationName || entry.sia} em ${entry.entryDate}. ` +
+            "O dado revisado/consolidado no aplicativo foi mantido; resolva a pendência manualmente.",
+        );
+        if (existingRow.missing_in_import) {
+          plannedRows.push({ ...existingRow, missing_in_import: false });
+        }
       }
       continue;
     }
@@ -376,17 +480,23 @@ async function prepareRowsForUpsert(entries: FieldDiaryEntry[]) {
     // Preliminar: a planilha da campanha atualiza o registro (mantém a sequência
     // de coleta vinda da planilha e limpa a marca de ausente).
     const base = classification.status === "additive" ? classification.entry : existingEntry ?? entry;
-    const updatedRow: FieldDiaryImportRow = {
-      ...toRow({ ...base, id: existingRow.id }),
-      collection_order: entry.collectionOrder ?? existingRow.collection_order ?? null,
-      governance_status: normalizeGovernanceStatus(existingRow.governance_status),
-      missing_in_import: false,
-      created_at: existingRow.created_at,
-    };
-    plannedRows.push(updatedRow);
+    plannedRows.push(buildUpdatedRow(entry, existingRow, base));
 
     if (classification.status === "additive") {
       report.atualizados += 1;
+
+      if (existingEntry) {
+        for (const change of diffFieldDiaryEntries(existingEntry, base)) {
+          changes.push({
+            entryId: existingRow.id,
+            campaignName: entry.campaignName,
+            field: String(change.field),
+            oldValue: change.oldValue,
+            newValue: change.newValue,
+            origin: "planilha",
+          });
+        }
+      }
     } else {
       report.inalterados += 1;
     }
@@ -406,7 +516,7 @@ async function prepareRowsForUpsert(entries: FieldDiaryEntry[]) {
     );
   }
 
-  return { rows: plannedRows, warnings, report };
+  return { rows: plannedRows, warnings, report, conflicts, changes };
 }
 
 function toRow(entry: FieldDiaryEntry): FieldDiaryImportRow {

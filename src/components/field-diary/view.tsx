@@ -1,9 +1,27 @@
 "use client";
 
 import { Pencil } from "lucide-react";
+import { useEffect, useState } from "react";
 import { formatDate } from "@/components/field-diary/helpers";
 import { DetailBlock, Dialog, Info } from "@/components/field-diary/ui";
 import type { FieldDiaryEntry } from "@/lib/field-diary";
+
+const governanceLabels: Record<string, string> = {
+  importado: "Preliminar (importado)",
+  em_revisao: "Em revisão",
+  consolidado: "Consolidado",
+  corrigido: "Corrigido manualmente",
+};
+
+type ChangeHistoryItem = {
+  id: string;
+  field: string;
+  oldValue: string;
+  newValue: string;
+  origin: string;
+  changedBy: string;
+  changedAt: string;
+};
 
 export function FieldDiaryView({
   entry,
@@ -39,6 +57,13 @@ export function FieldDiaryView({
           <Info label="Ocorrência" value={entry.hasOccurrence ? "Sim" : "Não"} />
           <Info label="Acompanhamento" value={entry.requiresFollowUp} />
           <Info label="Status" value={entry.status} />
+          <Info
+            label="Governança"
+            value={
+              (entry.missingInImport ? "Ausente na última importação · " : "") +
+              (governanceLabels[entry.governanceStatus ?? "importado"] ?? "Preliminar (importado)")
+            }
+          />
         </div>
 
         <DetailBlock label="Atividades realizadas" value={entry.activities.join(", ") || "Não informado"} />
@@ -77,6 +102,8 @@ export function FieldDiaryView({
           <DetailBlock label="Imagens da coleta" value="Nenhuma imagem vinculada." />
         )}
 
+        <ChangeHistorySection entryId={entry.id} />
+
         <div className="flex justify-end gap-3">
           <button
             type="button"
@@ -98,5 +125,67 @@ export function FieldDiaryView({
         </div>
       </div>
     </Dialog>
+  );
+}
+
+function ChangeHistorySection({ entryId }: { entryId: string }) {
+  const [history, setHistory] = useState<ChangeHistoryItem[]>([]);
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+
+  useEffect(() => {
+    let active = true;
+
+    fetch(`/api/field-diary/history?entryId=${encodeURIComponent(entryId)}`)
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("history"))))
+      .then((payload: { history?: ChangeHistoryItem[] }) => {
+        if (active) {
+          setHistory(Array.isArray(payload.history) ? payload.history : []);
+          setState("ready");
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setState("error");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [entryId]);
+
+  return (
+    <div className="rounded-2xl border border-[var(--line-ghost)] bg-white p-4">
+      <p className="text-caption font-bold uppercase tracking-[0.18em] text-slate-400">
+        Histórico de alterações
+      </p>
+      {state === "loading" ? (
+        <p className="mt-2 text-xs text-[var(--ink-soft)]">Carregando…</p>
+      ) : state === "error" ? (
+        <p className="mt-2 text-xs text-[var(--ink-soft)]">Não foi possível carregar o histórico.</p>
+      ) : history.length === 0 ? (
+        <p className="mt-2 text-xs text-[var(--ink-soft)]">Sem alterações registradas para este ponto.</p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {history.slice(0, 30).map((item) => (
+            <li key={item.id} className="rounded-xl border border-[var(--line-ghost)] px-3 py-2 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-bold text-[var(--brand-navy-strong)]">{item.field}</span>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                  {item.origin}
+                  {item.changedBy ? ` · ${item.changedBy}` : ""}
+                  {item.changedAt ? ` · ${formatDate(item.changedAt.slice(0, 10))}` : ""}
+                </span>
+              </div>
+              <div className="mt-1 text-slate-700">
+                <span className="text-rose-800 line-through">{item.oldValue || "—"}</span>
+                <span className="mx-1 text-slate-400">→</span>
+                <span className="text-emerald-800">{item.newValue || "—"}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
