@@ -13,6 +13,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import {
   CampaignHydroMap,
+  dailyRouteColors,
   type CampaignMapLayerVisibility,
   type CampaignHydroMapPoint,
 } from "@/components/campaign-hydro-map";
@@ -183,24 +184,37 @@ export function CampaignMapSection({
               </label>
             ))}
           </div>
-          <div className="flex flex-col gap-1 border-t border-[var(--line-ghost)] px-3 py-2 text-caption font-bold uppercase tracking-[0.12em] text-slate-500">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full border border-white bg-black shadow" />
-              Ponto de coleta
+          <div className="flex flex-col gap-1.5 border-t border-[var(--line-ghost)] px-3 py-2 text-slate-500">
+            <span className="flex items-center gap-1.5 text-caption font-bold uppercase tracking-[0.12em]">
+              <span className="flex items-center -space-x-0.5">
+                {dailyRouteColors.slice(0, 5).map((color) => (
+                  <span
+                    key={color}
+                    className="h-2.5 w-2.5 rounded-full border border-white shadow"
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </span>
+              Cores = dias de coleta
             </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-0.5 w-4 rounded bg-[#00579f]" />
-              Percurso do dia
-            </span>
-            <span className="flex items-center gap-1.5">
+            <p className="text-[10px] font-medium normal-case leading-3 tracking-normal text-slate-400">
+              Pontos e linhas da mesma cor pertencem ao mesmo dia.
+            </p>
+            <span className="flex items-center gap-1.5 text-caption font-bold uppercase tracking-[0.12em]">
               <span
                 className="h-0.5 w-4 rounded"
                 style={{ backgroundImage: "repeating-linear-gradient(90deg,#475569 0 3px,transparent 3px 6px)" }}
               />
               Ligação entre dias
             </span>
+            <span className="flex items-center gap-1.5 text-caption font-bold uppercase tracking-[0.12em]">
+              <span className="h-2.5 w-2.5 rounded-full border border-white bg-black shadow" />
+              Coordenada de apoio
+            </span>
           </div>
         </div>
+
+
       </aside>
 
       <div className={`relative overflow-hidden radius-panel border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)] ${mapHeightClass}`}>

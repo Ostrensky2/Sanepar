@@ -1319,7 +1319,7 @@ function addFieldDiaryEntriesSheet(
     { header: "Acessibilidade", key: "pointAccessibility", width: 18 },
     { header: "Resumo diário", key: "dailySummary", width: 48 },
     { header: "Status", key: "status", width: 14 },
-    { header: "Criado por", key: "createdByName", width: 24 },
+    { header: "Equipe", key: "createdByName", width: 24 },
     { header: "Criado em", key: "createdAt", width: 22 },
     { header: "Atualizado em", key: "updatedAt", width: 22 },
   ];

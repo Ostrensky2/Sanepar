@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildPointDayColorMap,
   buildRoadRouteRequests,
   dailyRouteColors,
   renderableRouteKinds,
@@ -92,6 +93,34 @@ describe("buildRoadRouteRequests", () => {
     for (const color of dailyRouteColors) {
       expect(isBlackish(color)).toBe(false);
     }
+  });
+
+  it("pinta cada ponto com a cor do seu dia — a mesma cor da linha diária", () => {
+    const points = scenarioPoints();
+    const colors = buildPointDayColorMap(points);
+
+    // Pontos da mesma data têm a mesma cor; datas diferentes têm cores diferentes.
+    const dia1 = colors.get(points[0].id);
+    const dia2 = colors.get(points[2].id);
+    const dia3 = colors.get(points[4].id);
+
+    expect(dia1).toBeTruthy();
+    expect(colors.get(points[1].id)).toBe(dia1);
+    expect(colors.get(points[3].id)).toBe(dia2);
+    expect(new Set([dia1, dia2, dia3]).size).toBe(3);
+
+    // Nenhum ponto é pintado de preto (a cor é sempre da paleta de dias).
+    for (const color of colors.values()) {
+      expect(isBlackish(color)).toBe(false);
+      expect(dailyRouteColors).toContain(color);
+    }
+
+    // A cor do ponto é EXATAMENTE a cor da linha diária do mesmo dia.
+    const { requests } = buildRoadRouteRequests(points, allLayers);
+    const dia1Leg = requests.find(
+      (request) => request.kind === "daily" && request.label === "Dia 1",
+    );
+    expect(dia1Leg?.color).toBe(dia1);
   });
 
   it("não cria ligação entre dias quando as datas não são adjacentes", () => {
