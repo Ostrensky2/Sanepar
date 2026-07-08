@@ -7,6 +7,8 @@ import {
   Eye,
   FileSpreadsheet,
   ListFilter,
+  Lock,
+  LoaderCircle,
   MapPin,
   Pencil,
   Search,
@@ -126,10 +128,12 @@ export function FieldDiaryPageContent({
   campaignScope,
   readOnly = false,
   hideHeader = false,
+  compactSummaryMetrics = false,
 }: {
   campaignScope?: FieldDiaryCampaignScope;
   readOnly?: boolean;
   hideHeader?: boolean;
+  compactSummaryMetrics?: boolean;
 } = {}) {
   const initialScopedCalendarStart = campaignScope
     ? getCampaignCalendarMonthStart(campaignScope.id, campaignScope.name, [])
@@ -142,6 +146,7 @@ export function FieldDiaryPageContent({
   const [formEntry, setFormEntry] = useState<FieldDiaryPayload | null>(null);
   const [viewEntry, setViewEntry] = useState<FieldDiaryEntry | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isConsolidating, setIsConsolidating] = useState(false);
   const [isAdvancedFiltersOpen, setIsAdvancedFiltersOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("daily");
   const [message, setMessage] = useState("");
@@ -158,6 +163,69 @@ export function FieldDiaryPageContent({
   const activeCampaignId = campaignScopeId || selectedDiaryCampaign?.id || "";
   const activeCampaignName = campaignScopeName || selectedDiaryCampaign?.name || "";
   const hasActiveDiaryCampaign = Boolean(isCampaignScoped || selectedDiaryCampaign);
+  // Registros da campanha ativa ainda preliminares (podem ser consolidados/travados).
+  const preliminaryCampaignCount = useMemo(
+    () =>
+      entries.filter((entry) => {
+        if (entry.campaignName !== activeCampaignName) {
+          return false;
+        }
+        const governance = entry.governanceStatus ?? "importado";
+        return governance === "importado" || governance === "em_revisao";
+      }).length,
+    [entries, activeCampaignName],
+  );
+
+  async function handleConsolidateCampaign() {
+    if (!activeCampaignName || isConsolidating) {
+      return;
+    }
+
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        `Consolidar "${activeCampaignName}"? Os registros preliminares desta campanha ficam travados: ` +
+          "uma nova importação de planilha não poderá mais sobrescrevê-los automaticamente (gerará conflito).",
+      )
+    ) {
+      return;
+    }
+
+    setIsConsolidating(true);
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/field-diary/consolidate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ campaignName: activeCampaignName }),
+      });
+      const payload = (await response.json()) as { consolidated?: number; error?: string };
+
+      if (!response.ok || payload.error) {
+        throw new Error(payload.error ?? "Falha ao consolidar a campanha.");
+      }
+
+      const consolidatedEntries = entries.map((entry) => {
+        const governance = entry.governanceStatus ?? "importado";
+        if (
+          entry.campaignName === activeCampaignName &&
+          (governance === "importado" || governance === "em_revisao")
+        ) {
+          return { ...entry, governanceStatus: "consolidado" as const };
+        }
+        return entry;
+      });
+
+      setEntries(consolidatedEntries);
+      cacheFieldDiaryEntries(consolidatedEntries);
+      setMessage(`Campanha consolidada: ${payload.consolidated ?? 0} registro(s) travado(s) contra sobrescrita.`);
+    } catch {
+      setMessage("Não foi possível consolidar a campanha agora.");
+    } finally {
+      setIsConsolidating(false);
+    }
+  }
   const calendarMonthStart = useMemo(
     () => getCampaignCalendarMonthStart(activeCampaignId, activeCampaignName, entries),
     [activeCampaignId, activeCampaignName, entries],
@@ -275,6 +343,8 @@ export function FieldDiaryPageContent({
             entry.sia,
             entry.municipality,
             entry.createdByName,
+            entry.fieldTeamName,
+            (entry.fieldTeamMembers ?? []).join(" "),
             entry.occurrenceType,
             entry.occurrenceDescription,
             entry.followUpNotes,
@@ -382,6 +452,8 @@ export function FieldDiaryPageContent({
       campaignDay: entry.campaignDay,
       entryDate: entry.entryDate,
       collectionTime: entry.collectionTime,
+      fieldTeamName: entry.fieldTeamName,
+      fieldTeamMembers: entry.fieldTeamMembers ?? [],
       locationName: entry.locationName,
       sia: entry.sia,
       samplesReplicasEdna: entry.samplesReplicasEdna,
@@ -402,6 +474,7 @@ export function FieldDiaryPageContent({
       status: entry.status,
       createdBy: entry.createdBy,
       createdByName: entry.createdByName,
+      photos: entry.photos ?? [],
     });
   }
 
@@ -454,6 +527,12 @@ export function FieldDiaryPageContent({
             readOnly ? null :
             <div className="flex flex-wrap gap-2">
               <ImportButton onClick={() => setIsImportOpen(true)} />
+              {hasActiveDiaryCampaign && preliminaryCampaignCount > 0 ? (
+                <ConsolidateCampaignButton
+                  onClick={() => void handleConsolidateCampaign()}
+                  pending={isConsolidating}
+                />
+              ) : null}
               <NewEntryButton onClick={openNewForm} label="Novo registro" />
             </div>
           }
@@ -470,14 +549,22 @@ export function FieldDiaryPageContent({
           {readOnly ? null : (
             <div className="flex flex-wrap items-start justify-end gap-2">
               <ImportButton onClick={() => setIsImportOpen(true)} />
+              {hasActiveDiaryCampaign && preliminaryCampaignCount > 0 ? (
+                <ConsolidateCampaignButton
+                  onClick={() => void handleConsolidateCampaign()}
+                  pending={isConsolidating}
+                />
+              ) : null}
               <NewEntryButton onClick={openNewForm} label="Novo registro" />
             </div>
           )}
         </div>
       ) : null}
       {readOnly && hideHeader ? (
-        <div className="rounded-2xl border border-[var(--line-ghost)] bg-[var(--surface-soft)] px-4 py-3 text-xs font-semibold text-[var(--ink-soft)]">
+        <div className={compactSummaryMetrics ? "lg:pr-[19rem]" : ""}>
+          <div className={`rounded-2xl border border-[var(--line-ghost)] bg-[var(--surface-soft)] text-xs font-semibold text-[var(--ink-soft)] ${compactSummaryMetrics ? "px-3 py-2" : "px-4 py-3"}`}>
           Dados espelhados de Entrada de dados - Diário de Campo. Esta visualização é somente leitura.
+          </div>
         </div>
       ) : null}
 
@@ -518,31 +605,37 @@ export function FieldDiaryPageContent({
       {hasActiveDiaryCampaign ? (
         <>
           <ErrorBoundary title="Falha no resumo do Diário de Campo">
+            <div className={compactSummaryMetrics ? "lg:pr-[19rem]" : ""}>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <OperationalMetric
                 icon={BarChart3}
                 label="Registros no diário"
                 value={String(scopedSummary.total)}
                 detail={`${filteredSummary.total} visível(is) na consulta atual.`}
+                compact={compactSummaryMetrics}
               />
               <OperationalMetric
                 icon={CheckCircle2}
                 label="Preenchidos"
                 value={String(scopedSummary.recorded + scopedSummary.occurrence)}
                 detail={`${scopedSummary.recorded} registrado(s), ${scopedSummary.occurrence} com ocorrência.`}
+                compact={compactSummaryMetrics}
               />
               <OperationalMetric
                 icon={CalendarDays}
                 label="Planejados"
                 value={String(scopedSummary.planned)}
                 detail="Pontos importados ainda sem relato operacional."
+                compact={compactSummaryMetrics}
               />
               <OperationalMetric
                 icon={MapPin}
                 label="Sem coordenada"
                 value={String(scopedSummary.withoutCoordinates)}
                 detail="Registros que dependem de localização complementar."
+                compact={compactSummaryMetrics}
               />
+            </div>
             </div>
           </ErrorBoundary>
 
@@ -907,7 +1000,8 @@ export function FieldDiaryPageContent({
                   <th className="px-3 py-3">Coordenadas</th>
                   <th className="px-3 py-3">Município</th>
                   <th className="px-3 py-3">Situação</th>
-                  <th className="px-3 py-3">Responsável</th>
+                  <th className="px-3 py-3">Equipe</th>
+                  <th className="px-3 py-3">Fotos</th>
                   <th className="px-3 py-3">Status</th>
                   <th className="px-3 py-3">Ações</th>
                 </tr>
@@ -933,7 +1027,11 @@ export function FieldDiaryPageContent({
                         <StageBadge stage={stage} />
                       </td>
                       <td className="px-3 py-4">{entry.createdByName || "Não informado"}</td>
-                      <td className="px-3 py-4">{entry.status}</td>
+                      <td className="px-3 py-4">{(entry.photos ?? []).length}</td>
+                      <td className="px-3 py-4">
+                        <span className="block">{entry.status}</span>
+                        <GovernanceBadge entry={entry} />
+                      </td>
                       <td className="px-3 py-4">
                         <div className="flex gap-2">
                           <IconButton label="Visualizar" onClick={() => setViewEntry(entry)} icon={Eye} />
@@ -1005,5 +1103,51 @@ export function FieldDiaryPageContent({
         />
       ) : null}
     </div>
+  );
+}
+
+function ConsolidateCampaignButton({
+  onClick,
+  pending,
+}: {
+  onClick: () => void;
+  pending: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={pending}
+      title="Trava os registros preliminares desta campanha: uma nova importação não poderá mais sobrescrevê-los automaticamente."
+      className="inline-flex items-center gap-2 rounded-xl border border-[var(--line-ghost)] bg-white px-4 py-2.5 text-sm font-bold text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)] disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {pending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+      Consolidar campanha
+    </button>
+  );
+}
+
+function GovernanceBadge({ entry }: { entry: FieldDiaryEntry }) {
+  if (entry.missingInImport) {
+    return (
+      <span className="mt-1 inline-block rounded bg-[rgba(190,18,60,0.10)] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] text-rose-900">
+        Ausente na importação
+      </span>
+    );
+  }
+
+  const governance = entry.governanceStatus ?? "importado";
+  const config: Record<string, { label: string; className: string }> = {
+    importado: { label: "Preliminar", className: "bg-[var(--surface-soft)] text-slate-600" },
+    em_revisao: { label: "Em revisão", className: "bg-[rgba(234,179,8,0.14)] text-amber-900" },
+    consolidado: { label: "Consolidado", className: "bg-[rgba(5,150,105,0.10)] text-emerald-800" },
+    corrigido: { label: "Corrigido", className: "bg-[rgba(2,132,199,0.10)] text-sky-800" },
+  };
+  const { label, className } = config[governance] ?? config.importado;
+
+  return (
+    <span className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] ${className}`}>
+      {label}
+    </span>
   );
 }

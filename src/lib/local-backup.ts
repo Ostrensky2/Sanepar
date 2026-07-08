@@ -128,6 +128,17 @@ export type BackupHistoryItem = {
   downloadable: boolean;
 };
 
+export type BackupAutomationStatus = {
+  dailyBackupHour: number;
+  dailyBackupMinute: number;
+  latestAppBackup?: BackupHistoryItem;
+  latestDailyBackup?: BackupHistoryItem;
+  latestMonthlyBackup?: BackupHistoryItem;
+  hasDailyBackupToday: boolean;
+  hasAppBackupToday: boolean;
+  nextDailyBackupAt: string;
+};
+
 type OperationLogEntry = {
   timestamp: string;
   operation: string;
@@ -279,13 +290,18 @@ export async function createDailyBackup(date = new Date()) {
     if (config) {
       const databaseBackupPath = path.join(destinationRoot, `BD_${day}.dump`);
 
-      await runExternalCommand(config.pgDumpPath, [
-        `--dbname=${config.connectionString}`,
-        "-F",
-        "c",
-        "-f",
-        databaseBackupPath,
-      ]);
+      try {
+        await runExternalCommand(config.pgDumpPath, [
+          `--dbname=${config.connectionString}`,
+          "-F",
+          "c",
+          "-f",
+          databaseBackupPath,
+        ]);
+      } catch (error) {
+        await rm(destinationRoot, { recursive: true, force: true });
+        throw error;
+      }
 
       const checksum = await checksumPath(destinationRoot);
       await writeFile(
@@ -422,6 +438,27 @@ export async function listBackupHistory() {
   return [...appBackups, ...dbBackups, ...dailyBackups, ...monthlyBackups].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
   );
+}
+
+export async function getBackupAutomationStatus(now = new Date()): Promise<BackupAutomationStatus> {
+  const backups = await listBackupHistory();
+  const today = formatDateOnly(now);
+  const nextDailyBackupAt = new Date(now.getTime() + getNextDailyBackupDelay(now));
+
+  return {
+    dailyBackupHour: DAILY_BACKUP_HOUR,
+    dailyBackupMinute: DAILY_BACKUP_MINUTE,
+    latestAppBackup: backups.find((backup) => backup.type === "manual-app"),
+    latestDailyBackup: backups.find((backup) => backup.type === "diario"),
+    latestMonthlyBackup: backups.find((backup) => backup.type === "mensal"),
+    hasDailyBackupToday: backups.some(
+      (backup) => backup.type === "diario" && formatDateOnly(new Date(backup.date)) === today,
+    ),
+    hasAppBackupToday: backups.some(
+      (backup) => backup.type === "manual-app" && formatDateOnly(new Date(backup.date)) === today,
+    ),
+    nextDailyBackupAt: nextDailyBackupAt.toISOString(),
+  };
 }
 
 export async function getOperationLogs() {
@@ -738,6 +775,17 @@ async function scanGroupedBackups(root: string, type: "diario" | "mensal", prefi
     }
 
     const fullPath = path.join(root, entry.name);
+    const manifestPath = path.join(fullPath, "backup-manifest.json");
+
+    try {
+      const manifestStat = await stat(manifestPath);
+      if (!manifestStat.isFile()) {
+        continue;
+      }
+    } catch {
+      continue;
+    }
+
     records.push({
       id: encodeBackupId(fullPath),
       date: dateFromName(entry.name) ?? new Date().toISOString(),

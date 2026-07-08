@@ -1,6 +1,7 @@
 export type UserCategory =
   | "Admin"
   | "Sanepar"
+  | "Tecpar"
   | "UFPR"
   | "ATGC";
 
@@ -37,8 +38,21 @@ export const ACCESS_PRIVILEGE_MATRIX_COOKIE_NAME = "yvae_access_privilege_matrix
 export const userCategories: UserCategory[] = [
   "Admin",
   "Sanepar",
+  "Tecpar",
   "UFPR",
   "ATGC",
+];
+
+const generalViewPrivileges: PrivilegeKey[] = [
+  "nav.home",
+  "nav.campaigns",
+  "nav.results",
+  "nav.documents",
+  "nav.requests",
+  "nav.help",
+  "dashboard.view",
+  "campaigns.view",
+  "documents.view",
 ];
 
 export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
@@ -82,6 +96,21 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "documents.view",
     "users.manage",
   ],
+  Tecpar: [
+    "nav.home",
+    "nav.campaigns",
+    "nav.results",
+    "nav.data",
+    "nav.documents",
+    "nav.requests",
+    "nav.settings",
+    "nav.help",
+    "dashboard.view",
+    "campaigns.view",
+    "data.view",
+    "documents.view",
+    "users.manage",
+  ],
   UFPR: [
     "nav.home",
     "nav.campaigns",
@@ -110,7 +139,6 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "campaigns.view",
     "data.view",
     "data.import",
-    "data.delete",
     "documents.view",
     "users.manage",
   ],
@@ -120,11 +148,13 @@ export const categoryDescriptions: Record<UserCategory, string> = {
   Admin:
     "Controle total do app, incluindo usuários, backups, importações e exclusões.",
   Sanepar:
-    "Coordenação institucional Sanepar com leitura operacional, Entrada de dados sem edição e cadastro restrito de pessoas Sanepar.",
+    "Coordenação institucional Sanepar com leitura operacional, Entrada de dados sem edição e cadastro restrito de usuários Sanepar.",
+  Tecpar:
+    "Coordenação institucional Tecpar com leitura operacional, Entrada de dados sem edição e cadastro restrito de usuários Tecpar.",
   UFPR:
     "Equipe UFPR com curadoria técnica, importação de dados e gestão documental.",
   ATGC:
-    "Equipe ATGC com operação da Entrada de dados e cadastro restrito de pessoas ATGC.",
+    "Equipe ATGC com operação da Entrada de dados e cadastro restrito de usuários ATGC.",
 };
 
 export const privilegeLabels: Record<PrivilegeKey, string> = {
@@ -145,7 +175,7 @@ export const privilegeLabels: Record<PrivilegeKey, string> = {
   "documents.manage": "Gerenciar Documentos",
   "settings.manage": "Configurações",
   "backups.manage": "Backups",
-  "users.manage": "Pessoas autorizadas",
+  "users.manage": "Usuários autorizados",
   "permissions.manage": "Alterar matriz de permissões",
   "settings.buildSync": "Build e sincronização",
   "settings.activity": "Atividade dos membros",
@@ -214,6 +244,10 @@ export function normalizeUserCategory(value: string | null | undefined): UserCat
     return "Sanepar";
   }
 
+  if (value === "Tecpar") {
+    return "Tecpar";
+  }
+
   if (value === "Curador" || value === "UFPR") {
     return "UFPR";
   }
@@ -239,26 +273,26 @@ export function normalizePrivilegesForCategory(
     return categoryPrivileges.Admin;
   }
 
-  const normalizedPrivileges = sanitizePrivileges(privileges ?? categoryPrivileges[category]);
-  const allowedPrivileges = new Set(categoryPrivileges[category]);
+  const result = sanitizePrivileges([
+    ...generalViewPrivileges,
+    ...(privileges ?? categoryPrivileges[category]),
+  ]);
 
-  return Array.from(
-    new Set([
-      ...normalizedPrivileges.filter((privilege) => allowedPrivileges.has(privilege)),
-      ...categoryPrivileges[category],
-    ]),
-  );
+  return result.filter((p) => p !== "data.delete");
 }
 
 function expandLegacyPrivileges(privileges: PrivilegeKey[]) {
   const expanded = new Set(privileges);
 
-  if (privileges.some((privilege) => privilege.startsWith("nav."))) {
-    return Array.from(expanded);
-  }
-
   expanded.add("nav.help");
   expanded.add("nav.requests");
+  expanded.add("nav.home");
+  expanded.add("nav.campaigns");
+  expanded.add("nav.results");
+  expanded.add("nav.documents");
+  expanded.add("dashboard.view");
+  expanded.add("campaigns.view");
+  expanded.add("documents.view");
 
   if (expanded.has("dashboard.view")) {
     expanded.add("nav.home");
@@ -278,6 +312,18 @@ function expandLegacyPrivileges(privileges: PrivilegeKey[]) {
   }
 
   if (expanded.has("settings.manage")) {
+    expanded.add("nav.settings");
+  }
+
+  if (
+    expanded.has("users.manage") ||
+    expanded.has("permissions.manage") ||
+    expanded.has("backups.manage") ||
+    expanded.has("settings.buildSync") ||
+    expanded.has("settings.activity") ||
+    expanded.has("settings.rules") ||
+    expanded.has("settings.diagnostics")
+  ) {
     expanded.add("nav.settings");
   }
 

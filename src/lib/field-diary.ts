@@ -71,6 +71,8 @@ export type FieldDiaryEntry = {
   campaignName: string;
   campaignDay: number;
   entryDate: string;
+  fieldTeamName?: string | null;
+  fieldTeamMembers: string[];
   collectionTime: string;
   locationName: string;
   sia?: string | null;
@@ -94,6 +96,48 @@ export type FieldDiaryEntry = {
   createdByName?: string | null;
   createdAt: string;
   updatedAt: string;
+  photos: FieldDiaryPhoto[];
+  // Governança de importação (ver import-governance): decide se uma nova planilha
+  // da campanha pode sobrescrever este registro.
+  governanceStatus?: FieldDiaryGovernanceStatus;
+  // Ordem de coleta = ordem das linhas da planilha dentro do dia (afeta o traçado).
+  collectionOrder?: number | null;
+  // Marca registros que existem no app mas não vieram na última planilha importada
+  // (nunca apagamos automaticamente).
+  missingInImport?: boolean;
+};
+
+export const fieldDiaryGovernanceStatuses = [
+  "importado",
+  "em_revisao",
+  "consolidado",
+  "corrigido",
+] as const;
+
+export type FieldDiaryGovernanceStatus = (typeof fieldDiaryGovernanceStatuses)[number];
+
+export function normalizeGovernanceStatus(value: unknown): FieldDiaryGovernanceStatus {
+  return fieldDiaryGovernanceStatuses.includes(value as FieldDiaryGovernanceStatus)
+    ? (value as FieldDiaryGovernanceStatus)
+    : "importado";
+}
+
+// Um registro está protegido contra sobrescrita automática por planilha quando já
+// saiu do estado preliminar "importado".
+export function isGovernanceProtected(status: unknown): boolean {
+  return normalizeGovernanceStatus(status) !== "importado";
+}
+
+export type FieldDiaryPhoto = {
+  id: string;
+  url: string;
+  caption?: string | null;
+  bucket?: string | null;
+  path?: string | null;
+  fileName?: string | null;
+  width?: number | null;
+  height?: number | null;
+  uploadedAt?: string | null;
 };
 
 export type FieldDiaryPayload = Omit<FieldDiaryEntry, "id" | "createdAt" | "updatedAt"> & {
@@ -110,6 +154,8 @@ export function createEmptyFieldDiaryPayload(): FieldDiaryPayload {
     campaignName: "1ª Campanha - Verão 2026",
     campaignDay: 1,
     entryDate: todayIsoDate(),
+    fieldTeamName: "",
+    fieldTeamMembers: [],
     collectionTime: "",
     locationName: "",
     sia: "",
@@ -131,6 +177,7 @@ export function createEmptyFieldDiaryPayload(): FieldDiaryPayload {
     status: "Rascunho",
     createdBy: "",
     createdByName: "",
+    photos: [],
   };
 }
 
@@ -199,6 +246,8 @@ export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
     ...payload,
     id: payload.id ?? crypto.randomUUID(),
     campaignId: payload.campaignId ?? null,
+    fieldTeamName: payload.fieldTeamName ?? "",
+    fieldTeamMembers: toStringArray(payload.fieldTeamMembers),
     sia: payload.sia ?? "",
     collectionTime: payload.collectionTime ?? "",
     samplesReplicasEdna: payload.samplesReplicasEdna ?? "",
@@ -210,6 +259,7 @@ export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
     pointAccessibility: payload.pointAccessibility ?? "",
     createdBy: payload.createdBy ?? "",
     createdByName: payload.createdByName ?? "",
+    photos: normalizeFieldDiaryPhotos(payload.photos),
     createdAt: localEntries.find((item) => item.id === payload.id)?.createdAt ?? now,
     updatedAt: now,
   };
@@ -285,6 +335,8 @@ export function normalizeFieldDiaryEntry(value: unknown): FieldDiaryEntry | null
     campaignName,
     campaignDay: Number(candidate.campaignDay) || 1,
     entryDate,
+    fieldTeamName: candidate.fieldTeamName ? String(candidate.fieldTeamName) : "",
+    fieldTeamMembers: toStringArray(candidate.fieldTeamMembers),
     collectionTime: candidate.collectionTime ? String(candidate.collectionTime) : "",
     locationName,
     sia: candidate.sia ? String(candidate.sia) : "",
@@ -308,6 +360,13 @@ export function normalizeFieldDiaryEntry(value: unknown): FieldDiaryEntry | null
     createdByName: candidate.createdByName ? String(candidate.createdByName) : "",
     createdAt: String(candidate.createdAt ?? new Date().toISOString()),
     updatedAt: String(candidate.updatedAt ?? candidate.createdAt ?? new Date().toISOString()),
+    photos: normalizeFieldDiaryPhotos(candidate.photos),
+    governanceStatus: normalizeGovernanceStatus(candidate.governanceStatus),
+    collectionOrder:
+      candidate.collectionOrder === null || candidate.collectionOrder === undefined
+        ? null
+        : Number(candidate.collectionOrder) || null,
+    missingInImport: Boolean(candidate.missingInImport),
   };
 }
 
@@ -332,9 +391,8 @@ export function dedupeFieldDiaryEntries(entries: FieldDiaryEntry[]) {
 }
 
 export function fieldDiaryEntryKey(entry: Pick<FieldDiaryEntry, "campaignName" | "entryDate" | "locationName" | "sia">) {
-  const pointKey = normalizeKeyPart(entry.sia) || normalizeKeyPart(entry.locationName);
+  const pointKey = normalizePointKey(entry.sia) || normalizePointKey(entry.locationName);
   return [
-    normalizeKeyPart(entry.campaignName),
     String(entry.entryDate ?? "").slice(0, 10),
     pointKey,
   ].join("|");
@@ -390,9 +448,45 @@ function scoreFieldDiaryEntry(entry: FieldDiaryEntry) {
     entry.followUpNotes,
     entry.dailySummary,
     entry.createdByName,
+    entry.fieldTeamName,
   ].filter((value) => String(value ?? "").trim()).length +
     entry.activities.length +
-    entry.waterVisualConditions.length;
+    entry.waterVisualConditions.length +
+    (entry.fieldTeamMembers ?? []).length +
+    (entry.photos ?? []).length;
+}
+
+export function normalizeFieldDiaryPhotos(value: unknown): FieldDiaryPhoto[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item): FieldDiaryPhoto | null => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const candidate = item as Partial<FieldDiaryPhoto>;
+      const url = String(candidate.url ?? "").trim();
+
+      if (!url) {
+        return null;
+      }
+
+      return {
+        id: String(candidate.id || crypto.randomUUID()),
+        url,
+        caption: candidate.caption ? String(candidate.caption) : "",
+        bucket: candidate.bucket ? String(candidate.bucket) : null,
+        path: candidate.path ? String(candidate.path) : null,
+        fileName: candidate.fileName ? String(candidate.fileName) : null,
+        width: Number.isFinite(candidate.width) ? Number(candidate.width) : null,
+        height: Number.isFinite(candidate.height) ? Number(candidate.height) : null,
+        uploadedAt: candidate.uploadedAt ? String(candidate.uploadedAt) : null,
+      };
+    })
+    .filter((photo): photo is FieldDiaryPhoto => photo !== null);
 }
 
 function normalizeKeyPart(value: unknown) {
@@ -402,6 +496,17 @@ function normalizeKeyPart(value: unknown) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ");
+}
+
+function normalizePointKey(value: unknown) {
+  const normalized = normalizeKeyPart(value);
+  const siaDigits = normalized.match(/^sia[\s-]*(\d+)$/)?.[1];
+
+  if (siaDigits) {
+    return `sia-${siaDigits.padStart(4, "0")}`;
+  }
+
+  return /^\d+$/.test(normalized) ? `sia-${normalized.padStart(4, "0")}` : normalized;
 }
 
 function normalizeFollowUp(value: unknown): FieldDiaryFollowUp {

@@ -12,7 +12,9 @@ import { useEffect, useMemo, useState } from "react";
 import type { Workbook, Worksheet } from "exceljs";
 import { CampaignMapSection } from "@/components/campaign-map-section";
 import { CampaignResultsPanels } from "@/components/campaign-results-panels";
+import { FieldDiaryForm } from "@/components/field-diary/form";
 import { FieldDiaryPageContent } from "@/components/field-diary-page-content";
+import { MetabarcodingStagesIndicator } from "@/components/metabarcoding-stages";
 import {
   type CampaignHydroMapPoint,
 } from "@/components/campaign-hydro-map";
@@ -20,20 +22,23 @@ import {
   FIELD_DIARY_UPDATED_EVENT,
   readFieldDiaryEntries,
   readFieldDiaryEntriesFromStorage,
+  saveFieldDiaryEntry,
   type FieldDiaryEntry,
+  type FieldDiaryPayload,
 } from "@/lib/field-diary";
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 import {
   campaignPointMatchesSelectedCampaign,
   normalizeCampaignKey,
 } from "@/lib/campaign-points";
+import { validateEntry } from "@/components/field-diary/helpers";
 import {
   buildDefaultCampaignManagement,
   buildInitialCampaignManagement,
   CAMPAIGN_MANAGEMENT_STORAGE_KEY,
+  calculateCampaignProgress,
   defaultCampaigns,
   readCampaignManagement,
-  type CampaignOperationalStatus,
   type CampaignManagementById,
   type CampaignView,
 } from "@/lib/campaign-management";
@@ -87,6 +92,8 @@ export function CampaignsPageContent({
   const [exportMessage, setExportMessage] = useState("");
   const [dismissedUnavailableResultsNoticeCampaignId, setDismissedUnavailableResultsNoticeCampaignId] =
     useState<string | null>(null);
+  const [mapEditEntry, setMapEditEntry] = useState<FieldDiaryPayload | null>(null);
+  const [mapEditMessage, setMapEditMessage] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -240,7 +247,10 @@ export function CampaignsPageContent({
   const selectedStages = selectedManagement.stages.length
     ? selectedManagement.stages
     : buildDefaultCampaignManagement(selectedCampaign).stages;
-  const campaignClosed = isFieldCampaignClosed(selectedManagement.status);
+  const selectedCampaignProgress = calculateCampaignProgress(
+    selectedStages,
+    selectedManagement.status,
+  );
 
   const sourceCampaignPoints =
     view === "resultados" && localRiskPoints?.length
@@ -294,14 +304,23 @@ export function CampaignsPageContent({
     () => selectedCampaignPoints.filter(hasImportedFieldMapPoint),
     [selectedCampaignPoints],
   );
-  // Campanha 1 não teve entrada via Diário de Campo: o mapa dela usa somente a
-  // planilha importada. Da Campanha 2 em diante a fonte é o Diário de Campo.
+  // Da Campanha 2 em diante, o Diário de Campo (planilha de campo importada) é a
+  // fonte autoritativa do percurso — dias, coordenadas e sequência de coleta.
+  // A Campanha 1 permanece como está: consolidada a partir da planilha importada.
+  const selectedCampaignNumber = selectedCampaign.id.match(/campanha-(\d+)/)?.[1] ?? "";
   const campaignFieldMapPoints = useMemo(
-    () =>
-      campaignClosed
-        ? mergeFieldMapPoints(importedFieldMapPoints, [])
-        : diaryMapPoints,
-    [campaignClosed, diaryMapPoints, importedFieldMapPoints],
+    () => {
+      if (selectedCampaignNumber !== "1" && diaryMapPoints.length) {
+        return diaryMapPoints;
+      }
+
+      if (importedFieldMapPoints.length) {
+        return hydrateImportedFieldMapPointsFromDiary(importedFieldMapPoints, diaryMapPoints);
+      }
+
+      return diaryMapPoints;
+    },
+    [diaryMapPoints, importedFieldMapPoints, selectedCampaignNumber],
   );
 
   const visiblePoints = useMemo(() => {
@@ -382,6 +401,47 @@ export function CampaignsPageContent({
     } finally {
       setIsExporting(false);
     }
+  }
+
+  function openMapPointEditForm(point: CampaignHydroMapPoint) {
+    const entry = findDiaryEntryForMapPoint(point, selectedDiaryEntries);
+
+    if (!entry) {
+      setMapEditMessage("Não encontrei um registro do Diário de Campo para editar as fotos deste ponto.");
+      return;
+    }
+
+    setMapEditMessage("");
+    setMapEditEntry(fieldDiaryEntryToPayload(entry, selectedCampaign.id, selectedCampaign.title));
+  }
+
+  async function handleMapEditSave(payload: FieldDiaryPayload) {
+    const error = validateEntry(payload);
+
+    if (error) {
+      setMapEditMessage(error);
+      return;
+    }
+
+    const result = await saveFieldDiaryEntry(payload);
+
+    if (result.persistence === "none") {
+      setMapEditMessage("A nuvem não confirmou a gravação. O registro não foi publicado para outros usuários.");
+      return;
+    }
+
+    setDiaryEntries((current) =>
+      [
+        result.entry,
+        ...current.filter((entry) => entry.id !== result.entry.id),
+      ].sort((a, b) => b.entryDate.localeCompare(a.entryDate) || b.updatedAt.localeCompare(a.updatedAt)),
+    );
+    setMapEditEntry(null);
+    setMapEditMessage(
+      result.persistence === "cloud"
+        ? "Fotos atualizadas no Diário de Campo."
+        : "Fotos atualizadas localmente. A nuvem será usada quando estiver disponível.",
+    );
   }
 
   return (
@@ -478,6 +538,12 @@ export function CampaignsPageContent({
         </div>
       </section>
 
+      {mapEditMessage && !mapEditEntry ? (
+        <div className="rounded-2xl border border-[var(--line-ghost)] bg-white px-4 py-3 text-sm font-semibold text-[var(--brand-navy-strong)] shadow-[var(--shadow-soft)]">
+          {mapEditMessage}
+        </div>
+      ) : null}
+
       {/* Metrics cards */}
       <ErrorBoundary title="Falha nos indicadores da campanha">
         {isCampaignHydrating ? (
@@ -528,6 +594,20 @@ export function CampaignsPageContent({
         )}
       </ErrorBoundary>
 
+      {view === "campo" ? (
+        <ErrorBoundary title="Falha no andamento da campanha">
+          {isCampaignHydrating ? (
+            <DashboardSkeleton rows={2} />
+          ) : (
+            <MetabarcodingStagesIndicator
+              stages={selectedStages}
+              title={selectedManagement.stageTitle}
+              progress={selectedCampaignProgress}
+            />
+          )}
+        </ErrorBoundary>
+      ) : null}
+
       {/* Campo view */}
       {view === "campo" && (
         <CampaignResultsPanels>
@@ -542,6 +622,7 @@ export function CampaignsPageContent({
                     useLocalImportCache={false}
                     selectedCampaignId={selectedCampaignId}
                     selectedCampaignTitle={selectedCampaign.title}
+                    onEditPointPhotos={openMapPointEditForm}
                   />
                 ) : (
                   <EmptyCampaignPanel
@@ -565,6 +646,7 @@ export function CampaignsPageContent({
                 }}
                 readOnly
                 hideHeader
+                compactSummaryMetrics
               />
             )}
           </ErrorBoundary>
@@ -586,6 +668,23 @@ export function CampaignsPageContent({
           />
         </div>
       )}
+
+      {mapEditEntry ? (
+        <FieldDiaryForm
+          entry={mapEditEntry}
+          message={mapEditMessage}
+          campaignScope={{
+            id: selectedCampaign.id,
+            name: selectedCampaign.title,
+          }}
+          onChange={setMapEditEntry}
+          onSave={handleMapEditSave}
+          onClose={() => {
+            setMapEditEntry(null);
+            setMapEditMessage("");
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -604,16 +703,6 @@ function riskPriority(level: CampaignHydroMapPoint["riskLevel"]) {
   }
 
   return level === "baixo" ? 1 : 0;
-}
-
-function isFieldCampaignClosed(status: CampaignOperationalStatus) {
-  return [
-    "Coleta concluída",
-    "Aguardando laboratório",
-    "Em análise",
-    "Resultados publicados",
-    "Concluída",
-  ].includes(status);
 }
 
 function diaryEntryMatchesSelectedCampaign(
@@ -637,6 +726,7 @@ function hasImportedFieldMapPoint(point: CampaignHydroMapPoint) {
 }
 
 function hasValidFieldDiaryMapEntry(entry: FieldDiaryEntry) {
+  const hasPhotos = (entry.photos ?? []).some((photo) => String(photo.url ?? "").trim());
   const hasOperationalFieldData = Boolean(
     entry.activities.length ||
       entry.waterVisualConditions.length ||
@@ -646,7 +736,31 @@ function hasValidFieldDiaryMapEntry(entry: FieldDiaryEntry) {
   );
 
   return Boolean(
-    hasOperationalFieldData,
+    hasOperationalFieldData || hasPhotos,
+  );
+}
+
+function hydrateImportedFieldMapPointsFromDiary(
+  importedFieldPoints: CampaignHydroMapPoint[],
+  diaryPoints: CampaignHydroMapPoint[],
+) {
+  if (!diaryPoints.length) {
+    return mergeFieldMapPoints(importedFieldPoints, []);
+  }
+
+  return mergeFieldMapPoints(
+    importedFieldPoints.map((importedPoint) => {
+      const importedKeys = new Set(mapPointMatchKeys(importedPoint));
+      const matchingDiaryPoints = diaryPoints.filter((diaryPoint) =>
+        mapPointMatchKeys(diaryPoint).some((key) => importedKeys.has(key)),
+      );
+
+      return matchingDiaryPoints.reduce(
+        (current, diaryPoint) => mergeDiaryMapPointWithImportedFieldPoint(diaryPoint, current),
+        importedPoint,
+      );
+    }),
+    [],
   );
 }
 
@@ -680,11 +794,14 @@ function mergeDiaryMapPointWithImportedFieldPoint(
   diaryPoint: CampaignHydroMapPoint,
   importedPoint: CampaignHydroMapPoint,
 ): CampaignHydroMapPoint {
+  const photos = mergePointPhotos(diaryPoint, importedPoint);
+
   return {
     ...importedPoint,
     ...diaryPoint,
     // A planilha importada é a fonte autoritativa de sequência/identidade do
     // roteiro; o diário só complementa observações de campo.
+    id: importedPoint.id,
     point: importedPoint.point || diaryPoint.point,
     day: importedPoint.day ?? diaryPoint.day,
     date: importedPoint.date ?? diaryPoint.date,
@@ -699,8 +816,28 @@ function mergeDiaryMapPointWithImportedFieldPoint(
     problems: diaryPoint.problems || importedPoint.problems,
     driveUrl: diaryPoint.driveUrl || importedPoint.driveUrl,
     dropboxUrl: diaryPoint.dropboxUrl || importedPoint.dropboxUrl,
-    photoUrl: diaryPoint.photoUrl || importedPoint.photoUrl,
+    photoUrl: photos[0]?.url || diaryPoint.photoUrl || importedPoint.photoUrl,
+    photos,
   };
+}
+
+function mergePointPhotos(
+  primaryPoint: CampaignHydroMapPoint,
+  secondaryPoint: CampaignHydroMapPoint,
+) {
+  const byUrl = new Map<string, NonNullable<CampaignHydroMapPoint["photos"]>[number]>();
+
+  for (const photo of [...pointPhotos(primaryPoint), ...pointPhotos(secondaryPoint)]) {
+    const url = photo.url.trim();
+
+    if (!url || byUrl.has(url)) {
+      continue;
+    }
+
+    byUrl.set(url, { ...photo, url });
+  }
+
+  return [...byUrl.values()];
 }
 
 function fieldMapPointMergeKey(point: CampaignHydroMapPoint) {
@@ -756,6 +893,10 @@ function dedupeFieldDiaryMapEntries(entries: FieldDiaryEntry[]) {
       a.entryDate.localeCompare(b.entryDate) ||
       a.campaignDay - b.campaignDay ||
       diaryCollectionTimeRank(a).localeCompare(diaryCollectionTimeRank(b)) ||
+      // Sequência de coleta = ordem das linhas da planilha (collectionOrder). Sem
+      // ela, cai para a ordem de criação, depois nome.
+      (a.collectionOrder ?? Number.MAX_SAFE_INTEGER) - (b.collectionOrder ?? Number.MAX_SAFE_INTEGER) ||
+      String(a.createdAt).localeCompare(String(b.createdAt)) ||
       a.locationName.localeCompare(b.locationName, "pt-BR"),
   );
 }
@@ -828,11 +969,15 @@ function diaryEntryToMapPoint(
   const lon = parseFloat(entry.longitude ?? "");
   const effective = isFinite(lat) && isFinite(lon) ? { lat, lon } : null;
   const referencePoint = findKnownPointForDiaryEntry(entry, knownPoints);
-  const original = referencePoint?.original ?? referencePoint?.effective ?? null;
 
-  if (!original && !effective) return null;
+  // Mapa de percurso da campanha: o Diário é a coleta real. NÃO fabricamos uma
+  // coordenada "prevista" a partir de imports antigos — isso gerava linhas de
+  // deslocamento (retas) indevidas cruzando o mapa. Sem previsto, sem deslocamento.
+  if (!effective) return null;
 
   const code = formatDiarySiaCode(entry.sia) || referencePoint?.code || entry.locationName;
+  const photos = entry.photos ?? [];
+  const firstPhotoUrl = photos[0]?.url || referencePoint?.photoUrl || "";
 
   return {
     id: `diary-${entry.id}`,
@@ -841,9 +986,10 @@ function diaryEntryToMapPoint(
     day: String(entry.campaignDay),
     campaign: entry.campaignName,
     date: entry.entryDate,
+    collectionOrder: entry.collectionOrder ?? null,
     waterBody: referencePoint?.waterBody || entry.locationName,
     municipality: entry.municipality || referencePoint?.municipality || "Paraná",
-    original,
+    original: null,
     effective,
     accessibility: referencePoint?.accessibility || "",
     waterAspect: entry.waterVisualConditions.join(", "),
@@ -851,7 +997,73 @@ function diaryEntryToMapPoint(
     problems: entry.hasOccurrence ? (entry.occurrenceDescription ?? "") : "",
     driveUrl: referencePoint?.driveUrl || "",
     dropboxUrl: referencePoint?.dropboxUrl || "",
-    photoUrl: referencePoint?.photoUrl || "",
+    photoUrl: firstPhotoUrl,
+    photos,
+  };
+}
+
+function pointPhotos(point?: CampaignHydroMapPoint | null) {
+  return point?.photos?.filter((photo) => photo.url) ?? [];
+}
+
+function findDiaryEntryForMapPoint(
+  point: CampaignHydroMapPoint,
+  entries: FieldDiaryEntry[],
+) {
+  const pointKeys = new Set(mapPointMatchKeys(point));
+  const pointDate = normalizeMapPointDateKey(point.date);
+  const pointDay = dayNumber(point.day);
+
+  return entries.find((entry) => {
+    const samePoint = mapDiaryEntryMatchKeys(entry).some((key) => pointKeys.has(key));
+
+    if (!samePoint) {
+      return false;
+    }
+
+    if (pointDate && entry.entryDate !== pointDate) {
+      return false;
+    }
+
+    return pointDay === Number.MAX_SAFE_INTEGER || entry.campaignDay === pointDay;
+  }) ?? null;
+}
+
+function fieldDiaryEntryToPayload(
+  entry: FieldDiaryEntry,
+  fallbackCampaignId: string,
+  fallbackCampaignName: string,
+): FieldDiaryPayload {
+  return {
+    id: entry.id,
+    campaignId: entry.campaignId || fallbackCampaignId,
+    campaignName: entry.campaignName || fallbackCampaignName,
+    campaignDay: entry.campaignDay,
+    entryDate: entry.entryDate,
+    fieldTeamName: entry.fieldTeamName,
+    fieldTeamMembers: entry.fieldTeamMembers ?? [],
+    collectionTime: entry.collectionTime,
+    locationName: entry.locationName,
+    sia: entry.sia,
+    samplesReplicasEdna: entry.samplesReplicasEdna,
+    zooplanktonId: entry.zooplanktonId,
+    latitude: entry.latitude,
+    longitude: entry.longitude,
+    municipality: entry.municipality,
+    activities: entry.activities,
+    waterVisualConditions: entry.waterVisualConditions,
+    hasOccurrence: entry.hasOccurrence,
+    occurrenceType: entry.occurrenceType,
+    occurrenceDescription: entry.occurrenceDescription,
+    requiresFollowUp: entry.requiresFollowUp,
+    followUpNotes: entry.followUpNotes,
+    weatherConditions: entry.weatherConditions,
+    pointAccessibility: entry.pointAccessibility,
+    dailySummary: entry.dailySummary,
+    status: entry.status,
+    createdBy: entry.createdBy,
+    createdByName: entry.createdByName,
+    photos: entry.photos ?? [],
   };
 }
 
@@ -1107,7 +1319,7 @@ function addFieldDiaryEntriesSheet(
     { header: "Acessibilidade", key: "pointAccessibility", width: 18 },
     { header: "Resumo diário", key: "dailySummary", width: 48 },
     { header: "Status", key: "status", width: 14 },
-    { header: "Criado por", key: "createdByName", width: 24 },
+    { header: "Equipe", key: "createdByName", width: 24 },
     { header: "Criado em", key: "createdAt", width: 22 },
     { header: "Atualizado em", key: "updatedAt", width: 22 },
   ];

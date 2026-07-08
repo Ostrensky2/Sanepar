@@ -13,24 +13,26 @@ export function OperationalMetric({
   label,
   value,
   detail,
+  compact = false,
 }: {
   icon: typeof ClipboardList;
   label: string;
   value: string;
   detail: string;
+  compact?: boolean;
 }) {
   return (
-    <article className="glass-panel radius-panel p-5">
-      <div className="flex items-start justify-between gap-4">
+    <article className={`glass-panel radius-panel ${compact ? "p-3" : "p-5"}`}>
+      <div className={`flex items-start justify-between ${compact ? "gap-3" : "gap-4"}`}>
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">{label}</p>
-          <p className="heading-font mt-3 text-3xl font-black text-[var(--brand-navy-strong)]">{value}</p>
+          <p className={`${compact ? "text-[10px]" : "text-xs"} font-bold uppercase tracking-[0.16em] text-slate-500`}>{label}</p>
+          <p className={`heading-font font-black text-[var(--brand-navy-strong)] ${compact ? "mt-2 text-2xl" : "mt-3 text-3xl"}`}>{value}</p>
         </div>
-        <span className="rounded-2xl bg-[var(--brand-blue-soft)] p-3 text-[var(--brand-navy-strong)]">
-          <Icon className="h-5 w-5" />
+        <span className={`rounded-2xl bg-[var(--brand-blue-soft)] text-[var(--brand-navy-strong)] ${compact ? "p-2" : "p-3"}`}>
+          <Icon className={compact ? "h-4 w-4" : "h-5 w-5"} />
         </span>
       </div>
-      <p className="mt-4 text-sm leading-6 text-[var(--ink-soft)]">{detail}</p>
+      <p className={`${compact ? "mt-2 text-xs leading-5" : "mt-4 text-sm leading-6"} text-[var(--ink-soft)]`}>{detail}</p>
     </article>
   );
 }

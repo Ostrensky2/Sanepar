@@ -9,6 +9,7 @@ import {
   Sheet,
   Trash2,
   Target,
+  Upload,
   X,
 } from "lucide-react";
 import {
@@ -89,6 +90,7 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [uploadingPhotoIds, setUploadingPhotoIds] = useState<string[]>([]);
 
   function syncDocuments() {
     setDocuments(readStoredDocumentsFromStorage());
@@ -216,6 +218,41 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
     setPoints(action.points.length ? action.points.map(pointToForm) : [emptyPoint()]);
   }
 
+  async function uploadPointPhoto(pointId: string, photoId: string, file: File | null) {
+    if (!file) {
+      return;
+    }
+
+    setError(null);
+    setUploadingPhotoIds((current) => [...current, photoId]);
+
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+      formData.set("pointId", pointId);
+
+      const response = await fetch("/api/photos/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const payload = (await response.json()) as { url?: string; error?: string };
+
+      if (!response.ok || !payload.url) {
+        throw new Error(payload.error ?? "Não foi possível enviar a foto.");
+      }
+
+      updatePhoto(pointId, photoId, { url: payload.url });
+    } catch (uploadError) {
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Não foi possível enviar a foto.",
+      );
+    } finally {
+      setUploadingPhotoIds((current) => current.filter((id) => id !== photoId));
+    }
+  }
+
   async function savePointAction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -295,6 +332,9 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
             id: selectedDocument.id,
             title: selectedDocument.title,
             dropboxUrl: selectedDocument.dropboxUrl,
+            originalUrl: selectedDocument.originalUrl,
+            storageBucket: selectedDocument.storageBucket,
+            storagePath: selectedDocument.storagePath,
             type: selectedDocument.type,
           }
         : null,
@@ -508,10 +548,10 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
                 </div>
 
                 {point.photos.map((photo, photoIndex) => (
-                  <div key={photo.id} className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                  <div key={photo.id} className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
                     <input
                       className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
-                      placeholder={`Link Dropbox da foto ${photoIndex + 1}`}
+                      placeholder={`Link ou upload da foto ${photoIndex + 1}`}
                       value={photo.url}
                       disabled={!canImport}
                       onChange={(event) =>
@@ -527,6 +567,20 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
                         updatePhoto(point.id, photo.id, { caption: event.target.value })
                       }
                     />
+                    <label className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-[var(--surface-soft)] px-3 py-2 text-caption font-bold uppercase tracking-[0.12em] text-[var(--brand-navy-strong)] transition-colors hover:bg-[var(--surface-muted)] has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+                      <Upload className="mr-1 h-3.5 w-3.5" />
+                      {uploadingPhotoIds.includes(photo.id) ? "Enviando" : "Upload"}
+                      <input
+                        className="sr-only"
+                        type="file"
+                        accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+                        disabled={!canImport || uploadingPhotoIds.includes(photo.id)}
+                        onChange={(event) => {
+                          void uploadPointPhoto(point.id, photo.id, event.target.files?.[0] ?? null);
+                          event.currentTarget.value = "";
+                        }}
+                      />
+                    </label>
                     <button
                       type="button"
                       className="rounded-lg p-2 text-[var(--brand-danger)] transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"

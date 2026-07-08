@@ -53,6 +53,17 @@ type OperationLogEntry = {
   error?: string;
 };
 
+type BackupAutomationStatus = {
+  dailyBackupHour: number;
+  dailyBackupMinute: number;
+  latestAppBackup?: BackupHistoryItem;
+  latestDailyBackup?: BackupHistoryItem;
+  latestMonthlyBackup?: BackupHistoryItem;
+  hasDailyBackupToday: boolean;
+  hasAppBackupToday: boolean;
+  nextDailyBackupAt: string;
+};
+
 type CloudRestoreRequest = {
   id: string;
   createdAt: string;
@@ -95,6 +106,7 @@ export function LocalBackupPanel({
   const [isPending, startTransition] = useTransition();
   const [backups, setBackups] = useState<BackupHistoryItem[]>([]);
   const [logs, setLogs] = useState<OperationLogEntry[]>([]);
+  const [automationStatus, setAutomationStatus] = useState<BackupAutomationStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<BackupResponse | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -111,7 +123,12 @@ export function LocalBackupPanel({
     try {
       const response = await fetch("/api/local/backups", { cache: "no-store" });
       const payload = (await response.json()) as
-        | { ok: true; backups: BackupHistoryItem[]; logs: OperationLogEntry[] }
+        | {
+            ok: true;
+            backups: BackupHistoryItem[];
+            logs: OperationLogEntry[];
+            automationStatus: BackupAutomationStatus;
+          }
         | { error: string };
 
       if (!response.ok || "error" in payload) {
@@ -121,6 +138,7 @@ export function LocalBackupPanel({
 
       setBackups(payload.backups);
       setLogs(payload.logs);
+      setAutomationStatus(payload.automationStatus);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -432,13 +450,32 @@ export function LocalBackupPanel({
             </span>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-4">
-            <MiniStat label="Status da automação" value={enabled ? "Ativa no localhost" : "Bloqueada"} />
+            <MiniStat
+              label="Status da automação"
+              value={
+                enabled
+                  ? automationStatus?.hasDailyBackupToday && automationStatus?.hasAppBackupToday
+                    ? "BD e APP em dia"
+                    : "Aguardando reforço"
+                  : "Bloqueada"
+              }
+            />
             <MiniStat label="Modo de execução" value="Host local" />
-            <MiniStat label="Tarefa diária" value="12:15" />
-            <MiniStat label="Retenção mensal" value="Dias 01 e 15" />
+            <MiniStat
+              label="Tarefa diária"
+              value={
+                automationStatus
+                  ? `${String(automationStatus.dailyBackupHour).padStart(2, "0")}:${String(automationStatus.dailyBackupMinute).padStart(2, "0")}`
+                  : "12:15"
+              }
+            />
+            <MiniStat
+              label="Próximo ciclo"
+              value={automationStatus ? formatDateTime(automationStatus.nextDailyBackupAt) : "---"}
+            />
           </div>
           <div className="mt-4 rounded-lg border border-[var(--line-ghost)] bg-[var(--surface-soft)]/55 p-3 text-xs font-normal leading-5 text-[var(--ink-soft)]">
-            O app agenda o backup automático do BD uma vez ao dia às 12:15. O backup do APP permanece manual e só é executado pelo localhost.
+            O app tenta recuperar backups perdidos ao abrir no localhost e agenda BD + APP uma vez ao dia. O Windows também executa as tarefas mesmo com o app fechado.
           </div>
         </section>
 

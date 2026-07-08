@@ -122,6 +122,7 @@ export function FieldDiaryMonthCalendar({
           const dayEntries = day.inMonth ? entriesByDate.get(day.date) ?? [] : [];
           const collectionDay = collectionDaysByDate.get(day.date);
           const isSelected = day.date === selectedDate;
+          const hasOccurrence = dayEntries.some((entry) => entry.hasOccurrence);
 
           return (
             <button
@@ -134,16 +135,30 @@ export function FieldDiaryMonthCalendar({
                   ? isSelected
                     ? "border-[var(--brand-blue)] bg-[var(--brand-navy-strong)] text-white shadow"
                     : dayEntries.length
-                      ? "border-[var(--brand-teal)]/40 bg-[var(--brand-green-soft)] text-[var(--brand-navy-strong)] hover:border-[var(--brand-blue)] hover:bg-white"
-                    : "border-[var(--line-ghost)] bg-white text-[var(--brand-navy-strong)] hover:border-[var(--brand-blue)] hover:bg-[var(--surface-soft)]"
+                      ? hasOccurrence
+                        ? "border-[var(--brand-danger)]/40 bg-red-50 text-[var(--brand-danger)] hover:border-[var(--brand-blue)] hover:bg-white"
+                        : "border-[var(--brand-teal)]/40 bg-[var(--brand-green-soft)] text-[var(--brand-navy-strong)] hover:border-[var(--brand-blue)] hover:bg-white"
+                      : "border-[var(--line-ghost)] bg-white text-[var(--brand-navy-strong)] hover:border-[var(--brand-blue)] hover:bg-[var(--surface-soft)]"
                   : "border-transparent bg-slate-50/60 text-slate-300"
               }`}
             >
               <span className="text-base font-black leading-none">{Number(day.date.slice(8, 10))}</span>
-              <span className={`mt-1 h-3 text-caption font-black leading-none ${isSelected ? "text-white/80" : "text-[var(--brand-teal)]"}`}>
+              <span className={`mt-1 h-3 text-caption font-black leading-none ${
+                isSelected
+                  ? "text-white/80"
+                  : hasOccurrence
+                    ? "text-[var(--brand-danger)]"
+                    : "text-[var(--brand-teal)]"
+              }`}>
                 {collectionDay ? collectionDay : ""}
               </span>
-              <span className={`mt-0.5 h-3 text-caption font-bold leading-none ${isSelected ? "text-white/80" : "text-slate-500"}`}>
+              <span className={`mt-0.5 h-3 text-caption font-bold leading-none ${
+                isSelected
+                  ? "text-white/80"
+                  : hasOccurrence
+                    ? "text-[var(--brand-danger)]/80"
+                    : "text-slate-500"
+              }`}>
                 {dayEntries.length ? `(${dayEntries.length})` : ""}
               </span>
             </button>
@@ -178,7 +193,7 @@ export function SelectedFieldDiaryDay({
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--line-ghost)] pb-3">
         <div>
           <p className="text-label font-black uppercase tracking-[0.16em] text-slate-500">
-            Diário por dia
+            Diário
           </p>
           <h2 className="heading-font mt-1 text-xl font-black text-[var(--brand-navy-strong)]">
             {selectedDate ? formatDate(selectedDate) : "Selecione uma data"}
@@ -210,9 +225,10 @@ export function SelectedFieldDiaryDay({
               <tr className="border-b border-[var(--line-ghost)] text-caption uppercase tracking-[0.16em] text-slate-500">
                 <th className="px-3 py-3">Ponto / SIA</th>
                 <th className="px-3 py-3">Município</th>
-                <th className="px-3 py-3">Responsável</th>
+                <th className="px-3 py-3">Equipe</th>
                 <th className="px-3 py-3">Situação</th>
                 <th className="px-3 py-3">Resumo operacional</th>
+                <th className="px-3 py-3">Fotos</th>
                 <th className="px-3 py-3">Ações</th>
               </tr>
             </thead>
@@ -256,6 +272,7 @@ export function OperationalEntryRow({
   onEdit?: () => void;
 }) {
   const stage = getOperationalStage(entry);
+  const photos = entry.photos ?? [];
 
   return (
     <tr className="border-b border-[var(--line-ghost)] align-top last:border-0">
@@ -269,6 +286,7 @@ export function OperationalEntryRow({
         <StageBadge stage={stage} />
       </td>
       <td className="max-w-md px-3 py-4 text-sm leading-6 text-slate-600">{getOperationalSummary(entry)}</td>
+      <td className="px-3 py-4">{photos.length}</td>
       <td className="px-3 py-4">
         <div className="flex gap-2">
           <IconButton label="Visualizar" onClick={onView} icon={Eye} />

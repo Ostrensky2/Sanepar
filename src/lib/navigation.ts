@@ -1,5 +1,6 @@
 import type { ComponentType, SVGProps } from "react";
 import {
+  AlertTriangle,
   CarFront,
   DatabaseZap,
   FileText,
@@ -111,6 +112,13 @@ export const navigationItems: NavigationItem[] = [
         summary: "ocorrências e registros diários",
         headerTitle: "Entrada de Dados - Diário de Campo",
         icon: NotebookPen,
+      },
+      {
+        href: "/dados/pendencias",
+        label: "Pendências",
+        summary: "conflitos de importação",
+        headerTitle: "Entrada de Dados - Pendências",
+        icon: AlertTriangle,
       },
       {
         href: "/dados/resultados",

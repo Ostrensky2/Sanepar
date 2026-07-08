@@ -17,8 +17,12 @@ type OsrmResponse = {
   }>;
 };
 
+// `router.project-osrm.org` (servidor-demo) dá timeout em rajada e, no Windows,
+// cada timeout dispara o fallback PowerShell (1 processo por requisição) — uma
+// tempestade de processos que derrubava até as pernas boas. O OSRM da FOSSGIS
+// (`routing.openstreetmap.de`) resolve tudo rápido e é o primário. Mantemos só
+// ele + Valhalla como redundância.
 const osrmEndpoints = [
-  "https://router.project-osrm.org/route/v1/driving",
   "https://routing.openstreetmap.de/routed-car/route/v1/driving",
 ];
 const valhallaEndpoints = ["https://valhalla1.openstreetmap.de/route"];
@@ -184,7 +188,16 @@ async function fetchOsrmRouteFromUrl(url: URL) {
 }
 
 function requestJson(url: URL): Promise<OsrmResponse> {
-  return requestJsonWithNode(url).catch(() => requestJsonWithPowerShell(url));
+  return requestJsonWithNode(url).catch((error: unknown) => {
+    // Fallback PowerShell só para erros genuínos (ex.: interceptação TLS
+    // corporativa). NUNCA para timeout: abrir um processo por requisição lenta
+    // era o que gerava a tempestade de PowerShell no Windows.
+    if (error instanceof Error && error.name === "OsrmTimeoutError") {
+      throw error;
+    }
+
+    return requestJsonWithPowerShell(url);
+  });
 }
 
 function requestJsonWithNode(url: URL) {
@@ -196,7 +209,7 @@ function requestJsonWithNode(url: URL) {
           "User-Agent": "YvaeMonitoramento/1.0",
         },
         rejectUnauthorized: false,
-        timeout: 25000,
+        timeout: 12000,
       },
       (response) => {
         let body = "";
@@ -221,7 +234,9 @@ function requestJsonWithNode(url: URL) {
     );
 
     request.on("timeout", () => {
-      request.destroy(new Error("Tempo esgotado ao consultar rota rodoviária."));
+      const timeoutError = new Error("Tempo esgotado ao consultar rota rodoviária.");
+      timeoutError.name = "OsrmTimeoutError";
+      request.destroy(timeoutError);
     });
     request.on("error", reject);
   });

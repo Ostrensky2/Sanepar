@@ -10,7 +10,7 @@ type SyncStatusBadgeProps = {
 export function SyncStatusBadge({ snapshot, className }: SyncStatusBadgeProps) {
   const isCloud = snapshot.state === "synced" || snapshot.state === "checking";
   const Icon = isCloud ? Cloud : HardDrive;
-  const label = isCloud ? "Nuvem" : "Local";
+  const label = isCloud ? "Dados na nuvem" : "Dados locais";
 
   return (
     <span

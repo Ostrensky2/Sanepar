@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 type YvaeMastheadProps = {
@@ -23,14 +22,17 @@ export function YvaeMasthead({
         className,
       )}
     >
-      <div className={cn("relative mx-auto", compact ? "h-16 w-24" : "h-28 w-full")}>
-        <Image
-          src="/brand/yvae-logo.png"
+      <div
+        className={cn(
+          "relative mx-auto",
+          compact ? "h-20 w-24" : "h-44 w-full",
+        )}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/brand/yvae-logo.svg"
           alt="Yva'e Monitoramento"
-          fill
-          priority
-          sizes={compact ? "96px" : "180px"}
-          className="object-contain"
+          className="h-full w-full object-contain"
         />
       </div>
 
@@ -59,22 +61,20 @@ export function InstitutionalPartners({
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="brand-logo-shell radius-card border px-3 py-2">
-          <Image
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
             src="/brand/sanepar-logo.jpg"
             alt="Sanepar"
-            width={compact ? 92 : 122}
-            height={compact ? 20 : 28}
-            className="h-auto w-auto object-contain"
+            className={cn("h-auto object-contain", compact ? "w-[92px]" : "w-[122px]")}
           />
         </div>
 
         <div className="brand-logo-shell flex items-center radius-card border bg-white px-3 py-2">
-          <Image
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
             src="/brand/atgc-logo.png"
             alt="ATGC"
-            width={compact ? 42 : 56}
-            height={compact ? 42 : 56}
-            className="h-auto w-auto object-contain"
+            className={cn("h-auto object-contain", compact ? "w-[42px]" : "w-[56px]")}
           />
         </div>
       </div>

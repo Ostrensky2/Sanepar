@@ -1,7 +1,20 @@
 import { NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/api-auth";
 import { parseCampaignWorkbook } from "@/lib/imports/campaigns";
+import { classifyFieldDiaryImport } from "@/lib/imports/conflict-detection";
 import { MAX_IMPORT_FILE_BYTES, previewWorkbook } from "@/lib/imports/excel";
+import { campaignPointToFieldDiaryPayload } from "@/lib/imports/field-spreadsheet-to-diary";
+import {
+  buildImportedPhotoPath,
+  fetchAndStorePhotosAsPng,
+  splitPhotoLinks,
+} from "@/lib/imports/photo-fetch";
+import {
+  fieldDiaryEntryKey,
+  normalizeFieldDiaryEntry,
+  type FieldDiaryEntry,
+  type FieldDiaryPayload,
+} from "@/lib/field-diary";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 
 export const runtime = "nodejs";
@@ -41,7 +54,47 @@ export async function POST(request: Request) {
     const buffer = await file.arrayBuffer();
     const campaignImport = await parseCampaignWorkbook(buffer, file.name);
     normalizeCampaignKeys(campaignImport.points);
+
+    // Validação 1: Garantir que a planilha contenha dados de apenas uma campanha
+    const uniqueCampaigns = Array.from(
+      new Set(campaignImport.points.map((p) => p.campaign.trim()).filter(Boolean))
+    );
+
+    if (uniqueCampaigns.length > 1) {
+      return NextResponse.json(
+        {
+          error: `A planilha de campo contém dados de múltiplas campanhas (${uniqueCampaigns.join(
+            ", "
+          )}). É permitido conter dados de apenas uma campanha por vez.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validação 2: Garantir que a campanha identificada coincida com a selecionada no formulário
+    const selectedCampaign = formData.get("selectedCampaign")?.toString()?.trim();
+    if (selectedCampaign && uniqueCampaigns.length > 0) {
+      const sheetCampaign = uniqueCampaigns[0];
+      const normSelected = selectedCampaign.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+      const normSheet = sheetCampaign.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+
+      if (normSelected !== normSheet) {
+        return NextResponse.json(
+          {
+            error: `A campanha selecionada no formulário ("${selectedCampaign}") não coincide com a campanha identificada na planilha ("${sheetCampaign}"). Verifique se selecionou a campanha correta ou se a planilha está correta.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Para consistência de casing, forçar o nome exato selecionado
+      for (const point of campaignImport.points) {
+        point.campaign = selectedCampaign;
+      }
+    }
+
     const preview = await previewWorkbook(buffer, file.name);
+    const unifiedImport = await applyUnifiedFieldImport(campaignImport);
     const persistence = await persistCampaignImport(campaignImport);
 
     if (persistence.mode === "cloud-error") {
@@ -58,6 +111,7 @@ export async function POST(request: Request) {
       ...campaignImport,
       preview,
       persistence,
+      unifiedImport,
     });
   } catch (error) {
     const message =
@@ -67,6 +121,405 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+async function applyUnifiedFieldImport(campaignImport: Awaited<ReturnType<typeof parseCampaignWorkbook>>) {
+  const supabase = createOptionalSupabaseClient();
+  const summary = {
+    novos: 0,
+    identicos: 0,
+    aditivos: 0,
+    conflitos: 0,
+    fotos: {
+      baixadas: 0,
+      avisos: 0,
+    },
+  };
+  const conflicts: Array<{
+    entityType: "diario";
+    entityKey: string;
+    fieldName: string;
+    appValue: unknown;
+    sheetValue: unknown;
+  }> = [];
+  const photoWarnings: Array<{ pointId: string; sourceUrl: string; message: string }> = [];
+
+  if (supabase) {
+    await attachStoredPhotos(campaignImport, supabase, summary, photoWarnings);
+  } else {
+    for (const point of campaignImport.points) {
+      const warningLinks = splitPhotoLinks([point.photoUrl, point.driveUrl, point.dropboxUrl].join(";"));
+      if (warningLinks.length) {
+        const message = "Supabase não configurado; fotos por link não foram convertidas para Storage.";
+        point.photoWarnings = warningLinks.map((sourceUrl) => `${sourceUrl}: ${message}`);
+        photoWarnings.push(...warningLinks.map((sourceUrl) => ({ pointId: point.id, sourceUrl, message })));
+      }
+    }
+  }
+
+  const incomingEntries = campaignImport.points
+    .map(campaignPointToFieldDiaryPayload)
+    .filter((payload): payload is FieldDiaryPayload => payload !== null)
+    .map(createEntry);
+  const uniqueIncomingEntries = dedupeIncomingFieldEntries(incomingEntries, summary, conflicts);
+
+  if (!supabase) {
+    summary.novos = uniqueIncomingEntries.length;
+    return {
+      mode: "browser" as const,
+      summary,
+      conflicts,
+      photoWarnings,
+      entries: uniqueIncomingEntries,
+    };
+  }
+
+  const existingEntries = await readExistingFieldDiaryEntries(supabase, uniqueIncomingEntries);
+  const rowsToUpsert: FieldDiaryEntry[] = [];
+  const batchId = crypto.randomUUID();
+
+  for (const incoming of uniqueIncomingEntries) {
+    const key = fieldDiaryEntryKey(incoming);
+    const existing = existingEntries.get(key) ?? null;
+    const classification = classifyFieldDiaryImport(incoming, existing, key);
+
+    if (classification.status === "new") {
+      summary.novos += 1;
+      rowsToUpsert.push(incoming);
+    } else if (classification.status === "additive") {
+      summary.aditivos += 1;
+      rowsToUpsert.push(classification.entry);
+    } else if (classification.status === "identical") {
+      summary.identicos += 1;
+    } else {
+      summary.conflitos += 1;
+      conflicts.push(
+        ...classification.conflicts.map((conflict) => ({
+          entityType: conflict.entityType,
+          entityKey: conflict.entityKey,
+          fieldName: String(conflict.fieldName),
+          appValue: conflict.appValue,
+          sheetValue: conflict.sheetValue,
+        })),
+      );
+    }
+  }
+
+  if (rowsToUpsert.length) {
+    const { error } = await supabase
+      .from("field_diary_entries")
+      .upsert(rowsToUpsert.map(fieldDiaryEntryToRow), { onConflict: "id" });
+
+    if (error) {
+      throw new Error("A planilha foi lida, mas o Diário de Campo recusou a gravação.");
+    }
+  }
+
+  if (conflicts.length) {
+    await persistImportConflicts(supabase, batchId, conflicts);
+  }
+
+  return {
+    mode: "cloud" as const,
+    batchId,
+    summary,
+    conflicts,
+    photoWarnings,
+  };
+}
+
+function dedupeIncomingFieldEntries(
+  entries: FieldDiaryEntry[],
+  summary: { identicos: number; aditivos: number; conflitos: number },
+  conflicts: Array<{
+    entityType: "diario";
+    entityKey: string;
+    fieldName: string;
+    appValue: unknown;
+    sheetValue: unknown;
+  }>,
+) {
+  const entriesByKey = new Map<string, FieldDiaryEntry>();
+
+  for (const entry of entries) {
+    const key = fieldDiaryEntryKey(entry);
+    const existing = entriesByKey.get(key);
+
+    if (!existing) {
+      entriesByKey.set(key, entry);
+      continue;
+    }
+
+    const classification = classifyFieldDiaryImport(entry, existing, key);
+
+    if (classification.status === "identical") {
+      summary.identicos += 1;
+      continue;
+    }
+
+    if (classification.status === "additive") {
+      summary.aditivos += 1;
+      entriesByKey.set(key, classification.entry);
+      continue;
+    }
+
+    if (classification.status === "conflict") {
+      summary.conflitos += 1;
+      conflicts.push(
+        ...classification.conflicts.map((conflict) => ({
+          entityType: conflict.entityType,
+          entityKey: conflict.entityKey,
+          fieldName: String(conflict.fieldName),
+          appValue: conflict.appValue,
+          sheetValue: conflict.sheetValue,
+        })),
+      );
+    }
+  }
+
+  return [...entriesByKey.values()];
+}
+
+async function attachStoredPhotos(
+  campaignImport: Awaited<ReturnType<typeof parseCampaignWorkbook>>,
+  supabase: NonNullable<ReturnType<typeof createOptionalSupabaseClient>>,
+  summary: { fotos: { baixadas: number; avisos: number } },
+  photoWarnings: Array<{ pointId: string; sourceUrl: string; message: string }>,
+) {
+  for (const point of campaignImport.points) {
+    const sourceLinks = [
+      ...splitPhotoLinks(point.photoUrl),
+      ...splitPhotoLinks(point.driveUrl),
+      ...splitPhotoLinks(point.dropboxUrl),
+    ];
+    const uniqueLinks = [...new Set(sourceLinks)];
+
+    if (!uniqueLinks.length) {
+      continue;
+    }
+
+    const result = await fetchAndStorePhotosAsPng(uniqueLinks, {
+      supabase,
+      storagePathBuilder: (sourceUrl, index) =>
+        buildImportedPhotoPath({
+          campaign: point.campaign,
+          code: point.code,
+          pointId: point.id,
+          sourceUrl,
+          index,
+        }),
+    });
+
+    if (result.photos.length) {
+      point.photos = result.photos.map((photo, index) => ({
+        id: photo.id,
+        url: photo.url,
+        caption: `Foto ${index + 1} - ${point.code}`,
+        bucket: photo.bucket,
+        path: photo.path,
+        fileName: photo.fileName,
+        width: photo.width,
+        height: photo.height,
+        uploadedAt: photo.uploadedAt,
+      }));
+      point.photoUrl = result.photos[0].url;
+      point.driveUrl = "";
+      point.dropboxUrl = "";
+      summary.fotos.baixadas += result.photos.length;
+    }
+
+    if (result.warnings.length) {
+      point.photoWarnings = result.warnings.map((warning) => `${warning.sourceUrl}: ${warning.message}`);
+      photoWarnings.push(
+        ...result.warnings.map((warning) => ({
+          pointId: point.id,
+          sourceUrl: warning.sourceUrl,
+          message: warning.message,
+        })),
+      );
+      summary.fotos.avisos += result.warnings.length;
+    }
+  }
+}
+
+function createEntry(payload: FieldDiaryPayload): FieldDiaryEntry {
+  const now = new Date().toISOString();
+  const normalized = normalizeFieldDiaryEntry({
+    ...payload,
+    id: crypto.randomUUID(),
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  if (!normalized) {
+    throw new Error("Registro inválido gerado pela Planilha de Campo.");
+  }
+
+  return normalized;
+}
+
+async function readExistingFieldDiaryEntries(
+  supabase: NonNullable<ReturnType<typeof createOptionalSupabaseClient>>,
+  incomingEntries: FieldDiaryEntry[],
+) {
+  const campaignNames = [...new Set(incomingEntries.map((entry) => entry.campaignName).filter(Boolean))];
+  const entries = new Map<string, FieldDiaryEntry>();
+
+  if (!campaignNames.length) {
+    return entries;
+  }
+
+  const { data, error } = await supabase
+    .from("field_diary_entries")
+    .select("*")
+    .in("campaign_name", campaignNames);
+
+  if (error || !Array.isArray(data)) {
+    return entries;
+  }
+
+  for (const row of data) {
+    const entry = normalizeFieldDiaryEntry(fieldDiaryRowToEntry(row as FieldDiaryRow));
+    if (entry) {
+      entries.set(fieldDiaryEntryKey(entry), entry);
+    }
+  }
+
+  return entries;
+}
+
+async function persistImportConflicts(
+  supabase: NonNullable<ReturnType<typeof createOptionalSupabaseClient>>,
+  batchId: string,
+  conflicts: Array<{
+    entityType: "diario";
+    entityKey: string;
+    fieldName: string;
+    appValue: unknown;
+    sheetValue: unknown;
+  }>,
+) {
+  const { error } = await supabase.from("import_conflicts").insert(
+    conflicts.map((conflict) => ({
+      batch_id: batchId,
+      entity_type: conflict.entityType,
+      entity_key: conflict.entityKey,
+      field_name: conflict.fieldName,
+      app_value: conflict.appValue,
+      sheet_value: conflict.sheetValue,
+      status: "pendente",
+    })),
+  );
+
+  if (error) {
+    throw new Error("Conflitos detectados, mas a área de pendências recusou a gravação.");
+  }
+}
+
+type FieldDiaryRow = {
+  id: string;
+  campaign_id?: string | null;
+  campaign_name: string;
+  campaign_day: number;
+  entry_date: string;
+  field_team_name?: string | null;
+  field_team_members?: string[];
+  collection_time?: string | null;
+  location_name: string;
+  sia?: string | null;
+  samples_replicas_edna?: string | null;
+  zooplankton_id?: string | null;
+  latitude?: string | null;
+  longitude?: string | null;
+  municipality: string;
+  activities?: string[];
+  water_visual_conditions?: string[];
+  has_occurrence?: boolean;
+  occurrence_type?: string | null;
+  occurrence_description?: string | null;
+  requires_follow_up?: string;
+  follow_up_notes?: string | null;
+  weather_conditions?: string | null;
+  point_accessibility?: string | null;
+  daily_summary?: string;
+  status?: string;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  photos?: unknown;
+};
+
+function fieldDiaryRowToEntry(row: FieldDiaryRow): FieldDiaryEntry {
+  return {
+    id: row.id,
+    campaignId: row.campaign_id ?? null,
+    campaignName: row.campaign_name,
+    campaignDay: row.campaign_day,
+    entryDate: row.entry_date,
+    fieldTeamName: row.field_team_name ?? "",
+    fieldTeamMembers: row.field_team_members ?? [],
+    collectionTime: row.collection_time ?? "",
+    locationName: row.location_name,
+    sia: row.sia ?? "",
+    samplesReplicasEdna: row.samples_replicas_edna ?? "",
+    zooplanktonId: row.zooplankton_id ?? "",
+    latitude: row.latitude ?? "",
+    longitude: row.longitude ?? "",
+    municipality: row.municipality,
+    activities: row.activities ?? [],
+    waterVisualConditions: row.water_visual_conditions ?? [],
+    hasOccurrence: Boolean(row.has_occurrence),
+    occurrenceType: row.occurrence_type ?? "",
+    occurrenceDescription: row.occurrence_description ?? "",
+    requiresFollowUp: (row.requires_follow_up ?? "Não") as FieldDiaryEntry["requiresFollowUp"],
+    followUpNotes: row.follow_up_notes ?? "",
+    weatherConditions: (row.weather_conditions ?? "") as FieldDiaryEntry["weatherConditions"],
+    pointAccessibility: (row.point_accessibility ?? "") as FieldDiaryEntry["pointAccessibility"],
+    dailySummary: row.daily_summary ?? "",
+    status: (row.status ?? "Rascunho") as FieldDiaryEntry["status"],
+    createdBy: row.created_by ?? "",
+    createdByName: row.created_by_name ?? "",
+    createdAt: row.created_at ?? new Date().toISOString(),
+    updatedAt: row.updated_at ?? new Date().toISOString(),
+    photos: Array.isArray(row.photos) ? row.photos as FieldDiaryEntry["photos"] : [],
+  };
+}
+
+function fieldDiaryEntryToRow(entry: FieldDiaryEntry) {
+  return {
+    id: entry.id,
+    campaign_id: entry.campaignId,
+    campaign_name: entry.campaignName,
+    campaign_day: entry.campaignDay,
+    entry_date: entry.entryDate,
+    field_team_name: entry.fieldTeamName || null,
+    field_team_members: entry.fieldTeamMembers,
+    collection_time: entry.collectionTime || null,
+    location_name: entry.locationName,
+    sia: entry.sia || null,
+    samples_replicas_edna: entry.samplesReplicasEdna || null,
+    zooplankton_id: entry.zooplanktonId || null,
+    latitude: entry.latitude || null,
+    longitude: entry.longitude || null,
+    municipality: entry.municipality,
+    activities: entry.activities,
+    water_visual_conditions: entry.waterVisualConditions,
+    has_occurrence: entry.hasOccurrence,
+    occurrence_type: entry.hasOccurrence ? entry.occurrenceType || null : null,
+    occurrence_description: entry.hasOccurrence ? entry.occurrenceDescription || null : null,
+    requires_follow_up: entry.requiresFollowUp,
+    follow_up_notes: entry.followUpNotes || null,
+    weather_conditions: entry.weatherConditions || null,
+    point_accessibility: entry.pointAccessibility || null,
+    daily_summary: entry.dailySummary,
+    status: entry.status,
+    created_by: entry.createdBy || null,
+    created_by_name: entry.createdByName || null,
+    created_at: entry.createdAt,
+    updated_at: new Date().toISOString(),
+    photos: entry.photos,
+  };
 }
 
 async function persistCampaignImport(campaignImport: Awaited<ReturnType<typeof parseCampaignWorkbook>>) {
@@ -120,5 +573,73 @@ function normalizeCampaignKeys(points: Awaited<ReturnType<typeof parseCampaignWo
     if (!point.campaign?.trim()) {
       point.campaign = fallbackCampaign;
     }
+  }
+}
+
+export async function DELETE(request: Request) {
+  const auth = requireApiSession(request, "data.delete");
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const campaignName = searchParams.get("campaignName")?.trim();
+    const campaignKey = searchParams.get("campaignKey")?.trim();
+
+    if (!campaignName) {
+      return NextResponse.json(
+        { error: "O nome da campanha é obrigatório para a exclusão." },
+        { status: 400 },
+      );
+    }
+
+    const supabase = createOptionalSupabaseClient();
+
+    if (supabase) {
+      // 1. Apagar histórico de alterações do Diário de Campo
+      const { error: errorLog } = await supabase
+        .from("field_diary_change_log")
+        .delete()
+        .eq("campaign_name", campaignName);
+
+      if (errorLog) {
+        throw new Error(`Falha ao excluir histórico de alterações: ${errorLog.message}`);
+      }
+
+      // 2. Apagar diário de campo
+      const { error: errorEntries } = await supabase
+        .from("field_diary_entries")
+        .delete()
+        .eq("campaign_name", campaignName);
+
+      if (errorEntries) {
+        throw new Error(`Falha ao excluir registros do diário de campo: ${errorEntries.message}`);
+      }
+
+      // 3. Apagar importações de campanhas (pontos/mapa)
+      const keyToUse = campaignKey || campaignName.trim().toLowerCase();
+      const { error: errorImports } = await supabase
+        .from("campaign_imports")
+        .delete()
+        .eq("campaign_key", keyToUse);
+
+      if (errorImports) {
+        throw new Error(`Falha ao excluir importações da campanha: ${errorImports.message}`);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Todos os dados da campanha "${campaignName}" foram excluídos com sucesso.`,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Não foi possível excluir os dados da campanha.";
+
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

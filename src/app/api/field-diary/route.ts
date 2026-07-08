@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/api-auth";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 import {
+  fieldDiaryEntryKey,
   normalizeFieldDiaryEntry,
+  normalizeGovernanceStatus,
   type FieldDiaryEntry,
 } from "@/lib/field-diary";
+import { classifyFieldDiaryImport, diffFieldDiaryEntries } from "@/lib/imports/conflict-detection";
 
 export const runtime = "nodejs";
 
@@ -14,6 +17,8 @@ type FieldDiaryRow = {
   campaign_name: string;
   campaign_day: number;
   entry_date: string;
+  field_team_name: string | null;
+  field_team_members: string[];
   collection_time: string | null;
   location_name: string;
   sia: string | null;
@@ -37,6 +42,10 @@ type FieldDiaryRow = {
   created_by_name: string | null;
   created_at: string;
   updated_at: string;
+  photos: unknown;
+  governance_status?: string | null;
+  collection_order?: number | null;
+  missing_in_import?: boolean | null;
 };
 
 export async function GET(request: Request) {
@@ -97,19 +106,42 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
   }
 
   const payload = (await request.json()) as { entry?: unknown };
-  const entry = normalizeFieldDiaryEntry(payload.entry);
+  const normalized = normalizeFieldDiaryEntry(payload.entry);
 
-  if (!entry) {
+  if (!normalized) {
     return NextResponse.json(
       { error: "O registro do Diário de Campo é inválido." },
       { status: 400 },
     );
   }
 
+  // Edição manual no app promove o registro a "corrigido": passa a ter prioridade
+  // sobre futuras importações da planilha da campanha.
+  const entry: FieldDiaryEntry = { ...normalized, governanceStatus: "corrigido" };
+
+  // Captura o estado anterior (numa edição) para registrar o histórico por campo.
+  let previousEntry: FieldDiaryEntry | null = null;
+  if (mode === "upsert") {
+    const { data: previousRow } = await supabase
+      .from("field_diary_entries")
+      .select("*")
+      .eq("id", entry.id)
+      .maybeSingle<FieldDiaryRow>();
+    if (previousRow) {
+      previousEntry = normalizeFieldDiaryEntry(fromRow(previousRow));
+    }
+  }
+
+  const rowToSave = mode === "insert" ? await prepareInsertRow(supabase, entry) : toRow(entry);
+
+  if ("error" in rowToSave) {
+    return NextResponse.json({ error: rowToSave.error }, { status: rowToSave.status });
+  }
+
   const result =
     mode === "insert"
-      ? await supabase.from("field_diary_entries").insert(toRow(entry)).select("*").single<FieldDiaryRow>()
-      : await supabase.from("field_diary_entries").upsert(toRow(entry), { onConflict: "id" }).select("*").single<FieldDiaryRow>();
+      ? await supabase.from("field_diary_entries").upsert(rowToSave, { onConflict: "id" }).select("*").single<FieldDiaryRow>()
+      : await supabase.from("field_diary_entries").upsert(rowToSave, { onConflict: "id" }).select("*").single<FieldDiaryRow>();
 
   const { data, error } = result;
 
@@ -120,10 +152,65 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
     );
   }
 
+  const savedEntry = fromRow(data);
+
+  // Histórico de alterações da edição manual (origem "app").
+  if (previousEntry) {
+    const changes = diffFieldDiaryEntries(previousEntry, savedEntry);
+    if (changes.length) {
+      const changedBy = auth.session?.name || auth.session?.email || null;
+      await supabase.from("field_diary_change_log").insert(
+        changes.map((change) => ({
+          entry_id: entry.id,
+          campaign_name: entry.campaignName,
+          field_name: String(change.field),
+          old_value: change.oldValue,
+          new_value: change.newValue,
+          origin: "app",
+          changed_by: changedBy,
+        })),
+      );
+    }
+  }
+
   return NextResponse.json({
-    entry: fromRow(data),
+    entry: savedEntry,
     persistence: "cloud",
   });
+}
+
+async function prepareInsertRow(
+  supabase: NonNullable<ReturnType<typeof createOptionalSupabaseClient>>,
+  entry: FieldDiaryEntry,
+) {
+  const { data, error } = await supabase
+    .from("field_diary_entries")
+    .select("*")
+    .eq("entry_date", entry.entryDate)
+    .returns<FieldDiaryRow[]>();
+
+  if (error || !Array.isArray(data)) {
+    return toRow(entry);
+  }
+
+  const existing = data
+    .map(fromRow)
+    .find((candidate) => fieldDiaryEntryKey(candidate) === fieldDiaryEntryKey(entry));
+
+  if (!existing) {
+    return toRow(entry);
+  }
+
+  const classification = classifyFieldDiaryImport(entry, existing, fieldDiaryEntryKey(entry));
+
+  if (classification.status === "conflict") {
+    return {
+      error: "Já existe um registro para este ponto e data com dados diferentes. O registro do aplicativo foi mantido.",
+      status: 409,
+    } as const;
+  }
+
+  return toRow({ ...classification.entry, id: existing.id });
 }
 
 function fromRow(row: FieldDiaryRow): FieldDiaryEntry {
@@ -133,6 +220,8 @@ function fromRow(row: FieldDiaryRow): FieldDiaryEntry {
     campaignName: row.campaign_name,
     campaignDay: row.campaign_day,
     entryDate: row.entry_date,
+    fieldTeamName: row.field_team_name ?? "",
+    fieldTeamMembers: row.field_team_members ?? [],
     collectionTime: row.collection_time ?? "",
     locationName: row.location_name,
     sia: row.sia,
@@ -156,6 +245,10 @@ function fromRow(row: FieldDiaryRow): FieldDiaryEntry {
     createdByName: row.created_by_name,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    photos: Array.isArray(row.photos) ? row.photos as FieldDiaryEntry["photos"] : [],
+    governanceStatus: normalizeGovernanceStatus(row.governance_status),
+    collectionOrder: row.collection_order ?? null,
+    missingInImport: Boolean(row.missing_in_import),
   };
 }
 
@@ -166,6 +259,8 @@ function toRow(entry: FieldDiaryEntry) {
     campaign_name: entry.campaignName,
     campaign_day: entry.campaignDay,
     entry_date: entry.entryDate,
+    field_team_name: entry.fieldTeamName || null,
+    field_team_members: entry.fieldTeamMembers,
     collection_time: entry.collectionTime || null,
     location_name: entry.locationName,
     sia: entry.sia || null,
@@ -189,5 +284,11 @@ function toRow(entry: FieldDiaryEntry) {
     created_by_name: entry.createdByName || null,
     created_at: entry.createdAt,
     updated_at: new Date().toISOString(),
+    photos: entry.photos,
+    // Edição/salvamento manual no app: o registro passa a ter prioridade sobre
+    // futuras importações de planilha (ver import-governance).
+    governance_status: normalizeGovernanceStatus(entry.governanceStatus),
+    collection_order: entry.collectionOrder ?? null,
+    missing_in_import: entry.missingInImport ?? false,
   };
 }

@@ -441,7 +441,7 @@ const helpModules: HelpModule[] = [
         title: "Ajustar privilégios por categoria",
         steps: [
           "Abra Perfis e permissões.",
-          "Revise as categorias Admin, Sanepar, UFPR e ATGC.",
+          "Revise as categorias Admin, Sanepar, Tecpar, UFPR e ATGC.",
           "Ative ou desative funções conforme a matriz operacional.",
           "Evite remover privilégio essencial de Admin para não bloquear a administração.",
         ],

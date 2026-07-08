@@ -9,6 +9,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   ACCESS_CATEGORY_STORAGE_KEY,
   hasPrivilege,
@@ -28,6 +29,7 @@ import { EmptyState } from "@/components/empty-state";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 import type { LaboratoryRiskPoint, LaboratoryRiskResultRow } from "@/lib/laboratory-risk";
 import type { SpreadsheetPreview } from "@/lib/types";
+import type { FieldDiaryEntry } from "@/lib/field-diary";
 
 type SpreadsheetKind = "Campo" | "Laboratório";
 type CampaignScope = "Ordinária" | "Extraordinária";
@@ -117,6 +119,21 @@ type CampaignPublishPayload = {
     mode: "cloud" | "browser";
     message: string;
   };
+  unifiedImport?: {
+    mode: "cloud" | "browser";
+    batchId?: string;
+    summary: {
+      novos: number;
+      identicos: number;
+      aditivos: number;
+      conflitos: number;
+      fotos: {
+        baixadas: number;
+        avisos: number;
+      };
+    };
+    photoWarnings?: Array<{ pointId: string; sourceUrl: string; message: string }>;
+  };
 };
 
 type LaboratoryResultsPayload = {
@@ -165,6 +182,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [conflictHref, setConflictHref] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [activeCategory, setActiveCategory] = useState<UserCategory>("Admin");
@@ -259,6 +277,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
     event.preventDefault();
     setError(null);
     setMessage(null);
+    setConflictHref(null);
 
     if (!canImportSpreadsheets) {
       setError("A categoria ativa pode consultar Dados, mas não pode importar planilhas.");
@@ -278,6 +297,9 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
       formState.scope === "Extraordinária"
         ? formState.extraordinaryName.trim() || "Campanha extraordinária"
         : formState.campaign;
+
+    formData.append("selectedCampaign", campaign);
+
     let status: SheetStatus = "CARREGADA";
     let rowCount: number | undefined;
     let sheetCount: number | undefined;
@@ -339,7 +361,10 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
         status = "PUBLICADA";
         rowCount = payload.rowCount;
         sheetCount = payload.preview.sheetCount;
-        statusMessage = payload.persistence.message;
+        statusMessage = formatFieldImportMessage(payload);
+        if (payload.unifiedImport?.summary.conflitos) {
+          setConflictHref("/dados/pendencias");
+        }
       } else if (formState.kind === "Laboratório") {
         const resultsData = new FormData();
         resultsData.append("file", file);
@@ -468,45 +493,100 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
     URL.revokeObjectURL(url);
   }
 
-  function deleteSpreadsheet(sheet: StoredSpreadsheet) {
+  async function deleteSpreadsheet(sheet: StoredSpreadsheet) {
     if (!canDeleteSpreadsheets) {
       setError("A categoria ativa pode consultar Dados, mas não pode excluir planilhas.");
       return;
     }
 
     const confirmed = window.confirm(
-      `Remover "${sheet.fileName}" do repositório de dados deste painel?`,
+      `ATENÇÃO: A exclusão removerá permanentemente a planilha "${sheet.fileName}" e TODOS os dados associados à campanha "${sheet.campaign}" do diário de campo e mapas. Confirmar exclusão?`,
     );
 
     if (!confirmed) {
       return;
     }
 
-    setSpreadsheets((current) => current.filter((item) => item.id !== sheet.id));
-    void deleteSpreadsheetFile(sheet.id);
+    setIsPending(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetch(
+        `/api/imports/campaigns?campaignName=${encodeURIComponent(
+          sheet.campaign
+        )}&campaignKey=${encodeURIComponent(sheet.campaign.toLowerCase())}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) {
+        const errPayload = await response.json();
+        throw new Error(errPayload.error || "Erro ao excluir dados da nuvem.");
+      }
+
+      setSpreadsheets((current) => current.filter((item) => item.id !== sheet.id));
+      await deleteSpreadsheetFile(sheet.id);
+
+      const storedPointsRaw = window.localStorage.getItem("yvae:campaign-map-points");
+      if (storedPointsRaw) {
+        const storedPoints = JSON.parse(storedPointsRaw) as CampaignMapPoint[];
+        const filteredPoints = storedPoints.filter(
+          (p) => p.campaign.trim().toLowerCase() !== sheet.campaign.trim().toLowerCase()
+        );
+        if (filteredPoints.length === 0) {
+          window.localStorage.removeItem("yvae:campaign-map-points");
+        } else {
+          window.localStorage.setItem("yvae:campaign-map-points", JSON.stringify(filteredPoints));
+        }
+        window.dispatchEvent(new Event("storage"));
+      }
+
+      const storedImportRaw = window.localStorage.getItem("yvae:campaign-map-import");
+      if (storedImportRaw) {
+        const storedImport = JSON.parse(storedImportRaw);
+        if (storedImport.fileName === sheet.fileName) {
+          window.localStorage.removeItem("yvae:campaign-map-import");
+        }
+      }
+
+      const storedDiaryRaw = window.localStorage.getItem("yvae:field-diary-entries");
+      if (storedDiaryRaw) {
+        const storedDiary = JSON.parse(storedDiaryRaw) as FieldDiaryEntry[];
+        const filteredDiary = storedDiary.filter(
+          (d) => d.campaignName.trim().toLowerCase() !== sheet.campaign.trim().toLowerCase()
+        );
+        window.localStorage.setItem("yvae:field-diary-entries", JSON.stringify(filteredDiary));
+        window.dispatchEvent(new Event("yvae:field-diary-updated"));
+      }
+
+      setMessage(`Dados da campanha "${sheet.campaign}" excluídos com sucesso.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro desconhecido ao excluir dados.");
+    } finally {
+      setIsPending(false);
+    }
   }
 
   return (
     <div className="space-y-4">
-      <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="max-w-3xl text-justify text-sm leading-6 text-[var(--ink-soft)]">
-            {config.description}
-          </p>
-          <p className="mt-2 text-xs font-semibold text-slate-500">
-            Perfil <span className="text-[var(--brand-navy-strong)]">{activeCategory}</span>
-            {" "}· exclusão de planilhas {canDeleteSpreadsheets ? "permitida" : "bloqueada"}
-          </p>
-        </div>
+      <section className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+        <p className="text-xs text-[var(--ink-soft)]">
+          {config.description}
+        </p>
+        <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">
+          Perfil: <strong className="text-[var(--brand-navy-strong)]">{activeCategory}</strong> · Exclusão {canDeleteSpreadsheets ? "liberada" : "bloqueada"}
+        </span>
       </section>
 
       <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="heading-font text-base font-bold text-[var(--brand-navy-strong)]">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="heading-font text-sm font-bold text-[var(--brand-navy-strong)]">
             Controle de importação
           </h3>
-          <span className="text-caption font-semibold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
-            {viewSpreadsheets.length} planilhas de {config.metricsLabel} no painel
+          <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+            {viewSpreadsheets.length} de {config.metricsLabel}
           </span>
         </div>
 
@@ -519,57 +599,49 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
       </section>
 
       <section className="glass-panel radius-panel p-3">
-        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-2">
           <div>
-            <span className="mb-3 inline-block rounded-full bg-[var(--brand-green-soft)] px-2.5 py-0.5 text-caption font-bold uppercase tracking-[0.18em] text-[var(--brand-navy-strong)]">
-              Carga manual
-            </span>
-            <h3 className="heading-font text-lg font-extrabold text-[var(--brand-navy-strong)]">
-              {config.formHeading}
-            </h3>
-            <p className="mt-1 max-w-2xl text-justify text-xs leading-5 text-slate-500">
-              {config.formDescription}
-            </p>
+            <div className="flex items-center gap-2">
+              <span className="rounded bg-[var(--brand-green-soft)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-[var(--brand-navy-strong)]">
+                Carga manual
+              </span>
+              <h3 className="heading-font text-sm font-bold text-[var(--brand-navy-strong)]">
+                {config.formHeading}
+              </h3>
+            </div>
             {!canImportSpreadsheets ? (
-              <p className="mt-3 rounded-lg bg-[rgba(197,122,0,0.08)] px-3 py-2 text-xs font-semibold text-[var(--brand-amber)]">
+              <p className="mt-1 rounded bg-[rgba(197,122,0,0.08)] px-2 py-0.5 text-[10px] font-semibold text-[var(--brand-amber)]">
                 Importação bloqueada para a categoria ativa. Revise as permissões em Configurações.
               </p>
             ) : null}
           </div>
-          <div className="rounded-2xl bg-[var(--surface-soft)] p-3 text-[var(--brand-navy)]">
-            <DatabaseZap className="h-5 w-5" />
+          <div className="rounded bg-[var(--surface-soft)] p-1 text-[var(--brand-navy)] shrink-0">
+            <DatabaseZap className="h-4 w-4" />
           </div>
         </div>
 
         {config.template ? (
-          <div className="mb-3 flex flex-col gap-3 rounded-2xl bg-[var(--surface-soft)] p-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="rounded-xl bg-white p-2 text-[var(--brand-blue)]">
-                <FileSpreadsheet className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-[var(--brand-navy-strong)]">
-                  {config.template.title}
-                </p>
-                <p className="text-xs leading-5 text-slate-500">
-                  {config.template.description}
-                </p>
-              </div>
+          <div className="mb-2 flex items-center justify-between rounded-lg bg-[var(--surface-soft)] px-3 py-1.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <FileSpreadsheet className="h-4 w-4 text-[var(--brand-blue)] shrink-0" />
+              <p className="text-[11px] text-slate-500 truncate">
+                {config.template.description}
+              </p>
             </div>
             <a
               href={config.template.href}
               download
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[var(--brand-navy-strong)] px-4 py-2 text-xs font-bold text-white transition hover:bg-[var(--brand-navy)]"
+              className="inline-flex items-center gap-1 rounded bg-white border border-slate-200 px-2 py-1 text-[11px] font-bold text-[var(--brand-navy-strong)] transition hover:bg-slate-50 shrink-0 shadow-sm"
             >
-              <Download className="h-4 w-4" />
-              Baixar template
+              <Download className="h-3.5 w-3.5" />
+              Baixar Modelo
             </a>
           </div>
         ) : null}
 
         <form className="grid gap-2 lg:grid-cols-6" onSubmit={addSpreadsheet}>
           <select
-            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs lg:col-span-1"
+            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs lg:col-span-1"
             value={formState.scope}
             disabled={!canImportSpreadsheets || isPending}
             onChange={(event) =>
@@ -584,7 +656,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
           </select>
           {formState.scope === "Ordinária" ? (
             <select
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs lg:col-span-2"
+              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs lg:col-span-2"
               value={formState.campaign}
               disabled={!canImportSpreadsheets || isPending}
               onChange={(event) =>
@@ -599,7 +671,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
             </select>
           ) : (
             <input
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs lg:col-span-2"
+              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs lg:col-span-2"
               placeholder="Nome da campanha extraordinária"
               value={formState.extraordinaryName}
               disabled={!canImportSpreadsheets || isPending}
@@ -611,19 +683,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
               }
             />
           )}
-          <div className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[var(--brand-navy-strong)] lg:col-span-1">
-            Tipo: <span className="font-bold">{config.kind}</span>
-          </div>
-          <input
-            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs lg:col-span-2"
-            placeholder="Observação operacional"
-            value={formState.note}
-            disabled={!canImportSpreadsheets || isPending}
-            onChange={(event) =>
-              setFormState((current) => ({ ...current, note: event.target.value }))
-            }
-          />
-          <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[var(--brand-navy)]/40 bg-[var(--surface-soft)] px-3 text-xs font-bold text-[var(--brand-navy-strong)] transition hover:border-[var(--brand-navy)] hover:bg-[var(--brand-blue-soft)] lg:col-span-2">
+          <label className="flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--brand-navy)]/40 bg-[var(--surface-soft)] px-3 text-xs font-bold text-[var(--brand-navy-strong)] transition hover:border-[var(--brand-navy)] hover:bg-[var(--brand-blue-soft)] lg:col-span-2">
             <UploadCloud className="h-4 w-4 shrink-0 text-[var(--brand-navy)]" />
             <span className="min-w-0 flex-1 truncate text-center">
               {selectedFileName ?? "Selecionar planilha"}
@@ -639,8 +699,28 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
               }
             />
           </label>
+          <button
+            type="submit"
+            disabled={isPending || !canImportSpreadsheets}
+            className="flex h-9 items-center justify-center gap-2 rounded-lg bg-[var(--brand-navy-strong)] px-4 text-xs font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 lg:col-span-1"
+          >
+            <UploadCloud className="h-4 w-4" />
+            {isPending ? "Carregando..." : config.submitLabel}
+          </button>
+          
+          <input
+            className={`h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs ${
+              config.showFieldMapToggle ? "lg:col-span-4" : "lg:col-span-6"
+            }`}
+            placeholder="Observação operacional"
+            value={formState.note}
+            disabled={!canImportSpreadsheets || isPending}
+            onChange={(event) =>
+              setFormState((current) => ({ ...current, note: event.target.value }))
+            }
+          />
           {config.showFieldMapToggle ? (
-            <label className="flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[var(--brand-navy-strong)] lg:col-span-2">
+            <label className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[var(--brand-navy-strong)] lg:col-span-2">
               <input
                 type="checkbox"
                 checked={formState.publishFieldMap}
@@ -656,20 +736,20 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
               Mapa será atualizado
             </label>
           ) : null}
-          <button
-            type="submit"
-            disabled={isPending || !canImportSpreadsheets}
-            className="flex h-10 items-center justify-center gap-2 rounded-lg bg-[var(--brand-navy-strong)] px-4 text-xs font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 lg:col-span-2"
-          >
-            <UploadCloud className="h-4 w-4" />
-            {isPending ? "Carregando..." : config.submitLabel}
-          </button>
         </form>
 
         {message ? (
-          <p className="mt-4 rounded-lg bg-[rgba(0,168,107,0.08)] px-4 py-3 text-xs font-semibold text-[#0b5f40]">
-            {message}
-          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[rgba(0,168,107,0.08)] px-4 py-3 text-xs font-semibold text-[#0b5f40]">
+            <span>{message}</span>
+            {conflictHref ? (
+              <Link
+                href={conflictHref}
+                className="rounded-md bg-white px-3 py-1.5 font-bold text-[var(--brand-navy-strong)] shadow-sm"
+              >
+                Resolver agora
+              </Link>
+            ) : null}
+          </div>
         ) : null}
         {error ? (
           <p className="mt-4 rounded-lg bg-[rgba(186,26,26,0.08)] px-4 py-3 text-xs font-semibold text-[var(--brand-danger)]">
@@ -678,8 +758,8 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
         ) : null}
       </section>
 
-      <section className="space-y-6">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+      <section className="space-y-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <nav className="flex flex-wrap gap-1 rounded-lg bg-[var(--surface-soft)] p-1">
             {filters.map((filter) => (
               <button
@@ -713,68 +793,63 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
           <table className="w-full text-left">
             <thead className="bg-slate-50/50">
               <tr>
-                <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
-                  Planilha
-                </th>
-                <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
+                <th className="px-4 py-2 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
                   Campanha
                 </th>
-                <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
-                  Tipo
+                <th className="px-4 py-2 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
+                  Data de Importação
                 </th>
-                <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
-                  Data
-                </th>
-                <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
+                <th className="px-4 py-2 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
                   Status
                 </th>
-                <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
+                <th className="px-4 py-2 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
                   Ações
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 text-xs">
               {!hasLoaded ? (
-                <TableSkeletonRows rows={5} columns={6} />
+                <TableSkeletonRows rows={5} columns={4} />
               ) : (
               visibleSpreadsheets.map((sheet) => (
                 <tr key={sheet.id} className="group transition-all hover:bg-slate-50">
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-2">
                     <div className="flex items-center gap-3">
-                      <FileSpreadsheet className="h-5 w-5 text-[var(--brand-blue)]" />
+                      <FileSpreadsheet className="h-5 w-5 text-[var(--brand-blue)] shrink-0" />
                       <div>
-                        <p className="font-bold text-[var(--brand-navy-strong)]">
-                          {sheet.fileName}
-                        </p>
-                        <p className="text-caption text-slate-500">
-                          {formatBytes(sheet.sizeBytes)}
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-[var(--brand-navy-strong)]">
+                            {sheet.campaign}
+                          </p>
+                          <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
+                            sheet.scope === "Ordinária" 
+                              ? "bg-[var(--brand-navy-strong)]/10 text-[var(--brand-navy-strong)]" 
+                              : "bg-amber-100 text-amber-800"
+                          }`}>
+                            {sheet.scope}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          {sheet.fileName} • {formatBytes(sheet.sizeBytes)}
                           {sheet.rows ? ` • ${sheet.rows} linhas` : ""}
                           {sheet.sheets ? ` • ${sheet.sheets} abas` : ""}
+                          {sheet.note ? ` • Obs: "${sheet.note}"` : ""}
                         </p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-slate-500">
-                    <p className="font-bold">{sheet.campaign}</p>
-                    <p className="text-caption">{sheet.scope}</p>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="rounded bg-slate-100 px-2 py-0.5 text-caption font-bold">
-                      {sheet.kind.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-slate-500">{sheet.date}</td>
-                  <td className="px-6 py-4">
-                    <span className={`rounded-sm border-l-[3px] px-2 py-1 text-caption font-bold ${statusClass(sheet.status)}`}>
+                  <td className="px-4 py-2 text-slate-500 whitespace-nowrap">{sheet.date}</td>
+                  <td className="px-4 py-2">
+                    <span className={`rounded-sm border-l-[3px] px-2 py-0.5 text-caption font-bold ${statusClass(sheet.status)}`}>
                       {sheet.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-2">
                     <div className="flex gap-2">
                       <button
                         type="button"
                         aria-label={`Baixar ${sheet.fileName}`}
-                        className="rounded p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
+                        className="rounded p-1 text-slate-500 transition-colors hover:bg-slate-100"
                         onClick={() => void downloadSpreadsheet(sheet)}
                       >
                         <Download className="h-4 w-4" />
@@ -783,8 +858,9 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
                         <button
                           type="button"
                           aria-label={`Remover ${sheet.fileName}`}
-                          className="rounded p-1.5 text-[var(--brand-danger)] transition-colors hover:bg-red-50"
-                          onClick={() => deleteSpreadsheet(sheet)}
+                          disabled={isPending}
+                          className="rounded p-1 text-[var(--brand-danger)] transition-colors hover:bg-red-50 disabled:opacity-50"
+                          onClick={() => void deleteSpreadsheet(sheet)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -866,11 +942,11 @@ async function deleteSpreadsheetFile(id: string) {
 
 function MetricTile({ label, value }: { label: string; value: string | number }) {
   return (
-    <article className="glass-panel radius-card p-3">
-      <p className="mb-1 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
+    <article className="glass-panel radius-card p-2.5 flex items-center justify-between gap-4">
+      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 truncate">
         {label}
       </p>
-      <p className="heading-font text-2xl font-black text-[var(--brand-navy-strong)]">
+      <p className="heading-font text-xl font-extrabold text-[var(--brand-navy-strong)] shrink-0">
         {value}
       </p>
     </article>
@@ -924,5 +1000,30 @@ function statusClass(status: SheetStatus) {
   }
 
   return "border-[var(--brand-teal)] bg-cyan-50 text-cyan-700";
+}
+
+function formatFieldImportMessage(payload: CampaignPublishPayload) {
+  const unified = payload.unifiedImport;
+
+  if (!unified) {
+    return payload.persistence.message;
+  }
+
+  const parts = [
+    payload.persistence.message,
+    `Diário: ${unified.summary.novos} novos, ${unified.summary.aditivos} aditivos, ${unified.summary.identicos} idênticos`,
+  ];
+
+  if (unified.summary.conflitos) {
+    parts.push(`${unified.summary.conflitos} conflitos em Pendências`);
+  }
+
+  parts.push(
+    `Fotos: ${unified.summary.fotos.baixadas} convertidas${
+      unified.summary.fotos.avisos ? `, ${unified.summary.fotos.avisos} avisos` : ""
+    }`,
+  );
+
+  return parts.join(" · ");
 }
 

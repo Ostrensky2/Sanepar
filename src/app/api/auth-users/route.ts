@@ -26,6 +26,8 @@ type AuthUserRow = {
   updated_at: string;
 };
 
+const SELF_MANAGED_USER_CATEGORIES: AppUser["role"][] = ["Sanepar", "Tecpar", "ATGC"];
+
 export async function GET(request: Request) {
   const auth = requireApiSession(request);
 
@@ -207,7 +209,7 @@ function scopeUsersForSession(
     return submittedUsers;
   }
 
-  if (session.role !== "Sanepar" && session.role !== "ATGC") {
+  if (!SELF_MANAGED_USER_CATEGORIES.includes(session.role)) {
     return normalizeAuthUsers(existingRows.map(fromRow));
   }
 
@@ -229,7 +231,7 @@ function scopeVisibleUsersForSession(users: AppUser[], session: ApiSession | nul
     return users;
   }
 
-  if (session.role !== "Sanepar" && session.role !== "ATGC") {
+  if (!SELF_MANAGED_USER_CATEGORIES.includes(session.role)) {
     return [];
   }
 

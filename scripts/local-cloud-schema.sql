@@ -23,13 +23,19 @@ create table if not exists public.point_actions (
 create table if not exists public.app_documents (
   id text primary key,
   title text not null,
-  dropbox_url text not null,
+  dropbox_url text,
+  original_url text,
   campaign text not null,
   point text not null,
   date_label text not null,
   type text not null,
   status text not null,
   source text not null default 'link',
+  original_name text,
+  mime_type text,
+  size_bytes bigint,
+  storage_bucket text,
+  storage_path text,
   updated_at timestamptz not null default now()
 );
 
@@ -70,6 +76,8 @@ create table if not exists public.field_diary_entries (
   campaign_name text not null,
   campaign_day integer not null,
   entry_date date not null,
+  field_team_name text,
+  field_team_members text[] not null default '{}',
   collection_time text,
   location_name text not null,
   sia text,
@@ -92,7 +100,8 @@ create table if not exists public.field_diary_entries (
   created_by text,
   created_by_name text,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  photos jsonb not null default '[]'::jsonb
 );
 
 create index if not exists campaign_imports_created_at_idx on public.campaign_imports (created_at desc);
@@ -101,6 +110,7 @@ create index if not exists app_documents_updated_at_idx on public.app_documents 
 create index if not exists auth_users_name_idx on public.auth_users (name asc);
 create index if not exists support_requests_updated_at_idx on public.support_requests (updated_at desc);
 create index if not exists field_diary_entries_entry_date_idx on public.field_diary_entries (entry_date desc, updated_at desc);
+create index if not exists field_diary_entries_campaign_day_idx on public.field_diary_entries (campaign_name, entry_date desc, campaign_day);
 
 alter table public.campaign_imports enable row level security;
 alter table public.point_actions enable row level security;

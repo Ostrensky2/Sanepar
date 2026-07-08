@@ -15,14 +15,20 @@ export type DocumentType =
 export type StoredDocument = {
   id: string;
   title: string;
-  dropboxUrl: string;
+  dropboxUrl?: string;
+  originalUrl?: string;
   campaign: string;
   point: string;
   date: string;
   updatedAt?: string;
   type: DocumentType;
   status: string;
-  source: "link";
+  source: "link" | "storage";
+  originalName?: string;
+  mimeType?: string;
+  size?: number;
+  storageBucket?: string;
+  storagePath?: string;
 };
 
 export const filterTabs: DocumentType[] = [
@@ -38,7 +44,7 @@ export const filterTabs: DocumentType[] = [
 export function isDocumentAllowedInRepository(document: StoredDocument) {
   const type = String(document.type).toLowerCase();
   const title = document.title.toLowerCase();
-  const url = document.dropboxUrl.toLowerCase();
+  const url = (document.dropboxUrl ?? document.originalUrl ?? document.storagePath ?? "").toLowerCase();
 
   if (type === "planilhas") {
     return false;
@@ -86,7 +92,7 @@ function dedupeDocuments(documents: StoredDocument[]) {
   const seen = new Set<string>();
 
   return documents.filter((document) => {
-    const key = `${document.id}|${document.dropboxUrl}|${document.title}`.toLowerCase();
+    const key = `${document.id}|${document.dropboxUrl ?? document.storagePath ?? ""}|${document.title}`.toLowerCase();
 
     if (seen.has(key)) {
       return false;
@@ -105,17 +111,29 @@ export function normalizeStoredDocument(value: unknown): StoredDocument | null {
   const candidate = value as Partial<StoredDocument>;
   const title = String(candidate.title ?? "").trim();
   const dropboxUrl = String(candidate.dropboxUrl ?? "").trim();
+  const originalUrl = String(candidate.originalUrl ?? dropboxUrl).trim();
+  const storageBucket = String(candidate.storageBucket ?? "").trim();
+  const storagePath = String(candidate.storagePath ?? "").trim();
   const status = String(candidate.status ?? "INSERIDO");
-  const source = String(candidate.source ?? "link");
+  const source = storageBucket && storagePath ? "storage" : String(candidate.source ?? "link");
 
-  if (!title || !dropboxUrl || source !== "link" || status.toUpperCase() === "RECUPERADO") {
+  if (!title || status.toUpperCase() === "RECUPERADO") {
+    return null;
+  }
+
+  if (source === "storage" && (!storageBucket || !storagePath)) {
+    return null;
+  }
+
+  if (source !== "storage" && !dropboxUrl) {
     return null;
   }
 
   return {
-    id: String(candidate.id ?? `${dropboxUrl}-${title}`),
+    id: String(candidate.id ?? `${dropboxUrl || storagePath}-${title}`),
     title,
-    dropboxUrl,
+    dropboxUrl: dropboxUrl || undefined,
+    originalUrl: originalUrl || undefined,
     campaign: String(candidate.campaign ?? "Documento inserido"),
     point: String(candidate.point ?? "Repositório oficial"),
     date: String(candidate.date ?? ""),
@@ -124,7 +142,12 @@ export function normalizeStoredDocument(value: unknown): StoredDocument | null {
       ? (candidate.type as DocumentType)
       : "Relatórios",
     status,
-    source: "link",
+    source: source === "storage" ? "storage" : "link",
+    originalName: candidate.originalName ? String(candidate.originalName) : undefined,
+    mimeType: candidate.mimeType ? String(candidate.mimeType) : undefined,
+    size: typeof candidate.size === "number" ? candidate.size : undefined,
+    storageBucket: storageBucket || undefined,
+    storagePath: storagePath || undefined,
   };
 }
 
