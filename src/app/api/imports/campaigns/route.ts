@@ -54,6 +54,45 @@ export async function POST(request: Request) {
     const buffer = await file.arrayBuffer();
     const campaignImport = await parseCampaignWorkbook(buffer, file.name);
     normalizeCampaignKeys(campaignImport.points);
+
+    // Validação 1: Garantir que a planilha contenha dados de apenas uma campanha
+    const uniqueCampaigns = Array.from(
+      new Set(campaignImport.points.map((p) => p.campaign.trim()).filter(Boolean))
+    );
+
+    if (uniqueCampaigns.length > 1) {
+      return NextResponse.json(
+        {
+          error: `A planilha de campo contém dados de múltiplas campanhas (${uniqueCampaigns.join(
+            ", "
+          )}). É permitido conter dados de apenas uma campanha por vez.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validação 2: Garantir que a campanha identificada coincida com a selecionada no formulário
+    const selectedCampaign = formData.get("selectedCampaign")?.toString()?.trim();
+    if (selectedCampaign && uniqueCampaigns.length > 0) {
+      const sheetCampaign = uniqueCampaigns[0];
+      const normSelected = selectedCampaign.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+      const normSheet = sheetCampaign.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+
+      if (normSelected !== normSheet) {
+        return NextResponse.json(
+          {
+            error: `A campanha selecionada no formulário ("${selectedCampaign}") não coincide com a campanha identificada na planilha ("${sheetCampaign}"). Verifique se selecionou a campanha correta ou se a planilha está correta.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Para consistência de casing, forçar o nome exato selecionado
+      for (const point of campaignImport.points) {
+        point.campaign = selectedCampaign;
+      }
+    }
+
     const preview = await previewWorkbook(buffer, file.name);
     const unifiedImport = await applyUnifiedFieldImport(campaignImport);
     const persistence = await persistCampaignImport(campaignImport);
@@ -534,5 +573,73 @@ function normalizeCampaignKeys(points: Awaited<ReturnType<typeof parseCampaignWo
     if (!point.campaign?.trim()) {
       point.campaign = fallbackCampaign;
     }
+  }
+}
+
+export async function DELETE(request: Request) {
+  const auth = requireApiSession(request, "data.delete");
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const campaignName = searchParams.get("campaignName")?.trim();
+    const campaignKey = searchParams.get("campaignKey")?.trim();
+
+    if (!campaignName) {
+      return NextResponse.json(
+        { error: "O nome da campanha é obrigatório para a exclusão." },
+        { status: 400 },
+      );
+    }
+
+    const supabase = createOptionalSupabaseClient();
+
+    if (supabase) {
+      // 1. Apagar histórico de alterações do Diário de Campo
+      const { error: errorLog } = await supabase
+        .from("field_diary_change_log")
+        .delete()
+        .eq("campaign_name", campaignName);
+
+      if (errorLog) {
+        throw new Error(`Falha ao excluir histórico de alterações: ${errorLog.message}`);
+      }
+
+      // 2. Apagar diário de campo
+      const { error: errorEntries } = await supabase
+        .from("field_diary_entries")
+        .delete()
+        .eq("campaign_name", campaignName);
+
+      if (errorEntries) {
+        throw new Error(`Falha ao excluir registros do diário de campo: ${errorEntries.message}`);
+      }
+
+      // 3. Apagar importações de campanhas (pontos/mapa)
+      const keyToUse = campaignKey || campaignName.trim().toLowerCase();
+      const { error: errorImports } = await supabase
+        .from("campaign_imports")
+        .delete()
+        .eq("campaign_key", keyToUse);
+
+      if (errorImports) {
+        throw new Error(`Falha ao excluir importações da campanha: ${errorImports.message}`);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Todos os dados da campanha "${campaignName}" foram excluídos com sucesso.`,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Não foi possível excluir os dados da campanha.";
+
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

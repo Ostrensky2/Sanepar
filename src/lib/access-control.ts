@@ -139,7 +139,6 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "campaigns.view",
     "data.view",
     "data.import",
-    "data.delete",
     "documents.view",
     "users.manage",
   ],
@@ -274,10 +273,12 @@ export function normalizePrivilegesForCategory(
     return categoryPrivileges.Admin;
   }
 
-  return sanitizePrivileges([
+  const result = sanitizePrivileges([
     ...generalViewPrivileges,
     ...(privileges ?? categoryPrivileges[category]),
   ]);
+
+  return result.filter((p) => p !== "data.delete");
 }
 
 function expandLegacyPrivileges(privileges: PrivilegeKey[]) {

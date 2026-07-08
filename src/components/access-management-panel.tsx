@@ -616,8 +616,8 @@ export function AccessManagementPanel({
                       <p className="mt-1 text-xs text-[var(--ink-soft)]">{privilege}</p>
                     </td>
                     {visibleCategories.map((category) => {
-                      const enabled = privilegeMatrix[category].includes(privilege);
-                      const locked = category === "Admin" || !canManagePermissions;
+                      const enabled = (category as string) === "Admin" ? true : (privilege === "data.delete" ? false : privilegeMatrix[category as keyof typeof privilegeMatrix].includes(privilege));
+                      const locked = (category as string) === "Admin" || !canManagePermissions || (privilege === "data.delete" && (category as string) !== "Admin");
 
                       return (
                         <td key={`${category}-${privilege}`} className="px-3 py-3 text-center">

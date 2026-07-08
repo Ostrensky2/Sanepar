@@ -85,7 +85,7 @@ const REQUIRED_FIELD_ALIASES = {
   samplesReplicasEdna: ["amostras e replicas", "amostras e réplicas", "amostras"],
   zooplanktonId: ["id zooplancton", "id zooplâncton", "id zooplacton"],
   collectionTime: ["hora de coleta", "horario de coleta", "horário de coleta"],
-  createdByName: ["responsavel", "responsável"],
+  createdByName: ["equipe", "responsavel", "responsável"],
   activities: ["atividades realizadas", "atividades"],
   hasOccurrence: ["houve ocorrencia", "houve ocorrência"],
   occurrenceType: ["tipo de ocorrencia", "tipo de ocorrência"],
