@@ -1,7 +1,8 @@
 import type {
-  MetabarcodingStage,
   MetabarcodingStageStatus,
 } from "@/components/metabarcoding-stages";
+import type { MetabarcodingStage } from "@/components/metabarcoding-stages";
+export type { MetabarcodingStage };
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 
 export type CampaignOperationalStatus =
@@ -295,8 +296,8 @@ export function buildDefaultCampaignManagement(campaign: CampaignView): Campaign
 
 export function calculateStageProgress(stages: MetabarcodingStage[]) {
   if (!stages.length) return 0;
-  const advancedStages = countAdvancedStages(stages);
-  return Math.round((advancedStages / stages.length) * 100);
+  const advancedUnits = countStageProgressUnits(stages);
+  return Math.round((advancedUnits / stages.length) * 100);
 }
 
 export function calculateCampaignProgress(
@@ -311,25 +312,43 @@ export function calculateCampaignProgress(
 }
 
 export function calculateProjectProgress(managementById: CampaignManagementById) {
-  const managementRows = Object.values(managementById);
-  const totalStages = defaultCampaigns.length * defaultMetabarcodingStages.length;
+  let total = 0;
+  let completed = 0;
 
-  if (!totalStages) return 0;
+  defaultCampaigns.forEach((campaign) => {
+    const management = managementById[campaign.id];
+    const stages = management?.stages ?? defaultMetabarcodingStages;
+    total += stages.length;
+    completed += stages.filter((stage) => stage.status === "done").length;
+  });
 
-  const completedStages = managementRows.reduce((total, management) => {
-    if (isCampaignInactiveForProgress(management.status)) return total;
-    return total + countAdvancedStagesForStatus(management.stages, management.status);
-  }, 0);
-
-  return Math.round((completedStages / totalStages) * 100);
+  return total > 0 ? Math.round((completed / total) * 100) : 0;
 }
 
 export function getCurrentCampaignStage(stages: MetabarcodingStage[]) {
-  return (
-    stages.find((stage) => stage.status === "inprogress") ??
-    [...stages].reverse().find((stage) => stage.status === "done") ??
-    stages[0]
+  return stages.find((stage) => stage.status === "inprogress");
+}
+
+export function getMostAdvancedCampaignStage(stages: MetabarcodingStage[]) {
+  return [...stages].reverse().find(
+    (stage) => stage.status === "done" || stage.status === "inprogress"
   );
+}
+
+function countStageProgressUnits(stages: MetabarcodingStage[]) {
+  return stages.reduce((acc, stage) => {
+    if (stage.status === "done") return acc + 1;
+    if (stage.status === "inprogress") return acc + 0.5;
+    return acc;
+  }, 0);
+}
+
+function getStagePositionWeight(label: string, status: MetabarcodingStageStatus) {
+  const position = getStagePosition(label);
+  if (position === 0) return 0;
+  if (status === "done") return position;
+  if (status === "inprogress") return position - 1 + 0.5;
+  return 0; // pending
 }
 
 function countAdvancedStagesForStatus(
@@ -337,18 +356,19 @@ function countAdvancedStagesForStatus(
   status: CampaignOperationalStatus,
 ) {
   const currentStage = getCurrentCampaignStage(stages);
-  const currentStagePosition = currentStage ? getStagePosition(currentStage.label) : 0;
-  const advancedStages = Math.max(countAdvancedStages(stages), currentStagePosition);
+  const currentStagePositionWeight = currentStage && currentStage.status !== "pending"
+    ? getStagePositionWeight(currentStage.label, currentStage.status)
+    : 0;
+  const advancedStages = Math.max(countStageProgressUnits(stages), currentStagePositionWeight);
 
-  if (status === "Planejada" || status === "Em preparação") {
+  if (status === "Planejada") {
     return Math.min(advancedStages, 1);
+  }
+  if (status === "Em preparação") {
+    return Math.min(advancedStages, 2);
   }
 
   return advancedStages;
-}
-
-function countAdvancedStages(stages: MetabarcodingStage[]) {
-  return stages.filter((stage) => stage.status === "done" || stage.status === "inprogress").length;
 }
 
 function normalizeStoredStages(
@@ -379,8 +399,24 @@ function normalizeCampaignStatus(
   status: CampaignOperationalStatus,
   stages: MetabarcodingStage[],
 ): CampaignOperationalStatus {
-  if (status !== "Planejada" && status !== "Em preparação") {
-    return status;
+  let currentStatus = status;
+
+  if (status === "Aguardando calendário" || status === "Não previsto") {
+    const hasStarted = stages.some((stage) => stage.status === "done" || stage.status === "inprogress");
+    if (hasStarted) {
+      currentStatus = "Planejada";
+    }
+  }
+
+  if (
+    currentStatus !== "Planejada" &&
+    currentStatus !== "Em preparação" &&
+    currentStatus !== "Em campo" &&
+    currentStatus !== "Coleta concluída" &&
+    currentStatus !== "Aguardando laboratório" &&
+    currentStatus !== "Em análise"
+  ) {
+    return currentStatus;
   }
 
   const currentStage = getCurrentCampaignStage(stages);
@@ -389,11 +425,23 @@ function normalizeCampaignStatus(
     return "Em análise";
   }
 
+  if (currentStage && getStagePosition(currentStage.label) >= getStagePosition("Extração de DNA")) {
+    return "Coleta concluída";
+  }
+
   if (currentStage && getStagePosition(currentStage.label) >= getStagePosition("Coleta de amostras")) {
     return "Em campo";
   }
 
-  return status;
+  if (currentStatus === "Planejada" || currentStatus === "Em preparação") {
+    const prepStage = stages.find((stage) => normalizeStageKey(stage.label) === normalizeStageKey("Preparação da campanha"));
+    if (prepStage && (prepStage.status === "done" || prepStage.status === "inprogress")) {
+      return "Em preparação";
+    }
+    return "Planejada";
+  }
+
+  return currentStatus;
 }
 
 function normalizeStageListLength(stages: MetabarcodingStage[]) {

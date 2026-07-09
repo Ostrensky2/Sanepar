@@ -67,32 +67,37 @@ resolvidos silenciosamente.*
 19. **Tooltip (hover) mostra:** campanha, dia da campanha, data da coleta,
     sequência de coleta, código SIA, número do SIA (se houver), local/reservatório,
     município e rio (se houver).
+20. **Campanha em preparação:** Se o status da campanha for "Em preparação", o
+    mapa importado com os pontos previstos (original) e as devidas rotas/ligações
+    entre as datas previstas deve ser exibido. Todos os pontos devem ter a cor
+    preta (pois não há coletas executadas) e o painel de detalhes (card) do ponto
+    deve exibir o rótulo "Data prevista" no lugar de "Data".
 
 ---
 
 ## C. Regras técnicas do mapa (refinamento 2026-07-08)
 
-20. **Chave de rota = `campaignId + data real da coleta`**, não o "dia da campanha"
+21. **Chave de rota = `campaignId + data real da coleta`**, não o "dia da campanha"
     (que é só rótulo/ordem auxiliar).
-21. **Sequência persistida por ponto** (`collection_order`/`import_row_index`): a
+22. **Sequência persistida por ponto** (`collection_order`/`import_row_index`): a
     ordem das linhas da planilha vira dado no banco. **Não depender de `created_at`.**
-22. **Roteamento por trecho** (par consecutivo), não por dia inteiro: uma perna que
+23. **Roteamento por trecho** (par consecutivo), não por dia inteiro: uma perna que
     falha não derruba o dia.
-23. **Sem fallback de reta** para rota diária; trecho sem rota OSRM aparece no
+24. **Sem fallback de reta** para rota diária; trecho sem rota OSRM aparece no
     **diagnóstico** ("sem rota"), não como linha.
-24. **Entre dias só se as datas forem consecutivas** (diferença exata de 1 dia).
-25. **Limpar camadas antigas antes de redesenhar** (canvas é redesenhado inteiro a
+25. **Entre dias só se as datas forem consecutivas** (diferença exata de 1 dia).
+26. **Limpar camadas antigas antes de redesenhar** (canvas é redesenhado inteiro a
     cada frame; só as requisições da campanha atual são mapeadas).
-26. **Proibido usar localStorage/cache como fonte da lista de pontos.** O mapa de
+27. **Proibido usar localStorage/cache como fonte da lista de pontos.** O mapa de
     campanha usa só o Diário do banco (`no-store`). Cache serve só para geometria
     OSRM.
-27. **Toda polyline do app tem tipo explícito** (`daily`/`transition`/`displacement`);
+28. **Toda polyline do app tem tipo explícito** (`daily`/`transition`/`displacement`);
     tipo não reconhecido não renderiza. **Nenhuma polyline do app é preta contínua**
     (linhas escuras só de bacias/limites administrativos, nunca da camada de percurso).
-28. **Diagnóstico de rota**: total de pontos, datas com rota, trechos diários
+29. **Diagnóstico de rota**: total de pontos, datas com rota, trechos diários
     esperados/com rota/sem rota, ligações entre dias desenhadas e ignoradas por
     intervalo (console em dev + atributos `data-*` no container).
-29. **Correções filtram rigidamente por campanha** (C2), nunca atualização global.
+30. **Correções filtram rigidamente por campanha** (C2), nunca atualização global.
     A C1 é intocável.
 
 ---

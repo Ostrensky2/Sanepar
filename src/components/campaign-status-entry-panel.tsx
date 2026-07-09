@@ -125,9 +125,7 @@ export function CampaignStatusEntryPanel() {
   }
 
   const currentStage =
-    selectedManagement.stages.find((stage) => stage.status === "inprogress") ??
-    [...selectedManagement.stages].reverse().find((stage) => stage.status === "done") ??
-    selectedManagement.stages[0];
+    selectedManagement.stages.find((stage) => stage.status === "inprogress");
 
   return (
     <section className="space-y-5">

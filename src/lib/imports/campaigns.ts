@@ -50,6 +50,7 @@ export type CampaignMapPoint = {
     uploadedAt?: string | null;
   }>;
   photoWarnings?: string[];
+  collectionOrder?: number | null;
 };
 
 export type CampaignWorkbookImport = {
@@ -191,6 +192,7 @@ function parseCampaignWorksheet(
     .filter(([, column]) => column === null)
     .map(([field]) => field);
   const points: CampaignMapPoint[] = [];
+  const orderCounters = new Map<string, number>();
 
   for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber += 1) {
     const row = worksheet.getRow(rowNumber);
@@ -214,6 +216,12 @@ function parseCampaignWorksheet(
     }
 
     const campaign = readMappedCell(row, columns.campaign, FALLBACK_COLUMNS.campaign);
+    const day = readMappedCell(row, columns.day, FALLBACK_COLUMNS.day);
+    const campaignDay = parseInt(day, 10) || 1;
+    const orderKey = `${campaign || "Campanha"}|${campaignDay}`;
+    const collectionOrder = (orderCounters.get(orderKey) ?? 0) + 1;
+    orderCounters.set(orderKey, collectionOrder);
+
     const driveUrl = readMappedCell(row, columns.driveUrl, FALLBACK_COLUMNS.driveUrl);
     const dropboxUrl = readMappedCell(row, columns.dropboxUrl, FALLBACK_COLUMNS.dropboxUrl);
     const fieldPhotoUrl = readMappedCell(row, columns.photoUrl, FALLBACK_COLUMNS.photoUrl);
@@ -224,7 +232,8 @@ function parseCampaignWorksheet(
       id: `${campaign || "campanha"}-${code}-${rowNumber}`,
       code: `SIA-${code.padStart(4, "0")}`,
       point: readMappedCell(row, columns.point, FALLBACK_COLUMNS.point),
-      day: readMappedCell(row, columns.day, FALLBACK_COLUMNS.day),
+      day,
+      collectionOrder,
       campaign: campaign || "Campanha",
       date: formatDateCell(row.getCell(columns.date ?? FALLBACK_COLUMNS.date).value),
       waterBody:
@@ -375,6 +384,15 @@ function formatDateCell(value: ExcelJS.CellValue | undefined) {
 
   if (!normalized) {
     return "Data não informada";
+  }
+
+  // Se já for no formato DD/MM/YYYY, retorna direto para evitar erros de parse regional (Ex: 06/08/2026 ser lido como 8 de junho)
+  const brMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (brMatch) {
+    const day = brMatch[1].padStart(2, "0");
+    const month = brMatch[2].padStart(2, "0");
+    const year = brMatch[3];
+    return `${day}/${month}/${year}`;
   }
 
   const date = new Date(normalized);

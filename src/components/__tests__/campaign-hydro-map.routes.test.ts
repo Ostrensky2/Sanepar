@@ -134,4 +134,21 @@ describe("buildRoadRouteRequests", () => {
     expect(diagnostics.interdayIgnoredGap).toBe(1);
     expect(diagnostics.interdayDrawn).toBe(0);
   });
+
+  it("resolve coordenadas originais para rotas quando as efetivas são nulas", () => {
+    const plannedOnly: CampaignHydroMapPoint[] = [
+      point({ lat: 0, lon: 0, original: { lat: -25.45, lon: -49.12 }, effective: null, date: "2026-06-01", day: "1", collectionOrder: 1 }),
+      point({ lat: 0, lon: 0, original: { lat: -25.48, lon: -49.19 }, effective: null, date: "2026-06-01", day: "1", collectionOrder: 2 }),
+    ];
+    const { requests, diagnostics } = buildRoadRouteRequests(plannedOnly, allLayers);
+
+    expect(diagnostics.routeDates).toBe(1);
+    expect(diagnostics.dailyLegsExpected).toBe(1);
+    const daily = requests.filter((request) => request.kind === "daily");
+    expect(daily).toHaveLength(1);
+    expect(daily[0].waypoints).toEqual([
+      { lat: -25.45, lon: -49.12 },
+      { lat: -25.48, lon: -49.19 }
+    ]);
+  });
 });

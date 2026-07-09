@@ -34,6 +34,7 @@ describe("campaignPointToFieldDiaryPayload", () => {
       driveUrl: "",
       dropboxUrl: "",
       photoUrl: "",
+      collectionOrder: 5,
     } satisfies CampaignMapPoint);
 
     expect(payload).toMatchObject({
@@ -49,6 +50,7 @@ describe("campaignPointToFieldDiaryPayload", () => {
       hasOccurrence: true,
       requiresFollowUp: "Avaliar posteriormente",
       status: "Enviado",
+      collectionOrder: 5,
     });
   });
 });

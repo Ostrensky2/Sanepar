@@ -1,6 +1,6 @@
 "use client";
 
-import { Minimize2, Minus, Plus } from "lucide-react";
+import { Calendar, Minimize2, Minus, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { normalizeCampaignKey } from "@/lib/campaign-points";
 import { laboratoryRiskColor, type LaboratoryRiskLevel } from "@/lib/laboratory-risk";
@@ -153,6 +153,7 @@ export function CampaignHydroMap({
   zoomOnSelect = true,
   clipBaseTilesToBasins: shouldClipBaseTilesToBasins = true,
   focusedDayKey = null,
+  isPreparation = false,
 }: {
   points: CampaignHydroMapPoint[];
   selectedPointId?: string;
@@ -165,8 +166,8 @@ export function CampaignHydroMap({
   effectivePointColor?: string;
   zoomOnSelect?: boolean;
   clipBaseTilesToBasins?: boolean;
-  // Dia de coleta a realçar (demais dias ficam atenuados). null = mostra tudo.
   focusedDayKey?: string | null;
+  isPreparation?: boolean;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -410,8 +411,9 @@ export function CampaignHydroMap({
       pointDayColors,
       activeFocusedDayKey,
       pointDayKeys,
+      isPreparation,
     );
-  }, [basins, constrainedCenter, effectivePointColor, activeFocusedDayKey, layers, mapZoom, markerMode, pointDayColors, pointDayKeys, points, roadRoutes, selectedPointId, shouldClipBaseTilesToBasins, size]);
+  }, [basins, constrainedCenter, effectivePointColor, activeFocusedDayKey, layers, mapZoom, markerMode, pointDayColors, pointDayKeys, points, roadRoutes, selectedPointId, shouldClipBaseTilesToBasins, size, isPreparation]);
 
   useEffect(() => {
     if (!size.width || !size.height) {
@@ -686,6 +688,23 @@ export function CampaignHydroMap({
           zoom={mapZoom}
           size={size}
         />
+      ) : null}
+
+      {isPreparation ? (
+        <div className="absolute left-4 top-4 z-20 max-w-[240px] md:max-w-[280px] rounded-xl border border-amber-200 bg-amber-50/95 p-3 shadow-[0_8px_24px_-8px_rgba(120,53,4,0.16)] backdrop-blur-sm transition-all hover:bg-amber-50">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="flex h-2.5 w-2.5 items-center justify-center rounded-full bg-amber-500/20">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+            </span>
+            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-800 flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              Campanha Prevista
+            </span>
+          </div>
+          <p className="text-[11px] font-semibold leading-relaxed text-amber-700 normal-case tracking-normal">
+            A campanha está em fase de preparação. Estas são as rotas e o cronograma planejado.
+          </p>
+        </div>
       ) : null}
 
       <div className="absolute bottom-4 left-4 rounded border border-white/70 bg-white/90 px-3 py-2 text-caption font-semibold text-slate-600 shadow backdrop-blur">
@@ -1117,6 +1136,7 @@ function drawMapOverlay(
   pointDayColors: Map<string, string> | null = null,
   focusedDayKey: string | null = null,
   pointDayKeys: Map<string, string> | null = null,
+  isPreparation = false,
 ) {
   if (!canvas || !size.width || !size.height) {
     return;
@@ -1157,6 +1177,7 @@ function drawMapOverlay(
     pointDayColors,
     focusedDayKey,
     pointDayKeys,
+    isPreparation,
   );
 }
 
@@ -1265,6 +1286,7 @@ function drawPoints(
   pointDayColors: Map<string, string> | null = null,
   focusedDayKey: string | null = null,
   pointDayKeys: Map<string, string> | null = null,
+  isPreparation = false,
 ) {
   context.lineCap = "round";
 
@@ -1320,6 +1342,7 @@ function drawPoints(
         campaignRoute,
         undefined,
         Boolean(isHighlightedDay),
+        isPreparation,
       );
     }
 
@@ -1337,6 +1360,7 @@ function drawPoints(
         campaignRoute,
         campaignRoute ? pointDayColors?.get(point.id) : undefined,
         Boolean(isHighlightedDay),
+        isPreparation,
       );
     }
 
@@ -1832,6 +1856,7 @@ function drawMarkerAt(
   campaignRoute = false,
   dayColor?: string,
   isHighlightedDay = false,
+  isPreparation = false,
 ) {
   if (selected) {
     context.beginPath();
@@ -1862,10 +1887,10 @@ function drawMarkerAt(
     campaignRoute && type === "effective" && Boolean(dayColor) && !hasOverride && !riskLevel;
   // Sem cor de dia (ex.: apoio/previsto no percurso, ou dia sem data), o ponto
   // fica preto neutro — nunca representa resultado, só distingue o marcador.
-  const routeBlack = campaignRoute && !hasOverride && !riskLevel && !hasDayColor;
+  const routeBlack = (campaignRoute && !hasOverride && !riskLevel && !hasDayColor) || isPreparation;
   context.beginPath();
 
-  const markerRadius = hasDayColor
+  const markerRadius = hasDayColor && !isPreparation
     ? (isHighlightedDay ? 7.5 : 5.6)
     : routeBlack
       ? (isHighlightedDay ? 7 : 5.2)
@@ -1882,7 +1907,7 @@ function drawMarkerAt(
     0,
     Math.PI * 2,
   );
-  context.fillStyle = hasDayColor
+  context.fillStyle = hasDayColor && !isPreparation
     ? (dayColor as string)
     : routeBlack
       ? "#050505"
@@ -1896,8 +1921,8 @@ function drawMarkerAt(
   // Contorno claro para o ponto continuar visível sobre a linha e o mapa (regra:
   // preto ou branco). Mantemos branco, como no padrão dos pontos efetivos.
   context.strokeStyle =
-    hasDayColor || routeBlack ? "#ffffff" : type === "original" ? "#111827" : "#ffffff";
-  context.lineWidth = selected ? 2.6 : hasDayColor ? (isHighlightedDay ? 2.8 : 2) : 1.8;
+    (hasDayColor && !isPreparation) || routeBlack ? "#ffffff" : type === "original" ? "#111827" : "#ffffff";
+  context.lineWidth = selected ? 2.6 : (hasDayColor && !isPreparation) ? (isHighlightedDay ? 2.8 : 2) : 1.8;
   context.fill();
   context.stroke();
 }

@@ -35,6 +35,7 @@ export function HomeRiskMapSection({
 }) {
   const [activePoints, setActivePoints] = useState(points);
   const [campaignFilter, setCampaignFilter] = useState("Todas");
+  const [classificationFilter, setClassificationFilter] = useState("Todas");
   const [riskFilter, setRiskFilter] = useState<LaboratoryRiskLevel | "todos">("todos");
   const [pointSearch, setPointSearch] = useState("");
   const [selectedPointId, setSelectedPointId] = useState<string | undefined>(points[0]?.id);
@@ -95,12 +96,30 @@ export function HomeRiskMapSection({
         : activePoints.filter((point) => point.campaign === campaignFilter),
     [activePoints, campaignFilter],
   );
+  const classifications = useMemo(
+    () => [
+      "Todas",
+      ...Array.from(
+        new Set(campaignFilteredPoints.map((point) => point.riskClassification).filter(Boolean)),
+      ).sort(),
+    ],
+    [campaignFilteredPoints],
+  );
+  const classificationFilteredPoints = useMemo(
+    () =>
+      classificationFilter === "Todas"
+        ? campaignFilteredPoints
+        : campaignFilteredPoints.filter(
+            (point) => point.riskClassification === classificationFilter,
+          ),
+    [campaignFilteredPoints, classificationFilter],
+  );
   const filteredPoints = useMemo(
     () =>
       riskFilter === "todos"
-        ? campaignFilteredPoints
-        : campaignFilteredPoints.filter((point) => point.riskLevel === riskFilter),
-    [campaignFilteredPoints, riskFilter],
+        ? classificationFilteredPoints
+        : classificationFilteredPoints.filter((point) => point.riskLevel === riskFilter),
+    [classificationFilteredPoints, riskFilter],
   );
   const selectedPoint = useMemo(
     () =>
@@ -108,8 +127,8 @@ export function HomeRiskMapSection({
     [filteredPoints, selectedPointId],
   );
   const campaignSummary = useMemo(
-    () => buildRiskSummary(campaignFilteredPoints),
-    [campaignFilteredPoints],
+    () => buildRiskSummary(classificationFilteredPoints),
+    [classificationFilteredPoints],
   );
   const searchMatches = useMemo(() => {
     const query = pointSearch.trim().toLowerCase();
@@ -152,6 +171,7 @@ export function HomeRiskMapSection({
                 value={campaignFilter}
                 onChange={(event) => {
                   setCampaignFilter(event.target.value);
+                  setClassificationFilter("Todas");
                   setRiskFilter("todos");
                   setSelectedPointId(undefined);
                 }}
@@ -159,6 +179,27 @@ export function HomeRiskMapSection({
                 {campaigns.map((campaign) => (
                   <option key={campaign} value={campaign}>
                     {formatCampaignLabel(campaign)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex min-w-56 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-[var(--brand-navy-strong)]">
+              <span className="text-caption uppercase tracking-[0.16em] text-slate-400">
+                Classificação
+              </span>
+              <select
+                aria-label="Filtrar classificação de risco"
+                className="min-w-0 flex-1 bg-transparent font-bold text-[var(--brand-navy-strong)] outline-none"
+                value={classificationFilter}
+                onChange={(event) => {
+                  setClassificationFilter(event.target.value);
+                  setRiskFilter("todos");
+                  setSelectedPointId(undefined);
+                }}
+              >
+                {classifications.map((classification) => (
+                  <option key={classification} value={classification}>
+                    {classification === "Todas" ? "Todas" : classification}
                   </option>
                 ))}
               </select>

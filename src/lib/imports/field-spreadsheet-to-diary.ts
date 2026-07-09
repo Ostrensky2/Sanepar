@@ -46,6 +46,7 @@ export function campaignPointToFieldDiaryPayload(point: CampaignMapPoint): Field
     status: normalizeStatus(point.status ?? ""),
     createdBy: null,
     photos: point.photos ?? [],
+    collectionOrder: point.collectionOrder ?? null,
   };
 }
 

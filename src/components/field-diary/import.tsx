@@ -182,12 +182,12 @@ export function FieldDiaryImport({
             </p>
           </div>
           <a
-            href="/template-diario-de-campo.xlsx"
+            href="/template-planilha-de-campo.xlsx"
             download
             className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-navy-strong)] px-4 py-2.5 text-sm font-bold text-[#ffffff] transition hover:bg-[var(--brand-navy)]"
           >
             <Download className="h-4 w-4" />
-            Baixar modelo do Diário
+            Baixar modelo de Campo
           </a>
         </div>
 

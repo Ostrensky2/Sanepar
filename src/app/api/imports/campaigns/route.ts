@@ -78,7 +78,7 @@ export async function POST(request: Request) {
       const normSelected = selectedCampaign.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
       const normSheet = sheetCampaign.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
 
-      if (normSelected !== normSheet) {
+      if (normSelected !== normSheet && normSheet !== "campanha") {
         return NextResponse.json(
           {
             error: `A campanha selecionada no formulário ("${selectedCampaign}") não coincide com a campanha identificada na planilha ("${sheetCampaign}"). Verifique se selecionou a campanha correta ou se a planilha está correta.`,
@@ -448,6 +448,7 @@ type FieldDiaryRow = {
   created_at?: string;
   updated_at?: string;
   photos?: unknown;
+  collection_order?: number | null;
 };
 
 function fieldDiaryRowToEntry(row: FieldDiaryRow): FieldDiaryEntry {
@@ -483,6 +484,7 @@ function fieldDiaryRowToEntry(row: FieldDiaryRow): FieldDiaryEntry {
     createdAt: row.created_at ?? new Date().toISOString(),
     updatedAt: row.updated_at ?? new Date().toISOString(),
     photos: Array.isArray(row.photos) ? row.photos as FieldDiaryEntry["photos"] : [],
+    collectionOrder: row.collection_order ?? null,
   };
 }
 
@@ -519,6 +521,7 @@ function fieldDiaryEntryToRow(entry: FieldDiaryEntry) {
     created_at: entry.createdAt,
     updated_at: new Date().toISOString(),
     photos: entry.photos,
+    collection_order: entry.collectionOrder ?? null,
   };
 }
 

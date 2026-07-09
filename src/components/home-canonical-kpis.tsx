@@ -1,10 +1,9 @@
 "use client";
 
-import { Activity, AlertTriangle, CircleDot, FlaskConical, MapPinned, Target } from "lucide-react";
+import { AlertOctagon, AlertTriangle, CircleDot, FlaskConical, MapPinned, Target } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   buildInitialCampaignManagement,
-  calculateProjectProgress,
   defaultCampaigns,
   isCampaignActive,
   readCampaignManagement,
@@ -50,13 +49,19 @@ export function HomeCanonicalKpis({
       ? scores.reduce((total, score) => total + score, 0) / scores.length
       : null;
 
+    const highRiskPoints = laboratoryRiskPoints.filter((point) => point.riskLevel === "alto");
+    const uniqueMunicipalities = Array.from(
+      new Set(highRiskPoints.map((point) => point.municipality).filter(Boolean))
+    );
+    const worstPointsLabel = uniqueMunicipalities.length > 0 ? uniqueMunicipalities.join(", ") : "Nenhum";
+
     return {
       monitoredPoints: pointSummary.monitored,
       etas: new Set(laboratoryRiskPoints.map((point) => point.eta).filter(Boolean)).size,
-      highRisk: laboratoryRiskPoints.filter((point) => point.riskLevel === "alto").length,
+      highRisk: highRiskPoints.length,
       averageScore,
-      projectProgress: calculateProjectProgress(campaignManagement),
       activeCampaigns,
+      worstPointsLabel,
     };
   }, [campaignManagement, campaigns, laboratoryRiskPoints, pointSummary.monitored]);
 
@@ -78,6 +83,18 @@ export function HomeCanonicalKpis({
         detail="Inferidas dos pontos com resultado"
       />
       <CanonicalKpi
+        icon={FlaskConical}
+        label="Escore médio"
+        value={formatScore(metrics.averageScore)}
+        detail="Média dos resultados válidos"
+      />
+      <CanonicalKpi
+        icon={CircleDot}
+        label="Campanhas ativas"
+        value={formatInteger(metrics.activeCampaigns)}
+        detail="Gestão operacional"
+      />
+      <CanonicalKpi
         icon={AlertTriangle}
         label="Risco alto"
         value={formatInteger(metrics.highRisk)}
@@ -86,22 +103,12 @@ export function HomeCanonicalKpis({
         tone="danger"
       />
       <CanonicalKpi
-        icon={FlaskConical}
-        label="Escore médio"
-        value={formatScore(metrics.averageScore)}
-        detail="Média dos resultados válidos"
-      />
-      <CanonicalKpi
-        icon={Activity}
-        label="Avanço total"
-        value={`${metrics.projectProgress}%`}
-        detail="Campanhas e etapas"
-      />
-      <CanonicalKpi
-        icon={CircleDot}
-        label="Campanhas ativas"
-        value={formatInteger(metrics.activeCampaigns)}
-        detail="Gestão operacional"
+        icon={AlertOctagon}
+        label="Pontos críticos"
+        value={metrics.worstPointsLabel}
+        detail="Municípios com risco alto"
+        accentColor={laboratoryRiskColor("alto")}
+        tone="danger"
       />
     </section>
   );
@@ -115,7 +122,7 @@ function CanonicalKpi({
   accentColor,
   tone = "default",
 }: {
-  icon: typeof Activity;
+  icon: typeof AlertTriangle;
   label: string;
   value: string;
   detail: string;
@@ -126,6 +133,15 @@ function CanonicalKpi({
     tone === "danger"
       ? "text-[var(--brand-navy-strong)]"
       : "border-[var(--line-ghost)] text-[var(--brand-navy-strong)]";
+
+  let fontSizeClass = "text-2xl";
+  if (value.length > 25) {
+    fontSizeClass = "text-[11px] leading-tight font-bold";
+  } else if (value.length > 15) {
+    fontSizeClass = "text-xs leading-tight font-semibold";
+  } else if (value.length > 7) {
+    fontSizeClass = "text-sm leading-tight";
+  }
 
   return (
     <article
@@ -141,7 +157,7 @@ function CanonicalKpi({
           style={accentColor ? { color: accentColor } : undefined}
         />
       </div>
-      <p className="heading-font text-2xl font-black tracking-0 text-[var(--brand-navy-strong)]">
+      <p className={`heading-font font-black tracking-0 text-[var(--brand-navy-strong)] ${fontSizeClass}`}>
         {value}
       </p>
       <p className="text-label font-semibold leading-4 text-[var(--ink-soft)]">

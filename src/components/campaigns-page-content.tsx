@@ -251,6 +251,8 @@ export function CampaignsPageContent({
     selectedStages,
     selectedManagement.status,
   );
+  const sampleCollection = selectedStages.find((s) => s.label === "Coleta de amostras");
+  const isPreparation = !sampleCollection || sampleCollection.status === "pending";
 
   const sourceCampaignPoints =
     view === "resultados" && localRiskPoints?.length
@@ -310,6 +312,10 @@ export function CampaignsPageContent({
   const selectedCampaignNumber = selectedCampaign.id.match(/campanha-(\d+)/)?.[1] ?? "";
   const campaignFieldMapPoints = useMemo(
     () => {
+      if (isPreparation) {
+        return selectedCampaignPoints.filter((point) => point.original || point.effective);
+      }
+
       if (selectedCampaignNumber !== "1" && diaryMapPoints.length) {
         return diaryMapPoints;
       }
@@ -320,7 +326,7 @@ export function CampaignsPageContent({
 
       return diaryMapPoints;
     },
-    [diaryMapPoints, importedFieldMapPoints, selectedCampaignNumber],
+    [diaryMapPoints, importedFieldMapPoints, selectedCampaignNumber, selectedCampaignPoints, isPreparation],
   );
 
   const visiblePoints = useMemo(() => {
@@ -340,8 +346,10 @@ export function CampaignsPageContent({
 
   const fieldRowCount = selectedDiaryEntries.length;
   const effectivePointCount = campaignFieldMapPoints.filter((point) => point.effective).length;
-  const mapEmptyTitle = emptyMapTitle;
-  const mapEmptyDescription = emptyMapDescription;
+  const mapEmptyTitle = isPreparation ? "Aguardando importação da planilha" : emptyMapTitle;
+  const mapEmptyDescription = isPreparation
+    ? "Importe a planilha com os pontos previstos na aba Dados para visualizá-los no mapa."
+    : emptyMapDescription;
   const isCampaignHydrating =
     !hasLoadedCampaignManagement ||
     !hasLoadedDiaryEntries ||
@@ -623,6 +631,8 @@ export function CampaignsPageContent({
                     selectedCampaignId={selectedCampaignId}
                     selectedCampaignTitle={selectedCampaign.title}
                     onEditPointPhotos={openMapPointEditForm}
+                    campaignStatus={selectedManagement.status}
+                    isPreparation={isPreparation}
                   />
                 ) : (
                   <EmptyCampaignPanel

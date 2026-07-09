@@ -9,6 +9,8 @@ import {
   type FieldDiaryPayload,
 } from "@/lib/field-diary";
 import { classifyFieldDiaryImport, diffFieldDiaryEntries } from "@/lib/imports/conflict-detection";
+import { parseCampaignWorkbook } from "@/lib/imports/campaigns";
+import { campaignPointToFieldDiaryPayload } from "@/lib/imports/field-spreadsheet-to-diary";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 
 export const runtime = "nodejs";
@@ -145,78 +147,93 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Não foi possível ler o arquivo. Verifique se é um .xlsx válido." }, { status: 400 });
   }
 
-  const ws = wb.getWorksheet("Registros") ?? wb.worksheets[0];
+  const ws = wb.getWorksheet("Registros") ?? wb.getWorksheet("Campanhas") ?? wb.worksheets[0];
   if (!ws) {
-    return NextResponse.json({ error: "A planilha não contém a aba 'Registros'." }, { status: 400 });
+    return NextResponse.json({ error: "A planilha não contém a aba 'Registros' ou 'Campanhas'." }, { status: 400 });
   }
 
   const errors: string[] = [];
-  const payloads: FieldDiaryPayload[] = [];
-  // Sequência de coleta = ordem das linhas da planilha dentro de cada dia da
-  // campanha. Preservá-la é o que faz o traçado do percurso sair na ordem certa.
-  const orderCounters = new Map<string, number>();
+  let payloads: FieldDiaryPayload[] = [];
 
-  ws.eachRow((row, rowNumber) => {
-    if (rowNumber === 1) return; // header
+  if (ws.name === "Campanhas") {
+    try {
+      const campaignImport = await parseCampaignWorkbook(arrayBuffer, file.name);
+      payloads = campaignImport.points
+        .map(campaignPointToFieldDiaryPayload)
+        .filter((payload): payload is FieldDiaryPayload => payload !== null);
+      if (campaignImport.missingFields.length) {
+        errors.push(`Campos esperados ausentes na planilha: ${campaignImport.missingFields.join(", ")}`);
+      }
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : "Erro ao processar planilha de campo." }, { status: 400 });
+    }
+  } else {
+    // Sequência de coleta = ordem das linhas da planilha dentro de cada dia da
+    // campanha. Preservá-la é o que faz o traçado do percurso sair na ordem certa.
+    const orderCounters = new Map<string, number>();
 
-    if (!hasAnyCellData(row)) return;
+    ws.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // header
 
-    const rawDate = cellText(row, COL.entryDate);
-    const entryDate = parseDate(rawDate) || new Date().toISOString().slice(0, 10);
+      if (!hasAnyCellData(row)) return;
 
-    const rawDay = cellText(row, COL.campaignDay);
-    const campaignDay = parseInt(rawDay, 10) || 1;
+      const rawDate = cellText(row, COL.entryDate);
+      const entryDate = parseDate(rawDate) || new Date().toISOString().slice(0, 10);
 
-    const activities = parseArray(cellText(row, COL.activities));
-    const waterVisualConditions = parseArray(cellText(row, COL.waterVisualConditions));
+      const rawDay = cellText(row, COL.campaignDay);
+      const campaignDay = parseInt(rawDay, 10) || 1;
 
-    const hasOccurrence = parseHasOccurrence(cellText(row, COL.hasOccurrence));
+      const activities = parseArray(cellText(row, COL.activities));
+      const waterVisualConditions = parseArray(cellText(row, COL.waterVisualConditions));
 
-    const rawStatus = cellText(row, COL.status);
-    const status = (["Rascunho", "Enviado", "Revisado"].includes(rawStatus) ? rawStatus : "Rascunho") as FieldDiaryPayload["status"];
+      const hasOccurrence = parseHasOccurrence(cellText(row, COL.hasOccurrence));
 
-    const rawFollowUp = cellText(row, COL.requiresFollowUp);
-    const requiresFollowUp = (
-      ["Não", "Sim", "Avaliar posteriormente"].includes(rawFollowUp) ? rawFollowUp : "Não"
-    ) as FieldDiaryPayload["requiresFollowUp"];
+      const rawStatus = cellText(row, COL.status);
+      const status = (["Rascunho", "Enviado", "Revisado"].includes(rawStatus) ? rawStatus : "Rascunho") as FieldDiaryPayload["status"];
 
-    const campaignName = cellText(row, COL.campaignName);
-    const orderKey = `${campaignName}|${campaignDay}`;
-    const collectionOrder = (orderCounters.get(orderKey) ?? 0) + 1;
-    orderCounters.set(orderKey, collectionOrder);
+      const rawFollowUp = cellText(row, COL.requiresFollowUp);
+      const requiresFollowUp = (
+        ["Não", "Sim", "Avaliar posteriormente"].includes(rawFollowUp) ? rawFollowUp : "Não"
+      ) as FieldDiaryPayload["requiresFollowUp"];
 
-    payloads.push({
-      campaignName,
-      campaignDay,
-      collectionOrder,
-      governanceStatus: "importado",
-      entryDate,
-      fieldTeamName: "",
-      fieldTeamMembers: [],
-      collectionTime: "",
-      createdByName: cellText(row, COL.createdByName) || null,
-      locationName: cellText(row, COL.locationName),
-      sia: cellText(row, COL.sia) || null,
-      samplesReplicasEdna: "",
-      zooplanktonId: "",
-      latitude: cellText(row, COL.latitude) || null,
-      longitude: cellText(row, COL.longitude) || null,
-      municipality: cellText(row, COL.municipality),
-      activities,
-      waterVisualConditions,
-      hasOccurrence,
-      occurrenceType: hasOccurrence ? cellText(row, COL.occurrenceType) || null : null,
-      occurrenceDescription: hasOccurrence ? cellText(row, COL.occurrenceDescription) || null : null,
-      requiresFollowUp,
-      followUpNotes: cellText(row, COL.followUpNotes) || null,
-      weatherConditions: "",
-      pointAccessibility: "",
-      dailySummary: cellText(row, COL.dailySummary),
-      status,
-      createdBy: null,
-      photos: [],
+      const campaignName = cellText(row, COL.campaignName);
+      const orderKey = `${campaignName}|${campaignDay}`;
+      const collectionOrder = (orderCounters.get(orderKey) ?? 0) + 1;
+      orderCounters.set(orderKey, collectionOrder);
+
+      payloads.push({
+        campaignName,
+        campaignDay,
+        collectionOrder,
+        governanceStatus: "importado",
+        entryDate,
+        fieldTeamName: "",
+        fieldTeamMembers: [],
+        collectionTime: "",
+        createdByName: cellText(row, COL.createdByName) || null,
+        locationName: cellText(row, COL.locationName),
+        sia: cellText(row, COL.sia) || null,
+        samplesReplicasEdna: "",
+        zooplanktonId: "",
+        latitude: cellText(row, COL.latitude) || null,
+        longitude: cellText(row, COL.longitude) || null,
+        municipality: cellText(row, COL.municipality),
+        activities,
+        waterVisualConditions,
+        hasOccurrence,
+        occurrenceType: hasOccurrence ? cellText(row, COL.occurrenceType) || null : null,
+        occurrenceDescription: hasOccurrence ? cellText(row, COL.occurrenceDescription) || null : null,
+        requiresFollowUp,
+        followUpNotes: cellText(row, COL.followUpNotes) || null,
+        weatherConditions: "",
+        pointAccessibility: "",
+        dailySummary: cellText(row, COL.dailySummary),
+        status,
+        createdBy: null,
+        photos: [],
+      });
     });
-  });
+  }
 
   if (!payloads.length && !errors.length) {
     return NextResponse.json({ error: "A planilha não contém registros para importar." }, { status: 400 });

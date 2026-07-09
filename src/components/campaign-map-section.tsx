@@ -19,6 +19,7 @@ import {
 } from "@/components/campaign-hydro-map";
 import { campaignPointMatchesSelectedCampaign } from "@/lib/campaign-points";
 import { getPhotoPreview } from "@/lib/photo-preview";
+import type { CampaignOperationalStatus } from "@/lib/campaign-management";
 
 export function CampaignMapSection({
   points,
@@ -27,6 +28,8 @@ export function CampaignMapSection({
   selectedCampaignId,
   selectedCampaignTitle,
   onEditPointPhotos,
+  campaignStatus,
+  isPreparation: isPreparationProp,
 }: {
   points: CampaignHydroMapPoint[];
   compact?: boolean;
@@ -34,7 +37,15 @@ export function CampaignMapSection({
   selectedCampaignId?: string;
   selectedCampaignTitle?: string;
   onEditPointPhotos?: (point: CampaignHydroMapPoint) => void;
+  campaignStatus?: CampaignOperationalStatus;
+  isPreparation?: boolean;
 }) {
+  const isPreparation =
+    isPreparationProp !== undefined
+      ? isPreparationProp
+      : campaignStatus === "Em preparação" ||
+        campaignStatus === "Aguardando calendário" ||
+        campaignStatus === "Planejada";
   const [cachedPoints, setCachedPoints] = useState<CampaignHydroMapPoint[] | null>(null);
   const [selectedPointId, setSelectedPointId] = useState(points[0]?.id);
   const [isDetailsPanelOpen, setIsDetailsPanelOpen] = useState(true);
@@ -92,7 +103,7 @@ export function CampaignMapSection({
     { key: "basins", label: "Bacias hidrográficas" },
     { key: "dailyRoutes", label: "Percurso rodoviário diário" },
     { key: "dayTransitions", label: "Ligação entre dias" },
-    { key: "planned", label: "Coordenada de apoio" },
+    { key: "planned", label: isPreparation ? "Pontos previstos" : "Coordenada de apoio" },
     { key: "effective", label: "Pontos efetivos" },
     { key: "displacement", label: "Deslocamento" },
   ];
@@ -195,10 +206,12 @@ export function CampaignMapSection({
                   />
                 ))}
               </span>
-              Cores = dias de coleta
+              {isPreparation ? "Cores = rotas previstas" : "Cores = dias de coleta"}
             </span>
             <p className="text-[10px] font-medium normal-case leading-3 tracking-normal text-slate-400">
-              Pontos e linhas da mesma cor pertencem ao mesmo dia.
+              {isPreparation
+                ? "Linhas da mesma cor pertencem ao mesmo dia planejado."
+                : "Pontos e linhas da mesma cor pertencem ao mesmo dia."}
             </p>
             <span className="flex items-center gap-1.5 text-caption font-bold uppercase tracking-[0.12em]">
               <span
@@ -209,7 +222,7 @@ export function CampaignMapSection({
             </span>
             <span className="flex items-center gap-1.5 text-caption font-bold uppercase tracking-[0.12em]">
               <span className="h-2.5 w-2.5 rounded-full border border-white bg-black shadow" />
-              Coordenada de apoio
+              {isPreparation ? "Pontos previstos" : "Coordenada de apoio"}
             </span>
           </div>
         </div>
@@ -232,6 +245,7 @@ export function CampaignMapSection({
             setSelectedPointId(point.id);
             setIsDetailsPanelOpen(true);
           }}
+          isPreparation={isPreparation}
         />
       </div>
 
@@ -254,7 +268,7 @@ export function CampaignMapSection({
             </div>
             <div className="flex items-center gap-2 rounded bg-white/10 px-2 py-1 text-caption font-bold uppercase tracking-[0.16em]">
               <span className="h-1.5 w-1.5 rounded-full bg-[#eaff00]" />
-              Dados da campanha
+              {isPreparation ? "Planejamento da campanha" : "Dados da campanha"}
             </div>
           </div>
 
@@ -277,12 +291,21 @@ export function CampaignMapSection({
               </button>
             ) : null}
 
+            {isPreparation && (
+              <div className="rounded-lg border border-amber-100 bg-amber-50/70 p-2 px-2.5 text-[11px] font-semibold leading-relaxed text-amber-700">
+                <span className="flex items-center gap-1.5 font-black uppercase tracking-wider text-amber-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  Coleta não iniciada
+                </span>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-1.5 text-xs">
               <InfoTile label="Campanha" value={selectedPoint?.campaign} />
               <InfoTile label="SIA" value={selectedPoint?.code} />
               <InfoTile label="Ponto" value={selectedPoint?.point} />
               <InfoTile label="Dia" value={selectedPoint?.day} />
-              <InfoTile label="Data" value={selectedPoint?.date} />
+              <InfoTile label={isPreparation ? "Data prevista" : "Data"} value={selectedPoint?.date} />
               <InfoTile label="Município" value={selectedPoint?.municipality} />
               <InfoTile label="Acessibilidade" value={selectedPoint?.accessibility} />
             </div>

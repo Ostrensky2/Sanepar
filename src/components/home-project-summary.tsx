@@ -3,7 +3,6 @@
 import {
   CalendarCheck2,
   CheckCircle2,
-  ListChecks,
   FlaskConical,
   Target,
 } from "lucide-react";
@@ -11,11 +10,12 @@ import { useEffect, useMemo, useState } from "react";
 import {
   buildInitialCampaignManagement,
   defaultCampaigns,
-  getCurrentCampaignStage,
+  getMostAdvancedCampaignStage,
   isCampaignActive,
   readCampaignManagement,
   type CampaignManagementById,
   type CampaignOperationalStatus,
+  type MetabarcodingStage,
 } from "@/lib/campaign-management";
 
 type HomeProjectSummaryProps = {
@@ -26,9 +26,13 @@ type HomeProjectSummaryProps = {
     monitored: number;
     fieldCampaigns: number;
   };
+  reserveRightRail?: boolean;
 };
 
-export function HomeProjectSummary({ pointSummary }: HomeProjectSummaryProps) {
+export function HomeProjectSummary({
+  pointSummary,
+  reserveRightRail = false,
+}: HomeProjectSummaryProps) {
   const campaigns = defaultCampaigns;
   const [campaignManagement, setCampaignManagement] = useState<CampaignManagementById>(() =>
     buildInitialCampaignManagement(campaigns),
@@ -51,83 +55,177 @@ export function HomeProjectSummary({ pointSummary }: HomeProjectSummaryProps) {
       campaign,
       management: campaignManagement[campaign.id],
     }));
-    const resultsFinalized = managementRows.filter((management) =>
-      management.management ? isResultFinalized(management.management.status) : false,
+    const resultsFinalized = managementRows.filter((m) =>
+      m.management ? isResultFinalized(m.management.status) : false,
     ).length;
     const activeRows = managementRows.filter(
       ({ management }) => management && isCampaignActive(management.status),
     );
-    const activeStageSummary = activeRows
-      .map(({ campaign, management }) => {
-        const campaignNumber = campaign.id.match(/campanha-(\d+)/)?.[1] ?? campaign.selectorLabel;
-        const stage = management ? getCurrentCampaignStage(management.stages) : undefined;
-        return `Campanha ${campaignNumber}: ${stage?.label ?? "Etapa não informada"}`;
-      })
-      .join("; ");
-    const firstActiveStage = activeRows[0]?.management
-      ? getCurrentCampaignStage(activeRows[0].management.stages)?.label
-      : undefined;
 
     return {
       plannedCampaigns: campaigns.length,
       activeCampaigns: activeRows.length,
       resultsFinalized,
-      currentStageLabel: firstActiveStage ?? "Sem campanha ativa",
       activeCampaignLabel:
         activeRows.map(({ campaign }) => formatCampaignLabel(campaign.selectorLabel)).join(", ") ||
         "Todas elegíveis",
-      activeStageSummary: activeStageSummary || "Sem campanha ativa",
     };
   }, [campaignManagement, campaigns]);
 
-  return (
-    <section className="glass-panel radius-panel border border-[var(--line-ghost)] p-4">
-      <div className="mb-3 flex flex-col gap-[var(--space-3)] sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
-            Síntese do projeto
-          </p>
-          <h2 className="heading-font mt-1 text-xl font-bold tracking-tight text-[var(--brand-navy-strong)]">
-            Monitoramento sazonal Yva&apos;e
-          </h2>
-        </div>
-        <span className="inline-flex w-fit max-w-full items-center rounded-full border border-[var(--brand-teal)]/20 bg-white/80 px-3 py-1.5 text-label font-black text-[var(--brand-navy-strong)] shadow-[0_12px_30px_-24px_rgba(0,66,98,0.34)]">
-          <span className="mr-2 h-2 w-2 rounded-full bg-[var(--brand-teal)]" />
-          <span className="truncate">Campanha: {summary.activeCampaignLabel}</span>
-        </span>
-      </div>
+  const campaignRows = useMemo(() => {
+    const rows: Array<{
+      id: string;
+      label: string;
+      advancedStage?: MetabarcodingStage;
+      allDone?: boolean;
+      isGrouped?: boolean;
+    }> = [];
+    
+    // First 3 campaigns (C1, C2, C3) are always separate
+    for (let i = 0; i < 3; i++) {
+      const campaign = campaigns[i];
+      if (!campaign) continue;
+      const management = campaignManagement[campaign.id];
+      const stages = management?.stages ?? [];
+      const advancedStage = getMostAdvancedCampaignStage(stages);
+      const allDone = stages.length > 0 && stages.every((s) => s.status === "done");
+      
+      rows.push({
+        id: campaign.id,
+        label: campaign.selectorLabel.split(" - ")[0] || campaign.selectorLabel,
+        advancedStage,
+        allDone,
+      });
+    }
 
-      <div className="grid items-stretch gap-[var(--space-3)] sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryCard
-          icon={Target}
-          label="Previstas"
-          value={String(summary.plannedCampaigns)}
-          detail="campanhas ordinárias"
-          tone="primary"
-        />
-        <SummaryCard
-          icon={CalendarCheck2}
-          label="Campo realizadas"
-          value={String(pointSummary.fieldCampaigns)}
-          detail="com coleta efetiva"
-          tone="success"
-        />
-        <SummaryCard
-          icon={FlaskConical}
-          label="Resultados finais"
-          value={String(summary.resultsFinalized)}
-          detail="publicados ou concluídos"
-          tone={summary.resultsFinalized > 0 ? "success" : "warning"}
-        />
-        <SummaryCard
-          icon={ListChecks}
-          label="Etapa atual"
-          value={summary.currentStageLabel}
-          detail={summary.activeStageSummary}
-          tone="neutral"
-        />
-      </div>
-    </section>
+    // Check C4 to C9
+    const remainingCampaigns = campaigns.slice(3); // C4 to C9
+    const unstartedRemaining = remainingCampaigns.filter(c => {
+      const m = campaignManagement[c.id];
+      const stages = m?.stages ?? [];
+      return !getMostAdvancedCampaignStage(stages);
+    });
+
+    if (unstartedRemaining.length === remainingCampaigns.length) {
+      // All C4 to C9 are unstarted, group them!
+      rows.push({
+        id: "campanhas-4-9",
+        label: "4ª a 9ª Campanha",
+        advancedStage: undefined,
+        allDone: false,
+        isGrouped: true,
+      });
+    } else {
+      // Some are started, list them individually
+      remainingCampaigns.forEach((campaign) => {
+        const m = campaignManagement[campaign.id];
+        const stages = m?.stages ?? [];
+        const advancedStage = getMostAdvancedCampaignStage(stages);
+        const allDone = stages.length > 0 && stages.every((s) => s.status === "done");
+
+        rows.push({
+          id: campaign.id,
+          label: campaign.selectorLabel.split(" - ")[0] || campaign.selectorLabel,
+          advancedStage,
+          allDone,
+        });
+      });
+    }
+
+    return rows;
+  }, [campaignManagement, campaigns]);
+
+  return (
+    <div className={reserveRightRail ? "lg:pr-[calc(30%+var(--layout-gutter))]" : ""}>
+      <section className="glass-panel radius-panel border border-[var(--line-ghost)] p-4">
+        <div className="mb-4 flex flex-col gap-[var(--space-3)] sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+              Síntese do projeto
+            </p>
+            <h2 className="heading-font mt-1 text-xl font-bold tracking-tight text-[var(--brand-navy-strong)]">
+              Monitoramento sazonal Yva&apos;e
+            </h2>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-3 items-stretch">
+          {/* Lado esquerdo: Cards de resumo reduzidos */}
+          <div className="lg:col-span-2">
+            <div className="grid gap-3 grid-cols-1 sm:grid-cols-3 h-full">
+              <SummaryCard
+                icon={Target}
+                label="Previstas"
+                value={String(summary.plannedCampaigns)}
+                detail="campanhas ordinárias"
+                tone="primary"
+              />
+              <SummaryCard
+                icon={CalendarCheck2}
+                label="Campo realizadas"
+                value={String(pointSummary.fieldCampaigns)}
+                detail="com coleta efetiva"
+                tone="success"
+              />
+              <SummaryCard
+                icon={FlaskConical}
+                label="Resultados finais"
+                value={String(summary.resultsFinalized)}
+                detail="publicados ou concluídos"
+                tone={summary.resultsFinalized > 0 ? "success" : "warning"}
+              />
+            </div>
+          </div>
+
+          {/* Lado direito: Tabela de fase mais avançada por campanha */}
+          <div className="lg:col-span-1 h-full">
+            <div className="radius-card border border-[var(--line-ghost)] border-b-2 bg-white p-3 shadow-[0_12px_30px_-24px_rgba(0,66,98,0.15)] h-full flex flex-col justify-between">
+              <div>
+                <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-slate-500 mb-1.5">
+                  Etapa atual
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 font-semibold">
+                        <th className="pb-1.5 font-bold">Campanha</th>
+                        <th className="pb-1.5 font-bold text-left pl-4">Fase atual</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {campaignRows.map((row) => (
+                        <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-1 pr-2 font-bold text-[var(--brand-navy-strong)] border-r border-slate-100/50">
+                            {row.label}
+                          </td>
+                          <td className="py-1 pl-4 text-left font-semibold text-slate-600">
+                            {row.isGrouped ? (
+                              <span className="text-slate-400">Não iniciadas</span>
+                            ) : row.allDone ? (
+                              <span className="inline-flex items-center gap-1.5 justify-start">
+                                <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-green)]" />
+                                Concluída
+                              </span>
+                            ) : row.advancedStage ? (
+                              <span className="inline-flex items-center gap-1.5 justify-start">
+                                <span className={`h-1.5 w-1.5 rounded-full ${row.advancedStage.status === 'done' ? 'bg-[var(--brand-green)]' : 'bg-[var(--brand-teal)] animate-pulse'}`} />
+                                {row.advancedStage.label}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">Não iniciada</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }
 
