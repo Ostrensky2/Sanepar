@@ -80,7 +80,6 @@ export function HomeProjectSummary({
       allDone?: boolean;
       isGrouped?: boolean;
     }> = [];
-    
     // First 3 campaigns (C1, C2, C3) are always separate
     for (let i = 0; i < 3; i++) {
       const campaign = campaigns[i];
@@ -89,7 +88,6 @@ export function HomeProjectSummary({
       const stages = management?.stages ?? [];
       const advancedStage = getMostAdvancedCampaignStage(stages);
       const allDone = stages.length > 0 && stages.every((s) => s.status === "done");
-      
       rows.push({
         id: campaign.id,
         label: campaign.selectorLabel.split(" - ")[0] || campaign.selectorLabel,

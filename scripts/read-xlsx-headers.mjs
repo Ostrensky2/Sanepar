@@ -12,7 +12,6 @@ async function inspect(fileName) {
   console.log(`\n========================================`);
   console.log(`Inspecting file: ${fileName}`);
   console.log(`========================================`);
-  
   const workbook = new ExcelJS.Workbook();
   try {
     await workbook.xlsx.readFile(filePath);
