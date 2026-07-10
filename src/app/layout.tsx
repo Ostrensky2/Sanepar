@@ -1,18 +1,6 @@
+import type { CSSProperties } from "react";
 import type { Metadata } from "next";
-import { Inter, Manrope } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({
-  variable: "--font-body",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const manrope = Manrope({
-  variable: "--font-heading",
-  subsets: ["latin"],
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: {
@@ -31,7 +19,11 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`${inter.variable} ${manrope.variable} h-full antialiased`}
+      className="h-full antialiased"
+      style={{
+        "--font-body": "Arial, Helvetica, sans-serif",
+        "--font-heading": "Arial, Helvetica, sans-serif",
+      } as CSSProperties}
     >
       <body suppressHydrationWarning className="min-h-full flex flex-col">
         {children}

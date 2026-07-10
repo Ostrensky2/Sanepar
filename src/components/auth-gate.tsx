@@ -155,7 +155,7 @@ export function AuthGate({ children }: AuthGateProps) {
   return (
     <main className="grid min-h-screen place-items-center px-4 py-10">
       <section className="grid w-full max-w-5xl overflow-hidden radius-panel border border-[var(--line-ghost)] bg-white shadow-[0_34px_100px_-60px_rgba(0,66,98,0.55)] lg:grid-cols-[0.9fr_1.1fr]">
-        <div className="hero-gradient relative flex min-h-[420px] flex-col justify-between p-8 text-white">
+        <div className="hero-gradient relative flex min-w-0 flex-col justify-between p-6 text-white sm:min-h-[420px] sm:p-8">
           <YvaeMasthead />
           <div>
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/24 bg-white/12 px-3 py-2 text-xs font-bold uppercase tracking-[0.16em]">
