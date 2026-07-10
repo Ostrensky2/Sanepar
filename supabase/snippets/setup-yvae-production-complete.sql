@@ -120,8 +120,53 @@ create table if not exists public.field_diary_entries (
   created_by_name text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  photos jsonb not null default '[]'::jsonb
+  photos jsonb not null default '[]'::jsonb,
+  governance_status text not null default 'importado',
+  collection_order integer,
+  missing_in_import boolean not null default false,
+  constraint field_diary_entries_governance_status_check
+    check (governance_status in ('importado', 'em_revisao', 'consolidado', 'corrigido'))
 );
+
+create table if not exists public.field_diary_change_log (
+  id uuid primary key default gen_random_uuid(),
+  entry_id text not null,
+  campaign_name text not null,
+  field_name text not null,
+  old_value text,
+  new_value text,
+  changed_by text,
+  changed_at timestamptz not null default now()
+);
+
+create table if not exists public.import_conflicts (
+  id uuid primary key default gen_random_uuid(),
+  batch_id text not null,
+  entity_type text not null,
+  entity_key text not null,
+  field_name text not null,
+  app_value jsonb,
+  sheet_value jsonb,
+  status text not null default 'pendente',
+  resolved_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create or replace function public.normalize_field_diary_point_key(value text)
+returns text
+language sql
+immutable
+as $$
+  with normalized as (
+    select lower(regexp_replace(btrim(coalesce(value, '')), '\s+', ' ', 'g')) as point_key
+  )
+  select case
+    when point_key ~ '^(sia[\s-]*[0-9]+|[0-9]+)$'
+      then 'sia-' || lpad(regexp_replace(point_key, '\D', '', 'g'), 4, '0')
+    else nullif(point_key, '')
+  end
+  from normalized;
+$$;
 
 create index if not exists campaign_imports_created_at_idx on public.campaign_imports (created_at desc);
 create index if not exists campaign_imports_campaign_key_idx on public.campaign_imports (campaign_key, created_at desc);
@@ -134,6 +179,14 @@ create index if not exists auth_users_name_idx on public.auth_users (name asc);
 create index if not exists support_requests_updated_at_idx on public.support_requests (updated_at desc);
 create index if not exists field_diary_entries_entry_date_idx on public.field_diary_entries (entry_date desc, updated_at desc);
 create index if not exists field_diary_entries_campaign_day_idx on public.field_diary_entries (campaign_name, entry_date desc, campaign_day);
+
+create unique index if not exists field_diary_entries_point_date_unique_idx
+on public.field_diary_entries (
+  campaign_name,
+  entry_date,
+  public.normalize_field_diary_point_key(coalesce(nullif(sia, ''), location_name))
+)
+where public.normalize_field_diary_point_key(coalesce(nullif(sia, ''), location_name)) is not null;
 
 do $$
 declare

@@ -1,4 +1,5 @@
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
+import { campaignIdentityKey } from "@/lib/campaign-identity";
 
 export const FIELD_DIARY_STORAGE_KEY = "yvae:field-diary-entries";
 export const FIELD_DIARY_UPDATED_EVENT = "yvae:field-diary-updated";
@@ -390,9 +391,14 @@ export function dedupeFieldDiaryEntries(entries: FieldDiaryEntry[]) {
   );
 }
 
-export function fieldDiaryEntryKey(entry: Pick<FieldDiaryEntry, "campaignName" | "entryDate" | "locationName" | "sia">) {
+export function fieldDiaryEntryKey(
+  entry: Pick<FieldDiaryEntry, "campaignName" | "entryDate" | "locationName" | "sia"> & {
+    campaignId?: string | null;
+  },
+) {
   const pointKey = normalizePointKey(entry.sia) || normalizePointKey(entry.locationName);
   return [
+    campaignIdentityKey(entry.campaignId, entry.campaignName),
     String(entry.entryDate ?? "").slice(0, 10),
     pointKey,
   ].join("|");

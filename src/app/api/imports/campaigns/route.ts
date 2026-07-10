@@ -211,7 +211,33 @@ async function applyUnifiedFieldImport(campaignImport: Awaited<ReturnType<typeof
       .upsert(rowsToUpsert.map(fieldDiaryEntryToRow), { onConflict: "id" });
 
     if (error) {
-      throw new Error("A planilha foi lida, mas o Diário de Campo recusou a gravação.");
+      // Fallback: tenta upsert individual para não perder tudo por causa de uma linha
+      console.error("[campaign-import] Batch upsert failed, trying individual rows:", error.message, error.code);
+      const failedRows: Array<{ id: string; error: string }> = [];
+
+      for (const entry of rowsToUpsert) {
+        const row = fieldDiaryEntryToRow(entry);
+        const { error: rowError } = await supabase
+          .from("field_diary_entries")
+          .upsert(row, { onConflict: "id" });
+
+        if (rowError) {
+          console.error(`[campaign-import] Row upsert failed for ${row.id} (${row.sia}/${row.entry_date}):`, rowError.message, rowError.code);
+          failedRows.push({ id: row.id, error: rowError.message });
+        }
+      }
+
+      if (failedRows.length === rowsToUpsert.length) {
+        throw new Error(
+          `A planilha foi lida, mas o Diário de Campo recusou a gravação de todos os ${failedRows.length} registros. ` +
+          `Erro: ${error.message} (${error.code ?? "sem código"})`
+        );
+      }
+
+      if (failedRows.length > 0) {
+        summary.novos = summary.novos - failedRows.length;
+        console.warn(`[campaign-import] ${failedRows.length}/${rowsToUpsert.length} rows failed individually`);
+      }
     }
   }
 

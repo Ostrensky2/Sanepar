@@ -5,6 +5,7 @@ import {
   weatherConditionOptions,
   type FieldDiaryPayload,
 } from "@/lib/field-diary";
+import { resolveCanonicalCampaign } from "@/lib/campaign-identity";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 
 export function campaignPointToFieldDiaryPayload(point: CampaignMapPoint): FieldDiaryPayload | null {
@@ -16,10 +17,11 @@ export function campaignPointToFieldDiaryPayload(point: CampaignMapPoint): Field
   }
 
   const entryDate = parseImportDate(point.date);
+  const canonicalCampaign = resolveCanonicalCampaign(point.campaign);
 
   return {
-    campaignId: null,
-    campaignName: point.campaign || "Campanha",
+    campaignId: canonicalCampaign?.id ?? null,
+    campaignName: canonicalCampaign?.name ?? point.campaign ?? "Campanha",
     campaignDay: Number.parseInt(point.day, 10) || 1,
     entryDate,
     fieldTeamName: "",

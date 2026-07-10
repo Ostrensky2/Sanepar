@@ -101,10 +101,13 @@ async function loadCampaignImport() {
     };
   }
 
-  const synthesisImport = await readCampaignWorkbookFromPath(
-    CAMPAIGN_SYNTHESIS_WORKBOOK_PATH,
-    "Campanhas_ Planilha sintese.xlsx",
-  ).catch(() => null);
+  const synthesisImport =
+    process.env.NEXT_PUBLIC_DISABLE_DB === "true"
+      ? null
+      : await readCampaignWorkbookFromPath(
+          CAMPAIGN_SYNTHESIS_WORKBOOK_PATH,
+          "Campanhas_ Planilha sintese.xlsx",
+        ).catch(() => null);
 
   if (synthesisImport?.points.length) {
     return {

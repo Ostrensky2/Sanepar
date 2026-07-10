@@ -1,4 +1,5 @@
 import type { CampaignHydroMapPoint } from "@/components/campaign-hydro-map";
+import { normalizeCampaignKey } from "@/lib/campaign-identity";
 
 export function campaignPointMatchesSelectedCampaign(
   point: CampaignHydroMapPoint,
@@ -14,16 +15,4 @@ export function campaignPointMatchesSelectedCampaign(
   );
 }
 
-export function normalizeCampaignKey(value: string) {
-  const normalized = String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
-
-  return (
-    normalized.match(/^\d+$/)?.[0] ??
-    normalized.match(/(\d+)\s*(?:a|ª|º)?\s*campanha/)?.[1] ??
-    normalized
-  );
-}
+export { normalizeCampaignKey };

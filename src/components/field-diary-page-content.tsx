@@ -67,6 +67,7 @@ import {
   type FieldDiaryEntry,
   type FieldDiaryPayload,
 } from "@/lib/field-diary";
+import { campaignIdentityMatches } from "@/lib/campaign-identity";
 import { getStoredSession } from "@/lib/auth-users";
 
 type Filters = {
@@ -167,13 +168,18 @@ export function FieldDiaryPageContent({
   const preliminaryCampaignCount = useMemo(
     () =>
       entries.filter((entry) => {
-        if (entry.campaignName !== activeCampaignName) {
+        if (
+          !campaignIdentityMatches(
+            { campaignId: entry.campaignId, campaignName: entry.campaignName },
+            { campaignId: activeCampaignId, campaignName: activeCampaignName },
+          )
+        ) {
           return false;
         }
         const governance = entry.governanceStatus ?? "importado";
         return governance === "importado" || governance === "em_revisao";
       }).length,
-    [entries, activeCampaignName],
+    [entries, activeCampaignId, activeCampaignName],
   );
 
   async function handleConsolidateCampaign() {
@@ -249,8 +255,10 @@ export function FieldDiaryPageContent({
       entries.filter(
         (entry) =>
           !activeCampaignId ||
-          entry.campaignId === activeCampaignId ||
-          entry.campaignName === activeCampaignName,
+          campaignIdentityMatches(
+            { campaignId: entry.campaignId, campaignName: entry.campaignName },
+            { campaignId: activeCampaignId, campaignName: activeCampaignName },
+          ),
       ),
     [activeCampaignId, activeCampaignName, entries],
   );

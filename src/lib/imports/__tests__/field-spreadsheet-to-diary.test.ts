@@ -38,6 +38,8 @@ describe("campaignPointToFieldDiaryPayload", () => {
     } satisfies CampaignMapPoint);
 
     expect(payload).toMatchObject({
+      campaignId: "campanha-1-verao-2026",
+      campaignName: "1ª Campanha - Verão 2026",
       campaignDay: 3,
       entryDate: "2026-02-09",
       locationName: "Captação ETA Iguaçu",
@@ -51,6 +53,33 @@ describe("campaignPointToFieldDiaryPayload", () => {
       requiresFollowUp: "Avaliar posteriormente",
       status: "Enviado",
       collectionOrder: 5,
+    });
+  });
+
+  it("resolve nome curto da segunda campanha para a campanha canônica", () => {
+    const payload = campaignPointToFieldDiaryPayload({
+      id: "p2",
+      code: "770",
+      point: "2",
+      day: "1",
+      campaign: "2",
+      date: "01/06/2026",
+      waterBody: "Captação ETA Iguaçu",
+      municipality: "Curitiba",
+      original: { lat: -25.48, lon: -49.19 },
+      effective: null,
+      accessibility: "Fácil",
+      waterAspect: "Aparentemente normal",
+      weatherConditions: "Sol",
+      problems: "",
+      driveUrl: "",
+      dropboxUrl: "",
+      photoUrl: "",
+    } satisfies CampaignMapPoint);
+
+    expect(payload).toMatchObject({
+      campaignId: "campanha-2-outono-2026",
+      campaignName: "2ª Campanha - Outono 2026",
     });
   });
 });
