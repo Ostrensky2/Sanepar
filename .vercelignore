@@ -11,3 +11,6 @@ next-dev.*.log
 tsconfig.tsbuildinfo
 supabase/.branches/
 supabase/.temp/
+auth-users-response.json
+http-headers.txt
+http-response.html
