@@ -88,12 +88,18 @@ describe("api-auth", () => {
     );
     expect(semPrivilegio.ok).toBe(false);
 
-    // ATGC tem data.import
-    const comPrivilegio = requireApiSession(
+    // ATGC tem data.import e documents.manage
+    const comImport = requireApiSession(
       requestWithCookie(`${SESSION_COOKIE_NAME}=${token}`),
       "data.import",
     );
-    expect(comPrivilegio.ok).toBe(true);
+    expect(comImport.ok).toBe(true);
+
+    const comGestaoDocumentos = requireApiSession(
+      requestWithCookie(`${SESSION_COOKIE_NAME}=${token}`),
+      "documents.manage",
+    );
+    expect(comGestaoDocumentos.ok).toBe(true);
   });
 
   it("aplica rate limit por chave", async () => {

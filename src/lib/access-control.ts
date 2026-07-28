@@ -140,6 +140,7 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "data.view",
     "data.import",
     "documents.view",
+    "documents.manage",
     "users.manage",
   ],
 };
@@ -154,7 +155,7 @@ export const categoryDescriptions: Record<UserCategory, string> = {
   UFPR:
     "Equipe UFPR com curadoria técnica, importação de dados e gestão documental.",
   ATGC:
-    "Equipe ATGC com operação da Entrada de dados e cadastro restrito de usuários ATGC.",
+    "Equipe ATGC com operação da Entrada de dados, gestão documental e cadastro restrito de usuários ATGC.",
 };
 
 export const privilegeLabels: Record<PrivilegeKey, string> = {
