@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FileClock, LogIn, MousePointerClick, Search, TrendingUp, UsersRound } from "lucide-react";
 import { readStoredDocumentsFromStorage } from "@/lib/app-documents";
-import { readActivityLog, type ActivityLogEntry } from "@/lib/activity-log";
+import { fetchCentralActivityLogs, readActivityLog, type ActivityLogEntry } from "@/lib/activity-log";
 import { loadAuthUsers, type AppUser } from "@/lib/auth-users";
 
 type Period = "day" | "month" | "year";
@@ -17,18 +17,28 @@ export function MemberActivityPanel() {
   const [filter, setFilter] = useState("");
 
   useEffect(() => {
-    function sync() {
+    let cancelled = false;
+
+    async function sync() {
+      // Exibe logs locais imediatamente
       setActivities(readActivityLog());
       setUsers(loadAuthUsers());
       setDocuments(readStoredDocumentsFromStorage().slice(0, 10));
+
+      // Busca logs centralizados da nuvem
+      const centralLogs = await fetchCentralActivityLogs();
+      if (!cancelled && centralLogs.length > 0) {
+        setActivities(centralLogs);
+      }
     }
 
-    sync();
+    void sync();
     window.addEventListener("yvae:activity-log-updated", sync);
     window.addEventListener("yvae:auth-users-updated", sync);
     window.addEventListener("storage", sync);
 
     return () => {
+      cancelled = true;
       window.removeEventListener("yvae:activity-log-updated", sync);
       window.removeEventListener("yvae:auth-users-updated", sync);
       window.removeEventListener("storage", sync);
