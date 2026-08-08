@@ -10,6 +10,7 @@ import {
   type UserCategory,
 } from "@/lib/access-control";
 import { APP_DOCUMENTS_STORAGE_KEY } from "@/lib/app-documents";
+import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 import { FIELD_DIARY_STORAGE_KEY } from "@/lib/field-diary";
 import { navigationItems } from "@/lib/navigation";
 import { POINT_ACTIONS_STORAGE_KEY } from "@/lib/point-actions";
@@ -211,9 +212,9 @@ function Badge({ count, active }: { count?: number; active: boolean }) {
   );
 }
 
-function readSidebarBadges() {
+export function readSidebarBadges() {
   const documents = readArrayCount(APP_DOCUMENTS_STORAGE_KEY);
-  const diary = readArrayCount(FIELD_DIARY_STORAGE_KEY);
+  const diary = canUseBrowserOnlyPersistence() ? readArrayCount(FIELD_DIARY_STORAGE_KEY) : 0;
   const pointActions = readArrayCount(POINT_ACTIONS_STORAGE_KEY);
   const spreadsheets = readArray("yvae:spreadsheets");
   const fieldSheets = spreadsheets.filter((item) => readString(item, "kind") === "Campo").length;

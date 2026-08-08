@@ -9,10 +9,10 @@ import { resolveCanonicalCampaign } from "@/lib/campaign-identity";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 
 export function campaignPointToFieldDiaryPayload(point: CampaignMapPoint): FieldDiaryPayload | null {
-  const coordinates = point.effective ?? point.original;
+  const coordinates = point.effective;
   const sia = normalizeSia(point.code);
 
-  if (!sia && !coordinates) {
+  if (!coordinates || !hasOperationalEvidence(point)) {
     return null;
   }
 
@@ -50,6 +50,40 @@ export function campaignPointToFieldDiaryPayload(point: CampaignMapPoint): Field
     photos: point.photos ?? [],
     collectionOrder: point.collectionOrder ?? null,
   };
+}
+
+function hasOperationalEvidence(point: CampaignMapPoint) {
+  return Boolean(
+    point.activities?.some(hasMeaningfulValue) ||
+    hasMeaningfulValue(point.collectionTime) ||
+    hasMeaningfulValue(point.samplesReplicasEdna) ||
+    hasMeaningfulValue(point.zooplanktonId) ||
+    point.hasOccurrence ||
+    hasMeaningfulValue(point.occurrenceType) ||
+    hasMeaningfulValue(point.occurrenceDescription) ||
+    hasNonDefaultValue(point.requiresFollowUp, "Não") ||
+    hasMeaningfulValue(point.followUpNotes) ||
+    hasMeaningfulValue(point.dailySummary) ||
+    hasMeaningfulValue(point.problems) ||
+    hasMeaningfulValue(point.waterAspect) ||
+    hasMeaningfulValue(point.weatherConditions) ||
+    hasNonDefaultValue(point.status, "Rascunho") ||
+    point.photos?.length ||
+    hasMeaningfulValue(point.photoUrl)
+  );
+}
+
+function hasMeaningfulValue(value: unknown) {
+  const normalized = normalizeEvidenceValue(value);
+  return Boolean(normalized && normalized !== "não informado" && normalized !== "nao informado");
+}
+
+function hasNonDefaultValue(value: unknown, defaultValue: string) {
+  return hasMeaningfulValue(value) && normalizeEvidenceValue(value) !== normalizeEvidenceValue(defaultValue);
+}
+
+function normalizeEvidenceValue(value: unknown) {
+  return String(value ?? "").trim().toLocaleLowerCase("pt-BR");
 }
 
 // Coluna "Condições visuais da água (;)": multisseleção separada por ";".

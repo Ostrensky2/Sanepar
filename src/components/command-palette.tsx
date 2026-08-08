@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FileSearch, Search, X } from "lucide-react";
 import { getSearchableNavigationItems } from "@/lib/navigation";
 import { APP_DOCUMENTS_STORAGE_KEY } from "@/lib/app-documents";
+import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 import { FIELD_DIARY_STORAGE_KEY } from "@/lib/field-diary";
 import { POINT_ACTIONS_STORAGE_KEY } from "@/lib/point-actions";
 
@@ -164,7 +165,7 @@ export function CommandPalette() {
   );
 }
 
-function readLocalRecordItems() {
+export function readLocalRecordItems() {
   const documents = readArray(APP_DOCUMENTS_STORAGE_KEY).map((document, index) => ({
     id: `document:${readString(document, "id", String(index))}`,
     href: "/documentos",
@@ -173,13 +174,15 @@ function readLocalRecordItems() {
     keywords: `${readString(document, "title")} ${readString(document, "campaign")} ${readString(document, "point")}`,
   }));
 
-  const diary = readArray(FIELD_DIARY_STORAGE_KEY).map((entry, index) => ({
-    id: `diary:${readString(entry, "id", String(index))}`,
-    href: "/dados/diario-de-campo",
-    label: readString(entry, "locationName", "Registro do diário"),
-    group: "Diário de Campo",
-    keywords: `${readString(entry, "locationName")} ${readString(entry, "sia")} ${readString(entry, "municipality")} ${readString(entry, "campaignName")}`,
-  }));
+  const diary = canUseBrowserOnlyPersistence()
+    ? readArray(FIELD_DIARY_STORAGE_KEY).map((entry, index) => ({
+        id: `diary:${readString(entry, "id", String(index))}`,
+        href: "/dados/diario-de-campo",
+        label: readString(entry, "locationName", "Registro do diário"),
+        group: "Diário de Campo",
+        keywords: `${readString(entry, "locationName")} ${readString(entry, "sia")} ${readString(entry, "municipality")} ${readString(entry, "campaignName")}`,
+      }))
+    : [];
 
   const spreadsheets = readArray(SPREADSHEET_STORAGE_KEY).map((sheet, index) => ({
     id: `sheet:${readString(sheet, "id", String(index))}`,
