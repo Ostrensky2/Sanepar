@@ -6,6 +6,10 @@ import {
   type CampaignMapPoint,
 } from "@/lib/imports/campaigns";
 import {
+  parseInternalStorageUrl,
+  sanitizeCampaignMedia,
+} from "@/lib/imports/media-policy";
+import {
   buildLaboratoryRiskPoints,
   hydrateLaboratoryRiskPointPhotos,
   normalizeLaboratoryRiskLevel,
@@ -22,6 +26,12 @@ const CAMPAIGN_SYNTHESIS_WORKBOOK_PATH =
 const CAMPAIGN_1_DASHBOARD_PATH = path.join(
   process.cwd(),
   "public/dashboards/Painel_eDNA_Campanha1_Sanepar.html",
+);
+const FAIL_CLOSED_MEDIA_SIAS = new Set(["sia:257"]);
+const bundledCampaignMediaByKey = new Map(
+  (bundledCampaignMapPoints as CampaignMapPoint[])
+    .map((point) => [campaignMediaKey(point), sanitizeCampaignMedia(point)] as const)
+    .filter(([key]) => Boolean(key)),
 );
 
 export type DashboardData = {
@@ -46,13 +56,16 @@ export type DashboardData = {
 
 export async function loadDashboardData(): Promise<DashboardData> {
   const campaignImport = await loadCampaignImport();
-  const campaignPoints = campaignImport.points;
+  const campaignPoints = overlayBundledCampaignMedia(campaignImport.points);
   const publishedRiskPoints = await getLatestPublishedLaboratoryRiskPoints();
   const riskRows = publishedRiskPoints?.length
     ? []
     : await loadBundledLaboratoryRiskRows();
   const laboratoryRiskPoints = publishedRiskPoints?.length
-    ? hydrateLaboratoryRiskPointPhotos(publishedRiskPoints, campaignPoints)
+    ? hydrateLaboratoryRiskPointPhotos(
+        overlayBundledCampaignMedia(publishedRiskPoints),
+        campaignPoints,
+      )
     : hydrateLaboratoryRiskPointPhotos(
         buildLaboratoryRiskPoints(campaignPoints, riskRows),
         campaignPoints,
@@ -70,6 +83,79 @@ export async function loadDashboardData(): Promise<DashboardData> {
       fieldCampaigns: countCampaignsWithEffectiveCollection(campaignPoints),
     },
   };
+}
+
+export function overlayBundledCampaignMedia<T extends CampaignMapPoint>(points: T[]): T[] {
+  return points.map((point) => {
+    const sanitized = sanitizeCampaignMedia(point);
+    const siaKey = normalizeSiaMediaKey(point.code);
+
+    if (FAIL_CLOSED_MEDIA_SIAS.has(siaKey)) {
+      return {
+        ...sanitized,
+        driveUrl: "",
+        dropboxUrl: "",
+        photoUrl: "",
+        photos: [],
+      };
+    }
+
+    if (hasInternalCampaignMedia(sanitized)) {
+      return sanitized;
+    }
+
+    const canonical = bundledCampaignMediaByKey.get(campaignMediaKey(point));
+
+    if (!canonical || !hasInternalCampaignMedia(canonical)) {
+      return sanitized;
+    }
+
+    return {
+      ...sanitized,
+      photoUrl: canonical.photoUrl,
+      photos: canonical.photos ?? [],
+    };
+  });
+}
+
+function hasInternalCampaignMedia(point: CampaignMapPoint) {
+  return Boolean(
+    parseInternalStorageUrl(point.photoUrl, "photos") ||
+      point.photos?.some((photo) => parseInternalStorageUrl(photo.url, "photos")),
+  );
+}
+
+function campaignMediaKey(point: Pick<CampaignMapPoint, "campaign" | "code">) {
+  const campaignKey = normalizeCampaignMediaKey(point.campaign);
+  const siaKey = normalizeSiaMediaKey(point.code);
+
+  return campaignKey && siaKey ? `${campaignKey}|${siaKey}` : "";
+}
+
+function normalizeCampaignMediaKey(value: string | undefined) {
+  const normalized = normalizeMediaKey(value);
+  const campaignNumber =
+    normalized.match(/^\s*(\d+)\s*$/)?.[1] ??
+    normalized.match(/\b(\d+)\s*[ao]?\s+campanha\b/)?.[1] ??
+    normalized.match(/\bcampanha\s*(\d+)\b/)?.[1];
+
+  return campaignNumber ? `campaign:${Number(campaignNumber)}` : normalized;
+}
+
+function normalizeSiaMediaKey(value: string | undefined) {
+  const normalized = normalizeMediaKey(value);
+  const siaNumber = normalized.match(/\d+/)?.[0];
+
+  return siaNumber ? `sia:${Number(siaNumber)}` : "";
+}
+
+function normalizeMediaKey(value: string | undefined) {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function countUniqueEffectivePoints(campaignPoints: CampaignMapPoint[]) {

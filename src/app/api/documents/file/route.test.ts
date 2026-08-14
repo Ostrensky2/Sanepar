@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const storage = vi.hoisted(() => ({
   createSignedUrl: vi.fn(),
@@ -25,6 +25,10 @@ describe("GET /api/documents/file private-only", () => {
     storage.getPublicUrl.mockReset();
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("preserva o redirecionamento para URL assinada", async () => {
     storage.createSignedUrl.mockResolvedValue({
       data: { signedUrl: "https://storage.invalid/signed-redacted" },
@@ -41,6 +45,35 @@ describe("GET /api/documents/file private-only", () => {
     expect(storage.createSignedUrl).toHaveBeenCalledWith("private/photo.png", 600, {
       download: false,
     });
+  });
+
+  it("segue a assinatura autenticada até bytes PNG no fixture", async () => {
+    const pngBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    storage.createSignedUrl.mockResolvedValue({
+      data: { signedUrl: "https://storage.invalid/signed-redacted" },
+      error: null,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(pngBytes, {
+          status: 200,
+          headers: { "content-type": "image/png" },
+        }),
+      ),
+    );
+
+    const redirect = await GET(
+      new Request(
+        "http://local.test/api/documents/file?bucket=photos&path=migrated%2Fcampaigns%2F1%2Fsia-0078-redacted.png",
+      ),
+    );
+    const image = await fetch(redirect.headers.get("location")!);
+
+    expect(redirect.status).toBe(307);
+    expect(image.status).toBe(200);
+    expect(image.headers.get("content-type")).toBe("image/png");
+    expect(new Uint8Array(await image.arrayBuffer())).toEqual(pngBytes);
   });
 
   it("falha fechado quando a assinatura falha, sem consultar URL pública", async () => {
