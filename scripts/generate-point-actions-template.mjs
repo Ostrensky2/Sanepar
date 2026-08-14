@@ -27,12 +27,6 @@ const columns = [
   { header: "Latitude *", key: "latitude", width: 14 },
   { header: "Longitude *", key: "longitude", width: 14 },
   { header: "Resultados *", key: "results", width: 50 },
-  { header: "Foto 1 - URL Dropbox", key: "photo1Url", width: 36 },
-  { header: "Foto 1 - Legenda", key: "photo1Caption", width: 32 },
-  { header: "Foto 2 - URL Dropbox", key: "photo2Url", width: 36 },
-  { header: "Foto 2 - Legenda", key: "photo2Caption", width: 32 },
-  { header: "Foto 3 - URL Dropbox", key: "photo3Url", width: 36 },
-  { header: "Foto 3 - Legenda", key: "photo3Caption", width: 32 },
 ];
 
 ws.columns = columns;
@@ -56,12 +50,6 @@ const exampleRows = [
     latitude: "-25.4284",
     longitude: "-49.6733",
     results: "Clorofila-a 38,2 µg/L; presença de Microcystis aeruginosa.",
-    photo1Url: "https://dropbox.com/s/exemplo1",
-    photo1Caption: "Vista geral da floração na margem leste",
-    photo2Url: "https://dropbox.com/s/exemplo2",
-    photo2Caption: "Coleta superficial - ponto P1",
-    photo3Url: "",
-    photo3Caption: "",
   },
   {
     eventName: "Monitoramento emergencial - Floração de cianobactérias",
@@ -72,12 +60,6 @@ const exampleRows = [
     latitude: "-25.4310",
     longitude: "-49.6755",
     results: "Clorofila-a 12,4 µg/L; ausência de organismos visíveis.",
-    photo1Url: "https://dropbox.com/s/exemplo3",
-    photo1Caption: "Ponto P2 - margem oeste",
-    photo2Url: "",
-    photo2Caption: "",
-    photo3Url: "",
-    photo3Caption: "",
   },
 ];
 
@@ -131,10 +113,9 @@ const instructions = [
   ["  • Longitude — coordenada decimal entre -180 e 180 (ex: -49.6733)"],
   ["  • Resultados — texto livre com os resultados ou observações da coleta"],
   [""],
-  ["FOTOS (opcionais)"],
-  ["  • É possível anexar até 3 fotos por ponto."],
-  ["  • Para cada foto, preencha URL (link Dropbox público) e Legenda."],
-  ["  • Para mais de 3 fotos por ponto, adicione fotos extras pelo formulário do app após a importação."],
+  ["FOTOS"],
+  ["  • Fotos são associadas pelo aplicativo e armazenadas exclusivamente no Supabase."],
+  ["  • Não inclua links de serviços externos nesta planilha."],
   [""],
   ["DICAS"],
   ["  • As linhas 2 e 3 são exemplos — podem ser apagadas antes de importar."],

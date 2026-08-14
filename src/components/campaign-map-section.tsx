@@ -435,10 +435,10 @@ function PointPhotoPreview({
         className="relative aspect-[4/3] h-[clamp(148px,20vh,220px)] w-full overflow-hidden radius-card border border-slate-200 bg-slate-100 text-slate-400 transition hover:brightness-95"
         onClick={() => onExpand(safeIndex)}
         disabled={!preview || imageFailed}
-        aria-label="Expandir fotos do ponto"
+        aria-label={preview && !imageFailed ? "Expandir fotos do ponto" : "Foto indisponível"}
       >
         {preview?.kind === "image" && !imageFailed ? (
-          // Google Drive thumbnails need a regular image element.
+          // URLs temporárias do armazenamento privado precisam de um elemento de imagem comum.
           // eslint-disable-next-line @next/next/no-img-element
           <img
             alt={activePhoto?.caption || `Foto do ponto ${point?.code ?? ""}`}
@@ -475,11 +475,7 @@ function PointPhotoPreview({
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-1 px-3 text-center">
             <ImageIcon className="h-8 w-8 text-slate-300" />
-            {imageFailed ? (
-              <span className="text-caption font-bold text-slate-500">
-                Foto indisponível — verifique o Drive
-              </span>
-            ) : null}
+            <span className="text-caption font-bold text-slate-500">Foto indisponível</span>
           </div>
         )}
         {preview && !imageFailed ? (
@@ -556,25 +552,26 @@ function PhotoModal({
 
         <div className="grid h-[calc(100%-76px)] grid-rows-[minmax(0,1fr)_auto] bg-slate-100">
           <div className="min-h-0">
-            {preview.kind === "image" ? (
-              // Google Drive thumbnails need a regular image element.
+            {preview.kind === "image" && candidateIndex < preview.candidates.length ? (
+              // URLs temporárias do armazenamento privado precisam de um elemento de imagem comum.
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 alt={activePhoto?.caption || `Foto do ponto ${point.code}`}
                 className="h-full w-full object-contain"
-                onError={() =>
-                  setCandidateIndex((current) =>
-                    current + 1 < preview.candidates.length ? current + 1 : current,
-                  )
-                }
-                src={preview.candidates[candidateIndex] ?? preview.src}
+                onError={() => setCandidateIndex((current) => current + 1)}
+                src={preview.candidates[candidateIndex]}
               />
-            ) : (
+            ) : preview.kind === "folder" ? (
               <iframe
                 className="h-full w-full border-0"
                 src={preview.src}
                 title={`Fotos do ponto ${point.code}`}
               />
+            ) : (
+              <div className="flex h-full items-center justify-center gap-2 text-sm font-bold text-slate-500">
+                <ImageIcon className="h-6 w-6" />
+                Foto indisponível
+              </div>
             )}
           </div>
           {photos.length > 1 ? (
@@ -616,4 +613,3 @@ function getPointPhotos(point?: CampaignHydroMapPoint | null) {
     ? [{ id: `${point.id}-photo`, url: point.photoUrl, caption: "Foto representativa" }]
     : [];
 }
-

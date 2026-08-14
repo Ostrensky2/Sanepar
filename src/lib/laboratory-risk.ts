@@ -1,4 +1,5 @@
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
+import { sanitizeCampaignMedia } from "@/lib/imports/media-policy";
 
 export type LaboratoryRiskLevel = "baixo" | "baixoModerado" | "moderado" | "alto";
 
@@ -121,12 +122,12 @@ export function hydrateLaboratoryRiskPointPhotos(
       return riskPoint;
     }
 
-    return {
+    return sanitizeCampaignMedia({
       ...riskPoint,
       driveUrl: fieldPoint.driveUrl,
       dropboxUrl: fieldPoint.dropboxUrl,
       photoUrl: fieldPoint.photoUrl || fieldPoint.dropboxUrl || fieldPoint.driveUrl,
-    };
+    });
   });
 }
 

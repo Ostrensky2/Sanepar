@@ -1,4 +1,5 @@
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
+import { sanitizePointActionMedia } from "@/lib/imports/media-policy";
 
 export const POINT_ACTIONS_STORAGE_KEY = "yvae:point-actions";
 const POINT_ACTIONS_UPDATED_EVENT = "yvae:point-actions-updated";
@@ -58,7 +59,7 @@ export function readPointActionsFromStorage() {
     const parsed = JSON.parse(raw);
 
     return Array.isArray(parsed)
-      ? parsed.filter(isPointActionEvent)
+      ? parsed.filter(isPointActionEvent).map(sanitizePointActionMedia)
       : [];
   } catch {
     return [];
@@ -84,7 +85,7 @@ export async function readPointActions() {
 
     const payload = (await response.json()) as { actions?: unknown };
     const cloudActions = Array.isArray(payload.actions)
-      ? payload.actions.filter(isPointActionEvent)
+      ? payload.actions.filter(isPointActionEvent).map(sanitizePointActionMedia)
       : [];
 
     if (cloudActions.length) {

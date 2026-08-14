@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 import type { LaboratoryRiskPoint } from "@/lib/laboratory-risk";
+import { sanitizeCampaignMedia } from "@/lib/imports/media-policy";
 
 export const POINT_ACTIONS_SNAPSHOT_FILE_NAME = "__point_actions__";
 export const APP_DOCUMENTS_SNAPSHOT_FILE_NAME = "__app_documents__";
@@ -110,7 +111,9 @@ export async function getAggregatedPublishedCampaignImports() {
   }
 
   const aggregatedRows = [...latestByCampaign.values()];
-  const aggregatedPoints = aggregatedRows.flatMap((row) => row.points ?? []);
+  const aggregatedPoints = aggregatedRows
+    .flatMap((row) => row.points ?? [])
+    .map(sanitizeCampaignMedia);
   const rowCount = aggregatedRows.reduce((total, row) => total + (row.row_count ?? 0), 0);
   const fileNames = aggregatedRows.map((row) => row.file_name).join(" + ");
   const latest = aggregatedRows[0];
@@ -138,7 +141,7 @@ export async function getLatestPublishedLaboratoryRiskPoints() {
     .maybeSingle<LabRiskResultRow>();
 
   if (!error && Array.isArray(data?.points)) {
-    return data.points as LaboratoryRiskPoint[];
+    return (data.points as LaboratoryRiskPoint[]).map(sanitizeCampaignMedia);
   }
 
   // Fallback legado: snapshots gravados em campaign_imports antes da
@@ -155,7 +158,7 @@ export async function getLatestPublishedLaboratoryRiskPoints() {
     return null;
   }
 
-  return legacy.points as LaboratoryRiskPoint[];
+  return (legacy.points as LaboratoryRiskPoint[]).map(sanitizeCampaignMedia);
 }
 
 function inferCampaignKeyFromRow(row: CampaignImportRow) {

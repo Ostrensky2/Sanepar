@@ -305,7 +305,11 @@ export async function requestLogin(email: string, password: string): Promise<Log
       return { ok: false, error: payload.error ?? "Nao foi possivel entrar." };
     }
 
-    const [user] = normalizeAuthUsers([payload.user]);
+    const loginUser =
+      typeof payload.user === "object" && payload.user !== null
+        ? { ...payload.user, password: "" }
+        : payload.user;
+    const [user] = normalizeAuthUsers([loginUser]);
 
     if (!user) {
       return { ok: false, error: "Resposta de login invalida." };

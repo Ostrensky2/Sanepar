@@ -10,6 +10,10 @@ import {
   splitPhotoLinks,
 } from "@/lib/imports/photo-fetch";
 import {
+  classifyPhotoAssociation,
+  sanitizeCampaignMedia,
+} from "@/lib/imports/media-policy";
+import {
   fieldDiaryEntryKey,
   normalizeFieldDiaryEntry,
   type FieldDiaryEntry,
@@ -151,11 +155,15 @@ async function applyUnifiedFieldImport(campaignImport: Awaited<ReturnType<typeof
       const warningLinks = splitPhotoLinks([point.photoUrl, point.driveUrl, point.dropboxUrl].join(";"));
       if (warningLinks.length) {
         const message = "Supabase não configurado; fotos por link não foram convertidas para Storage.";
-        point.photoWarnings = warningLinks.map((sourceUrl) => `${sourceUrl}: ${message}`);
-        photoWarnings.push(...warningLinks.map((sourceUrl) => ({ pointId: point.id, sourceUrl, message })));
+        point.photoWarnings = warningLinks.map(() => message);
+        photoWarnings.push(
+          ...warningLinks.map(() => ({ pointId: point.id, sourceUrl: "[redacted]", message })),
+        );
       }
     }
   }
+
+  campaignImport.points = campaignImport.points.map(sanitizeCampaignMedia);
 
   const incomingEntries = campaignImport.points
     .map(campaignPointToFieldDiaryPayload)
@@ -319,12 +327,30 @@ async function attachStoredPhotos(
       ...splitPhotoLinks(point.dropboxUrl),
     ];
     const uniqueLinks = [...new Set(sourceLinks)];
+    const acceptedLinks: string[] = [];
 
-    if (!uniqueLinks.length) {
+    for (const sourceUrl of uniqueLinks) {
+      const association = classifyPhotoAssociation(point.code, sourceUrl);
+
+      if (association.status === "match") {
+        acceptedLinks.push(sourceUrl);
+        continue;
+      }
+
+      const message =
+        association.status === "mismatch"
+          ? "Foto ignorada: o SIA do arquivo diverge do SIA do ponto."
+          : "Foto ignorada: não foi possível confirmar um único SIA pelo nome do arquivo.";
+      point.photoWarnings = [...(point.photoWarnings ?? []), message];
+      photoWarnings.push({ pointId: point.id, sourceUrl: "[redacted]", message });
+      summary.fotos.avisos += 1;
+    }
+
+    if (!acceptedLinks.length) {
       continue;
     }
 
-    const result = await fetchAndStorePhotosAsPng(uniqueLinks, {
+    const result = await fetchAndStorePhotosAsPng(acceptedLinks, {
       supabase,
       storagePathBuilder: (sourceUrl, index) =>
         buildImportedPhotoPath({
@@ -355,11 +381,14 @@ async function attachStoredPhotos(
     }
 
     if (result.warnings.length) {
-      point.photoWarnings = result.warnings.map((warning) => `${warning.sourceUrl}: ${warning.message}`);
+      point.photoWarnings = [
+        ...(point.photoWarnings ?? []),
+        ...result.warnings.map((warning) => warning.message),
+      ];
       photoWarnings.push(
         ...result.warnings.map((warning) => ({
           pointId: point.id,
-          sourceUrl: warning.sourceUrl,
+          sourceUrl: "[redacted]",
           message: warning.message,
         })),
       );

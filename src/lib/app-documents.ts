@@ -111,7 +111,6 @@ export function normalizeStoredDocument(value: unknown): StoredDocument | null {
   const candidate = value as Partial<StoredDocument>;
   const title = String(candidate.title ?? "").trim();
   const dropboxUrl = String(candidate.dropboxUrl ?? "").trim();
-  const originalUrl = String(candidate.originalUrl ?? dropboxUrl).trim();
   const storageBucket = String(candidate.storageBucket ?? "").trim();
   const storagePath = String(candidate.storagePath ?? "").trim();
   const status = String(candidate.status ?? "INSERIDO");
@@ -125,15 +124,15 @@ export function normalizeStoredDocument(value: unknown): StoredDocument | null {
     return null;
   }
 
-  if (source !== "storage" && !dropboxUrl) {
+  if (source !== "storage" || !storageBucket || !storagePath) {
     return null;
   }
 
   return {
     id: String(candidate.id ?? `${dropboxUrl || storagePath}-${title}`),
     title,
-    dropboxUrl: dropboxUrl || undefined,
-    originalUrl: originalUrl || undefined,
+    dropboxUrl: undefined,
+    originalUrl: undefined,
     campaign: String(candidate.campaign ?? "Documento inserido"),
     point: String(candidate.point ?? "Repositório oficial"),
     date: String(candidate.date ?? ""),

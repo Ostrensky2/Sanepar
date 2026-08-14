@@ -80,6 +80,9 @@ export function PointActionsPageContent() {
     (total, point) => total + point.photos.length,
     0,
   ) ?? 0;
+  const selectedDocumentUrl = selectedAction?.document
+    ? pointActionDocumentUrl(selectedAction.document)
+    : null;
 
   if (isLoadingActions) {
     return (
@@ -123,9 +126,9 @@ export function PointActionsPageContent() {
           <h2 className="heading-font text-2xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
             {selectedAction.eventName}
           </h2>
-          {selectedAction.document ? (
+          {selectedAction.document && selectedDocumentUrl ? (
             <a
-              href={pointActionDocumentUrl(selectedAction.document)}
+              href={selectedDocumentUrl}
               target="_blank"
               rel="noreferrer"
               className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[var(--surface-soft)] px-3 py-2 text-xs font-bold text-[var(--brand-navy-strong)] transition-colors hover:bg-[var(--surface-muted)]"
@@ -160,7 +163,7 @@ export function PointActionsPageContent() {
         <MetricCard icon={Target} label="Registro" value="Pontual" detail={selectedAction.createdAt} />
         <MetricCard icon={MapPinned} label="Pontos de coleta" value={selectedAction.points.length} detail="Pontos vinculados" />
         <MetricCard icon={FlaskConical} label="Resultados" value={selectedAction.points.length} detail="Descrições registradas" />
-        <MetricCard icon={Camera} label="Fotos" value={totalPhotos} detail="Links Dropbox" />
+        <MetricCard icon={Camera} label="Fotos" value={totalPhotos} detail="Arquivos vinculados" />
       </section>
 
       <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
@@ -250,6 +253,8 @@ function PointActionCard({
   objectives: string;
   document: PointActionEvent["document"];
 }) {
+  const documentUrl = document ? pointActionDocumentUrl(document) : null;
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2 text-xs xl:grid-cols-4">
@@ -278,9 +283,9 @@ function PointActionCard({
         </div>
       </div>
 
-      {document ? (
+      {document && documentUrl ? (
         <a
-          href={pointActionDocumentUrl(document)}
+          href={documentUrl}
           target="_blank"
           rel="noreferrer"
           className="flex items-center justify-between gap-3 radius-card border border-blue-100 bg-white p-4 text-sm font-bold text-blue-700 transition-colors hover:border-blue-200 hover:bg-blue-50"
@@ -297,7 +302,9 @@ function PointActionCard({
         </a>
       ) : (
         <p className="radius-card bg-[var(--surface-soft)] p-4 text-xs font-semibold text-slate-500">
-          Nenhum documento vinculado a este evento.
+          {document
+            ? "Documento indisponível no armazenamento privado."
+            : "Nenhum documento vinculado a este evento."}
         </p>
       )}
 
@@ -353,24 +360,26 @@ function PointActionPhotos({ point }: { point: PointActionSamplePoint }) {
 }
 
 function PhotoThumb({ photoUrl, alt }: { photoUrl: string; alt: string }) {
-  const previewUrl = toDropboxPreviewUrl(photoUrl);
+  const previewUrl = photoUrl.trim();
+  const [imageFailed, setImageFailed] = useState(false);
 
   return (
     <span className="relative block h-44 w-full overflow-hidden rounded-xl bg-[var(--surface-soft)]">
-      <span className="absolute inset-0 flex items-center justify-center text-slate-400">
-        <Camera className="h-5 w-5" />
-      </span>
-      {previewUrl ? (
-        // User-provided Dropbox links are remote images and need normal img fallback behavior.
+      {!previewUrl || imageFailed ? (
+        <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-xs font-bold text-slate-500">
+          <Camera className="h-5 w-5" />
+          Foto indisponível
+        </span>
+      ) : null}
+      {previewUrl && !imageFailed ? (
+        // URLs temporárias do armazenamento privado usam o comportamento nativo de imagem.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={previewUrl}
           alt={alt}
           className="relative h-full w-full object-cover"
           loading="lazy"
-          onError={(event) => {
-            event.currentTarget.style.display = "none";
-          }}
+          onError={() => setImageFailed(true)}
         />
       ) : null}
     </span>
@@ -404,7 +413,9 @@ function PhotoDialog({
     return () => window.removeEventListener("keydown", handleKey);
   }, [onClose, onNavigate, currentIndex, photos]);
 
-  const previewUrl = toDropboxPreviewUrl(photo.url);
+  const previewUrl = photo.url.trim();
+  const [failedUrl, setFailedUrl] = useState("");
+  const imageFailed = failedUrl === previewUrl;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
@@ -454,17 +465,19 @@ function PhotoDialog({
           </div>
         </div>
         <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-950/95 p-3">
-          {previewUrl ? (
-            // User-provided Dropbox links are remote images and need normal img fallback behavior.
+          {previewUrl && !imageFailed ? (
+            // URLs temporárias do armazenamento privado usam o comportamento nativo de imagem.
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={previewUrl}
               alt={photo.caption || "Foto da ação pontual"}
               className="max-h-[64vh] w-auto max-w-full object-contain"
+              onError={() => setFailedUrl(previewUrl)}
             />
           ) : (
-            <div className="flex min-h-72 items-center justify-center text-white/70">
+            <div className="flex min-h-72 flex-col items-center justify-center gap-3 text-sm font-bold text-white/70">
               <Camera className="h-10 w-10" />
+              Foto indisponível
             </div>
           )}
         </div>
@@ -472,15 +485,6 @@ function PhotoDialog({
           <p className="text-justify text-sm font-semibold leading-6 text-slate-700">
             {photo.caption || "Sem legenda informada"}
           </p>
-          <a
-            href={photo.url}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg bg-[var(--surface-soft)] px-3 py-2 text-xs font-bold text-[var(--brand-navy-strong)]"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            Abrir link
-          </a>
         </div>
       </div>
     </div>
@@ -529,29 +533,6 @@ function pointActionDocumentUrl(document: NonNullable<PointActionEvent["document
     return `/api/documents/file?${params.toString()}`;
   }
 
-  return document.dropboxUrl ?? document.originalUrl ?? "#";
-}
-
-function toDropboxPreviewUrl(url: string) {
-  const trimmedUrl = url.trim();
-
-  if (!trimmedUrl) {
-    return "";
-  }
-
-  try {
-    const parsedUrl = new URL(trimmedUrl);
-
-    if (parsedUrl.hostname.includes("dropbox.com")) {
-      parsedUrl.hostname = "dl.dropboxusercontent.com";
-      parsedUrl.searchParams.delete("dl");
-      parsedUrl.searchParams.delete("raw");
-      return parsedUrl.toString();
-    }
-
-    return trimmedUrl;
-  } catch {
-    return trimmedUrl;
-  }
+  return null;
 }
 

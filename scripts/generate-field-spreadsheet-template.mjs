@@ -92,8 +92,6 @@ const columns = [
   { header: "Pendência / Encaminhamento", key: "followUpNotes", width: 34 },
   { header: "Resumo do dia", key: "dailySummary", width: 42 },
   { header: "Status", key: "status", width: 18 },
-  { header: "Drive", key: "driveUrl", width: 36 },
-  { header: "Dropbox", key: "dropboxUrl", width: 36 },
 ];
 
 ws.columns = columns;
@@ -140,8 +138,6 @@ const exampleRows = [
     followUpNotes: "",
     dailySummary: "Coleta concluída sem ocorrência.",
     status: "Enviado",
-    driveUrl: "https://drive.google.com/file/d/1ExemploArquivoFoto/view?usp=sharing",
-    dropboxUrl: "",
   },
   {
     campaign: "1",
@@ -171,8 +167,6 @@ const exampleRows = [
     followUpNotes: "Reavaliar acesso no próximo ciclo.",
     dailySummary: "Coleta concluída com observação de condição climática.",
     status: "Rascunho",
-    driveUrl: "",
-    dropboxUrl: "https://dropbox.com/s/exemplo",
   },
 ];
 
@@ -304,9 +298,8 @@ const instructions = [
   ["  • Não altere o nome da aba Campanhas."],
   ["  • Não altere os nomes das colunas da linha 1."],
   ["  • Linhas sem Cód. SIA ou sem coordenada válida são ignoradas."],
-  ["  • Links de Drive ou Dropbox alimentam as evidências visuais no painel."],
-  ["  • Use links de arquivo do Google Drive; links de pasta não são suportados nesta fase."],
-  ["  • Para várias fotos do mesmo ponto, separe os links por ponto-e-vírgula (;)."],
+  ["  • Fotos e documentos são associados pelo aplicativo e armazenados exclusivamente no Supabase."],
+  ["  • Não inclua links de serviços externos nesta planilha."],
   ["  • Amostras e Réplicas e ID Zooplacton podem ser preenchidos manualmente ou via fórmula."],
   ["  • Condições visuais da água aceitam vários valores separados por ponto-e-vírgula (;), usando a lista da aba Valores válidos."],
 ];

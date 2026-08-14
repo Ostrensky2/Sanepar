@@ -5,6 +5,7 @@ import {
   POINT_ACTIONS_SNAPSHOT_FILE_NAME,
 } from "@/lib/supabase";
 import type { PointActionEvent } from "@/lib/point-actions";
+import { sanitizePointActionMedia } from "@/lib/imports/media-policy";
 
 export const runtime = "nodejs";
 
@@ -47,7 +48,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    actions: data.map(fromRow),
+    actions: data.map(fromRow).map(sanitizePointActionMedia),
     persistence: "cloud",
   });
 }
@@ -152,7 +153,7 @@ async function readActionsFromCampaignSnapshot(
   }
 
   const actions = Array.isArray(data?.points)
-    ? data.points.filter(isPointActionEvent)
+    ? data.points.filter(isPointActionEvent).map(sanitizePointActionMedia)
     : [];
 
   return NextResponse.json({

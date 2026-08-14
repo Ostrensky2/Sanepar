@@ -986,16 +986,17 @@ function DocumentTypeIcon({ document }: { document: StoredDocument }) {
 }
 
 async function openDocument(document: StoredDocument) {
-  window.open(documentAccessUrl(document), "_blank", "noopener,noreferrer");
+  const url = documentAccessUrl(document);
+
+  if (url) {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
 }
 
 function downloadDocument(document: StoredDocument) {
   if (document.storageBucket && document.storagePath) {
     window.open(documentAccessUrl(document, true), "_blank", "noopener,noreferrer");
-    return;
   }
-
-  window.open(toDropboxDownloadUrl(documentAccessUrl(document)), "_blank", "noopener,noreferrer");
 }
 
 function documentAccessUrl(document: StoredDocument, download = false) {
@@ -1012,7 +1013,7 @@ function documentAccessUrl(document: StoredDocument, download = false) {
     return `/api/documents/file?${params.toString()}`;
   }
 
-  return document.dropboxUrl ?? document.originalUrl ?? "";
+  return "";
 }
 
 function iconClassForDocument(document: StoredDocument) {
@@ -1104,19 +1105,5 @@ function normalize(value: string) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
-}
-
-function toDropboxDownloadUrl(value: string) {
-  try {
-    const url = new URL(value);
-
-    if (url.hostname.endsWith("dropbox.com")) {
-      url.searchParams.set("dl", "1");
-    }
-
-    return url.toString();
-  } catch {
-    return value;
-  }
 }
 

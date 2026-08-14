@@ -549,21 +549,7 @@ function RiskPointPhoto({
     return (
       <div className="relative flex aspect-[4/3] h-[clamp(176px,22vh,240px)] w-[clamp(235px,29.333vh,320px)] max-w-full flex-shrink-0 flex-col items-center justify-center gap-2 self-center overflow-hidden radius-card border border-slate-200 bg-[var(--surface-soft)] px-5 text-center text-slate-400">
         <ImageIcon className="h-9 w-9 text-slate-300" />
-        <span className="text-xs font-bold text-slate-500">
-          {hasError
-            ? "Foto indisponível — verifique o compartilhamento do Drive"
-            : "Foto representativa indisponível"}
-        </span>
-        {preview?.driveUrl || preview?.originalUrl ? (
-          <a
-            className="text-caption font-black uppercase tracking-[0.14em] text-[var(--brand-teal)] underline-offset-4 hover:underline"
-            href={preview.driveUrl ?? preview.originalUrl}
-            rel="noreferrer"
-            target="_blank"
-          >
-            Abrir no Drive
-          </a>
-        ) : null}
+        <span className="text-xs font-bold text-slate-500">Foto representativa indisponível</span>
       </div>
     );
   }
@@ -659,17 +645,21 @@ function RiskPhotoModal({
         </div>
 
         <div className="h-[calc(100%-76px)] bg-slate-100">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            alt={`Foto representativa do ponto ${point.code}`}
-            className="h-full w-full object-contain"
-            onError={() =>
-              setCandidateIndex((current) =>
-                current + 1 < preview.candidates.length ? current + 1 : current,
-              )
-            }
-            src={preview.candidates[candidateIndex] ?? preview.src}
-          />
+          {/* eslint-disable @next/next/no-img-element */}
+          {candidateIndex < preview.candidates.length ? (
+            <img
+              alt={`Foto representativa do ponto ${point.code}`}
+              className="h-full w-full object-contain"
+              onError={() => setCandidateIndex((current) => current + 1)}
+              src={preview.candidates[candidateIndex]}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center gap-2 text-sm font-bold text-slate-500">
+              <ImageIcon className="h-6 w-6" />
+              Foto representativa indisponível
+            </div>
+          )}
+          {/* eslint-enable @next/next/no-img-element */}
         </div>
       </div>
     </div>
@@ -841,4 +831,3 @@ function riskHexColor(level: LaboratoryRiskLevel) {
 function getRiskTextColor(level: LaboratoryRiskLevel) {
   return level === "baixo" ? "#ffffff" : "#111827";
 }
-

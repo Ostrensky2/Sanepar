@@ -279,7 +279,7 @@ const helpModules: HelpModule[] = [
       { label: "Galeria de fotos", detail: "Amplia evidências associadas ao ponto." },
     ],
     notes: [
-      "Fotos e documentos são links externos, normalmente do Dropbox.",
+      "Fotos e documentos são servidos pelo armazenamento privado do Supabase.",
       "A consistência da ação depende do cadastro completo no módulo Dados.",
     ],
     troubleshooting: [
@@ -289,7 +289,7 @@ const helpModules: HelpModule[] = [
       },
       {
         issue: "Foto não carrega",
-        action: "Verifique se o link do Dropbox está acessível e compartilhado corretamente.",
+        action: "Atualize a página; se a indisponibilidade persistir, registre a ocorrência para suporte.",
       },
     ],
     keywords: ["acao pontual", "fotos", "evidencias", "demanda", "resultados"],
@@ -359,12 +359,12 @@ const helpModules: HelpModule[] = [
   },
   {
     title: "Documentos",
-    short: "Links oficiais, filtros e compartilhamento",
+    short: "Arquivos oficiais, filtros e compartilhamento",
     icon: FileText,
     purpose:
-      "Centraliza documentos oficiais do projeto por meio de links, mantendo busca, filtros, seleção, compartilhamento e abertura rápida.",
+      "Centraliza documentos oficiais do projeto no armazenamento privado do Supabase, mantendo busca, filtros, seleção, compartilhamento e abertura rápida.",
     whenToUse: [
-      "Use para inserir links oficiais do Dropbox.",
+      "Use para enviar documentos oficiais.",
       "Use para localizar relatórios, laudos, mapas, apresentações e documentos institucionais.",
       "Use para compartilhar ou baixar uma seleção de documentos.",
     ],
@@ -372,8 +372,8 @@ const helpModules: HelpModule[] = [
       {
         title: "Inserir documento",
         steps: [
-          "Clique em inserir link.",
-          "Informe título, link do Dropbox, tipo, campanha e observação.",
+          "Clique em Enviar arquivo.",
+          "Selecione o arquivo e informe título, tipo, campanha e observação.",
           "Salve e confirme se o item apareceu na lista.",
         ],
       },
@@ -400,20 +400,20 @@ const helpModules: HelpModule[] = [
       { label: "Ações por linha", detail: "Abrir, baixar, compartilhar, copiar link ou excluir." },
     ],
     notes: [
-      "O arquivo permanece no Dropbox; o app guarda o link e os metadados.",
+      "O arquivo permanece no armazenamento privado do Supabase e o acesso ocorre pelo aplicativo.",
       "Evite cadastrar planilhas neste módulo; planilhas pertencem ao módulo Dados.",
     ],
     troubleshooting: [
       {
-        issue: "Link recusado",
-        action: "Use um endereço válido do Dropbox ou Dropboxusercontent.",
+        issue: "Arquivo recusado",
+        action: "Confirme o formato aceito e tente enviar o arquivo novamente.",
       },
       {
         issue: "Documento não sincroniza",
         action: "Verifique se o app está em modo nuvem ou se o navegador manteve o armazenamento local.",
       },
     ],
-    keywords: ["documentos", "dropbox", "relatorio", "laudo", "mapa", "link"],
+    keywords: ["documentos", "arquivo", "relatorio", "laudo", "mapa", "supabase"],
   },
   {
     title: "Configurações",

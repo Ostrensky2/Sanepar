@@ -331,8 +331,6 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
         ? {
             id: selectedDocument.id,
             title: selectedDocument.title,
-            dropboxUrl: selectedDocument.dropboxUrl,
-            originalUrl: selectedDocument.originalUrl,
             storageBucket: selectedDocument.storageBucket,
             storagePath: selectedDocument.storagePath,
             type: selectedDocument.type,

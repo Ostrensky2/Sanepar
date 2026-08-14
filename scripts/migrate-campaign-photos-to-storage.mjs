@@ -109,6 +109,7 @@ const report = {
   summary: {
     points: 0,
     candidates: 0,
+    ambiguous: 0,
     migrated: 0,
     failed: 0,
     publishedImports: 0,
@@ -136,7 +137,7 @@ for (const point of campaignImport.points) {
     id: point.id,
     code: point.code,
     campaign: point.campaign,
-    sourceUrl,
+    sourceType: classifyExternalSource(sourceUrl),
     status: "pending",
   };
   report.items.push(item);
@@ -144,6 +145,19 @@ for (const point of campaignImport.points) {
   if (!sourceUrl || isInternalStorageUrl(sourceUrl)) {
     item.status = "skipped";
     item.reason = sourceUrl ? "Foto já aponta para Storage interno." : "Ponto sem URL de foto.";
+    continue;
+  }
+
+  const association = classifyPhotoAssociation(point.code, sourceUrl);
+  item.sourceSia = association.inferredSias[0] ?? null;
+
+  if (association.status !== "match") {
+    item.status = "ambiguous";
+    report.summary.ambiguous += 1;
+    item.reason =
+      association.status === "mismatch"
+        ? "SIA do arquivo diverge do SIA do ponto."
+        : "Não foi possível confirmar um único SIA pelo nome do arquivo.";
     continue;
   }
 
@@ -193,7 +207,6 @@ for (const point of campaignImport.points) {
     }
 
     const storageUrl = storageAccessUrl(PHOTOS_BUCKET, storagePath);
-    point.originalPhotoUrl = sourceUrl;
     point.photoUrl = storageUrl;
     point.dropboxUrl = "";
     point.driveUrl = "";
@@ -397,6 +410,46 @@ function firstUrl(...values) {
   return values.map((value) => String(value || "").trim()).find((value) => /^https?:\/\//i.test(value)) || "";
 }
 
+function classifyPhotoAssociation(pointCode, sourceUrl) {
+  const pointSias = String(pointCode || "").toUpperCase().includes("SIA")
+    ? [...new Set((String(pointCode).match(/\d{1,4}/g) || []).map(normalizeSia))]
+    : [];
+  let inferredSias = [];
+
+  try {
+    const fileName = decodeURIComponent(new URL(sourceUrl).pathname.split("/").pop() || "");
+    inferredSias = [
+      ...new Set([...fileName.matchAll(/SIA[^0-9]*(\d{1,4})/gi)].map((match) => normalizeSia(match[1]))),
+    ];
+  } catch {
+    // URL inválida permanece ambígua e não é migrada.
+  }
+
+  if (!pointSias.length || inferredSias.length !== 1) {
+    return { status: "ambiguous", inferredSias };
+  }
+
+  return {
+    status: pointSias.includes(inferredSias[0]) ? "match" : "mismatch",
+    inferredSias,
+  };
+}
+
+function normalizeSia(value) {
+  return `SIA-${Number(value).toString().padStart(4, "0")}`;
+}
+
+function classifyExternalSource(value) {
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    if (host.endsWith("dropbox.com")) return "dropbox";
+    if (host === "drive.google.com" || host.endsWith(".google.com")) return "drive";
+    return "other";
+  } catch {
+    return value ? "invalid" : "absent";
+  }
+}
+
 function toDownloadUrl(value) {
   const trimmed = String(value || "").trim();
 
@@ -548,7 +601,7 @@ async function writeReport(result) {
 }
 
 function toCsv(items) {
-  const headers = ["status", "id", "code", "campaign", "sourceUrl", "storageBucket", "storagePath", "mimeType", "size", "reason"];
+  const headers = ["status", "id", "code", "campaign", "sourceType", "sourceSia", "storageBucket", "storagePath", "mimeType", "size", "reason"];
   const rows = items.map((item) => headers.map((header) => csvCell(item[header])).join(","));
   return `${headers.join(",")}\n${rows.join("\n")}\n`;
 }

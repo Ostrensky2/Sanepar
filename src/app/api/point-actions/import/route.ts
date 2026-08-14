@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/api-auth";
 import type {
   PointActionEvent,
-  PointActionPhoto,
   PointActionSamplePoint,
 } from "@/lib/point-actions";
 
@@ -18,12 +17,6 @@ const COL = {
   latitude: 6,
   longitude: 7,
   results: 8,
-  photo1Url: 9,
-  photo1Caption: 10,
-  photo2Url: 11,
-  photo2Caption: 12,
-  photo3Url: 13,
-  photo3Caption: 14,
 } as const;
 
 function cellText(row: ExcelJS.Row, col: number): string {
@@ -124,21 +117,6 @@ export async function POST(request: Request) {
       return;
     }
 
-    const photos: PointActionPhoto[] = [];
-    for (const [urlCol, captionCol] of [
-      [COL.photo1Url, COL.photo1Caption],
-      [COL.photo2Url, COL.photo2Caption],
-      [COL.photo3Url, COL.photo3Caption],
-    ] as const) {
-      const url = cellText(row, urlCol);
-      if (!url) continue;
-      photos.push({
-        id: crypto.randomUUID(),
-        url,
-        caption: cellText(row, captionCol),
-      });
-    }
-
     parsed.push({
       eventName,
       objectives,
@@ -150,7 +128,7 @@ export async function POST(request: Request) {
         effectiveLat: effectiveLat as number,
         effectiveLon: effectiveLon as number,
         results,
-        photos,
+        photos: [],
       },
     });
   });
