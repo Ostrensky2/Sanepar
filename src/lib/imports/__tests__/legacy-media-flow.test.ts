@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import campaignPoints from "@/data/campaign-map-points.json";
-import migrationReport from "../../../../migration-reports/campaign-photo-migration-2026-07-07T09-49-18-345Z.json";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 import {
   hydrateLaboratoryRiskPointPhotos,
@@ -12,6 +11,26 @@ import {
   sanitizeCampaignMedia,
 } from "@/lib/imports/media-policy";
 import { getPhotoPreview } from "@/lib/photo-preview";
+
+const migrationReport = {
+  items: [
+    ["migrated/campaigns/1/sia-0091-5c614a34d766.png", "SIA-0377"],
+    ["migrated/campaigns/1/sia-0184-c7f9ec5c9870.png", "SIA-0121"],
+    ["migrated/campaigns/1/sia-0244-1f275b98be79.png", "SIA-0435"],
+    ["migrated/campaigns/1/sia-0057-ccf0da194736.png", "SIA-0181"],
+    ["migrated/campaigns/1/sia-0343-f7871c5adac8.png", "SIA-0431"],
+    ["migrated/campaigns/1/sia-0078-87bfd27c51a1.png", "SIA-0780"],
+    ["migrated/campaigns/1/sia-0257-198626159e2a.png", null],
+  ].map(([storagePath, sourceSia]) => ({
+    storagePath,
+    sourceUrl: sourceSia
+      ? `https://legacy.invalid/${sourceSia}.png`
+      : "https://legacy.invalid/photo-without-sia.png",
+    status: "migrated",
+    storageBucket: "photos",
+    mimeType: "image/png",
+  })),
+};
 
 const createSignedUrl = vi.fn(async () => ({
   data: { signedUrl: "https://storage.invalid/signed-redacted" },
