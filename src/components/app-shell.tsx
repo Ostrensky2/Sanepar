@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, CircleHelp, LogOut, UserRound } from "lucide-react";
+import { ArrowLeft, CircleHelp, LogOut, Menu, UserRound, X } from "lucide-react";
 import { AuthGate } from "@/components/auth-gate";
 import { CommandPalette } from "@/components/command-palette";
 import {
@@ -28,6 +28,7 @@ import {
   readSyncStatusSnapshot,
   type SyncStatusSnapshot,
 } from "@/lib/sync-status";
+import { cn } from "@/lib/utils";
 
 type AppShellProps = {
   children: ReactNode;
@@ -54,6 +55,9 @@ export function AppShell({ children }: AppShellProps) {
   const [activeCategory, setActiveCategory] = useState<UserCategory | null>(null);
   const [privilegeMatrix, setPrivilegeMatrix] = useState(() => getPrivilegeMatrix());
   const [syncStatus, setSyncStatus] = useState<SyncStatusSnapshot>(() => readSyncStatusSnapshot());
+  const [mobileMenuPath, setMobileMenuPath] = useState<string | null>(null);
+  const mobileMenuOpen = mobileMenuPath === pathname;
+  const closeMobileMenu = useCallback(() => setMobileMenuPath(null), []);
   const matchedChild = navigationItems
     .flatMap((item) => item.children ?? [])
     .find((child) => child.href === pathname);
@@ -141,79 +145,68 @@ export function AppShell({ children }: AppShellProps) {
         </div>
 
         <div className="mt-auto pt-4">
-          <div className="radius-card border border-[var(--line-ghost)] bg-white/88 px-3 py-3 shadow-[0_20px_40px_-34px_rgba(0,66,98,0.22)]">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--brand-blue-soft)] text-[var(--brand-navy)]">
-                <UserRound className="h-4 w-4" />
-              </div>
-              <div className="overflow-hidden">
-                <p className="truncate text-label font-bold text-[var(--brand-navy-strong)]">
-                  {session?.name ?? "Operador SIA"}
-                </p>
-                <p className="truncate text-label uppercase tracking-[0.12em] text-[var(--ink-soft)]">
-                  {session?.role ?? "Acesso"}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={signOut}
-              className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--line-ghost)] bg-white px-3 py-2 text-label font-bold text-[var(--ink-soft)] transition hover:border-[var(--brand-danger)] hover:text-[var(--brand-danger)]"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              Sair do sistema
-            </button>
-          </div>
+          <AccountCard session={session} onSignOut={signOut} />
         </div>
       </aside>
 
+      <MobileNavigationDrawer
+        open={mobileMenuOpen}
+        session={session}
+        onClose={closeMobileMenu}
+        onSignOut={signOut}
+      />
+
       <div className="min-h-screen lg:ml-60">
-        <header className="fixed left-0 right-0 top-0 z-40 h-16 border-b border-[var(--line-ghost)] bg-[rgba(248,252,253,0.8)] px-4 backdrop-blur-md lg:left-60 lg:px-8">
-          <div className="mx-auto flex h-full w-full max-w-[1600px] items-center justify-between gap-4">
-            <div className="flex min-w-0 items-center gap-3">
+        <header className="fixed left-0 right-0 top-0 z-40 h-[calc(4rem+env(safe-area-inset-top))] border-b border-[var(--line-ghost)] bg-[rgba(248,252,253,0.8)] pt-[env(safe-area-inset-top)] pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] backdrop-blur-md sm:pl-[max(1rem,env(safe-area-inset-left))] sm:pr-[max(1rem,env(safe-area-inset-right))] lg:left-60 lg:px-8">
+          <div className="mx-auto flex h-full w-full max-w-[1600px] items-center justify-between gap-1 sm:gap-3 lg:gap-4">
+            <div className="flex min-w-0 items-center gap-1 sm:gap-2 lg:gap-3">
+              <button
+                type="button"
+                aria-label="Abrir menu principal"
+                aria-expanded={mobileMenuOpen}
+                aria-controls="mobile-navigation-drawer"
+                onClick={() => setMobileMenuPath(pathname)}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[var(--brand-navy-strong)] transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)] lg:hidden"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
               {showDataBackButton ? (
                 <Link
                   href="/dados/status"
                   aria-label="Voltar para Entrada de Dados"
                   title="Voltar para Entrada de Dados"
-                  className="rounded-full p-2 text-[var(--ink-soft)] transition hover:bg-white hover:text-[var(--brand-navy-strong)]"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[var(--ink-soft)] transition hover:bg-white hover:text-[var(--brand-navy-strong)]"
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </Link>
               ) : null}
-              <div>
-                <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+              <div className="min-w-0">
+                <p className="hidden truncate text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)] min-[390px]:block">
                   {currentItem.summary}
                 </p>
-                <h2 className="heading-font text-base font-bold text-[var(--brand-navy-strong)] sm:text-lg">
+                <h2 className="heading-font truncate text-sm font-bold text-[var(--brand-navy-strong)] sm:text-base lg:text-lg">
                   {currentItem.headerTitle}
                 </h2>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <SyncStatusBadge snapshot={syncStatus} className="hidden md:inline-flex" />
-                <CommandPalette />
+            <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+                <div className="hidden md:block">
+                  <SyncStatusBadge snapshot={syncStatus} />
+                </div>
+                <CommandPalette responsive />
                 <Link
                   href="/ajuda"
                   aria-label="Ajuda"
                   title="Ajuda"
-                  className="rounded-full p-2 text-[var(--ink-soft)] transition hover:bg-white hover:text-[var(--brand-navy-strong)]"
+                  className="flex h-11 w-11 items-center justify-center rounded-xl text-[var(--ink-soft)] transition hover:bg-white hover:text-[var(--brand-navy-strong)]"
                 >
                   <CircleHelp className="h-4 w-4" />
                 </Link>
-              </div>
             </div>
           </div>
         </header>
 
-        <div className="pt-16 lg:hidden">
-          <div className="border-b border-[var(--line-ghost)] bg-white/90 px-4 py-3">
-            <SidebarNav mobile />
-          </div>
-        </div>
-
-        <main className="flex min-h-[calc(100vh-4rem)] flex-col">
+        <main className="flex min-h-[calc(100vh-4rem)] flex-col pt-[calc(4rem+env(safe-area-inset-top))] lg:pt-0">
           <div className="mx-auto w-full max-w-[1600px] flex-1 px-4 pb-6 pt-6 lg:px-8 lg:pt-24">
             <LocalModeNotice />
             {hasRouteAccess ? (
@@ -260,6 +253,166 @@ export function AppShell({ children }: AppShellProps) {
       </div>
     </div>
     </AuthGate>
+  );
+}
+
+function MobileNavigationDrawer({
+  open,
+  session,
+  onClose,
+  onSignOut,
+}: {
+  open: boolean;
+  session: AuthSession | null;
+  onClose: () => void;
+  onSignOut: () => void;
+}) {
+  const drawerRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const focusableSelector =
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const focusableElements = () =>
+      Array.from(drawerRef.current?.querySelectorAll<HTMLElement>(focusableSelector) ?? []);
+
+    drawerRef.current?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const elements = focusableElements();
+      const first = elements[0];
+      const last = elements.at(-1);
+
+      if (!first || !last) {
+        event.preventDefault();
+        return;
+      }
+
+      if (
+        event.shiftKey &&
+        (document.activeElement === first || document.activeElement === drawerRef.current)
+      ) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus();
+    };
+  }, [onClose, open]);
+
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] lg:hidden">
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label="Fechar menu principal"
+        onClick={onClose}
+        className="absolute inset-0 bg-slate-950/45"
+      />
+      <aside
+        ref={drawerRef}
+        id="mobile-navigation-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-navigation-title"
+        tabIndex={-1}
+        className="absolute inset-y-0 left-0 flex w-[min(20rem,calc(100vw-2.5rem))] flex-col overflow-hidden border-r border-[var(--line-ghost)] bg-[linear-gradient(180deg,#ffffff,#f4f9fb)] pl-[max(0.75rem,env(safe-area-inset-left))] pr-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-2xl"
+      >
+        <div className="flex min-h-14 items-center justify-between gap-3 px-2">
+          <div className="min-w-0">
+            <p id="mobile-navigation-title" className="heading-font truncate text-base font-black text-[var(--brand-navy-strong)]">
+              Menu principal
+            </p>
+            <p className="truncate text-xs font-semibold text-[var(--brand-teal)]">Yva&apos;e Monitoramento</p>
+          </div>
+          <button
+            type="button"
+            aria-label="Fechar menu principal"
+            onClick={onClose}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[var(--ink-soft)] transition hover:bg-[var(--surface-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)]"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-1 py-3">
+          <SidebarNav mobile onNavigate={onClose} />
+        </div>
+        <div className="border-t border-[var(--line-ghost)] px-1 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <AccountCard session={session} onSignOut={onSignOut} mobile />
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function AccountCard({
+  session,
+  onSignOut,
+  mobile = false,
+}: {
+  session: AuthSession | null;
+  onSignOut: () => void;
+  mobile?: boolean;
+}) {
+  return (
+    <div className="radius-card border border-[var(--line-ghost)] bg-white/88 px-3 py-3 shadow-[0_20px_40px_-34px_rgba(0,66,98,0.22)]">
+      <div className="flex items-center gap-2">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--brand-blue-soft)] text-[var(--brand-navy)]">
+          <UserRound className="h-4 w-4" />
+        </div>
+        <div className="overflow-hidden">
+          <p className="truncate text-label font-bold text-[var(--brand-navy-strong)]">
+            {session?.name ?? "Operador SIA"}
+          </p>
+          <p className="truncate text-label uppercase tracking-[0.12em] text-[var(--ink-soft)]">
+            {session?.role ?? "Acesso"}
+          </p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onSignOut}
+        className={cn(
+          "mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--line-ghost)] bg-white px-3 text-label font-bold text-[var(--ink-soft)] transition hover:border-[var(--brand-danger)] hover:text-[var(--brand-danger)]",
+          mobile ? "min-h-11 py-2" : "py-2",
+        )}
+      >
+        <LogOut className="h-3.5 w-3.5" />
+        Sair do sistema
+      </button>
+    </div>
   );
 }
 

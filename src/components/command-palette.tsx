@@ -8,6 +8,7 @@ import { APP_DOCUMENTS_STORAGE_KEY } from "@/lib/app-documents";
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 import { FIELD_DIARY_STORAGE_KEY } from "@/lib/field-diary";
 import { POINT_ACTIONS_STORAGE_KEY } from "@/lib/point-actions";
+import { cn } from "@/lib/utils";
 
 type CommandItem = {
   id: string;
@@ -19,7 +20,7 @@ type CommandItem = {
 
 const SPREADSHEET_STORAGE_KEY = "yvae:spreadsheets";
 
-export function CommandPalette() {
+export function CommandPalette({ responsive = false }: { responsive?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -99,10 +100,15 @@ export function CommandPalette() {
         onClick={() => setOpen(true)}
         aria-label="Busca rápida"
         title="Busca rápida (Ctrl+K)"
-        className="hidden items-center gap-2 rounded-full border border-[var(--line-ghost)] bg-white px-3 py-2 text-xs font-bold text-[var(--ink-soft)] transition hover:text-[var(--brand-navy-strong)] md:inline-flex"
+        className={cn(
+          "items-center border border-[var(--line-ghost)] bg-white text-xs font-bold text-[var(--ink-soft)] transition hover:text-[var(--brand-navy-strong)]",
+          responsive
+            ? "inline-flex h-11 w-11 justify-center rounded-xl md:w-auto md:gap-2 md:rounded-full md:px-3"
+            : "hidden gap-2 rounded-full px-3 py-2 md:inline-flex",
+        )}
       >
         <Search className="h-4 w-4" />
-        <span>Buscar</span>
+        <span className={responsive ? "hidden md:inline" : undefined}>Buscar</span>
       </button>
 
       {open ? (

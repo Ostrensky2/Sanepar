@@ -24,9 +24,10 @@ import { cn } from "@/lib/utils";
 
 type SidebarNavProps = {
   mobile?: boolean;
+  onNavigate?: () => void;
 };
 
-export function SidebarNav({ mobile = false }: SidebarNavProps) {
+export function SidebarNav({ mobile = false, onNavigate }: SidebarNavProps) {
   const pathname = usePathname();
   const [activeCategory, setActiveCategory] = useState<UserCategory>("ATGC");
   const [privilegeMatrix, setPrivilegeMatrix] = useState(() => getPrivilegeMatrix());
@@ -80,29 +81,21 @@ export function SidebarNav({ mobile = false }: SidebarNavProps) {
   }, []);
 
   const visibleItems = useMemo(
-    () =>
-      navigationItems
-        .filter((item) => !item.privilege || privilegeMatrix[activeCategory].includes(item.privilege))
-        .map((item) => ({
-          ...item,
-          children: item.children?.filter(
-            (child) => !child.privilege || privilegeMatrix[activeCategory].includes(child.privilege),
-          ),
-        })),
+    () => getVisibleNavigationItems(activeCategory, privilegeMatrix),
     [activeCategory, privilegeMatrix],
   );
 
   return (
-    <nav className={cn(mobile ? "flex gap-2 overflow-x-auto pb-2" : "flex flex-col gap-0.5")}>
-      {!mobile ? <SidebarSyncStatus status={syncStatus} /> : null}
+    <nav aria-label={mobile ? "Menu principal" : "Navegação principal"} className={cn("flex flex-col overflow-x-hidden", mobile ? "gap-1" : "gap-0.5")}>
+      <SidebarSyncStatus status={syncStatus} />
       {visibleItems.map((item, index) => {
         const childHrefs = item.children?.map((child) => child.href) ?? [];
         const childActive = childHrefs.includes(pathname);
         const active = pathname === item.href || childActive;
         const Icon = item.icon;
         const startsNewGroup =
-          !mobile && item.group !== "regular" && visibleItems[index - 1]?.group !== item.group;
-        const hasChildren = !mobile && item.children && item.children.length > 0;
+          item.group !== "regular" && visibleItems[index - 1]?.group !== item.group;
+        const hasChildren = item.children && item.children.length > 0;
 
         return (
           <div key={item.href} className={startsNewGroup ? "mt-4 border-t border-[var(--line-ghost)] pt-4" : undefined}>
@@ -110,22 +103,24 @@ export function SidebarNav({ mobile = false }: SidebarNavProps) {
               href={item.href}
               title={item.label}
               aria-label={item.label}
+              aria-current={pathname === item.href ? "page" : undefined}
+              onClick={onNavigate}
               className={cn(
                 mobile
-                  ? "min-w-max rounded-full border px-3 py-2"
+                  ? "flex min-h-11 items-center gap-3 rounded-xl border-l-4 px-3 py-2.5 text-sm tracking-tight"
                   : "flex items-center gap-3 border-l-4 px-3 py-2.5 text-xs tracking-tight",
                 "transition-all duration-200 ease-out",
                 active
                   ? mobile
-                    ? "border-[var(--brand-navy-strong)] bg-[linear-gradient(135deg,var(--brand-navy-strong),var(--brand-teal))] text-white shadow-[0_18px_36px_-28px_rgba(0,66,98,0.5)]"
+                    ? "border-[var(--brand-navy-strong)] bg-white font-black text-[var(--brand-navy-strong)] ring-1 ring-[var(--brand-blue-soft)]"
                     : "rounded-r-xl border-[var(--brand-navy-strong)] bg-white font-black text-[var(--brand-navy-strong)] shadow-[0_16px_36px_-30px_rgba(0,66,98,0.6)] ring-1 ring-[var(--brand-blue-soft)]"
                   : mobile
-                    ? "border-[var(--line-ghost)] bg-white text-[var(--ink-soft)]"
+                    ? "border-transparent font-semibold text-[var(--ink-soft)] hover:bg-white hover:text-[var(--brand-navy-strong)]"
                     : "rounded-xl border-transparent font-semibold text-[var(--ink-soft)] hover:translate-x-1 hover:bg-white hover:text-[var(--brand-navy-strong)]",
               )}
             >
-              <Icon className={cn(mobile ? "h-4 w-4" : "h-[18px] w-[18px]")} />
-              <span className={cn("min-w-0 flex-1 truncate", mobile ? "text-xs font-semibold" : "font-semibold")}>
+              <Icon className="h-[18px] w-[18px]" />
+              <span className="min-w-0 flex-1 truncate font-semibold">
                 {item.label}
               </span>
               <Badge count={badges[item.href]} active={active} />
@@ -142,8 +137,11 @@ export function SidebarNav({ mobile = false }: SidebarNavProps) {
                       href={child.href}
                       title={child.label}
                       aria-label={child.label}
+                      aria-current={childIsActive ? "page" : undefined}
+                      onClick={onNavigate}
                       className={cn(
-                        "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-label tracking-tight transition-all duration-200 ease-out",
+                        "flex items-center gap-2 rounded-lg px-2.5 tracking-tight transition-all duration-200 ease-out",
+                        mobile ? "min-h-11 py-2 text-sm" : "py-1.5 text-label",
                         childIsActive
                           ? "bg-white font-black text-[var(--brand-navy-strong)] shadow-sm ring-1 ring-[var(--brand-blue-soft)]"
                           : "font-semibold text-[var(--ink-soft)] hover:translate-x-0.5 hover:bg-white hover:text-[var(--brand-navy-strong)]",
@@ -157,34 +155,25 @@ export function SidebarNav({ mobile = false }: SidebarNavProps) {
                 })}
               </div>
             )}
-
-            {mobile && item.children?.map((child) => {
-              const childIsActive = pathname === child.href;
-              const ChildIcon = child.icon;
-              return (
-                <Link
-                  key={child.href}
-                  href={child.href}
-                  title={child.label}
-                  aria-label={child.label}
-                  className={cn(
-                    "ml-2 inline-flex min-w-max items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-label font-semibold transition-all",
-                    childIsActive
-                      ? "border-[var(--brand-navy-strong)] bg-[var(--brand-navy-strong)] text-white"
-                      : "border-[var(--line-ghost)] bg-white text-[var(--ink-soft)]",
-                  )}
-                >
-                  {ChildIcon ? <ChildIcon className="h-3 w-3" /> : null}
-                  <span className="truncate">{child.label}</span>
-                  <Badge count={badges[child.href]} active={childIsActive} />
-                </Link>
-              );
-            })}
           </div>
         );
       })}
     </nav>
   );
+}
+
+export function getVisibleNavigationItems(
+  activeCategory: UserCategory,
+  privilegeMatrix: ReturnType<typeof getPrivilegeMatrix>,
+) {
+  return navigationItems
+    .filter((item) => !item.privilege || privilegeMatrix[activeCategory].includes(item.privilege))
+    .map((item) => ({
+      ...item,
+      children: item.children?.filter(
+        (child) => !child.privilege || privilegeMatrix[activeCategory].includes(child.privilege),
+      ),
+    }));
 }
 
 function SidebarSyncStatus({ status }: { status: SyncStatusSnapshot }) {
