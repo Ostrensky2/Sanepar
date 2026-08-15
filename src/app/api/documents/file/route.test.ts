@@ -4,9 +4,10 @@ const storage = vi.hoisted(() => ({
   createSignedUrl: vi.fn(),
   getPublicUrl: vi.fn(),
 }));
+const requireApiSession = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/api-auth", () => ({
-  requireApiSession: () => ({ ok: true }),
+  requireApiSession,
 }));
 
 vi.mock("@/lib/supabase", () => ({
@@ -23,6 +24,21 @@ describe("GET /api/documents/file private-only", () => {
   beforeEach(() => {
     storage.createSignedUrl.mockReset();
     storage.getPublicUrl.mockReset();
+    requireApiSession.mockReset();
+    requireApiSession.mockReturnValue({ ok: true });
+  });
+
+  it("exige sessão antes de acessar o storage", async () => {
+    requireApiSession.mockReturnValueOnce({ ok: false, response: Response.json({ error: "Sessão necessária." }, { status: 401 }) });
+
+    const response = await GET(
+      new Request(
+        "http://local.test/api/documents/file?bucket=photos&path=private%2Fphoto.png",
+      ),
+    );
+
+    expect(response.status).toBe(401);
+    expect(storage.createSignedUrl).not.toHaveBeenCalled();
   });
 
   afterEach(() => {

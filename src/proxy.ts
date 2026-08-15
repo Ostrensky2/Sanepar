@@ -7,7 +7,7 @@ export async function proxy(request: NextRequest) {
   const isDev = process.env.NODE_ENV === "development";
   const csp = [
     "default-src 'self'", `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
-    "style-src 'self' 'unsafe-inline'", "img-src 'self' blob: data: https://tile.openstreetmap.org https://drive.google.com https://lh3.googleusercontent.com",
+    "style-src 'self' 'unsafe-inline'", `img-src 'self' blob: data: https://tile.openstreetmap.org https://drive.google.com https://lh3.googleusercontent.com${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
     `connect-src 'self'${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`, "font-src 'self' data:", "worker-src 'self' blob:",
     "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
   ].join("; ");
@@ -26,6 +26,13 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
-function safeOrigin(value: string | undefined) { try { return value ? new URL(value).origin : ""; } catch { return ""; } }
+function safeOrigin(value: string | undefined) {
+  if (!value) return "";
+  try {
+    const url = new URL(value.trim());
+    if ((url.protocol !== "http:" && url.protocol !== "https:") || url.username || url.password || url.pathname !== "/" || url.search || url.hash) return "";
+    return url.origin;
+  } catch { return ""; }
+}
 
 export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"] };
