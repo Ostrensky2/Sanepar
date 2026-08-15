@@ -28,6 +28,18 @@ const CAMPAIGN_1_DASHBOARD_PATH = path.join(
   "public/dashboards/Painel_eDNA_Campanha1_Sanepar.html",
 );
 const FAIL_CLOSED_MEDIA_SIAS = new Set(["sia:257"]);
+// Exceção canônica comprovada na auditoria M1: campanha 1 + SIA-0257 + ponto 14,
+// vinculada somente ao objeto com SHA-256 581e473c3daccda677aeabc12cacce49eabb346fef5428534f81b675af4edf5d.
+const AUDITED_FAIL_CLOSED_MEDIA_BY_KEY = new Map([
+  [
+    "campaign:1|sia:257",
+    {
+      pointId: "1-257-15",
+      point: "14",
+      storagePath: "migrated/campaigns/1/sia-0257-198626159e2a.png",
+    },
+  ],
+]);
 const bundledCampaignMediaByKey = new Map(
   (bundledCampaignMapPoints as CampaignMapPoint[])
     .map((point) => [campaignMediaKey(point), sanitizeCampaignMedia(point)] as const)
@@ -89,8 +101,28 @@ export function overlayBundledCampaignMedia<T extends CampaignMapPoint>(points: 
   return points.map((point) => {
     const sanitized = sanitizeCampaignMedia(point);
     const siaKey = normalizeSiaMediaKey(point.code);
+    const mediaKey = campaignMediaKey(point);
+    const canonical = bundledCampaignMediaByKey.get(mediaKey);
 
     if (FAIL_CLOSED_MEDIA_SIAS.has(siaKey)) {
+      const audited = AUDITED_FAIL_CLOSED_MEDIA_BY_KEY.get(mediaKey);
+      const canonicalStorage = parseInternalStorageUrl(canonical?.photoUrl, "photos");
+
+      if (
+        audited &&
+        point.id === audited.pointId &&
+        point.point === audited.point &&
+        canonical?.id === audited.pointId &&
+        canonical.point === audited.point &&
+        canonicalStorage?.path === audited.storagePath
+      ) {
+        return {
+          ...sanitized,
+          photoUrl: canonical.photoUrl,
+          photos: canonical.photos ?? [],
+        };
+      }
+
       return {
         ...sanitized,
         driveUrl: "",
@@ -103,8 +135,6 @@ export function overlayBundledCampaignMedia<T extends CampaignMapPoint>(points: 
     if (hasInternalCampaignMedia(sanitized)) {
       return sanitized;
     }
-
-    const canonical = bundledCampaignMediaByKey.get(campaignMediaKey(point));
 
     if (!canonical || !hasInternalCampaignMedia(canonical)) {
       return sanitized;

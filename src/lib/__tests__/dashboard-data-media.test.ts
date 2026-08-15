@@ -19,7 +19,7 @@ vi.mock("@/lib/supabase", () => ({
   getLatestPublishedLaboratoryRiskPoints,
 }));
 
-import { loadDashboardData } from "@/lib/dashboard-data";
+import { loadDashboardData, overlayBundledCampaignMedia } from "@/lib/dashboard-data";
 
 const bundledPoints = bundledCampaignMapPoints as CampaignMapPoint[];
 const legacyUrl = "https://legacy.invalid/photo.png";
@@ -78,9 +78,7 @@ describe("loadDashboardData canonical private-media overlay", () => {
     const dashboard = await loadDashboardData();
     const sia0780 = dashboard.campaignPoints.find((point) => point.code === "SIA-0780");
     const sia0257 = dashboard.campaignPoints.find((point) => point.code === "SIA-0257");
-    const mappedRiskPoints = dashboard.laboratoryRiskPoints.filter(
-      (point) => point.code !== "SIA-0257",
-    );
+    const mappedRiskPoints = dashboard.laboratoryRiskPoints;
 
     expect(sia0780).toMatchObject({
       waterBody: expect.stringContaining("CLOUD"),
@@ -91,7 +89,7 @@ describe("loadDashboardData canonical private-media overlay", () => {
       /^\/api\/documents\/file\?bucket=photos&path=migrated%2Fcampaigns%2F1%2Fsia-0078-/,
     );
     expect(sia0257).toMatchObject({
-      photoUrl: "",
+      photoUrl: bundledPoints.find((point) => point.code === "SIA-0257")?.photoUrl,
       photos: [],
       driveUrl: "",
       dropboxUrl: "",
@@ -100,7 +98,7 @@ describe("loadDashboardData canonical private-media overlay", () => {
       photoUrl: preservedInternal,
       photos: [{ id: "cloud-photo", url: preservedInternal }],
     });
-    expect(dashboard.campaignPoints.filter((point) => point.photoUrl)).toHaveLength(75);
+    expect(dashboard.campaignPoints.filter((point) => point.photoUrl)).toHaveLength(76);
     expect(
       dashboard.campaignPoints.every(
         (point) =>
@@ -120,14 +118,17 @@ describe("loadDashboardData canonical private-media overlay", () => {
     dashboard.campaignPoints.forEach((point, index) => {
       expect(withoutMedia(point)).toEqual(withoutMedia(cloudPoints[index]));
     });
-    expect(mappedRiskPoints).toHaveLength(
-      publishedRiskPoints.filter((point) => point.code !== "SIA-0257").length,
-    );
+    expect(mappedRiskPoints).toHaveLength(publishedRiskPoints.length);
     expect(mappedRiskPoints.every((point) => point.photoUrl.startsWith("/api/documents/file?"))).toBe(true);
-    expect(dashboard.laboratoryRiskPoints.find((point) => point.code === "SIA-0257")?.photoUrl).toBe("");
+    expect(dashboard.laboratoryRiskPoints.find((point) => point.code === "SIA-0257")?.photoUrl).toBe(
+      sia0257?.photoUrl,
+    );
 
     const risk0780 = dashboard.laboratoryRiskPoints.find(
       (point) => point.code === "SIA-0780",
+    );
+    const risk0257 = dashboard.laboratoryRiskPoints.find(
+      (point) => point.code === "SIA-0257",
     );
     expect(risk0780?.photoUrl).toBe(sia0780?.photoUrl);
     const mobileMarkup = renderToStaticMarkup(
@@ -138,6 +139,49 @@ describe("loadDashboardData canonical private-media overlay", () => {
     );
     expect(mobileMarkup).toContain('<img alt="Foto representativa do ponto SIA-0780"');
     expect(mobileMarkup).toContain('src="/api/documents/file?bucket=photos&amp;path=');
+
+    const sia0257Markup = renderToStaticMarkup(
+      createElement(HomeRiskMapSection, {
+        campaignPoints: [sia0257!],
+        points: [risk0257!],
+      }),
+    );
+    expect(sia0257Markup).toContain('<img alt="Foto representativa do ponto SIA-0257"');
+    expect(sia0257Markup).toContain(
+      "migrated%2Fcampaigns%2F1%2Fsia-0257-198626159e2a.png",
+    );
+  });
+
+  it("libera somente a identidade auditada de SIA-0257/C1", () => {
+    const canonical = bundledPoints.find((point) => point.code === "SIA-0257")!;
+    const wrongInternal =
+      "/api/documents/file?bucket=photos&path=migrated%2Fcampaigns%2F2%2Fsia-0257-incorreta.jpg";
+    const audited = overlayBundledCampaignMedia([
+      { ...canonical, photoUrl: wrongInternal, photos: [] },
+    ])[0];
+    const wrongPoint = overlayBundledCampaignMedia([
+      { ...canonical, id: "1-257-outro", point: "99", photoUrl: "", photos: [] },
+    ])[0];
+    const otherCampaign = overlayBundledCampaignMedia([
+      { ...canonical, id: "2-257-15", campaign: "2", photoUrl: "", photos: [] },
+    ])[0];
+    const sia0174NotCollected = overlayBundledCampaignMedia([
+      {
+        ...canonical,
+        id: "2-174-27",
+        code: "SIA-0174",
+        point: "27",
+        campaign: "2",
+        photoUrl: "",
+        photos: [],
+      },
+    ])[0];
+
+    expect(audited.photoUrl).toBe(canonical.photoUrl);
+    expect(audited.photoUrl).not.toBe(wrongInternal);
+    expect(wrongPoint.photoUrl).toBe("");
+    expect(otherCampaign.photoUrl).toBe("");
+    expect(sia0174NotCollected.photoUrl).toBe("");
   });
 });
 
