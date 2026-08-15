@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { checkRateLimit, requireApiSession, requireTrustedOrigin } from "@/lib/api-auth";
 import { createAuthAdminClient, createRequestAuthClient } from "@/lib/supabase-auth";
-import { AUTH_PURPOSE_COOKIE, verifyAuthPurpose } from "@/lib/auth-purpose";
+import { AUTH_PURPOSE_COOKIE, consumeAuthPurposeOnce, verifyAuthPurpose } from "@/lib/auth-purpose";
 
 export const runtime = "nodejs";
 
@@ -11,7 +11,10 @@ export async function POST(request: Request) {
   if (!session.ok) return session.response;
   const admin = createAuthAdminClient();
   const { data: profile } = admin ? await admin.from("auth_users").select("must_change_password").eq("auth_user_id", session.session.authUserId).maybeSingle() : { data: null };
-  const recovery = verifyAuthPurpose(readCookie(request, AUTH_PURPOSE_COOKIE), session.session.authUserId) === "recovery";
+  const purposeToken = readCookie(request, AUTH_PURPOSE_COOKIE);
+  const signedPurpose = verifyAuthPurpose(purposeToken, session.session.authUserId);
+  if (purposeToken && !signedPurpose) return NextResponse.json({ error: "Esta sessão não permite definir senha." }, { status: 403 });
+  const recovery = signedPurpose?.purpose === "recovery";
   if (!profile || (!profile.must_change_password && !recovery)) return NextResponse.json({ error: "Esta sessão não permite definir senha." }, { status: 403 });
   const body = await request.json().catch(() => null) as { newPassword?: unknown } | null;
   const password = typeof body?.newPassword === "string" ? body.newPassword : "";
@@ -21,6 +24,7 @@ export async function POST(request: Request) {
   if (!limit.allowed) return NextResponse.json({ error: "Muitas tentativas. Aguarde e tente novamente." }, { status: 429 });
   const auth = createRequestAuthClient(request);
   if (!auth || !admin) return NextResponse.json({ error: "Servidor de acesso indisponível." }, { status: 503 });
+  if (signedPurpose && !await consumeAuthPurposeOnce(signedPurpose)) return NextResponse.json({ error: "Esta sessão não permite definir senha." }, { status: 403 });
   const { error } = await auth.client.auth.updateUser({ password });
   if (error) return NextResponse.json({ error: "Não foi possível atualizar a senha." }, { status: 400 });
   const now = new Date().toISOString();

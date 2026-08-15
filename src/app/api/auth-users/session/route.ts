@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const admin = createAuthAdminClient();
   const { data: profile } = admin ? await admin.from("auth_users").select("must_change_password").eq("auth_user_id", auth.session.authUserId).maybeSingle() : { data: null };
   const signedPurpose = verifyAuthPurpose(readCookie(request, AUTH_PURPOSE_COOKIE), auth.session.authUserId);
-  const purpose = profile?.must_change_password ? "invite" : signedPurpose === "recovery" ? "recovery" : "authenticated";
+  const purpose = profile?.must_change_password ? "invite" : signedPurpose?.purpose === "recovery" ? "recovery" : "authenticated";
   const response = NextResponse.json({ active: true, session: auth.session, purpose,
     canSetPassword: purpose === "invite" || purpose === "recovery" }, { headers: { "Cache-Control": "no-store" } });
   if (readCookie(request, AUTH_PURPOSE_COOKIE) && !signedPurpose) response.cookies.set(AUTH_PURPOSE_COOKIE, "", { path: "/", maxAge: 0 });

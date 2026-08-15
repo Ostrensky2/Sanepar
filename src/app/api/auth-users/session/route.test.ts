@@ -6,7 +6,7 @@ vi.mock("@/lib/supabase-auth", () => ({
   createAuthAdminClient: () => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle }) }) }) }),
   createRequestAuthClient: () => ({ client: { auth: { signOut: vi.fn() } }, applyCookies: (response: Response) => response }),
 }));
-vi.mock("@/lib/auth-purpose", () => ({ AUTH_PURPOSE_COOKIE: "yvae_auth_purpose", verifyAuthPurpose: (token: string | null) => token === "signed-recovery" ? "recovery" : null }));
+vi.mock("@/lib/auth-purpose", () => ({ AUTH_PURPOSE_COOKIE: "yvae_auth_purpose", verifyAuthPurpose: (token: string | null) => token === "signed-recovery" ? { purpose: "recovery" } : null }));
 import { DELETE, GET } from "@/app/api/auth-users/session/route";
 
 describe("purpose da sessão", () => {
