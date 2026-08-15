@@ -1,118 +1,91 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
-const SECRET = "segredo-de-teste-com-tamanho-suficiente";
+const { rpc, getUser, maybeSingle, createRequestAuthClient, createAuthAdminClient } = vi.hoisted(() => ({
+  rpc: vi.fn(),
+  getUser: vi.fn(),
+  maybeSingle: vi.fn(),
+  createRequestAuthClient: vi.fn(),
+  createAuthAdminClient: vi.fn(),
+}));
+vi.mock("@/lib/supabase-auth", () => ({
+  createAuthAdminClient,
+  createRequestAuthClient,
+  opaqueRateLimitKey: (kind: string) => (kind === "ip" ? "a" : kind === "identifier" ? "b" : "c").repeat(64),
+}));
 
-function freshEnv() {
-  process.env.AUTH_SESSION_SECRET = SECRET;
-  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_teste";
-  delete process.env.NEXT_PUBLIC_DISABLE_DB;
-  delete process.env.VERCEL;
-}
+import { checkRateLimit, requireApiSession, requireTrustedOrigin } from "@/lib/api-auth";
 
-async function loadApiAuth() {
-  // Reimporta o módulo a cada teste para que as mudanças de env tenham efeito
-  // nas constantes derivadas em lib/supabase.
-  const mod = await import("@/lib/api-auth");
-  return mod;
-}
+const protectedMutations = {
+  "src/app/api/campaign-management/route.ts": ["PUT"],
+  "src/app/api/import-conflicts/route.ts": ["PATCH"],
+  "src/app/api/documents/route.ts": ["PUT", "DELETE"],
+  "src/app/api/documents/upload/route.ts": ["POST"],
+  "src/app/api/field-diary/route.ts": ["POST", "PUT"],
+  "src/app/api/field-diary/consolidate/route.ts": ["POST"],
+  "src/app/api/field-diary/import/route.ts": ["POST"],
+  "src/app/api/imports/campaigns/route.ts": ["POST", "DELETE"],
+  "src/app/api/imports/preview/route.ts": ["POST"],
+  "src/app/api/imports/results/route.ts": ["POST"],
+  "src/app/api/photos/upload/route.ts": ["POST"],
+  "src/app/api/point-actions/route.ts": ["PUT"],
+  "src/app/api/point-actions/import/route.ts": ["POST"],
+  "src/app/api/roads/route/route.ts": ["POST"],
+  "src/app/api/support-requests/route.ts": ["PUT"],
+  "src/app/api/support-requests/notify/route.ts": ["POST"],
+} as const;
 
-const sampleSession = {
-  userId: "usr-teste",
-  email: "teste@exemplo.com",
-  name: "Pessoa Teste",
-  role: "ATGC" as const,
-};
-
-function requestWithCookie(cookie?: string) {
-  return new Request("http://localhost/api/teste", {
-    headers: cookie ? { cookie } : {},
-  });
-}
-
-describe("api-auth", () => {
+describe("proteções de API auth", () => {
   beforeEach(() => {
-    freshEnv();
+    rpc.mockReset(); getUser.mockReset(); maybeSingle.mockReset();
+    createRequestAuthClient.mockReset(); createAuthAdminClient.mockReset();
+    process.env.APP_ORIGIN = "https://app.invalid";
+    getUser.mockResolvedValue({ data: { user: { id: "auth-fixture" } }, error: null });
+    maybeSingle.mockResolvedValue({ data: { id: "profile", auth_user_id: "auth-fixture", email: "redacted@example.invalid", name: "Pessoa", role: "ATGC", status: "ativo" }, error: null });
+    createRequestAuthClient.mockReturnValue({ client: { auth: { getUser }, rpc } });
+    createAuthAdminClient.mockReturnValue({ rpc, from: () => ({ select: () => ({ eq: () => ({ maybeSingle }) }) }) });
   });
 
-  it("emite token e o verifica com sucesso", async () => {
-    const { createSessionToken, verifySessionToken } = await loadApiAuth();
-    const token = createSessionToken(sampleSession);
-
-    expect(token).toBeTruthy();
-
-    const session = verifySessionToken(token as string);
-
-    expect(session?.userId).toBe("usr-teste");
-    expect(session?.role).toBe("ATGC");
-    expect(session && session.exp > Date.now() / 1000).toBe(true);
+  it("exige origem canônica", () => {
+    expect(requireTrustedOrigin(new Request("https://app.invalid/api", { headers: { origin: "https://app.invalid" } }))).toBe(true);
+    expect(requireTrustedOrigin(new Request("https://app.invalid/api", { headers: { origin: "https://evil.invalid" } }))).toBe(false);
   });
 
-  it("rejeita token adulterado", async () => {
-    const { createSessionToken, verifySessionToken } = await loadApiAuth();
-    const token = createSessionToken(sampleSession) as string;
-    const [payload, signature] = token.split(".");
-    const forgedPayload = Buffer.from(
-      JSON.stringify({ ...sampleSession, role: "Admin", exp: Math.floor(Date.now() / 1000) + 3600 }),
-      "utf8",
-    ).toString("base64url");
+  it.each(["POST", "PUT", "PATCH", "DELETE"])("protege mutação %s antes da sessão", async (method) => {
+    const missing = await requireApiSession(new Request("https://app.invalid/api", { method }));
+    const foreign = await requireApiSession(new Request("https://app.invalid/api", { method, headers: { origin: "https://evil.invalid" } }));
+    expect(missing.ok ? 200 : missing.response.status).toBe(403);
+    expect(foreign.ok ? 200 : foreign.response.status).toBe(403);
+    expect(createRequestAuthClient).not.toHaveBeenCalled();
 
-    expect(verifySessionToken(`${forgedPayload}.${signature}`)).toBeNull();
-    expect(verifySessionToken(`${payload}.assinatura-falsa`)).toBeNull();
-    expect(verifySessionToken("lixo-sem-formato")).toBeNull();
+    await expect(requireApiSession(new Request("https://app.invalid/api", { method, headers: { origin: "https://app.invalid" } }))).resolves.toMatchObject({ ok: true });
   });
 
-  it("não emite token sem segredo configurado", async () => {
-    const { createSessionToken } = await loadApiAuth();
-    delete process.env.AUTH_SESSION_SECRET;
-
-    expect(createSessionToken(sampleSession)).toBeNull();
-  });
-
-  it("requireApiSession exige cookie e privilégio", async () => {
-    const { createSessionToken, requireApiSession, SESSION_COOKIE_NAME } = await loadApiAuth();
-
-    const semCookie = requireApiSession(requestWithCookie());
-    expect(semCookie.ok).toBe(false);
-
-    const token = createSessionToken(sampleSession) as string;
-    const comCookie = requireApiSession(
-      requestWithCookie(`${SESSION_COOKIE_NAME}=${token}`),
-    );
-    expect(comCookie.ok).toBe(true);
-
-    // ATGC não tem gestão de permissões
-    const semPrivilegio = requireApiSession(
-      requestWithCookie(`${SESSION_COOKIE_NAME}=${token}`),
-      "permissions.manage",
-    );
-    expect(semPrivilegio.ok).toBe(false);
-
-    // ATGC tem data.import e documents.manage
-    const comImport = requireApiSession(
-      requestWithCookie(`${SESSION_COOKIE_NAME}=${token}`),
-      "data.import",
-    );
-    expect(comImport.ok).toBe(true);
-
-    const comGestaoDocumentos = requireApiSession(
-      requestWithCookie(`${SESSION_COOKIE_NAME}=${token}`),
-      "documents.manage",
-    );
-    expect(comGestaoDocumentos.ok).toBe(true);
-  });
-
-  it("aplica rate limit por chave", async () => {
-    const { checkRateLimit, clearRateLimit } = await loadApiAuth();
-    const key = `teste:${Math.random()}`;
-
-    for (let i = 0; i < 5; i++) {
-      expect(checkRateLimit(key, 5, 60_000)).toBe(true);
+  it("comprova o inventário mutante 19/19 no guard central de sessão", () => {
+    let count = 0;
+    for (const [file, methods] of Object.entries(protectedMutations)) {
+      const source = readFileSync(resolve(process.cwd(), file), "utf8");
+      expect(source, file).toContain("requireApiSession(");
+      for (const method of methods) {
+        expect(source, `${method} ${file}`).toMatch(new RegExp(`export\\s+async\\s+function\\s+${method}\\s*\\(`));
+        count += 1;
+      }
     }
+    expect(count).toBe(19);
+  });
 
-    expect(checkRateLimit(key, 5, 60_000)).toBe(false);
+  it("exige aprovação nas três dimensões sem enviar identificador claro", async () => {
+    rpc.mockResolvedValue({ data: [{ allowed: true, remaining: 1, retry_after_seconds: 0 }], error: null });
+    const result = await checkRateLimit("login", new Request("https://app.invalid", { headers: { "x-forwarded-for": "192.0.2.1" } }), "person@example.invalid", 5, 60);
+    expect(result).toEqual({ allowed: true, unavailable: false });
+    expect(rpc).toHaveBeenCalledTimes(3);
+    expect(JSON.stringify(rpc.mock.calls)).not.toContain("person@example.invalid");
+    expect(JSON.stringify(rpc.mock.calls)).not.toContain("192.0.2.1");
+  });
 
-    clearRateLimit(key);
-    expect(checkRateLimit(key, 5, 60_000)).toBe(true);
+  it("falha fechado se uma dimensão falhar", async () => {
+    rpc.mockResolvedValueOnce({ data: [{ allowed: true }], error: null }).mockResolvedValueOnce({ data: null, error: { message: "unavailable" } }).mockResolvedValueOnce({ data: [{ allowed: true }], error: null });
+    await expect(checkRateLimit("login", new Request("https://app.invalid"), "identifier", 5, 60)).resolves.toEqual({ allowed: false, unavailable: true });
   });
 });

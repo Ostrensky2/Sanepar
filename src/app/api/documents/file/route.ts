@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 const ALLOWED_BUCKETS = new Set(["documents", "photos"]);
 
 export async function GET(request: Request) {
-  const auth = requireApiSession(request);
+  const auth = await requireApiSession(request);
 
   if (!auth.ok) {
     return auth.response;

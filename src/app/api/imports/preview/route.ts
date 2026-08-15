@@ -5,7 +5,7 @@ import { MAX_IMPORT_FILE_BYTES, previewWorkbook } from "@/lib/imports/excel";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const auth = requireApiSession(request, "data.import");
+  const auth = await requireApiSession(request, "data.import");
 
   if (!auth.ok) {
     return auth.response;

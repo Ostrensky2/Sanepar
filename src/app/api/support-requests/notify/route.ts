@@ -33,7 +33,7 @@ function buildEmailText(request: SupportRequest) {
 }
 
 export async function POST(httpRequest: Request) {
-  const auth = requireApiSession(httpRequest);
+  const auth = await requireApiSession(httpRequest);
 
   if (!auth.ok) {
     return auth.response;

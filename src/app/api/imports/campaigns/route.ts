@@ -24,7 +24,7 @@ import { createOptionalSupabaseClient } from "@/lib/supabase";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const auth = requireApiSession(request, "data.import");
+  const auth = await requireApiSession(request, "data.import");
 
   if (!auth.ok) {
     return auth.response;
@@ -635,7 +635,7 @@ function normalizeCampaignKeys(points: Awaited<ReturnType<typeof parseCampaignWo
 }
 
 export async function DELETE(request: Request) {
-  const auth = requireApiSession(request, "data.delete");
+  const auth = await requireApiSession(request, "data.delete");
 
   if (!auth.ok) {
     return auth.response;

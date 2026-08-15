@@ -25,7 +25,7 @@ type PointActionSnapshotRow = {
 };
 
 export async function GET(request: Request) {
-  const auth = requireApiSession(request);
+  const auth = await requireApiSession(request);
 
   if (!auth.ok) {
     return auth.response;
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const auth = requireApiSession(request, "data.import");
+  const auth = await requireApiSession(request, "data.import");
 
   if (!auth.ok) {
     return auth.response;

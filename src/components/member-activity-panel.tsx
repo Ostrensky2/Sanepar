@@ -4,13 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { FileClock, LogIn, MousePointerClick, Search, TrendingUp, UsersRound } from "lucide-react";
 import { readStoredDocumentsFromStorage } from "@/lib/app-documents";
 import { fetchCentralActivityLogs, readActivityLog, type ActivityLogEntry } from "@/lib/activity-log";
-import { loadAuthUsers, type AppUser } from "@/lib/auth-users";
+import { loadManagedAuthUsers, type ManagedAuthUser } from "@/components/auth-ui-client";
 
 type Period = "day" | "month" | "year";
 
 export function MemberActivityPanel() {
   const [activities, setActivities] = useState<ActivityLogEntry[]>([]);
-  const [users, setUsers] = useState<AppUser[]>([]);
+  const [users, setUsers] = useState<ManagedAuthUser[]>([]);
   const [documents, setDocuments] = useState(() => readStoredDocumentsFromStorage().slice(0, 10));
   const [period, setPeriod] = useState<Period>("day");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -22,13 +22,18 @@ export function MemberActivityPanel() {
     async function sync() {
       // Exibe logs locais imediatamente
       setActivities(readActivityLog());
-      setUsers(loadAuthUsers());
       setDocuments(readStoredDocumentsFromStorage().slice(0, 10));
 
-      // Busca logs centralizados da nuvem
-      const centralLogs = await fetchCentralActivityLogs();
-      if (!cancelled && centralLogs.length > 0) {
-        setActivities(centralLogs);
+      // Busca usuários e logs centralizados da nuvem.
+      const [managedUsers, centralLogs] = await Promise.all([
+        loadManagedAuthUsers(),
+        fetchCentralActivityLogs(),
+      ]);
+      if (!cancelled) {
+        setUsers(managedUsers);
+        if (centralLogs.length > 0) {
+          setActivities(centralLogs);
+        }
       }
     }
 
@@ -223,7 +228,7 @@ function ActivityList({ title, activities }: { title: string; activities: Activi
   );
 }
 
-function buildRanking(users: AppUser[], activities: ActivityLogEntry[], filter: string) {
+function buildRanking(users: ManagedAuthUser[], activities: ActivityLogEntry[], filter: string) {
   const normalizedFilter = filter.trim().toLowerCase();
 
   return users

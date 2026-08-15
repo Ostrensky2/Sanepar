@@ -18,7 +18,7 @@ type ChangeLogRow = {
 
 // Histórico de alterações de um registro (ou de uma campanha) do Diário de Campo.
 export async function GET(request: Request) {
-  const auth = requireApiSession(request);
+  const auth = await requireApiSession(request);
 
   if (!auth.ok) {
     return auth.response;

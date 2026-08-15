@@ -13,7 +13,7 @@ const PHOTO_CONTEXT_PATHS: Record<string, string> = {
 };
 
 export async function POST(request: Request) {
-  const auth = requireApiSession(request, "data.import");
+  const auth = await requireApiSession(request, "data.import");
 
   if (!auth.ok) {
     return auth.response;

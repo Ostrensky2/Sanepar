@@ -432,9 +432,9 @@ const helpModules: HelpModule[] = [
         title: "Gerenciar pessoas autorizadas",
         steps: [
           "Use o formulário Pessoas autorizadas para cadastrar nome, e-mail, instituição e categoria.",
-          "Novos cadastros entram ativos com senha provisória ATGC26.",
+          "Novos cadastros recebem um convite individual para definir a própria senha.",
           "Use editar para alterar nome, e-mail ou categoria.",
-          "Use os controles de status, senha e exclusão conforme a necessidade administrativa.",
+          "Use os controles de status, reenvio de convite e exclusão conforme a necessidade administrativa.",
         ],
       },
       {
@@ -466,7 +466,7 @@ const helpModules: HelpModule[] = [
       },
     ],
     controls: [
-      { label: "Pessoas autorizadas", detail: "Cadastro, edição, categoria, senha inicial e status." },
+      { label: "Pessoas autorizadas", detail: "Cadastro, convite individual, categoria e status." },
       { label: "Backups", detail: "APP manual, BD automático, retenção e restauração." },
       { label: "Build & Sync Diagnostics", detail: "Mostra versão, commit, ambiente, pendências e sincronização." },
       { label: "Diagnóstico", detail: "Verifica integridade operacional dos dados principais." },

@@ -1,276 +1,92 @@
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
-import { errorDetails, requireApiSession, type ApiSession } from "@/lib/api-auth";
-import {
-  INITIAL_PASSWORD,
-  initialAuthUsers,
-  normalizeAuthUsers,
-  type AppUser,
-} from "@/lib/auth-users";
-import { isPrimaryAdminRow, normalizePrimaryAdminRow } from "@/lib/auth-users-server";
-import { hashPassword, isHashedPassword } from "@/lib/password";
-import { createOptionalSupabaseClient } from "@/lib/supabase";
+import { requireApiSession, requireTrustedOrigin } from "@/lib/api-auth";
+import { createAuthAdminClient } from "@/lib/supabase-auth";
+import { normalizeUserCategory, userCategories } from "@/lib/access-control";
 
 export const runtime = "nodejs";
-
-type AuthUserRow = {
-  id: string;
-  name: string;
-  email: string;
-  institution: string;
-  role: AppUser["role"];
-  status: AppUser["status"];
-  password: string;
-  must_change_password: boolean;
-  created_at_label: string;
-  last_access: string;
-  updated_at: string;
-};
-
-const SELF_MANAGED_USER_CATEGORIES: AppUser["role"][] = ["Sanepar", "Tecpar", "ATGC"];
+type Command =
+  | { action: "invite"; user?: unknown }
+  | { action: "resend-invite"; userId?: unknown }
+  | { action: "update"; userId?: unknown; patch?: unknown }
+  | { action: "delete"; userId?: unknown };
 
 export async function GET(request: Request) {
-  const auth = requireApiSession(request);
-
-  if (!auth.ok) {
-    return auth.response;
-  }
-
-  const supabase = createOptionalSupabaseClient();
-
-  if (!supabase) {
-    return NextResponse.json({ users: [], persistence: "browser" });
-  }
-
-  const { data, error } = await supabase
-    .from("auth_users")
-    .select("*")
-    .order("name", { ascending: true })
-    .returns<AuthUserRow[]>();
-
-  if (error) {
-    return NextResponse.json(
-      { error: "Nao foi possivel consultar usuarios autorizados.", details: errorDetails(error.message) },
-      { status: 500 },
-    );
-  }
-
-  if (!data?.length) {
-    if (process.env.AUTH_USERS_ALLOW_SEED !== "true") {
-      return NextResponse.json({ users: [], persistence: "cloud" });
-    }
-
-    const seededRows = await Promise.all(
-      initialAuthUsers.map(async (user) => ({
-        ...toRow(user),
-        password: await hashPassword(user.password),
-      })),
-    );
-    const { error: seedError } = await supabase
-      .from("auth_users")
-      .upsert(seededRows, { onConflict: "id" });
-
-    if (seedError) {
-      return NextResponse.json(
-        { error: "Nao foi possivel preparar usuarios autorizados na nuvem.", details: errorDetails(seedError.message) },
-        { status: 500 },
-      );
-    }
-
-    return NextResponse.json({
-      users: stripPasswords(scopeVisibleUsersForSession(initialAuthUsers, auth.session)),
-      persistence: "cloud",
-    });
-  }
-
-  const legacyRows = data.filter((row) => !isHashedPassword(row.password));
-
-  if (legacyRows.length) {
-    const migratedRows = await Promise.all(
-      legacyRows.map(async (row) => ({
-        ...row,
-        password: await hashPassword(row.password),
-        updated_at: new Date().toISOString(),
-      })),
-    );
-    const { error: migrationError } = await supabase
-      .from("auth_users")
-      .upsert(migratedRows, { onConflict: "id" });
-
-    if (migrationError) {
-      return NextResponse.json(
-        { error: "Nao foi possivel proteger as senhas existentes.", details: errorDetails(migrationError.message) },
-        { status: 500 },
-      );
-    }
-  }
-
-  return NextResponse.json({
-    users: stripPasswords(scopeVisibleUsersForSession(normalizeAuthUsers(data.map(fromRow)), auth.session)),
-    persistence: "cloud",
-  });
+  const auth = await requireApiSession(request, "users.manage");
+  if (!auth.ok) return auth.response;
+  const admin = createAuthAdminClient(); if (!admin) return unavailable();
+  const query = admin.from("auth_users").select("id,auth_user_id,name,email,institution,role,status,must_change_password,created_at_label,last_access").order("name");
+  const { data, error } = auth.session.role === "Admin" ? await query : await query.eq("role", auth.session.role);
+  if (error) return unavailable();
+  return NextResponse.json({ users: (data ?? []).map(toManagedUser) }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function PUT(request: Request) {
-  const auth = requireApiSession(request, "users.manage");
+  if (!requireTrustedOrigin(request)) return NextResponse.json({ error: "Origem não autorizada." }, { status: 403 });
+  const auth = await requireApiSession(request, "users.manage"); if (!auth.ok) return auth.response;
+  const admin = createAuthAdminClient(); const appOrigin = process.env.APP_ORIGIN?.trim();
+  if (!admin || !appOrigin) return unavailable();
+  const command = await request.json().catch(() => null) as Command | null;
+  if (!command) return invalid();
 
-  if (!auth.ok) {
-    return auth.response;
+  if (command.action === "invite") {
+    const user = validateUser(command.user, auth.session.role); if (!user) return invalid();
+    const { data: invited, error } = await admin.auth.admin.inviteUserByEmail(user.email, {
+      redirectTo: `${appOrigin}/auth/callback?type=invite&next=/definir-senha`, data: { display_name: user.name },
+    });
+    if (error || !invited.user) return NextResponse.json({ error: "Não foi possível enviar o convite." }, { status: 502 });
+    const now = new Date().toISOString();
+    const { error: profileError } = await admin.from("auth_users").insert({ id: randomUUID(), auth_user_id: invited.user.id,
+      name: user.name, email: user.email, institution: user.role, role: user.role, status: user.status,
+      must_change_password: true, created_at_label: now.slice(0, 10), last_access: "Convite pendente", updated_at: now });
+    if (profileError) { await admin.auth.admin.deleteUser(invited.user.id); return unavailable(); }
+    return NextResponse.json({ ok: true }, { status: 201 });
   }
 
-  const supabase = createOptionalSupabaseClient();
-  const payload = (await request.json()) as { users?: unknown };
-  const users = normalizeAuthUsers(payload.users);
+  const userId = typeof command.userId === "string" ? command.userId : ""; if (!userId) return invalid();
+  const { data: current } = await admin.from("auth_users").select("*").eq("id", userId).maybeSingle();
+  if (!current || (auth.session.role !== "Admin" && current.role !== auth.session.role)) return NextResponse.json({ error: "Operação não autorizada." }, { status: 403 });
 
-  if (!Array.isArray(payload.users) || !users.length) {
-    return NextResponse.json(
-      { error: "A lista de usuarios autorizados e invalida." },
-      { status: 400 },
-    );
+  if (command.action === "resend-invite") {
+    const { error } = await admin.auth.admin.inviteUserByEmail(current.email, { redirectTo: `${appOrigin}/auth/callback?type=invite&next=/definir-senha` });
+    return error ? NextResponse.json({ error: "Não foi possível reenviar o convite." }, { status: 502 }) : NextResponse.json({ ok: true });
   }
-
-  if (!supabase) {
-    return NextResponse.json({ users: stripPasswords(users), persistence: "browser" });
-  }
-
-  const { data: existingRows, error: readError } = await supabase
-    .from("auth_users")
-    .select("*")
-    .returns<AuthUserRow[]>();
-
-  if (readError) {
-    return NextResponse.json(
-      { error: "Nao foi possivel verificar usuarios atuais.", details: errorDetails(readError.message) },
-      { status: 500 },
-    );
-  }
-
-  const existingById = new Map((existingRows ?? []).map((row) => [row.id, row]));
-  const scopedUsers = scopeUsersForSession(users, existingRows ?? [], auth.session);
-  const initialPasswordHash = await hashPassword(INITIAL_PASSWORD);
-
-  const rows = scopedUsers.map((user) => {
-    const existing = existingById.get(user.id);
-    const baseRow = toRow(user);
-
-    if (existing) {
-      return {
-        ...baseRow,
-        password: existing.password,
-        must_change_password: existing.must_change_password,
-      };
+  if (command.action === "update") {
+    const patch = validatePatch(command.patch, auth.session.role); if (!patch) return invalid();
+    if (patch.email && current.auth_user_id) {
+      const { error } = await admin.auth.admin.updateUserById(current.auth_user_id, { email: patch.email });
+      if (error) return NextResponse.json({ error: "Não foi possível atualizar a conta." }, { status: 502 });
     }
-
-    return {
-      ...baseRow,
-      password: initialPasswordHash,
-      must_change_password: true,
-    };
-  });
-
-  const { error } = await supabase
-    .from("auth_users")
-    .upsert(rows, { onConflict: "id" });
-
-  if (error) {
-    return NextResponse.json(
-      { error: "Nao foi possivel salvar usuarios autorizados na nuvem.", details: errorDetails(error.message) },
-      { status: 500 },
-    );
+    const { error } = await admin.from("auth_users").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", userId);
+    return error ? unavailable() : NextResponse.json({ ok: true });
   }
-
-  const nextIds = new Set(scopedUsers.map((user) => user.id));
-  const deletedIds = (existingRows ?? [])
-    .filter((row) => !nextIds.has(row.id) && !isPrimaryAdminRow(row))
-    .map((row) => row.id);
-
-  if (deletedIds.length) {
-    const { error: deleteError } = await supabase
-      .from("auth_users")
-      .delete()
-      .in("id", deletedIds);
-
-    if (deleteError) {
-      return NextResponse.json(
-        { error: "Nao foi possivel remover usuarios autorizados na nuvem.", details: errorDetails(deleteError.message) },
-        { status: 500 },
-      );
-    }
+  if (command.action === "delete") {
+    if (current.id === auth.session.userId) return NextResponse.json({ error: "A conta atual não pode ser removida." }, { status: 400 });
+    const { error: removeProfile } = await admin.from("auth_users").delete().eq("id", userId); if (removeProfile) return unavailable();
+    const { error: removeAuth } = current.auth_user_id ? await admin.auth.admin.deleteUser(current.auth_user_id) : { error: null };
+    if (removeAuth) { await admin.from("auth_users").insert(current); return unavailable(); }
+    return NextResponse.json({ ok: true });
   }
-
-  return NextResponse.json({ users: stripPasswords(scopedUsers), persistence: "cloud" });
+  return invalid();
 }
 
-function scopeUsersForSession(
-  submittedUsers: AppUser[],
-  existingRows: AuthUserRow[],
-  session: ApiSession | null,
-) {
-  if (!session || session.role === "Admin") {
-    return submittedUsers;
-  }
-
-  if (!SELF_MANAGED_USER_CATEGORIES.includes(session.role)) {
-    return normalizeAuthUsers(existingRows.map(fromRow));
-  }
-
-  const existingUsers = normalizeAuthUsers(existingRows.map(fromRow));
-  const existingIds = new Set(existingUsers.map((user) => user.id));
-  const newScopedUsers = submittedUsers
-    .filter((user) => !existingIds.has(user.id) && user.role === session.role)
-    .map((user) => ({
-      ...user,
-      role: session.role,
-      institution: session.role,
-    }));
-
-  return [...newScopedUsers, ...existingUsers];
+function validateUser(value: unknown, actorRole: string) {
+  if (!value || typeof value !== "object") return null; const v = value as Record<string, unknown>;
+  const email = typeof v.email === "string" ? v.email.trim().toLowerCase() : ""; const name = typeof v.name === "string" ? v.name.trim() : "";
+  const requestedRole = normalizeUserCategory(typeof v.role === "string" ? v.role : ""); const role = actorRole === "Admin" ? requestedRole : normalizeUserCategory(actorRole);
+  if (!email || email.length > 254 || !name || name.length > 160 || !userCategories.includes(role)) return null;
+  return { email, name, role, status: v.status === "inativo" ? "inativo" : "ativo" } as const;
 }
-
-function scopeVisibleUsersForSession(users: AppUser[], session: ApiSession | null) {
-  if (!session || session.role === "Admin") {
-    return users;
-  }
-
-  if (!SELF_MANAGED_USER_CATEGORIES.includes(session.role)) {
-    return [];
-  }
-
-  return users.filter((user) => user.role === session.role);
+function validatePatch(value: unknown, actorRole: string) {
+  if (!value || typeof value !== "object") return null; const v = value as Record<string, unknown>; const patch: Record<string, string> = {};
+  if (typeof v.name === "string" && v.name.trim()) patch.name = v.name.trim().slice(0, 160);
+  if (typeof v.email === "string" && v.email.includes("@")) patch.email = v.email.trim().toLowerCase().slice(0, 254);
+  if (v.status === "ativo" || v.status === "inativo") patch.status = v.status;
+  if (actorRole === "Admin" && typeof v.role === "string") { const role = normalizeUserCategory(v.role); patch.role = role; patch.institution = role; }
+  return Object.keys(patch).length ? patch : null;
 }
-
-function stripPasswords(users: AppUser[]): AppUser[] {
-  return users.map((user) => ({ ...user, password: "" }));
-}
-
-function fromRow(row: AuthUserRow): AppUser {
-  const normalizedRow = normalizePrimaryAdminRow(row);
-
-  return {
-    id: normalizedRow.id,
-    name: normalizedRow.name,
-    email: normalizedRow.email,
-    institution: normalizedRow.institution,
-    role: normalizedRow.role,
-    status: normalizedRow.status,
-    password: normalizedRow.password,
-    mustChangePassword: normalizedRow.must_change_password,
-    createdAt: normalizedRow.created_at_label,
-    lastAccess: normalizedRow.last_access,
-  };
-}
-
-function toRow(user: AppUser): AuthUserRow {
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email.toLowerCase(),
-    institution: user.institution,
-    role: user.role,
-    status: user.status,
-    password: user.password,
-    must_change_password: user.mustChangePassword,
-    created_at_label: user.createdAt,
-    last_access: user.lastAccess,
-    updated_at: new Date().toISOString(),
-  };
-}
+function toManagedUser(row: Record<string, unknown>) { return { id: row.id, name: row.name, email: row.email, institution: row.institution,
+  role: normalizeUserCategory(String(row.role)), status: row.status, authStatus: row.status === "inativo" ? "bloqueado" : row.must_change_password ? "convidado" : "ativo",
+  createdAt: row.created_at_label, lastAccess: row.last_access }; }
+function invalid() { return NextResponse.json({ error: "Solicitação inválida." }, { status: 400 }); }
+function unavailable() { return NextResponse.json({ error: "Serviço de usuários indisponível." }, { status: 503 }); }

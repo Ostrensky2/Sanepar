@@ -1,212 +1,85 @@
-import { createHmac, timingSafeEqual } from "crypto";
+import "server-only";
+
 import { NextResponse } from "next/server";
-import {
-  categoryPrivileges,
-  normalizeUserCategory,
-  type PrivilegeKey,
-  type UserCategory,
-} from "@/lib/access-control";
-import { getCloudRuntimeMode } from "@/lib/supabase";
+import { normalizeUserCategory, type PrivilegeKey, type UserCategory } from "@/lib/access-control";
+import { createAuthAdminClient, createRequestAuthClient, opaqueRateLimitKey } from "@/lib/supabase-auth";
 
-export const SESSION_COOKIE_NAME = "yvae_session";
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+export type ApiSession = { userId: string; authUserId: string; email: string; name: string; role: UserCategory };
+export type ApiAuthResult = { ok: true; session: ApiSession } | { ok: false; response: NextResponse };
 
-export type ApiSession = {
-  userId: string;
-  email: string;
-  name: string;
-  role: UserCategory;
-  exp: number;
-};
+type ProfileRow = { id: string; auth_user_id: string; email: string; name: string; role: string; status: string };
 
-type SessionInput = Omit<ApiSession, "exp">;
+export async function requireApiSession(request: Request, privilege?: PrivilegeKey): Promise<ApiAuthResult> {
+  if (isMutation(request) && !requireTrustedOrigin(request)) return denied(403, "Origem não autorizada.");
 
-function getSessionSecret(): string | null {
-  const secret = process.env.AUTH_SESSION_SECRET?.trim();
-  return secret && secret.length >= 16 ? secret : null;
-}
+  const auth = createRequestAuthClient(request);
+  const admin = createAuthAdminClient();
+  if (!auth || !admin) return denied(503, "Servidor de acesso indisponível.");
 
-function isEnforcementActive() {
-  return getCloudRuntimeMode() !== "modo local";
-}
+  const { data: { user }, error } = await auth.client.auth.getUser();
+  if (error || !user) return denied(401, "Sessão expirada ou inexistente. Entre novamente no sistema.");
 
-function base64UrlEncode(value: string) {
-  return Buffer.from(value, "utf8").toString("base64url");
-}
+  const { data: profile, error: profileError } = await admin
+    .from("auth_users")
+    .select("id, auth_user_id, email, name, role, status")
+    .eq("auth_user_id", user.id)
+    .maybeSingle<ProfileRow>();
 
-function base64UrlDecode(value: string) {
-  return Buffer.from(value, "base64url").toString("utf8");
-}
+  if (profileError) return denied(503, "Não foi possível validar a autorização atual.");
+  if (!profile || profile.status !== "ativo") return denied(403, "Este acesso está inativo ou sem perfil autorizado.");
 
-function signPayload(payload: string, secret: string) {
-  return createHmac("sha256", secret).update(payload).digest("base64url");
-}
-
-export function createSessionToken(input: SessionInput): string | null {
-  const secret = getSessionSecret();
-
-  if (!secret) {
-    return null;
+  const role = normalizeUserCategory(profile.role);
+  if (privilege) {
+    const { data: allowed, error: permissionError } = await auth.client.rpc("has_current_permission", { p_permission: privilege });
+    if (permissionError) return denied(503, "Não foi possível validar a permissão atual.");
+    if (allowed !== true) return denied(403, "Seu perfil não tem permissão para esta operação.");
   }
 
-  const session: ApiSession = {
-    ...input,
-    exp: Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS,
-  };
-  const payload = base64UrlEncode(JSON.stringify(session));
-
-  return `${payload}.${signPayload(payload, secret)}`;
+  return { ok: true, session: { userId: profile.id, authUserId: user.id, email: profile.email, name: profile.name, role } };
 }
 
-export function verifySessionToken(token: string): ApiSession | null {
-  const secret = getSessionSecret();
-
-  if (!secret || !token) {
-    return null;
+export async function checkRateLimit(scope: string, request: Request, identifier: string, maxAttempts: number, windowSeconds: number, blockSeconds = 0) {
+  const admin = createAuthAdminClient();
+  if (!admin) return { allowed: false, unavailable: true } as const;
+  const ip = getClientKey(request).trim().toLowerCase();
+  const normalizedIdentifier = identifier.trim().toLowerCase();
+  const subjects = [
+    ["ip", opaqueRateLimitKey("ip", ip)],
+    ["identifier", opaqueRateLimitKey("identifier", normalizedIdentifier)],
+    ["pair", opaqueRateLimitKey("pair", `${ip}\0${normalizedIdentifier}`)],
+  ] as const;
+  if (subjects.some(([, hash]) => !hash)) return { allowed: false, unavailable: true } as const;
+  const results = await Promise.all(subjects.map(([dimension, hash]) => admin.rpc("consume_auth_rate_limit", {
+    p_scope: `${scope}:${dimension}`, p_subject_hash: hash!, p_limit: maxAttempts,
+    p_window_seconds: windowSeconds, p_block_seconds: blockSeconds,
+  })));
+  if (results.some(({ error, data }) => error || !Array.isArray(data) || typeof data[0]?.allowed !== "boolean")) {
+    return { allowed: false, unavailable: true } as const;
   }
-
-  const [payload, signature] = token.split(".");
-
-  if (!payload || !signature) {
-    return null;
-  }
-
-  const expected = Buffer.from(signPayload(payload, secret));
-  const received = Buffer.from(signature);
-
-  if (expected.length !== received.length || !timingSafeEqual(expected, received)) {
-    return null;
-  }
-
-  try {
-    const session = JSON.parse(base64UrlDecode(payload)) as ApiSession;
-
-    if (!session.userId || !session.email || typeof session.exp !== "number") {
-      return null;
-    }
-
-    if (session.exp < Math.floor(Date.now() / 1000)) {
-      return null;
-    }
-
-    return { ...session, role: normalizeUserCategory(session.role) };
-  } catch {
-    return null;
-  }
-}
-
-export function readSessionFromRequest(request: Request): ApiSession | null {
-  const cookieHeader = request.headers.get("cookie") ?? "";
-  const match = cookieHeader
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${SESSION_COOKIE_NAME}=`));
-
-  if (!match) {
-    return null;
-  }
-
-  return verifySessionToken(decodeURIComponent(match.slice(SESSION_COOKIE_NAME.length + 1)));
-}
-
-export function applySessionCookie(response: NextResponse, token: string) {
-  response.cookies.set(SESSION_COOKIE_NAME, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: SESSION_MAX_AGE_SECONDS,
-  });
-
-  return response;
-}
-
-export function clearSessionCookie(response: NextResponse) {
-  response.cookies.set(SESSION_COOKIE_NAME, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0,
-  });
-
-  return response;
-}
-
-export type ApiAuthResult =
-  | { ok: true; session: ApiSession | null }
-  | { ok: false; response: NextResponse };
-
-export function requireApiSession(request: Request, privilege?: PrivilegeKey): ApiAuthResult {
-  // Em modo local (sem Supabase) o app roda como ferramenta de máquina única,
-  // sem servidor de acesso disponível para emitir sessões.
-  if (!isEnforcementActive()) {
-    return { ok: true, session: null };
-  }
-
-  if (!getSessionSecret()) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        { error: "Sessão indisponível: AUTH_SESSION_SECRET não configurada no servidor." },
-        { status: 503 },
-      ),
-    };
-  }
-
-  const session = readSessionFromRequest(request);
-
-  if (!session) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        { error: "Sessão expirada ou inexistente. Entre novamente no sistema." },
-        { status: 401 },
-      ),
-    };
-  }
-
-  if (privilege && !categoryPrivileges[session.role]?.includes(privilege)) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        { error: "Seu perfil não tem permissão para esta operação." },
-        { status: 403 },
-      ),
-    };
-  }
-
-  return { ok: true, session };
-}
-
-const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
-
-export function checkRateLimit(key: string, maxAttempts: number, windowMs: number): boolean {
-  const now = Date.now();
-  const bucket = rateLimitBuckets.get(key);
-
-  if (!bucket || bucket.resetAt <= now) {
-    rateLimitBuckets.set(key, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-
-  bucket.count += 1;
-  return bucket.count <= maxAttempts;
-}
-
-export function clearRateLimit(key: string) {
-  rateLimitBuckets.delete(key);
+  return { allowed: results.every(({ data }) => data![0].allowed === true), unavailable: false } as const;
 }
 
 export function getClientKey(request: Request) {
-  const forwarded = request.headers.get("x-forwarded-for") ?? "";
-  return forwarded.split(",")[0]?.trim() || "local";
+  const vercelIp = request.headers.get("x-vercel-forwarded-for");
+  const forwarded = vercelIp ?? request.headers.get("x-forwarded-for") ?? "";
+  return forwarded.split(",")[0]?.trim() || "unknown";
 }
 
-export function errorDetails(detail: string | undefined): string | undefined {
-  if (process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production") {
-    return undefined;
-  }
+export function requireTrustedOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  const configured = process.env.APP_ORIGIN?.trim();
+  if (!origin || !configured) return false;
+  try { return new URL(origin).origin === new URL(configured).origin; } catch { return false; }
+}
 
-  return detail;
+function isMutation(request: Request) {
+  return request.method === "POST" || request.method === "PUT" || request.method === "PATCH" || request.method === "DELETE";
+}
+
+export function errorDetails(detail: string | undefined) {
+  return process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production" ? undefined : detail;
+}
+
+function denied(status: number, error: string): ApiAuthResult {
+  return { ok: false, response: NextResponse.json({ error }, { status, headers: { "Cache-Control": "no-store" } }) };
 }

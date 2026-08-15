@@ -89,7 +89,7 @@ export default async function GovernancaPage({ searchParams }: GovernancaPagePro
       ? {
           key: "usuarios",
           label: "Usuários",
-          description: "E-mails autorizados, categoria, senha inicial e status.",
+          description: "Convites individuais, categoria, vínculo e status.",
           icon: UsersRound,
         }
       : null,
@@ -195,7 +195,7 @@ export default async function GovernancaPage({ searchParams }: GovernancaPagePro
             icon={UsersRound}
             tone="blue"
             title="Usuários autorizados"
-            description="Cadastro, e-mail, categoria, senha inicial e status de cada usuário liberado para acessar o sistema."
+            description="Cadastro, convite individual, categoria e status de cada usuário liberado para acessar o sistema."
             aside={<StatusChip label="acesso controlado" tone="primary" />}
           >
             <AccessManagementPanel sections={["people"]} />

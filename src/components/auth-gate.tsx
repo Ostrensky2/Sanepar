@@ -1,330 +1,133 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 import { YvaeMasthead } from "@/components/brand-signature";
-import { recordActivity } from "@/lib/activity-log";
 import {
-  persistAccessCategory,
-  syncPrivilegeMatrixCookie,
-  type UserCategory,
-} from "@/lib/access-control";
-import {
-  INITIAL_PASSWORD,
-  clearSession,
-  getStoredSession,
-  loadAuthUsersFromSharedStore,
-  requestLogin,
-  requestPasswordChange,
-  persistSession,
-  verifyServerSession,
-  type AppUser,
-  type AuthSession,
-} from "@/lib/auth-users";
-import { cn } from "@/lib/utils";
+  AUTH_SESSION_UPDATED_EVENT,
+  readAuthSession,
+  signInWithPassword,
+  type AuthUiSession,
+} from "@/components/auth-ui-client";
+import { persistAccessCategory } from "@/lib/access-control";
 
-type AuthGateProps = {
-  children: ReactNode;
-};
+type AuthGateProps = { children: ReactNode };
 
 export function AuthGate({ children }: AuthGateProps) {
   const router = useRouter();
-  const [users, setUsers] = useState<AppUser[]>([]);
-  const [session, setSession] = useState<AuthSession | null>(null);
-  const [pendingUser, setPendingUser] = useState<AppUser | null>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const [session, setSession] = useState<AuthUiSession | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    async function loadInitialAuthState() {
-      const loadedUsers = await loadAuthUsersFromSharedStore();
-      const storedSession = getStoredSession();
-      setUsers(loadedUsers);
-      syncPrivilegeMatrixCookie();
-
-      const serverSessionActive = storedSession ? await verifyServerSession() : false;
-
-      if (
-        storedSession &&
-        serverSessionActive &&
-        loadedUsers.some((user) => user.id === storedSession.userId && user.status === "ativo")
-      ) {
-        setSession(storedSession);
-        syncActiveRole(storedSession.role);
-      } else {
-        clearSession();
+    let cancelled = false;
+    async function syncSession() {
+      const payload = await readAuthSession();
+      if (cancelled) return;
+      if (payload.canSetPassword && (payload.purpose === "invite" || payload.purpose === "recovery")) {
+        router.replace("/definir-senha");
+        return;
       }
-
+      setSession(payload.session ?? null);
+      if (payload.session) persistAccessCategory(payload.session.role);
       setReady(true);
     }
-
-    const timer = window.setTimeout(() => {
-      void loadInitialAuthState();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  const activeCount = useMemo(
-    () => users.filter((user) => user.status === "ativo").length,
-    [users],
-  );
+    void syncSession();
+    window.addEventListener(AUTH_SESSION_UPDATED_EVENT, syncSession);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(AUTH_SESSION_UPDATED_EVENT, syncSession);
+    };
+  }, [router]);
 
   async function signIn() {
-    const result = await requestLogin(email, password);
-
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-
-    if (result.mustChangePassword) {
-      setPendingUser(result.user);
-      setError("");
-      return;
-    }
-
-    completeSignIn(result.user);
-  }
-
-  async function changePassword() {
-    if (!pendingUser) {
-      return;
-    }
-
-    if (newPassword.length < 10) {
-      setError("A nova senha deve ter pelo menos 10 caracteres.");
-      return;
-    }
-
-    if (newPassword === INITIAL_PASSWORD) {
-      setError("Escolha uma senha diferente da senha provisoria ATGC26.");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setError("A confirmacao da senha nao confere.");
-      return;
-    }
-
-    const result = await requestPasswordChange(pendingUser.email, password, newPassword);
-
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-
-    setPendingUser(null);
-    setNewPassword("");
-    setConfirmPassword("");
-    completeSignIn(result.user);
-  }
-
-  function completeSignIn(user: AppUser) {
-    const sessionPayload = {
-      userId: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-    };
-
-    persistSession(sessionPayload);
-    recordActivity(sessionPayload, "login", "Entrada no sistema", "Login confirmado");
-    syncActiveRole(user.role);
-    setSession(sessionPayload);
-    setPassword("");
+    if (pending) return;
+    setPending(true);
     setError("");
-    router.refresh();
+    const submittedPassword = password;
+    setPassword("");
+    passwordRef.current?.blur();
+
+    try {
+      const result = await signInWithPassword(email, submittedPassword);
+      if (!result.ok) {
+        setError("Não foi possível entrar. Confira o e-mail e a senha e tente novamente.");
+        passwordRef.current?.focus();
+        return;
+      }
+      if (result.mustSetPassword) {
+        router.replace("/definir-senha");
+        return;
+      }
+      setSession(result.session);
+      persistAccessCategory(result.session.role);
+      window.dispatchEvent(new Event(AUTH_SESSION_UPDATED_EVENT));
+    } finally {
+      setPending(false);
+    }
   }
 
   if (!ready) {
-    return null;
+    return <main className="grid min-h-screen place-items-center" aria-busy="true"><span className="sr-only">Verificando sessão</span></main>;
   }
-
-  if (session) {
-    return <>{children}</>;
-  }
+  if (session) return <>{children}</>;
 
   return (
-    <main className="grid min-h-screen place-items-center px-4 py-10">
-      <section className="grid w-full max-w-5xl overflow-hidden radius-panel border border-[var(--line-ghost)] bg-white shadow-[0_34px_100px_-60px_rgba(0,66,98,0.55)] lg:grid-cols-[0.9fr_1.1fr]">
-        <div className="hero-gradient relative flex min-w-0 flex-col justify-between p-6 text-white sm:min-h-[420px] sm:p-8">
-          <YvaeMasthead />
+    <main className="flex min-h-[100dvh] items-start justify-center pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[max(1rem,env(safe-area-inset-top))] sm:items-center sm:py-8">
+      <section className="grid w-full max-w-4xl overflow-hidden radius-panel border border-[var(--line-strong)] bg-white md:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)]">
+        <div className="hero-gradient flex min-w-0 flex-col justify-center gap-6 p-5 text-white sm:p-7 md:min-h-[430px] md:p-8">
+          <YvaeMasthead compact />
           <div>
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/24 bg-white/12 px-3 py-2 text-xs font-bold uppercase tracking-[0.16em]">
-              <ShieldCheck className="h-4 w-4" />
-              Acesso por email
-            </div>
-            <h1 className="heading-font text-3xl font-black tracking-tight sm:text-4xl">
-              Entrada controlada do Yva&apos;e
-            </h1>
-            <p className="mt-4 max-w-sm text-sm leading-6 text-white/78">
-              Use o email cadastrado em Configuracoes. Senhas provisórias entram com ATGC26 e pedem troca no primeiro acesso.
+            <h1 className="text-balance heading-font text-2xl font-black tracking-[-0.02em] sm:text-3xl">Entrada segura no Yva&apos;e</h1>
+            <p className="mt-3 max-w-md text-sm leading-6 text-white/80">
+              Use o e-mail cadastrado e sua senha pessoal.
             </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <StatusStat label="Pessoas" value={String(users.length)} />
-            <StatusStat label="Ativos" value={String(activeCount)} />
           </div>
         </div>
 
-        <div className="p-7 sm:p-10">
-          <div className="mb-8">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--brand-teal)]">
-              Painel de entrada
-            </p>
-            <h2 className="heading-font mt-2 text-2xl font-black text-[var(--brand-navy-strong)]">
-              {pendingUser ? "Cadastre sua nova senha" : "Entrar no sistema"}
-            </h2>
-            <p className="mt-2 text-sm text-[var(--ink-soft)]">
-              {pendingUser
-                ? `${pendingUser.name}, sua senha inicial precisa ser substituida.`
-                : "Informe seu email e senha para liberar o painel operacional."}
-            </p>
+        <div className="flex min-w-0 flex-col justify-center p-5 sm:p-8 md:p-9">
+          <div className="mb-6">
+            <h2 className="heading-font text-2xl font-black text-[var(--brand-navy-strong)]">Entrar no sistema</h2>
+            <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">Acesse o painel com sua conta individual.</p>
           </div>
 
-          {pendingUser ? (
-            <div className="grid gap-4">
-              <PasswordField
-                label="Nova senha"
-                value={newPassword}
-                onChange={setNewPassword}
-                show={showPassword}
-                onToggleShow={() => setShowPassword((current) => !current)}
-              />
-              <PasswordField
-                label="Confirmar senha"
-                value={confirmPassword}
-                onChange={setConfirmPassword}
-                show={showPassword}
-                onToggleShow={() => setShowPassword((current) => !current)}
-              />
-              {error ? <p className="text-sm font-semibold text-[var(--brand-danger)]">{error}</p> : null}
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={changePassword}
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[var(--brand-navy-strong)] px-5 text-sm font-black text-white shadow-sm"
-                >
-                  <LockKeyhole className="h-4 w-4" />
-                  Salvar senha e entrar
+          <form className="grid gap-4" aria-busy={pending} onSubmit={(event) => { event.preventDefault(); void signIn(); }}>
+            <label className="grid gap-2 text-sm font-bold text-[var(--brand-navy-strong)]">
+              E-mail
+              <span className="flex h-12 items-center gap-3 radius-card border border-[var(--line-strong)] bg-white px-4 transition-colors duration-200 hover:border-[var(--brand-blue)] focus-within:border-[var(--brand-blue)] focus-within:ring-2 focus-within:ring-[var(--brand-blue-soft)]">
+                <Mail className="h-4 w-4 text-[var(--ink-soft)]" />
+                <input value={email} onChange={(event) => { setEmail(event.target.value); setError(""); }} type="email" autoComplete="email" required className="h-full min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-[var(--ink-soft)]" placeholder="nome@instituicao.com.br" />
+              </span>
+            </label>
+            <label className="grid gap-2 text-sm font-bold text-[var(--brand-navy-strong)]">
+              Senha
+              <span className="flex h-12 items-center gap-2 radius-card border border-[var(--line-strong)] bg-white pl-4 pr-0.5 transition-colors duration-200 hover:border-[var(--brand-blue)] focus-within:border-[var(--brand-blue)] focus-within:ring-2 focus-within:ring-[var(--brand-blue-soft)]">
+                <LockKeyhole className="h-4 w-4 text-[var(--ink-soft)]" />
+                <input ref={passwordRef} value={password} onChange={(event) => { setPassword(event.target.value); setError(""); }} type={showPassword ? "text" : "password"} autoComplete="current-password" required aria-invalid={Boolean(error)} aria-describedby={error ? "login-error" : undefined} className="h-full min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-[var(--ink-soft)]" placeholder="Digite sua senha" />
+                <button type="button" onClick={() => setShowPassword((current) => !current)} className="flex h-11 w-11 shrink-0 items-center justify-center radius-card text-[var(--ink-soft)] transition-colors duration-200 hover:bg-[var(--surface-soft)] hover:text-[var(--brand-navy-strong)] active:bg-[var(--surface-muted)]" aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"} aria-pressed={showPassword}>
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPendingUser(null);
-                    setPassword("");
-                    setError("");
-                  }}
-                  className="h-12 rounded-xl border border-[var(--line-strong)] bg-white px-5 text-sm font-bold text-[var(--brand-navy-strong)]"
-                >
-                  Voltar
-                </button>
-              </div>
+              </span>
+            </label>
+            {error ? <p id="login-error" role="alert" className="radius-control bg-red-50 px-3 py-2 text-sm font-semibold leading-5 text-[var(--brand-danger)]">{error}</p> : null}
+            <div className="flex items-center justify-end">
+              <Link href="/recuperar-senha" className="inline-flex min-h-11 items-center radius-control px-1 text-sm font-bold text-[var(--brand-navy)] underline-offset-4 transition-colors duration-200 hover:text-[var(--brand-navy-strong)] hover:underline">Esqueci minha senha</Link>
             </div>
-          ) : (
-            <form
-              className="grid gap-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void signIn();
-              }}
-            >
-              <label className="grid gap-2 text-sm font-bold text-[var(--brand-navy-strong)]">
-                Email
-                <span className="flex h-12 items-center gap-3 rounded-xl border border-[var(--line-strong)] bg-white px-4">
-                  <Mail className="h-4 w-4 text-[var(--ink-soft)]" />
-                  <input
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    type="email"
-                    autoComplete="email"
-                    className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none"
-                    placeholder="nome@instituicao.com.br"
-                  />
-                </span>
-              </label>
-              <PasswordField
-                label="Senha"
-                value={password}
-                onChange={setPassword}
-                show={showPassword}
-                onToggleShow={() => setShowPassword((current) => !current)}
-              />
-              {error ? <p className="text-sm font-semibold text-[var(--brand-danger)]">{error}</p> : null}
-              <button
-                type="submit"
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[var(--brand-navy-strong)] px-5 text-sm font-black text-white shadow-sm disabled:opacity-50"
-                disabled={!email.trim() || !password}
-              >
-                <LockKeyhole className="h-4 w-4" />
-                Entrar
-              </button>
-            </form>
-          )}
+            <button type="submit" aria-live="polite" className="inline-flex h-12 items-center justify-center gap-2 radius-card bg-[var(--brand-navy-strong)] px-5 text-sm font-black text-white transition-colors duration-200 hover:bg-[var(--brand-navy)] active:bg-[var(--brand-navy-strong)] disabled:cursor-not-allowed disabled:bg-[var(--surface-muted-strong)] disabled:text-[var(--ink-soft)]" disabled={pending || !email.trim() || !password}>
+              <LockKeyhole className="h-4 w-4" /> {pending ? "Entrando…" : "Entrar"}
+            </button>
+          </form>
+          <p className="mt-5 border-t border-[var(--line-ghost)] pt-4 text-sm leading-5 text-[var(--ink-soft)]">A equipe administrativa nunca cria nem informa sua senha.</p>
         </div>
       </section>
     </main>
   );
 }
-
-function StatusStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-white/16 bg-white/10 p-4">
-      <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/62">{label}</p>
-      <p className="mt-1 text-2xl font-black">{value}</p>
-    </div>
-  );
-}
-
-function PasswordField({
-  label,
-  value,
-  onChange,
-  show,
-  onToggleShow,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  show: boolean;
-  onToggleShow: () => void;
-}) {
-  return (
-    <label className="grid gap-2 text-sm font-bold text-[var(--brand-navy-strong)]">
-      {label}
-      <span className="flex h-12 items-center gap-3 rounded-xl border border-[var(--line-strong)] bg-white px-4">
-        <LockKeyhole className="h-4 w-4 text-[var(--ink-soft)]" />
-        <input
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          type={show ? "text" : "password"}
-          autoComplete="current-password"
-          className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none"
-          placeholder="Digite a senha"
-        />
-        <button
-          type="button"
-          onClick={onToggleShow}
-          className={cn("rounded-full p-1.5 text-[var(--ink-soft)] hover:bg-[var(--surface-soft)]")}
-          aria-label={show ? "Ocultar senha" : "Mostrar senha"}
-          title={show ? "Ocultar senha" : "Mostrar senha"}
-        >
-          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </button>
-      </span>
-    </label>
-  );
-}
-
-function syncActiveRole(role: UserCategory) {
-  persistAccessCategory(role);
-}
-

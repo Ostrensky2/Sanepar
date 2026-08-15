@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 // `consolidado`, travando-os contra sobrescrita automática por futuras planilhas
 // (ver REGRAS.md / import-governance). Ação explícita do usuário.
 export async function POST(request: Request) {
-  const auth = requireApiSession(request, "data.import");
+  const auth = await requireApiSession(request, "data.import");
 
   if (!auth.ok) {
     return auth.response;

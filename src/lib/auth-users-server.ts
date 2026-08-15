@@ -7,7 +7,8 @@ export type AuthUserRow = {
   institution: string;
   role: AppUser["role"];
   status: AppUser["status"];
-  password: string;
+  password?: string;
+  auth_user_id?: string | null;
   must_change_password: boolean;
   created_at_label: string;
   last_access: string;
@@ -48,7 +49,6 @@ export function rowToUser(row: AuthUserRow): AppUser {
     institution: normalizedRow.institution,
     role: normalizedRow.role,
     status: normalizedRow.status,
-    password: "",
     mustChangePassword: normalizedRow.must_change_password,
     createdAt: normalizedRow.created_at_label,
     lastAccess: normalizedRow.last_access,

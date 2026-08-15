@@ -31,7 +31,7 @@ const execFileAsync = promisify(execFile);
 const routeCache = new Map<string, Coordinate[]>();
 
 export async function POST(request: Request) {
-  const auth = requireApiSession(request);
+  const auth = await requireApiSession(request);
 
   if (!auth.ok) {
     return auth.response;

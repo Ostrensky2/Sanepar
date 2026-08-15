@@ -37,7 +37,7 @@ type AppDocumentSnapshotRow = {
 };
 
 export async function GET(request: Request) {
-  const auth = requireApiSession(request);
+  const auth = await requireApiSession(request);
 
   if (!auth.ok) {
     return auth.response;
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const auth = requireApiSession(request, "documents.manage");
+  const auth = await requireApiSession(request, "documents.manage");
 
   if (!auth.ok) {
     return auth.response;
@@ -160,7 +160,7 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const auth = requireApiSession(request, "documents.manage");
+  const auth = await requireApiSession(request, "documents.manage");
 
   if (!auth.ok) {
     return auth.response;

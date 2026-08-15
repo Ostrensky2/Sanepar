@@ -5,6 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowLeft, CircleHelp, LogOut, Menu, UserRound, X } from "lucide-react";
 import { AuthGate } from "@/components/auth-gate";
+import {
+  AUTH_SESSION_UPDATED_EVENT,
+  readAuthSession,
+  signOutAuthSession,
+  type AuthUiSession,
+} from "@/components/auth-ui-client";
 import { CommandPalette } from "@/components/command-palette";
 import {
   InstitutionalPartners,
@@ -21,7 +27,6 @@ import {
 } from "@/lib/access-control";
 import { recordActivity } from "@/lib/activity-log";
 import { APP_LAST_UPDATED_LABEL, APP_VERSION_LABEL } from "@/lib/app-version";
-import { clearSession, getStoredSession, type AuthSession } from "@/lib/auth-users";
 import { getNavigationAccessForPath, navigationItems } from "@/lib/navigation";
 import {
   SYNC_STATUS_EVENT,
@@ -51,7 +56,7 @@ const auxiliaryPageMeta: Record<string, { summary: string; headerTitle: string }
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const [session, setSession] = useState<AuthUiSession | null>(null);
   const [activeCategory, setActiveCategory] = useState<UserCategory | null>(null);
   const [privilegeMatrix, setPrivilegeMatrix] = useState(() => getPrivilegeMatrix());
   const [syncStatus, setSyncStatus] = useState<SyncStatusSnapshot>(() => readSyncStatusSnapshot());
@@ -75,12 +80,20 @@ export function AppShell({ children }: AppShellProps) {
     );
 
   useEffect(() => {
-    const syncSession = () => setSession(getStoredSession());
+    let cancelled = false;
+    const syncSession = () => {
+      void readAuthSession().then((payload) => {
+        if (!cancelled) setSession(payload.session ?? null);
+      });
+    };
 
     syncSession();
-    window.addEventListener("yvae:auth-session-updated", syncSession);
+    window.addEventListener(AUTH_SESSION_UPDATED_EVENT, syncSession);
 
-    return () => window.removeEventListener("yvae:auth-session-updated", syncSession);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(AUTH_SESSION_UPDATED_EVENT, syncSession);
+    };
   }, []);
 
   useEffect(() => {
@@ -124,8 +137,8 @@ export function AppShell({ children }: AppShellProps) {
     recordActivity(session, "page.view", pathname, currentItem.headerTitle);
   }, [currentItem.headerTitle, pathname, session]);
 
-  function signOut() {
-    clearSession();
+  async function signOut() {
+    await signOutAuthSession();
     window.location.reload();
   }
 
@@ -263,7 +276,7 @@ function MobileNavigationDrawer({
   onSignOut,
 }: {
   open: boolean;
-  session: AuthSession | null;
+  session: AuthUiSession | null;
   onClose: () => void;
   onSignOut: () => void;
 }) {
@@ -382,7 +395,7 @@ function AccountCard({
   onSignOut,
   mobile = false,
 }: {
-  session: AuthSession | null;
+  session: AuthUiSession | null;
   onSignOut: () => void;
   mobile?: boolean;
 }) {

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readSessionFromRequest } from "@/lib/api-auth";
+import { requireApiSession, requireTrustedOrigin } from "@/lib/api-auth";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 import type { ActivityKind, ActivityLogEntry } from "@/lib/activity-log";
 
@@ -17,7 +17,9 @@ type DbActivityLogRow = {
   created_at: string;
 };
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireApiSession(request, "settings.activity");
+  if (!auth.ok) return auth.response;
   const supabase = createOptionalSupabaseClient();
 
   if (!supabase) {
@@ -54,8 +56,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!requireTrustedOrigin(request)) return NextResponse.json({ error: "Origem não autorizada." }, { status: 403 });
+  const auth = await requireApiSession(request);
+  if (!auth.ok) return auth.response;
   const supabase = createOptionalSupabaseClient();
-  const session = readSessionFromRequest(request);
 
   let payload: Partial<ActivityLogEntry> = {};
 
@@ -65,10 +69,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Payload JSON inválido." }, { status: 400 });
   }
 
-  const userId = payload.userId || session?.userId;
-  const name = payload.name || session?.name;
-  const email = payload.email || session?.email;
-  const role = payload.role || session?.role || "Usuário";
+  const userId = auth.session.userId;
+  const name = auth.session.name;
+  const email = auth.session.email;
+  const role = auth.session.role;
   const kind = payload.kind;
   const target = payload.target;
   const detail = payload.detail ?? "";

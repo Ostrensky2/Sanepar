@@ -1,57 +1,19 @@
 import { NextResponse } from "next/server";
-import { requireApiSession } from "@/lib/api-auth";
-import { INITIAL_PASSWORD } from "@/lib/auth-users";
-import { createOptionalSupabaseClient } from "@/lib/supabase";
-import { hashPassword } from "@/lib/password";
+import { checkRateLimit, requireTrustedOrigin } from "@/lib/api-auth";
+import { createRequestAuthClient } from "@/lib/supabase-auth";
 
 export const runtime = "nodejs";
+const UNIFORM = { ok: true, message: "Se o endereço estiver autorizado, as instruções serão enviadas." };
 
 export async function POST(request: Request) {
-  const auth = requireApiSession(request, "users.manage");
-
-  if (!auth.ok) {
-    return auth.response;
-  }
-
-  if (auth.session && auth.session.role !== "Admin") {
-    return NextResponse.json(
-      { error: "Somente Admin pode redefinir senhas." },
-      { status: 403 },
-    );
-  }
-
-  const supabase = createOptionalSupabaseClient();
-
-  if (!supabase) {
-    return NextResponse.json(
-      { error: "Servidor de acesso indisponivel." },
-      { status: 503 },
-    );
-  }
-
-  const payload = (await request.json()) as { userId?: unknown };
-  const userId = typeof payload.userId === "string" ? payload.userId : "";
-
-  if (!userId) {
-    return NextResponse.json({ error: "Usuario invalido." }, { status: 400 });
-  }
-
-  const { error } = await supabase
-    .from("auth_users")
-    .update({
-      password: await hashPassword(INITIAL_PASSWORD),
-      must_change_password: true,
-      last_access: "Primeiro acesso pendente",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", userId);
-
-  if (error) {
-    return NextResponse.json(
-      { error: "Nao foi possivel redefinir a senha.", details: error.message },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json({ ok: true });
+  if (!requireTrustedOrigin(request)) return NextResponse.json({ error: "Origem não autorizada." }, { status: 403 });
+  const body = await request.json().catch(() => null) as { email?: unknown } | null;
+  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+  const limit = await checkRateLimit("recovery", request, email || "invalid", 5, 3600, 3600);
+  if (limit.unavailable) return NextResponse.json({ error: "Proteção de acesso indisponível." }, { status: 503 });
+  if (!limit.allowed) return NextResponse.json(UNIFORM, { status: 202 });
+  const auth = createRequestAuthClient(request); const appOrigin = process.env.APP_ORIGIN?.trim();
+  if (!auth || !appOrigin) return NextResponse.json({ error: "Recuperação indisponível." }, { status: 503 });
+  if (email && email.length <= 254) await auth.client.auth.resetPasswordForEmail(email, { redirectTo: `${appOrigin}/auth/callback?type=recovery&next=/definir-senha` });
+  return NextResponse.json(UNIFORM, { status: 202, headers: { "Cache-Control": "no-store" } });
 }

@@ -49,7 +49,7 @@ type FieldDiaryRow = {
 };
 
 export async function GET(request: Request) {
-  const auth = requireApiSession(request);
+  const auth = await requireApiSession(request);
 
   if (!auth.ok) {
     return auth.response;
@@ -90,7 +90,7 @@ export async function PUT(request: Request) {
 }
 
 async function writeEntry(request: Request, mode: "insert" | "upsert") {
-  const auth = requireApiSession(request, "data.import");
+  const auth = await requireApiSession(request, "data.import");
 
   if (!auth.ok) {
     return auth.response;

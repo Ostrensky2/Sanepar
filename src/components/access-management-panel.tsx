@@ -13,6 +13,14 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
+  AUTH_SESSION_UPDATED_EVENT,
+  loadManagedAuthUsers,
+  readAuthSession,
+  sendAdminAuthCommand,
+  type AuthUiSession,
+  type ManagedAuthUser,
+} from "@/components/auth-ui-client";
+import {
   ACCESS_CATEGORY_STORAGE_KEY,
   categoryPrivileges,
   getPrivilegeMatrix,
@@ -26,16 +34,6 @@ import {
   type PrivilegeKey,
   type UserCategory,
 } from "@/lib/access-control";
-import {
-  INITIAL_PASSWORD,
-  getStoredSession,
-  loadAuthUsersFromSharedStore,
-  persistAuthUsers,
-  persistSession,
-  requestPasswordReset,
-  type AppUser,
-  type AuthSession,
-} from "@/lib/auth-users";
 import { cn } from "@/lib/utils";
 
 const generalVisualizationLabels = [
@@ -73,7 +71,6 @@ const privilegeGroups: Array<{ title: string; description: string; privileges: P
   },
 ];
 const PRIMARY_ADMIN_ID = "usr-antonio-ostrensky";
-const PRIMARY_ADMIN_EMAIL = "ostrensky@ufpr.br";
 
 const roleToneClasses: Record<UserCategory, string> = {
   Admin: "border-purple-200 bg-purple-100 text-purple-800",
@@ -93,8 +90,8 @@ type AccessManagementPanelProps = {
 
 export function useAccessManagement() {
   const router = useRouter();
-  const [users, setUsers] = useState<AppUser[]>([]);
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const [users, setUsers] = useState<ManagedAuthUser[]>([]);
+  const [session, setSession] = useState<AuthUiSession | null>(null);
   const [activeCategory, setActiveCategory] = useState<UserCategory>("Admin");
   const [privilegeMatrix, setPrivilegeMatrix] = useState(categoryPrivileges);
   const [newUser, setNewUser] = useState({
@@ -116,14 +113,14 @@ export function useAccessManagement() {
     let cancelled = false;
 
     async function sync() {
-      const loadedUsers = await loadAuthUsersFromSharedStore();
+      const [loadedUsers, auth] = await Promise.all([loadManagedAuthUsers(), readAuthSession()]);
 
       if (cancelled) {
         return;
       }
 
       setUsers(loadedUsers);
-      setSession(getStoredSession());
+      setSession(auth.session ?? null);
       setActiveCategory(normalizeUserCategory(window.localStorage.getItem(ACCESS_CATEGORY_STORAGE_KEY)));
       setPrivilegeMatrix(getPrivilegeMatrix());
     }
@@ -169,7 +166,7 @@ export function useAccessManagement() {
     [visibleUsers],
   );
   const firstAccessCount = useMemo(
-    () => visibleUsers.filter((user) => user.mustChangePassword).length,
+    () => visibleUsers.filter((user) => user.authStatus === "convidado").length,
     [visibleUsers],
   );
   const sortedUsers = useMemo(
@@ -186,22 +183,26 @@ export function useAccessManagement() {
   const canManagePermissions = hasPrivilege(sessionCategory, "permissions.manage");
   const isSaving = savingAction !== null;
 
-  async function persistUsers(nextUsers: AppUser[], message: string, actionId = "users") {
+  async function runAdminCommand(
+    command: Parameters<typeof sendAdminAuthCommand>[0],
+    message: string,
+    actionId: string,
+  ) {
     setSavingAction(actionId);
     setNotice(null);
-    setUsers(nextUsers);
 
     try {
-      const saved = await persistAuthUsers(nextUsers);
+      const saved = await sendAdminAuthCommand(command);
 
       if (!saved) {
-        const errorMessage = "Falha ao salvar na nuvem. A lista foi recarregada.";
+        const errorMessage = "Não foi possível concluir a operação. A lista foi recarregada.";
         setAuditTrail((current) => [errorMessage, ...current].slice(0, 5));
         setNotice({ kind: "error", text: errorMessage });
-        setUsers(await loadAuthUsersFromSharedStore());
+        setUsers(await loadManagedAuthUsers());
         return false;
       }
 
+      setUsers(await loadManagedAuthUsers());
       setAuditTrail((current) => [message, ...current].slice(0, 5));
       setNotice({ kind: "success", text: message });
       return true;
@@ -210,26 +211,25 @@ export function useAccessManagement() {
     }
   }
 
-  function syncSessionForUser(user: AppUser) {
+  async function syncSessionForUser(user: ManagedAuthUser) {
     if (session?.userId !== user.id) {
       return;
     }
 
-    const nextSession = {
-      userId: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-    };
-
-    setSession(nextSession);
-    persistSession(nextSession);
-    setActiveCategory(user.role);
-    persistAccessCategory(user.role);
+    const auth = await readAuthSession();
+    setSession(auth.session ?? null);
+    if (auth.session) {
+      setActiveCategory(auth.session.role);
+      persistAccessCategory(auth.session.role);
+    }
+    window.dispatchEvent(new Event(AUTH_SESSION_UPDATED_EVENT));
     router.refresh();
   }
 
-  async function updateUser(userId: string, patch: Partial<AppUser>) {
+  async function updateUser(
+    userId: string,
+    patch: Partial<Pick<ManagedAuthUser, "name" | "email" | "role" | "status">>,
+  ) {
     const target = users.find((user) => user.id === userId);
 
     if (
@@ -243,20 +243,18 @@ export function useAccessManagement() {
     }
 
     const nextTarget = { ...target, ...patch };
-    const nextUsers = users.map((user) => (user.id === userId ? nextTarget : user));
-
-    const saved = await persistUsers(
-      nextUsers,
+    const saved = await runAdminCommand(
+      { action: "update", userId, patch },
       `Cadastro de ${nextTarget.name} atualizado.`,
       `update-${userId}`,
     );
 
     if (saved) {
-      syncSessionForUser(nextTarget);
+      await syncSessionForUser(nextTarget);
     }
   }
 
-  function startEditingUser(user: AppUser) {
+  function startEditingUser(user: ManagedAuthUser) {
     if (!canEditExistingUsers || (user.role === "Admin" && !canManageAdminAuthority)) {
       return;
     }
@@ -294,12 +292,11 @@ export function useAccessManagement() {
       name,
       email,
       role: editingUser.role,
-      institution: editingUser.role === "Admin" ? "Admin" : editingUser.role,
     });
     setEditingUser(null);
   }
 
-  async function resetPassword(userId: string) {
+  async function resendInvite(userId: string) {
     const target = users.find((user) => user.id === userId);
 
     if (
@@ -307,37 +304,19 @@ export function useAccessManagement() {
       !target ||
       !canManageUsers ||
       !canEditExistingUsers ||
-      isPasswordResetProtected(target, canManageAdminAuthority)
+      isInviteProtected(target, canManageAdminAuthority)
     ) {
       return;
     }
 
-    setSavingAction(`reset-${userId}`);
-    setNotice(null);
-    const reset = await requestPasswordReset(userId);
-
-    if (!reset) {
-      const errorMessage = `Falha ao redefinir a senha de ${target.name}.`;
-      setAuditTrail((current) => [errorMessage, ...current].slice(0, 5));
-      setNotice({ kind: "error", text: errorMessage });
-      setSavingAction(null);
-      return;
-    }
-    setSavingAction(null);
-
-    const nextUsers = users.map((user) =>
-      user.id === userId
-        ? { ...user, mustChangePassword: true, lastAccess: "Primeiro acesso pendente" }
-        : user,
-    );
-    await persistUsers(
-      nextUsers,
-      `Senha provisoria ${INITIAL_PASSWORD} aplicada para ${target.name}.`,
-      `reset-${userId}`,
+    await runAdminCommand(
+      { action: "resend-invite", userId },
+      `Novo convite individual solicitado para ${target.name}.`,
+      `invite-${userId}`,
     );
   }
 
-  function removeUser(userId: string) {
+  async function removeUser(userId: string) {
     const target = users.find((user) => user.id === userId);
 
     if (
@@ -354,8 +333,8 @@ export function useAccessManagement() {
       return;
     }
 
-    void persistUsers(
-      users.filter((user) => user.id !== userId),
+    await runAdminCommand(
+      { action: "delete", userId },
       `${target.name} removido da lista de entrada.`,
       `remove-${userId}`,
     );
@@ -385,23 +364,9 @@ export function useAccessManagement() {
       return;
     }
 
-    const saved = await persistUsers(
-      [
-        {
-          id: `usr-${Date.now()}`,
-          name,
-          email,
-          institution: role === "Admin" ? "Admin" : role,
-          role,
-          status: "ativo",
-          password: INITIAL_PASSWORD,
-          mustChangePassword: true,
-          createdAt: new Date().toISOString().slice(0, 10),
-          lastAccess: "Primeiro acesso pendente",
-        },
-        ...users,
-      ],
-      `Cadastro criado para ${name} com senha provisoria ${INITIAL_PASSWORD}.`,
+    const saved = await runAdminCommand(
+      { action: "invite", user: { name, email, role, status: "ativo" } },
+      `Convite individual solicitado para ${name}.`,
       "add-user",
     );
 
@@ -464,7 +429,7 @@ export function useAccessManagement() {
     updateUser,
     startEditingUser,
     saveEditingUser,
-    resetPassword,
+    resendInvite,
     removeUser,
     addUser,
     togglePrivilege,
@@ -526,7 +491,7 @@ export function AccessManagementPanel({
     updateUser,
     startEditingUser,
     saveEditingUser,
-    resetPassword,
+    resendInvite,
     removeUser,
     addUser,
     togglePrivilege,
@@ -540,7 +505,7 @@ export function AccessManagementPanel({
       {showSection("stats") ? (
       <div className="grid gap-3 lg:grid-cols-3">
         <AccessStat label="Usuários ativos" value={`${activeUsers}/${visibleUsers.length}`} icon={ShieldCheck} />
-        <AccessStat label="Primeiro acesso" value={String(firstAccessCount)} icon={KeyRound} />
+        <AccessStat label="Convites pendentes" value={String(firstAccessCount)} icon={KeyRound} />
         <div className="rounded-xl border border-[var(--line-ghost)] bg-white/76 p-4">
           <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
             Categoria da sessão
@@ -656,7 +621,7 @@ export function AccessManagementPanel({
       <section className="rounded-2xl border border-[var(--line-ghost)] bg-white/90 p-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <p className="text-xs text-[var(--ink-soft)]">
-            Novos cadastros entram ativos com senha provisória ATGC26.
+            Novos usuários recebem um convite individual no e-mail cadastrado. Administradores não criam nem visualizam senhas.
           </p>
           <span className="rounded-full border border-[rgba(0,142,156,0.24)] bg-[rgba(0,142,156,0.1)] px-2.5 py-1 text-label font-black text-[var(--brand-teal)]">
             {canAddUsers ? "cadastro liberado" : "somente leitura"}
@@ -819,7 +784,6 @@ export function AccessManagementPanel({
                         const role = event.target.value as UserCategory;
                         void updateUser(user.id, {
                           role,
-                          institution: role === "Admin" ? "Admin" : role,
                         });
                       }}
                       disabled={isSaving || !canEditExistingUsers || isProtectedUser(user, canManageAdminAuthority)}
@@ -838,11 +802,11 @@ export function AccessManagementPanel({
                   <td className="px-4 py-3">
                     <span className={cn(
                       "inline-flex rounded-full px-3 py-1 text-xs font-black",
-                      user.mustChangePassword
+                      user.authStatus === "convidado"
                         ? "bg-amber-100 text-amber-800"
                         : "bg-emerald-100 text-emerald-800",
                     )}>
-                      {user.mustChangePassword ? "Senha inicial" : "Cadastrado"}
+                      {user.authStatus === "convidado" ? "Convite pendente" : "Conta vinculada"}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -870,13 +834,13 @@ export function AccessManagementPanel({
                         icon={Pencil}
                       />
                       <ActionButton
-                        label="Redefinir senha"
+                        label="Reenviar convite"
                         disabled={
                           isSaving ||
                           !canEditExistingUsers ||
-                          isPasswordResetProtected(user, canManageAdminAuthority)
+                          isInviteProtected(user, canManageAdminAuthority)
                         }
-                        onClick={() => resetPassword(user.id)}
+                        onClick={() => resendInvite(user.id)}
                         icon={KeyRound}
                       />
                       <ActionButton
@@ -975,19 +939,19 @@ function ActionButton({
   );
 }
 
-function isProtectedUser(user: AppUser | undefined, canManageAdminAuthority: boolean) {
+function isProtectedUser(user: ManagedAuthUser | undefined, canManageAdminAuthority: boolean) {
   if (!user) {
     return false;
   }
 
-  if (user.id === PRIMARY_ADMIN_ID || user.email.toLowerCase() === PRIMARY_ADMIN_EMAIL) {
+  if (user.id === PRIMARY_ADMIN_ID) {
     return true;
   }
 
   return user.role === "Admin" && !canManageAdminAuthority;
 }
 
-function isPasswordResetProtected(user: AppUser | undefined, canManageAdminAuthority: boolean) {
+function isInviteProtected(user: ManagedAuthUser | undefined, canManageAdminAuthority: boolean) {
   if (!user) {
     return false;
   }
@@ -996,11 +960,11 @@ function isPasswordResetProtected(user: AppUser | undefined, canManageAdminAutho
 }
 
 function touchesAdminAuthority(
-  target: AppUser,
-  patch: Partial<AppUser>,
+  target: ManagedAuthUser,
+  patch: Partial<ManagedAuthUser>,
   canManageAdminAuthority: boolean,
 ) {
-  if (target.id === PRIMARY_ADMIN_ID || target.email.toLowerCase() === PRIMARY_ADMIN_EMAIL) {
+  if (target.id === PRIMARY_ADMIN_ID) {
     return patch.role !== undefined && patch.role !== "Admin";
   }
 

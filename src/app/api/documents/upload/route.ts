@@ -19,7 +19,7 @@ const ALLOWED_DOCUMENT_MIME_TYPES = new Set([
 ]);
 
 export async function POST(request: Request) {
-  const auth = requireApiSession(request, "documents.manage");
+  const auth = await requireApiSession(request, "documents.manage");
 
   if (!auth.ok) {
     return auth.response;
