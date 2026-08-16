@@ -11,6 +11,10 @@ async function cspFor(supabaseUrl?: string) {
   return response.headers.get("Content-Security-Policy") ?? "";
 }
 
+async function proxyResponse() {
+  return proxy(new NextRequest("https://app.invalid/recuperar-senha"));
+}
+
 function directive(csp: string, name: string) {
   return csp.split("; ").find((part) => part.startsWith(`${name} `)) ?? "";
 }
@@ -32,6 +36,23 @@ describe("CSP do proxy", () => {
     const csp = await cspFor("https://project.supabase.co");
     expect(directive(csp, "img-src")).toBe(`${baselineImages} https://project.supabase.co`);
     expect(directive(csp, "connect-src")).toBe("connect-src 'self' https://project.supabase.co");
+  });
+
+  it("propaga o mesmo nonce na CSP da requisição e da resposta", async () => {
+    const first = await proxyResponse();
+    const second = await proxyResponse();
+    const responseCsp = first.headers.get("Content-Security-Policy") ?? "";
+    const requestCsp = first.headers.get("x-middleware-request-content-security-policy") ?? "";
+    const requestNonce = first.headers.get("x-middleware-request-x-nonce") ?? "";
+    const nonce = responseCsp.match(/'nonce-([^']+)'/)?.[1] ?? "";
+    const secondNonce = (second.headers.get("Content-Security-Policy") ?? "").match(/'nonce-([^']+)'/)?.[1] ?? "";
+
+    expect(nonce).not.toBe("");
+    expect(requestNonce).toBe(nonce);
+    expect(requestCsp).toBe(responseCsp);
+    expect(secondNonce).not.toBe(nonce);
+    expect(directive(responseCsp, "script-src")).toBe(`script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`);
+    expect(directive(responseCsp, "script-src")).not.toContain("'unsafe-inline'");
   });
 
   it.each([
