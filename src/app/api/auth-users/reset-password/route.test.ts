@@ -58,7 +58,7 @@ describe("recovery PKCE", () => {
   it("expira somente o verifier criado pela chamada quando o provedor retorna erro", async () => {
     resetPasswordForEmail.mockImplementation(async () => {
       pending.push(verifierCookie());
-      pending.push({ name: "sb-project-auth-token", value: "session-fixture", options: { path: "/", httpOnly: true, sameSite: "lax", maxAge: 3600 } });
+      pending.push({ name: "sb-project-auth-token", value: "session-fixture", options: { path: "/", httpOnly: true, sameSite: "lax", maxAge: 3600 } } satisfies PendingAuthCookie);
       return { data: null, error: new Error("synthetic provider failure") };
     });
     const response = await POST(request("known@example.test"));
@@ -95,7 +95,7 @@ function request(email: string) {
   });
 }
 
-function verifierCookie() {
+function verifierCookie(): PendingAuthCookie {
   return {
     name: "sb-project-auth-token-code-verifier",
     value: "pkce-fixture",
