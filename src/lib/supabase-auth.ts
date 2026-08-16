@@ -5,7 +5,8 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import type { NextResponse } from "next/server";
 
-type PendingCookie = { name: string; value: string; options: CookieOptions };
+export type PendingAuthCookie = { name: string; value: string; options: CookieOptions };
+export type ApplyAuthCookieOptions = { expireCodeVerifier?: boolean };
 
 function env(name: string) {
   const value = process.env[name]?.trim();
@@ -23,7 +24,7 @@ export function createRequestAuthClient(request: Request) {
   const { url, publishableKey } = getAuthConfiguration();
   if (!url || !publishableKey) return null;
 
-  const pending: PendingCookie[] = [];
+  const pending: PendingAuthCookie[] = [];
   const cookies = parseCookies(request.headers.get("cookie") ?? "");
   const client = createServerClient(url, publishableKey, {
     auth: { flowType: "pkce" },
@@ -35,11 +36,21 @@ export function createRequestAuthClient(request: Request) {
 
   return {
     client,
-    applyCookies<T extends NextResponse>(response: T): T {
-      for (const cookie of pending) response.cookies.set(cookie.name, cookie.value, cookie.options);
-      return response;
+    applyCookies<T extends NextResponse>(response: T, options: ApplyAuthCookieOptions = {}): T {
+      return applyPendingAuthCookies(response, pending, options);
     },
   };
+}
+
+export function applyPendingAuthCookies<T extends NextResponse>(response: T, pending: PendingAuthCookie[], options: ApplyAuthCookieOptions = {}): T {
+  for (const cookie of pending) {
+    if (options.expireCodeVerifier && isCodeVerifierCookie(cookie.name)) {
+      response.cookies.set(cookie.name, "", { ...cookie.options, expires: new Date(0), maxAge: 0 });
+    } else {
+      response.cookies.set(cookie.name, cookie.value, cookie.options);
+    }
+  }
+  return response;
 }
 
 export function createAuthAdminClient() {
@@ -64,4 +75,8 @@ function parseCookies(header: string) {
     try { values.set(name, decodeURIComponent(raw)); } catch { values.set(name, raw); }
   }
   return values;
+}
+
+function isCodeVerifierCookie(name: string) {
+  return /-code-verifier(?:\.\d+)?$/.test(name);
 }

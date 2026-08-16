@@ -14,6 +14,17 @@ export async function POST(request: Request) {
   if (!limit.allowed) return NextResponse.json(UNIFORM, { status: 202 });
   const auth = createRequestAuthClient(request); const appOrigin = process.env.APP_ORIGIN?.trim();
   if (!auth || !appOrigin) return NextResponse.json({ error: "Recuperação indisponível." }, { status: 503 });
-  if (email && email.length <= 254) await auth.client.auth.resetPasswordForEmail(email, { redirectTo: `${appOrigin}/auth/callback?type=recovery&next=/definir-senha` });
-  return NextResponse.json(UNIFORM, { status: 202, headers: { "Cache-Control": "no-store" } });
+  let resetFailed = false;
+  if (email && email.length <= 254) {
+    try {
+      const { error } = await auth.client.auth.resetPasswordForEmail(email, { redirectTo: `${appOrigin}/auth/callback?type=recovery&next=/definir-senha` });
+      resetFailed = Boolean(error);
+    } catch {
+      resetFailed = true;
+    }
+  }
+  return auth.applyCookies(
+    NextResponse.json(UNIFORM, { status: 202, headers: { "Cache-Control": "no-store" } }),
+    { expireCodeVerifier: resetFailed },
+  );
 }
