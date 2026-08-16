@@ -12,7 +12,8 @@ export async function POST(request: Request) {
   const limit = await checkRateLimit("recovery", request, email || "invalid", 5, 3600, 3600);
   if (limit.unavailable) return NextResponse.json({ error: "Proteção de acesso indisponível." }, { status: 503 });
   if (!limit.allowed) return NextResponse.json(UNIFORM, { status: 202 });
-  const auth = createRequestAuthClient(request); const appOrigin = process.env.APP_ORIGIN?.trim();
+  const response = NextResponse.json(UNIFORM, { status: 202, headers: { "Cache-Control": "no-store" } });
+  const auth = createRequestAuthClient(request, response); const appOrigin = process.env.APP_ORIGIN?.trim();
   if (!auth || !appOrigin) return NextResponse.json({ error: "Recuperação indisponível." }, { status: 503 });
   let resetFailed = false;
   if (email && email.length <= 254) {
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
     }
   }
   return auth.applyCookies(
-    NextResponse.json(UNIFORM, { status: 202, headers: { "Cache-Control": "no-store" } }),
+    response,
     { expireCodeVerifier: resetFailed },
   );
 }

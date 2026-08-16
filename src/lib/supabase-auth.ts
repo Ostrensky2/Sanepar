@@ -20,7 +20,7 @@ export function getAuthConfiguration() {
   return { url, publishableKey, secretKey, ready: Boolean(url && publishableKey && secretKey) };
 }
 
-export function createRequestAuthClient(request: Request) {
+export function createRequestAuthClient(request: Request, response?: NextResponse) {
   const { url, publishableKey } = getAuthConfiguration();
   if (!url || !publishableKey) return null;
 
@@ -30,7 +30,10 @@ export function createRequestAuthClient(request: Request) {
     auth: { flowType: "pkce" },
     cookies: {
       getAll: () => [...cookies.entries()].map(([name, value]) => ({ name, value })),
-      setAll: (items) => { pending.push(...items); },
+      setAll: (items) => {
+        pending.push(...items);
+        if (response) applyPendingAuthCookies(response, items);
+      },
     },
   });
 
