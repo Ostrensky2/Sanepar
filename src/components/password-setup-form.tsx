@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CheckCircle2, Eye, EyeOff, LockKeyhole, ShieldAlert } from "lucide-react";
 import { YvaeMasthead } from "@/components/brand-signature";
 import { readAuthSession, signOutAuthSession, updateRecoveryPassword } from "@/components/auth-ui-client";
+import { MIN_PASSWORD_LENGTH } from "@/lib/auth-policy";
 
 type SetupState = "checking" | "invalid" | "ready" | "saved";
 
@@ -29,8 +30,8 @@ export function PasswordSetupForm() {
 
   async function submit() {
     if (pending || state !== "ready") return;
-    if (password.length < 12) {
-      setError("Use pelo menos 12 caracteres. Uma frase longa e exclusiva é recomendada.");
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Use pelo menos ${MIN_PASSWORD_LENGTH} caracteres. Uma frase longa e exclusiva é recomendada.`);
       return;
     }
     if (password !== confirmation) {
@@ -101,7 +102,7 @@ const PasswordInput = forwardRef<HTMLInputElement, { label: string; value: strin
       {label}
       <span className="flex h-12 items-center gap-3 rounded-xl border border-[var(--line-strong)] bg-white px-4 focus-within:border-[var(--brand-blue)]">
         <LockKeyhole className="h-4 w-4 text-[var(--ink-soft)]" />
-        <input ref={ref} value={value} onChange={(event) => onChange(event.target.value)} type={show ? "text" : "password"} autoComplete={autoComplete} maxLength={128} required className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" />
+        <input ref={ref} value={value} onChange={(event) => onChange(event.target.value)} type={show ? "text" : "password"} autoComplete={autoComplete} minLength={MIN_PASSWORD_LENGTH} maxLength={128} required className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" />
         <button type="button" onClick={onToggle} className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--ink-soft)] hover:bg-[var(--surface-soft)]" aria-label={show ? "Ocultar senha" : "Mostrar senha"}>{show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
       </span>
     </label>

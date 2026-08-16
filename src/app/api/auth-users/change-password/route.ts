@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { checkRateLimit, requireApiSession, requireTrustedOrigin } from "@/lib/api-auth";
 import { createAuthAdminClient, createRequestAuthClient } from "@/lib/supabase-auth";
 import { AUTH_PURPOSE_COOKIE, consumeAuthPurposeOnce, verifyAuthPurpose } from "@/lib/auth-purpose";
+import { MIN_PASSWORD_LENGTH } from "@/lib/auth-policy";
 
 export const runtime = "nodejs";
 
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
   if (!profile || (!profile.must_change_password && !recovery)) return NextResponse.json({ error: "Esta sessão não permite definir senha." }, { status: 403 });
   const body = await request.json().catch(() => null) as { newPassword?: unknown } | null;
   const password = typeof body?.newPassword === "string" ? body.newPassword : "";
-  if (password.length < 12 || password.length > 1024) return NextResponse.json({ error: "A senha deve ter entre 12 e 1024 caracteres." }, { status: 400 });
+  if (password.length < MIN_PASSWORD_LENGTH || password.length > 1024) return NextResponse.json({ error: `A senha deve ter entre ${MIN_PASSWORD_LENGTH} e 1024 caracteres.` }, { status: 400 });
   const limit = await checkRateLimit("password", request, session.session.authUserId, 5, 900, 900);
   if (limit.unavailable) return NextResponse.json({ error: "Proteção de acesso indisponível." }, { status: 503 });
   if (!limit.allowed) return NextResponse.json({ error: "Muitas tentativas. Aguarde e tente novamente." }, { status: 429 });

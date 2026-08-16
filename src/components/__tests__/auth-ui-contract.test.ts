@@ -104,6 +104,8 @@ describe("authentication screens", () => {
     const gate = readSource("src/components/auth-gate.tsx");
 
     expect(setup).toContain('payload.canSetPassword && allowedPurpose ? "ready" : "invalid"');
+    expect(setup).toContain('minLength={MIN_PASSWORD_LENGTH}');
+    expect(setup).toContain('password.length < MIN_PASSWORD_LENGTH');
     expect(setup.indexOf('setPassword("")')).toBeLessThan(setup.indexOf("updateRecoveryPassword(submittedPassword)"));
     expect(setup).toContain("await signOutAuthSession()");
     expect(gate.indexOf('setPassword("")')).toBeLessThan(gate.indexOf("signInWithPassword(email, submittedPassword)"));
