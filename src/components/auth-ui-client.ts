@@ -80,9 +80,10 @@ export async function updateRecoveryPassword(newPassword: string) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ newPassword }),
     });
-    return response.ok;
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    return response.ok ? { ok: true as const } : { ok: false as const, error: payload.error ?? "Não foi possível atualizar a senha." };
   } catch {
-    return false;
+    return { ok: false as const, error: "Não foi possível atualizar a senha." };
   }
 }
 

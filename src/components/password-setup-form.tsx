@@ -45,10 +45,10 @@ export function PasswordSetupForm() {
     setPassword("");
     setConfirmation("");
     firstPasswordRef.current?.blur();
-    const saved = await updateRecoveryPassword(submittedPassword);
+    const result = await updateRecoveryPassword(submittedPassword);
     setPending(false);
-    if (!saved) {
-      setState("invalid");
+    if (!result.ok) {
+      setError(result.error);
       return;
     }
     await signOutAuthSession();
