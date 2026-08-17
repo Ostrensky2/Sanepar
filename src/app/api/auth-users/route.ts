@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { requireApiSession, requireTrustedOrigin } from "@/lib/api-auth";
 import { createAuthAdminClient } from "@/lib/supabase-auth";
@@ -31,15 +31,22 @@ export async function PUT(request: Request) {
 
   if (command.action === "invite") {
     const user = validateUser(command.user, auth.session.role); if (!user) return invalid();
-    const { data: invited, error } = await admin.auth.admin.inviteUserByEmail(user.email, {
-      redirectTo: `${appOrigin}/auth/callback?type=invite&next=/definir-senha`, data: { display_name: user.name },
-    });
-    if (error || !invited.user) return NextResponse.json({ error: "Não foi possível enviar o convite." }, { status: 502 });
+    const { data: invited, error } = await admin.auth.admin.createUser({ email: user.email, email_confirm: true,
+      password: `${randomBytes(32).toString("base64url")}Aa1!`, user_metadata: { display_name: user.name } }).catch(() => ({ data: { user: null }, error: new Error("create failed") }));
+    if (error || !invited.user) return NextResponse.json({ error: "Não foi possível criar o convite." }, { status: 502 });
     const now = new Date().toISOString();
-    const { error: profileError } = await admin.from("auth_users").insert({ id: randomUUID(), auth_user_id: invited.user.id,
-      name: user.name, email: user.email, institution: user.role, role: user.role, status: user.status,
-      must_change_password: true, created_at_label: now.slice(0, 10), last_access: "Convite pendente", updated_at: now });
-    if (profileError) { await admin.auth.admin.deleteUser(invited.user.id); return unavailable(); }
+    let profileError: unknown = null;
+    try {
+      const result = await admin.from("auth_users").insert({ id: randomUUID(), auth_user_id: invited.user.id,
+        name: user.name, email: user.email, institution: user.role, role: user.role, status: user.status,
+        must_change_password: true, created_at_label: now.slice(0, 10), last_access: "Convite pendente", updated_at: now });
+      profileError = result.error;
+    } catch { profileError = new Error("insert failed"); }
+    if (profileError) { await discardInvite(admin, invited.user.id, true); return unavailable(); }
+    const { error: deliveryError } = await admin.auth.resetPasswordForEmail(user.email, {
+      redirectTo: `${appOrigin}/auth/callback?type=recovery&next=/definir-senha`,
+    }).catch(() => ({ error: new Error("delivery failed") }));
+    if (deliveryError) { await discardInvite(admin, invited.user.id, true); return NextResponse.json({ error: "Não foi possível enviar o convite." }, { status: 502 }); }
     return NextResponse.json({ ok: true }, { status: 201 });
   }
 
@@ -48,7 +55,8 @@ export async function PUT(request: Request) {
   if (!current || (auth.session.role !== "Admin" && current.role !== auth.session.role)) return NextResponse.json({ error: "Operação não autorizada." }, { status: 403 });
 
   if (command.action === "resend-invite") {
-    const { error } = await admin.auth.admin.inviteUserByEmail(current.email, { redirectTo: `${appOrigin}/auth/callback?type=invite&next=/definir-senha` });
+    if (!current.must_change_password || typeof current.auth_user_id !== "string" || !current.auth_user_id) return NextResponse.json({ error: "Este convite não pode ser reenviado." }, { status: 400 });
+    const { error } = await admin.auth.resetPasswordForEmail(current.email, { redirectTo: `${appOrigin}/auth/callback?type=recovery&next=/definir-senha` }).catch(() => ({ error: new Error("delivery failed") }));
     return error ? NextResponse.json({ error: "Não foi possível reenviar o convite." }, { status: 502 }) : NextResponse.json({ ok: true });
   }
   if (command.action === "update") {
@@ -90,3 +98,15 @@ function toManagedUser(row: Record<string, unknown>) { return { id: row.id, name
   createdAt: row.created_at_label, lastAccess: row.last_access }; }
 function invalid() { return NextResponse.json({ error: "Solicitação inválida." }, { status: 400 }); }
 function unavailable() { return NextResponse.json({ error: "Serviço de usuários indisponível." }, { status: 503 }); }
+
+async function discardInvite(admin: NonNullable<ReturnType<typeof createAuthAdminClient>>, authUserId: string, removeProfile: boolean) {
+  if (removeProfile) {
+    try { await admin.from("auth_users").delete().eq("auth_user_id", authUserId); } catch { /* confirmar abaixo */ }
+    try {
+      const { data, error } = await admin.from("auth_users").select("id").eq("auth_user_id", authUserId).maybeSingle();
+      if (error || data) { console.error("auth invite cleanup failed"); return; }
+    } catch { console.error("auth invite cleanup failed"); return; }
+  }
+  try { const { error } = await admin.auth.admin.deleteUser(authUserId); if (error) console.error("auth invite cleanup failed"); }
+  catch { console.error("auth invite cleanup failed"); }
+}
