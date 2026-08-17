@@ -23,7 +23,7 @@ export async function GET(request: Request) {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
       "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
-      "Referrer-Policy": "no-referrer",
+      "Referrer-Policy": "origin",
       "X-Content-Type-Options": "nosniff",
     },
   });
@@ -33,7 +33,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const url = new URL(request.url);
   const appOrigin = process.env.APP_ORIGIN?.trim();
-  if (!appOrigin || !requireTrustedOrigin(request)) return postRedirect("/?auth=invalid", appOrigin ?? url.origin);
+  if (!appOrigin || !trustedCallbackOrigin(request, appOrigin)) return postRedirect("/?auth=invalid", appOrigin ?? url.origin);
 
   const form = await request.formData().catch(() => null);
   const input = form && readInput(form);
@@ -104,5 +104,11 @@ function matchesCookie(request: Request, name: string, expected: string) {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 function escapeHtml(value: string) { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!); }
+function trustedCallbackOrigin(request: Request, appOrigin: string) {
+  if (request.headers.has("origin")) return requireTrustedOrigin(request);
+  if (request.headers.get("sec-fetch-site") !== "same-origin") return false;
+  const referer = request.headers.get("referer");
+  try { return Boolean(referer) && new URL(referer!).origin === new URL(appOrigin).origin; } catch { return false; }
+}
 function invalid(origin: string) { return NextResponse.redirect(new URL("/?auth=invalid", origin)); }
 function postRedirect(path: string, origin: string) { return NextResponse.redirect(new URL(path, origin), 303); }

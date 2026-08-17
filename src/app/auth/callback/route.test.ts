@@ -93,6 +93,24 @@ describe("callback anti-scanner", () => {
     expect(verifyOtp).not.toHaveBeenCalled();
   });
 
+  it("aceita fallback de formulário same-origin sem header Origin", async () => {
+    requireTrustedOrigin.mockReturnValueOnce(false);
+    const csrf = await issueCsrf();
+    const body = new URLSearchParams({ token_hash: tokenHash, type: "invite", next: "/definir-senha", csrf });
+    const response = await POST(new Request("https://app.invalid/auth/callback", { method: "POST", headers: { referer: "https://app.invalid/", "sec-fetch-site": "same-origin", "content-type": "application/x-www-form-urlencoded" }, body }));
+    expect(response.headers.get("location")).toBe("https://app.invalid/definir-senha");
+    expect(verifyOtp).toHaveBeenCalledOnce();
+  });
+
+  it("não usa fallback quando Origin presente é divergente", async () => {
+    requireTrustedOrigin.mockReturnValueOnce(false);
+    const csrf = await issueCsrf();
+    const body = new URLSearchParams({ token_hash: tokenHash, type: "invite", next: "/definir-senha", csrf });
+    const response = await POST(new Request("https://app.invalid/auth/callback", { method: "POST", headers: { origin: "https://evil.invalid", referer: "https://app.invalid/", "sec-fetch-site": "same-origin", "content-type": "application/x-www-form-urlencoded" }, body }));
+    expect(response.headers.get("location")).toBe("https://app.invalid/?auth=invalid");
+    expect(verifyOtp).not.toHaveBeenCalled();
+  });
+
   it("rejeita CSRF assinado expirado", async () => {
     vi.useFakeTimers();
     try {
