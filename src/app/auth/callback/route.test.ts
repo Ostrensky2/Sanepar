@@ -79,6 +79,13 @@ describe("callback anti-scanner", () => {
     expect((await GET(new Request("https://app.invalid/auth/callback?token_hash=short&type=recovery"))).headers.get("location")).toBe("https://app.invalid/?auth=invalid");
   });
 
+  it("aceita token_hash canônico URL-safe não hexadecimal", async () => {
+    const opaqueToken = `p_${"a".repeat(58)}`;
+    const response = await GET(new Request(`https://app.invalid/auth/callback?token_hash=${opaqueToken}&type=recovery&next=/definir-senha`));
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("Confirmar e continuar");
+  });
+
   it("rejeita POST sem Origin confiável ou sem CSRF", async () => {
     requireTrustedOrigin.mockReturnValueOnce(false);
     expect((await confirm("csrf", "yvae_auth_confirm_csrf=csrf")).headers.get("location")).toBe("https://app.invalid/?auth=invalid");
