@@ -61,7 +61,7 @@ function readInput(values: URLSearchParams | FormData): Input | null {
   const tokenHash = values.get("token_hash");
   const purpose = safePurpose(values.get("type"));
   const appOrigin = process.env.APP_ORIGIN?.trim();
-  if (!appOrigin || typeof tokenHash !== "string" || !/^[a-f0-9]{64}$/i.test(tokenHash) || !purpose) return null;
+  if (!appOrigin || typeof tokenHash !== "string" || !/^[a-f0-9]{40,128}$/i.test(tokenHash) || !purpose) return null;
   const next = values.get("next");
   return { tokenHash, purpose, next: safeUrl(typeof next === "string" ? next : null, appOrigin) };
 }

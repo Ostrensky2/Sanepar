@@ -6,7 +6,7 @@ vi.mock("@/lib/api-auth", () => ({ requireTrustedOrigin: mocks.requireTrustedOri
 vi.mock("@/lib/supabase-auth", () => ({ createRequestAuthClient: () => ({ client: { auth: { verifyOtp: mocks.verifyOtp } }, applyCookies: mocks.applyCookies }) }));
 import { GET, POST } from "@/app/auth/callback/route";
 
-const tokenHash = "a".repeat(64);
+const tokenHash = "a".repeat(56);
 const href = `https://app.invalid/auth/callback?token_hash=${tokenHash}&type=invite&next=/definir-senha`;
 
 describe("callback anti-scanner", () => {
