@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireTrustedOrigin } from "@/lib/api-auth";
 import { createRequestAuthClient } from "@/lib/supabase-auth";
@@ -6,7 +6,6 @@ import { AUTH_PURPOSE_COOKIE, createAuthPurpose } from "@/lib/auth-purpose";
 
 export const runtime = "nodejs";
 
-const CSRF_COOKIE = "yvae_auth_confirm_csrf";
 const USED_COOKIE = "yvae_auth_link_used";
 const COOKIE_OPTIONS = { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/auth/callback", maxAge: 600 };
 
@@ -16,7 +15,8 @@ export async function GET(request: Request) {
   const appOrigin = process.env.APP_ORIGIN?.trim();
   if (!input || !appOrigin || matchesCookie(request, USED_COOKIE, digest(input.tokenHash))) return invalid(appOrigin ?? url.origin);
 
-  const csrf = randomBytes(32).toString("base64url");
+  const csrf = createCsrf(input);
+  if (!csrf) return invalid(appOrigin);
   const response = new NextResponse(confirmPage(input, csrf), {
     status: 200,
     headers: {
@@ -27,7 +27,6 @@ export async function GET(request: Request) {
       "X-Content-Type-Options": "nosniff",
     },
   });
-  response.cookies.set(CSRF_COOKIE, csrf, COOKIE_OPTIONS);
   return response;
 }
 
@@ -40,14 +39,13 @@ export async function POST(request: Request) {
   const input = form && readInput(form);
   const csrf = form?.get("csrf");
   const used = input ? digest(input.tokenHash) : "";
-  if (!input || typeof csrf !== "string" || !matchesCookie(request, CSRF_COOKIE, csrf) || matchesCookie(request, USED_COOKIE, used)) return postRedirect("/?auth=invalid", appOrigin);
+  if (!input || typeof csrf !== "string" || !verifyCsrf(input, csrf) || matchesCookie(request, USED_COOKIE, used)) return postRedirect("/?auth=invalid", appOrigin);
 
   const auth = createRequestAuthClient(request);
   if (!auth) return postRedirect("/?auth=unavailable", appOrigin);
   const { data, error } = await auth.client.auth.verifyOtp({ token_hash: input.tokenHash, type: input.purpose });
   const purposeToken = !error && data.session?.user.id ? createAuthPurpose(input.purpose, data.session.user.id) : null;
   const response = NextResponse.redirect(error || !purposeToken ? new URL("/?auth=invalid", appOrigin) : input.next, 303);
-  response.cookies.set(CSRF_COOKIE, "", { ...COOKIE_OPTIONS, maxAge: 0 });
   if (!purposeToken) return response;
 
   response.cookies.set(USED_COOKIE, used, COOKIE_OPTIONS);
@@ -84,6 +82,20 @@ function safeUrl(value: string | null, appOrigin: string) {
 
 function safePurpose(value: FormDataEntryValue | string | null) { return value === "invite" || value === "recovery" ? value : null; }
 function digest(value: string) { return createHash("sha256").update(value).digest("base64url"); }
+function createCsrf(input: Input) {
+  const secret = process.env.AUTH_PURPOSE_SECRET?.trim(); if (!secret) return null;
+  const issuedAt = Math.floor(Date.now() / 1000).toString(); const nonce = randomBytes(16).toString("base64url");
+  const payload = csrfPayload(input, issuedAt, nonce); const signature = createHmac("sha256", secret).update(payload).digest("base64url");
+  return `${issuedAt}.${nonce}.${signature}`;
+}
+function verifyCsrf(input: Input, value: string) {
+  const secret = process.env.AUTH_PURPOSE_SECRET?.trim(); const [issuedAt, nonce, signature, extra] = value.split(".");
+  if (!secret || !issuedAt || !nonce || !signature || extra || !/^\d{10}$/.test(issuedAt) || !/^[a-z0-9_-]{20,32}$/i.test(nonce) || !/^[a-z0-9_-]{43}$/i.test(signature)) return false;
+  const age = Math.floor(Date.now() / 1000) - Number(issuedAt); if (age < 0 || age > 600) return false;
+  const expected = createHmac("sha256", secret).update(csrfPayload(input, issuedAt, nonce)).digest("base64url");
+  const left = Buffer.from(signature); const right = Buffer.from(expected); return left.length === right.length && timingSafeEqual(left, right);
+}
+function csrfPayload(input: Input, issuedAt: string, nonce: string) { return `${issuedAt}\0${nonce}\0${digest(input.tokenHash)}\0${input.purpose}\0${input.next.pathname}${input.next.search}`; }
 function readCookie(request: Request, name: string) { return request.headers.get("cookie")?.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${name}=`))?.slice(name.length + 1) ?? null; }
 function matchesCookie(request: Request, name: string, expected: string) {
   const actual = readCookie(request, name);

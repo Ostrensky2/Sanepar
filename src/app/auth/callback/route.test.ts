@@ -22,7 +22,7 @@ describe("callback anti-scanner", () => {
     const human = await GET(new Request(href));
     expect(scanner.status).toBe(200); expect(human.status).toBe(200);
     expect(await human.text()).toContain("Confirmar e continuar");
-    expect(scanner.headers.get("set-cookie")).toContain("yvae_auth_confirm_csrf=");
+    expect(scanner.headers.get("set-cookie")).toBeNull();
     expect(verifyOtp).not.toHaveBeenCalled();
   });
 
@@ -30,7 +30,7 @@ describe("callback anti-scanner", () => {
     const get = await GET(new Request(href));
     const html = await get.text();
     const csrf = html.match(/name="csrf" value="([^"]+)"/)![1];
-    const response = await confirm(csrf, `yvae_auth_confirm_csrf=${csrf}`);
+    const response = await confirm(csrf);
     expect(verifyOtp).toHaveBeenCalledOnce();
     expect(verifyOtp).toHaveBeenCalledWith({ token_hash: tokenHash, type: "invite" });
     expect(response.status).toBe(303);
@@ -41,10 +41,10 @@ describe("callback anti-scanner", () => {
   });
 
   it("nega replay no POST e no GET", async () => {
-    const csrf = "b".repeat(43);
-    const first = await confirm(csrf, `yvae_auth_confirm_csrf=${csrf}`);
+    const csrf = await issueCsrf();
+    const first = await confirm(csrf);
     const used = first.headers.get("set-cookie")!.match(/yvae_auth_link_used=([^;,]+)/)![1];
-    const postReplay = await confirm(csrf, `yvae_auth_confirm_csrf=${csrf}; yvae_auth_link_used=${used}`);
+    const postReplay = await confirm(csrf, `yvae_auth_link_used=${used}`);
     const getReplay = await GET(new Request(href, { headers: { cookie: `yvae_auth_link_used=${used}` } }));
     expect(postReplay.headers.get("location")).toBe("https://app.invalid/?auth=invalid");
     expect(getReplay.headers.get("location")).toBe("https://app.invalid/?auth=invalid");
@@ -53,17 +53,17 @@ describe("callback anti-scanner", () => {
 
   it("falha fechado para token expirado", async () => {
     verifyOtp.mockResolvedValueOnce({ data: { session: null }, error: new Error("expired") });
-    const response = await confirm("csrf", "yvae_auth_confirm_csrf=csrf");
+    const response = await confirm(await issueCsrf());
     expect(response.headers.get("location")).toBe("https://app.invalid/?auth=invalid");
-    expect(response.headers.get("set-cookie")).not.toContain("yvae_auth_purpose=");
+    expect(response.headers.get("set-cookie")).toBeNull();
     expect(applyCookies).not.toHaveBeenCalled();
   });
 
   it("não persiste sessão se a criação do purpose falhar", async () => {
-    delete process.env.AUTH_PURPOSE_SECRET;
-    const response = await confirm("csrf", "yvae_auth_confirm_csrf=csrf");
+    const csrf = await issueCsrf(); delete process.env.AUTH_PURPOSE_SECRET;
+    const response = await confirm(csrf);
     expect(response.headers.get("location")).toBe("https://app.invalid/?auth=invalid");
-    expect(response.headers.get("set-cookie")).not.toContain("yvae_auth_purpose=");
+    expect(response.headers.get("set-cookie")).toBeNull();
     expect(applyCookies).not.toHaveBeenCalled();
   });
 
@@ -88,8 +88,27 @@ describe("callback anti-scanner", () => {
 
   it("rejeita POST sem Origin confiável ou sem CSRF", async () => {
     requireTrustedOrigin.mockReturnValueOnce(false);
-    expect((await confirm("csrf", "yvae_auth_confirm_csrf=csrf")).headers.get("location")).toBe("https://app.invalid/?auth=invalid");
-    expect((await confirm("csrf", "")).headers.get("location")).toBe("https://app.invalid/?auth=invalid");
+    expect((await confirm(await issueCsrf())).headers.get("location")).toBe("https://app.invalid/?auth=invalid");
+    expect((await confirm("invalid")).headers.get("location")).toBe("https://app.invalid/?auth=invalid");
+    expect(verifyOtp).not.toHaveBeenCalled();
+  });
+
+  it("rejeita CSRF assinado expirado", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-08-17T15:00:00Z"));
+      const csrf = await issueCsrf();
+      vi.setSystemTime(new Date("2026-08-17T15:10:01Z"));
+      expect((await confirm(csrf)).headers.get("location")).toBe("https://app.invalid/?auth=invalid");
+      expect(verifyOtp).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("vincula o CSRF ao token, purpose e destino", async () => {
+    const csrf = await issueCsrf();
+    const body = new URLSearchParams({ token_hash: tokenHash, type: "invite", next: "/outro-destino", csrf });
+    const response = await POST(new Request("https://app.invalid/auth/callback", { method: "POST", headers: { origin: "https://app.invalid", "content-type": "application/x-www-form-urlencoded" }, body }));
+    expect(response.headers.get("location")).toBe("https://app.invalid/?auth=invalid");
     expect(verifyOtp).not.toHaveBeenCalled();
   });
 
@@ -99,7 +118,11 @@ describe("callback anti-scanner", () => {
   });
 });
 
-function confirm(csrf: string, cookie: string) {
+async function issueCsrf() {
+  const response = await GET(new Request(href)); const html = await response.text();
+  return html.match(/name="csrf" value="([^"]+)"/)![1];
+}
+function confirm(csrf: string, cookie = "") {
   const body = new URLSearchParams({ token_hash: tokenHash, type: "invite", next: "/definir-senha", csrf });
   return POST(new Request("https://app.invalid/auth/callback", { method: "POST", headers: { origin: "https://app.invalid", cookie, "content-type": "application/x-www-form-urlencoded" }, body }));
 }
