@@ -5,6 +5,7 @@ const { verifyOtp, applyCookies, requireTrustedOrigin } = mocks;
 vi.mock("@/lib/api-auth", () => ({ requireTrustedOrigin: mocks.requireTrustedOrigin }));
 vi.mock("@/lib/supabase-auth", () => ({ createRequestAuthClient: () => ({ client: { auth: { verifyOtp: mocks.verifyOtp } }, applyCookies: mocks.applyCookies }) }));
 import { GET, POST } from "@/app/auth/callback/route";
+import { GET as pathGET } from "@/app/auth/callback/[purpose]/[tokenHash]/route";
 
 const tokenHash = "a".repeat(56);
 const href = `https://app.invalid/auth/callback?token_hash=${tokenHash}&type=invite&next=/definir-senha`;
@@ -84,6 +85,16 @@ describe("callback anti-scanner", () => {
     const response = await GET(new Request(`https://app.invalid/auth/callback?token_hash=${opaqueToken}&type=recovery&next=/definir-senha`));
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("Confirmar e continuar");
+  });
+
+  it("aceita token no path sem depender da query institucional", async () => {
+    const response = await pathGET(
+      new Request(`https://app.invalid/auth/callback/recovery/${tokenHash}`),
+      { params: Promise.resolve({ purpose: "recovery", tokenHash }) },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("Confirmar e continuar");
+    expect(verifyOtp).not.toHaveBeenCalled();
   });
 
   it("rejeita POST sem Origin confiável ou sem CSRF", async () => {
