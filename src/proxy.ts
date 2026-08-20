@@ -1,15 +1,19 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const EMBEDDABLE_DASHBOARD = "/dashboards/Painel_eDNA_Campanha1_Sanepar.html";
+const DASHBOARD_SCRIPT_HASH = "'sha256-GIM3TXghWFz7sEf2eyRtph0lyBIlmKukRX99+2teUt8='";
+
 export async function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const supabaseOrigin = safeOrigin(process.env.NEXT_PUBLIC_SUPABASE_URL);
   const isDev = process.env.NODE_ENV === "development";
+  const isEmbeddableDashboard = request.nextUrl.pathname === EMBEDDABLE_DASHBOARD;
   const csp = [
-    "default-src 'self'", `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
+    "default-src 'self'", isEmbeddableDashboard ? `script-src 'self' ${DASHBOARD_SCRIPT_HASH}` : `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'", `img-src 'self' blob: data: https://tile.openstreetmap.org https://drive.google.com https://lh3.googleusercontent.com${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
     `connect-src 'self'${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`, "font-src 'self' data:", "worker-src 'self' blob:",
-    "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
+    "object-src 'none'", "base-uri 'self'", "form-action 'self'", `frame-ancestors '${isEmbeddableDashboard ? "self" : "none"}'`,
   ].join("; ");
   const headers = new Headers(request.headers); headers.set("x-nonce", nonce); headers.set("Content-Security-Policy", csp);
   let response = NextResponse.next({ request: { headers } });

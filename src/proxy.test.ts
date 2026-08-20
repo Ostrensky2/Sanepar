@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
+import nextConfig from "../next.config";
 import { proxy } from "@/proxy";
 
 const baselineImages = "img-src 'self' blob: data: https://tile.openstreetmap.org https://drive.google.com https://lh3.googleusercontent.com";
@@ -53,6 +54,20 @@ describe("CSP do proxy", () => {
     expect(secondNonce).not.toBe(nonce);
     expect(directive(responseCsp, "script-src")).toBe(`script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`);
     expect(directive(responseCsp, "script-src")).not.toContain("'unsafe-inline'");
+  });
+
+  it("libera somente o dashboard auditado com hash e frame same-origin", async () => {
+    const response = await proxy(new NextRequest("https://app.invalid/dashboards/Painel_eDNA_Campanha1_Sanepar.html"));
+    const csp = response.headers.get("Content-Security-Policy") ?? "";
+    expect(directive(csp, "script-src")).toBe("script-src 'self' 'sha256-GIM3TXghWFz7sEf2eyRtph0lyBIlmKukRX99+2teUt8='");
+    expect(directive(csp, "script-src")).not.toContain("'unsafe-inline'");
+    expect(directive(csp, "frame-ancestors")).toBe("frame-ancestors 'self'");
+  });
+
+  it("mantém XFO global DENY e sobrescreve somente o dashboard exato", async () => {
+    const rules = await nextConfig.headers?.();
+    expect(rules?.find((rule) => rule.source === "/(.*)")?.headers).toContainEqual({ key: "X-Frame-Options", value: "DENY" });
+    expect(rules?.find((rule) => rule.source === "/dashboards/Painel_eDNA_Campanha1_Sanepar.html")?.headers).toEqual([{ key: "X-Frame-Options", value: "SAMEORIGIN" }]);
   });
 
   it.each([
