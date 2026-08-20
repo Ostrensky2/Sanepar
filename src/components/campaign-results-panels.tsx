@@ -1,5 +1,5 @@
 import { BarChart3, ExternalLink, FileSpreadsheet, FlaskConical, Info, X } from "lucide-react";
-import { type ReactNode } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { CampaignHydroMap, type CampaignHydroMapPoint } from "@/components/campaign-hydro-map";
 import {
   MetabarcodingStagesIndicator,
@@ -56,9 +56,9 @@ export function CampaignResultsPanels({
         </>
       ) : (
         <>
+          <ResultsDashboardSection campaign={campaign} />
           <MetabarcodingStagesIndicator stages={stages} title={stageTitle} />
           <AnalyticResultsMap points={points} />
-          <ResultsDashboardSection campaign={campaign} />
         </>
       )}
     </ErrorBoundary>
@@ -178,22 +178,67 @@ function UnavailableResultsNotice({
 
 function ResultsDashboardSection({ campaign }: { campaign: CampaignView }) {
   const hasDashboard = Boolean(campaign.resultsDashboardUrl);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const observerCleanupRef = useRef<(() => void) | null>(null);
+  const [iframeHeight, setIframeHeight] = useState(640);
+
+  useEffect(() => () => observerCleanupRef.current?.(), []);
+
+  function syncIframeHeight() {
+    observerCleanupRef.current?.();
+    const frame = iframeRef.current;
+    const document = frame?.contentDocument;
+    if (!frame || !document) return;
+
+    let animationFrame = 0;
+    let releaseFrame = 0;
+    let measuring = false;
+    const sync = () => {
+      if (measuring) return;
+      cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(() => {
+        measuring = true;
+        frame.style.height = "0px";
+        const nextHeight = Math.max(
+          document.body.scrollHeight,
+          document.body.offsetHeight,
+          document.documentElement.scrollHeight,
+          document.documentElement.offsetHeight,
+        );
+        frame.style.height = `${nextHeight}px`;
+        setIframeHeight((current) => (current === nextHeight ? current : nextHeight));
+        releaseFrame = requestAnimationFrame(() => {
+          measuring = false;
+        });
+      });
+    };
+    const observer = new ResizeObserver(sync);
+    observer.observe(document.body);
+    frame.contentWindow?.addEventListener("resize", sync);
+    observerCleanupRef.current = () => {
+      cancelAnimationFrame(animationFrame);
+      cancelAnimationFrame(releaseFrame);
+      observer.disconnect();
+      frame.contentWindow?.removeEventListener("resize", sync);
+    };
+    sync();
+  }
 
   return (
-    <section className="overflow-hidden radius-panel border border-[#0d3b50] bg-[linear-gradient(160deg,#063044,#04202e)] shadow-[0_34px_90px_-48px_rgba(0,66,98,0.55)]">
-      <div className="flex flex-col gap-3 border-b border-white/10 p-5 md:flex-row md:items-center md:justify-between">
+    <section className="scroll-mt-20 overflow-hidden radius-panel border border-[var(--line-ghost)] bg-white">
+      <div className="flex flex-col gap-3 border-b border-[var(--line-ghost)] bg-[var(--surface-soft)]/55 p-5 md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[rgba(0,182,198,0.14)] text-[#5cd6e0] ring-1 ring-inset ring-[rgba(0,182,198,0.32)]">
+          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-teal-soft)] text-[var(--brand-teal)]">
             <BarChart3 className="h-4.5 w-4.5" />
           </span>
           <div>
-            <p className="text-caption font-bold uppercase tracking-[0.22em] text-[#5cd6e0]">
+            <p className="text-caption font-bold uppercase tracking-[0.16em] text-[var(--brand-teal)]">
               Resultados Monitoramento
             </p>
-            <p className="heading-font mt-1 text-2xl font-extrabold text-white">
+            <p className="heading-font mt-1 text-2xl font-extrabold text-[var(--brand-navy-strong)]">
               Dashboard de resultados
             </p>
-            <p className="mt-1 text-sm font-semibold text-[#a6c1d0]">{campaign.title}</p>
+            <p className="mt-1 text-sm font-semibold text-[var(--ink-soft)]">{campaign.title}</p>
           </div>
         </div>
 
@@ -202,7 +247,7 @@ function ResultsDashboardSection({ campaign }: { campaign: CampaignView }) {
             href={campaign.resultsDashboardUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[rgba(0,182,198,0.4)] bg-[rgba(0,182,198,0.1)] px-4 py-3 text-xs font-bold uppercase tracking-[0.14em] text-[#5cd6e0] transition hover:bg-[rgba(0,182,198,0.18)] hover:text-white"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-[var(--brand-navy-strong)] transition hover:bg-[var(--brand-blue-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)]"
           >
             <ExternalLink className="h-4 w-4" />
             Abrir dashboard
@@ -210,23 +255,26 @@ function ResultsDashboardSection({ campaign }: { campaign: CampaignView }) {
         ) : null}
       </div>
 
-      <div className="p-3 sm:p-4">
+      <div>
         {hasDashboard ? (
           <iframe
+            ref={iframeRef}
             src={campaign.resultsDashboardUrl}
             title={`Dashboard de resultados - ${campaign.title}`}
-            className="h-[760px] w-full radius-panel border border-white/10 bg-[#04202e] md:h-[860px] xl:h-[940px]"
+            className="block w-full border-0 bg-white"
+            style={{ height: iframeHeight }}
             loading="lazy"
+            onLoad={syncIframeHeight}
           />
         ) : (
-          <div className="flex h-[760px] flex-col items-center justify-center radius-panel border border-dashed border-white/15 bg-[rgba(255,255,255,0.02)] p-8 text-center md:h-[860px] xl:h-[940px]">
-            <div className="mb-4 rounded-2xl bg-[rgba(0,182,198,0.12)] p-4 text-[#5cd6e0]">
+          <div className="flex min-h-[520px] flex-col items-center justify-center bg-[var(--surface-soft)] p-8 text-center">
+            <div className="mb-4 rounded-2xl bg-[var(--brand-teal-soft)] p-4 text-[var(--brand-teal)]">
               <BarChart3 className="h-8 w-8" />
             </div>
-            <p className="heading-font text-2xl font-extrabold text-white">
+            <p className="heading-font text-2xl font-extrabold text-[var(--brand-navy-strong)]">
               Dashboard aguardando resultados
             </p>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-[#a6c1d0]">
+            <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--ink-soft)]">
               O espaço desta campanha seguirá o mesmo padrão quando o dashboard de resultados for publicado.
             </p>
           </div>
