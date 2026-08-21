@@ -152,10 +152,13 @@ export default async function GovernancaPage({ searchParams }: GovernancaPagePro
 
       <header className="flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-[var(--line-ghost)] bg-white/82 px-5 py-4 shadow-[var(--shadow-soft)]">
         <div>
-          <p className="text-label font-black uppercase tracking-[0.16em] text-[var(--brand-teal)]">
+          <p className="type-eyebrow text-[var(--brand-teal)]">
             Painel administrativo
           </p>
-          <p className="mt-1 text-sm leading-6 text-[var(--ink-soft)]">
+          <h1 className="heading-font type-page-title mt-1 text-[var(--brand-navy-strong)]">
+            Configurações
+          </h1>
+          <p className="type-body mt-2 text-[var(--ink-soft)]">
             Operação, acesso, backups e diagnóstico do ambiente.
           </p>
         </div>

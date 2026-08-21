@@ -193,8 +193,8 @@ export function EmptyState({ title, description }: { title: string; description:
   return (
     <div className="flex min-h-56 flex-col items-center justify-center radius-panel border border-dashed border-slate-300 bg-[var(--surface-soft)] p-8 text-center">
       <FileText className="mb-3 h-9 w-9 text-slate-400" />
-      <p className="heading-font text-xl font-bold text-[var(--brand-navy-strong)]">{title}</p>
-      <p className="mt-2 max-w-lg text-sm leading-6 text-slate-500">{description}</p>
+      <p className="heading-font type-panel-title text-[var(--brand-navy-strong)]">{title}</p>
+      <p className="type-help mt-2 max-w-lg text-[var(--ink-soft)]">{description}</p>
     </div>
   );
 }

@@ -73,7 +73,7 @@ export type DashboardRiskMapPoint = CampaignMapPoint & {
 
 export async function loadCampaign1DashboardMapPoints(): Promise<DashboardRiskMapPoint[]> {
   const html = await readFile(CAMPAIGN_1_DASHBOARD_PATH, "utf8").catch(() => "");
-  const match = html.match(/const DATA\s*=\s*(\{[\s\S]*?\});\s*\nconst \$/);
+  const match = html.match(/const DATA\s*=\s*(\{[^\n]*\});/);
 
   if (!match?.[1]) return [];
 

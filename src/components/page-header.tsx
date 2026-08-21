@@ -62,7 +62,7 @@ export function PageHeader({
           ) : null}
         </div>
         {eyebrow ? (
-          <p className="type-label mb-4 inline-flex items-center gap-2 rounded-full bg-[var(--brand-teal-soft)] px-3 py-1 uppercase tracking-[0.12em] text-[var(--brand-teal)]">
+          <p className="type-eyebrow mb-4 inline-flex items-center gap-2 rounded-full bg-[var(--brand-teal-soft)] px-3 py-1 text-[var(--brand-teal)]">
             <span className="h-2 w-2 rounded-full bg-[var(--brand-teal)]" />
             {eyebrow}
           </p>

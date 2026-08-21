@@ -63,7 +63,7 @@ describe("CSP do proxy", () => {
     const response = await proxy(new NextRequest("https://app.invalid/dashboards/Painel_eDNA_Campanha1_Sanepar.html"));
     const csp = response.headers.get("Content-Security-Policy") ?? "";
     const html = readFileSync(resolve(process.cwd(), "public/dashboards/Painel_eDNA_Campanha1_Sanepar.html"), "utf8");
-    const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? "";
+    const script = html.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1] ?? "";
     const scriptHash = createHash("sha256").update(script.replace(/\r\n/g, "\n")).digest("base64");
     expect(directive(csp, "script-src")).toBe(`script-src 'self' 'sha256-${scriptHash}'`);
     expect(directive(csp, "script-src")).not.toContain("'unsafe-inline'");

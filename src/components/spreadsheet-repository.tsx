@@ -30,6 +30,17 @@ import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 import type { LaboratoryRiskPoint, LaboratoryRiskResultRow } from "@/lib/laboratory-risk";
 import type { SpreadsheetPreview } from "@/lib/types";
 import type { FieldDiaryEntry } from "@/lib/field-diary";
+import {
+  RESULTS_DASHBOARD_HEADERS,
+  RESULTS_DASHBOARD_SECTIONS,
+  RESULTS_DICTIONARY_HEADERS,
+  RESULTS_INSTRUCTION_FIELDS,
+  RESULTS_INSTRUCTION_HEADERS,
+  RESULTS_MOLECULAR_FIELDS,
+  RESULTS_RANKING_FIELDS,
+  RESULTS_SCHEMA_VERSION,
+  RESULTS_WORKSHEETS,
+} from "@/lib/imports/results-contract";
 
 type SpreadsheetKind = "Campo" | "Laboratório";
 type CampaignScope = "Ordinária" | "Extraordinária";
@@ -44,7 +55,7 @@ const VIEW_CONFIG: Record<
     title: string;
     description: string;
     template?: {
-      href: string;
+      href?: string;
       title: string;
       description: string;
     };
@@ -81,10 +92,14 @@ const VIEW_CONFIG: Record<
     kind: "Laboratório",
     title: "Entrada de Planilhas de Resultados",
     description:
-      "Planilhas laboratoriais no modelo consolidado da Campanha 1. Alimentam as análises de Monitoramento.",
+      "Modelo canônico por campanha. A última publicação válida alimenta Dashboard e Resultados.",
+    template: {
+      title: "Modelo canônico de resultados",
+      description: `Schema ${RESULTS_SCHEMA_VERSION}, com Instruções, Dicionário e todas as leituras do dashboard.`,
+    },
     formHeading: "Nova planilha de Resultados",
     formDescription:
-      "Importe a planilha laboratorial da campanha. A aba Banco_consolidado deve seguir a ordem homologada das variáveis.",
+      "Importe o modelo preenchido. Rascunhos ou arquivos inválidos não substituem a última publicação válida.",
     submitLabel: "Carregar planilha",
     metricsLabel: "Resultados",
     metricTotalLabel: "Planilhas de Resultados",
@@ -196,11 +211,11 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
   });
 
   useEffect(() => {
-    setFormState((current) => ({
+    queueMicrotask(() => setFormState((current) => ({
       ...current,
       kind: config.kind,
       publishFieldMap: view === "campo" ? current.publishFieldMap : false,
-    }));
+    })));
   }, [config.kind, view]);
 
   useEffect(() => {
@@ -368,6 +383,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
       } else if (formState.kind === "Laboratório") {
         const resultsData = new FormData();
         resultsData.append("file", file);
+        resultsData.append("selectedCampaign", campaign);
         const response = await fetch("/api/imports/results", {
           method: "POST",
           body: resultsData,
@@ -572,20 +588,20 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
   return (
     <div className="space-y-4">
       <section className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
-        <p className="text-xs text-[var(--ink-soft)]">
+        <p className="type-metadata text-[var(--ink-soft)]">
           {config.description}
         </p>
-        <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">
+        <span className="type-caption whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-[var(--ink-soft)]">
           Perfil: <strong className="text-[var(--brand-navy-strong)]">{activeCategory}</strong> · Exclusão {canDeleteSpreadsheets ? "liberada" : "bloqueada"}
         </span>
       </section>
 
       <section>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="heading-font text-sm font-bold text-[var(--brand-navy-strong)]">
+          <h2 className="heading-font type-section-title text-[var(--brand-navy-strong)]">
             Controle de importação
-          </h3>
-          <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+          </h2>
+          <span className="type-eyebrow text-[var(--brand-teal)]">
             {viewSpreadsheets.length} de {config.metricsLabel}
           </span>
         </div>
@@ -602,10 +618,10 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-2">
           <div>
             <div className="flex items-center gap-2">
-              <span className="rounded bg-[var(--brand-green-soft)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-[var(--brand-navy-strong)]">
+              <span className="type-eyebrow rounded bg-[var(--brand-green-soft)] px-2 py-0.5 text-[var(--brand-navy-strong)]">
                 Carga manual
               </span>
-              <h3 className="heading-font text-sm font-bold text-[var(--brand-navy-strong)]">
+              <h3 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">
                 {config.formHeading}
               </h3>
             </div>
@@ -624,24 +640,35 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
           <div className="mb-2 flex items-center justify-between rounded-lg bg-[var(--surface-soft)] px-3 py-1.5">
             <div className="flex items-center gap-2 min-w-0">
               <FileSpreadsheet className="h-4 w-4 text-[var(--brand-blue)] shrink-0" />
-              <p className="text-[11px] text-slate-500 truncate">
+              <p className="type-caption truncate text-[var(--ink-soft)]">
                 {config.template.description}
               </p>
             </div>
-            <a
-              href={config.template.href}
-              download
-              className="inline-flex items-center gap-1 rounded bg-white border border-slate-200 px-2 py-1 text-[11px] font-bold text-[var(--brand-navy-strong)] transition hover:bg-slate-50 shrink-0 shadow-sm"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Baixar Modelo
-            </a>
+            {config.template.href ? (
+              <a
+                href={config.template.href}
+                download
+                className="type-button inline-flex shrink-0 items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[var(--brand-navy-strong)] shadow-sm transition hover:bg-slate-50"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Baixar Modelo
+              </a>
+            ) : (
+              <button
+                type="button"
+                className="type-button inline-flex shrink-0 items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[var(--brand-navy-strong)] shadow-sm transition hover:bg-slate-50"
+                onClick={() => void downloadResultsTemplate(formState.campaign)}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Baixar Modelo
+              </button>
+            )}
           </div>
         ) : null}
 
         <form className="grid gap-2 lg:grid-cols-6" onSubmit={addSpreadsheet}>
           <select
-            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs lg:col-span-1"
+            className="type-label h-9 rounded-lg border border-slate-200 bg-white px-3 lg:col-span-1"
             value={formState.scope}
             disabled={!canImportSpreadsheets || isPending}
             onChange={(event) =>
@@ -656,7 +683,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
           </select>
           {formState.scope === "Ordinária" ? (
             <select
-              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs lg:col-span-2"
+              className="type-label h-9 rounded-lg border border-slate-200 bg-white px-3 lg:col-span-2"
               value={formState.campaign}
               disabled={!canImportSpreadsheets || isPending}
               onChange={(event) =>
@@ -671,7 +698,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
             </select>
           ) : (
             <input
-              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs lg:col-span-2"
+              className="type-label h-9 rounded-lg border border-slate-200 bg-white px-3 lg:col-span-2"
               placeholder="Nome da campanha extraordinária"
               value={formState.extraordinaryName}
               disabled={!canImportSpreadsheets || isPending}
@@ -683,7 +710,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
               }
             />
           )}
-          <label className="flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--brand-navy)]/40 bg-[var(--surface-soft)] px-3 text-xs font-bold text-[var(--brand-navy-strong)] transition hover:border-[var(--brand-navy)] hover:bg-[var(--brand-blue-soft)] lg:col-span-2">
+          <label className="type-button flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--brand-navy)]/40 bg-[var(--surface-soft)] px-3 text-[var(--brand-navy-strong)] transition hover:border-[var(--brand-navy)] hover:bg-[var(--brand-blue-soft)] lg:col-span-2">
             <UploadCloud className="h-4 w-4 shrink-0 text-[var(--brand-navy)]" />
             <span className="min-w-0 flex-1 truncate text-center">
               {selectedFileName ?? "Selecionar planilha"}
@@ -702,7 +729,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
           <button
             type="submit"
             disabled={isPending || !canImportSpreadsheets}
-            className="flex h-9 items-center justify-center gap-2 rounded-lg bg-[var(--brand-navy-strong)] px-4 text-xs font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 lg:col-span-1"
+            className="type-button flex h-9 items-center justify-center gap-2 rounded-lg bg-[var(--brand-navy-strong)] px-4 text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 lg:col-span-1"
           >
             <UploadCloud className="h-4 w-4" />
             {isPending ? "Carregando..." : config.submitLabel}
@@ -807,7 +834,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50 text-xs">
+            <tbody className="type-table divide-y divide-slate-50">
               {!hasLoaded ? (
                 <TableSkeletonRows rows={5} columns={4} />
               ) : (
@@ -821,7 +848,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
                           <p className="font-bold text-[var(--brand-navy-strong)]">
                             {sheet.campaign}
                           </p>
-                          <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
+                          <span className={`type-caption rounded px-1.5 py-0.5 font-bold ${
                             sheet.scope === "Ordinária" 
                               ? "bg-[var(--brand-navy-strong)]/10 text-[var(--brand-navy-strong)]" 
                               : "bg-amber-100 text-amber-800"
@@ -943,10 +970,10 @@ async function deleteSpreadsheetFile(id: string) {
 function MetricTile({ label, value }: { label: string; value: string | number }) {
   return (
     <article className="glass-panel radius-card p-2.5 flex items-center justify-between gap-4">
-      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 truncate">
+      <p className="type-label truncate uppercase tracking-[0.1em] text-[var(--ink-soft)]">
         {label}
       </p>
-      <p className="heading-font text-xl font-extrabold text-[var(--brand-navy-strong)] shrink-0">
+      <p className="heading-font type-kpi shrink-0 text-[var(--brand-navy-strong)]">
         {value}
       </p>
     </article>
@@ -1025,5 +1052,93 @@ function formatFieldImportMessage(payload: CampaignPublishPayload) {
   );
 
   return parts.join(" · ");
+}
+
+async function downloadResultsTemplate(campaignTitle: string) {
+  const ExcelJS = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Yva'e Monitoramento";
+  workbook.created = new Date();
+
+  const instructions = workbook.addWorksheet(RESULTS_WORKSHEETS.instructions);
+  instructions.addRow([...RESULTS_INSTRUCTION_HEADERS]);
+  const campaignNumber = Number(campaignTitle.match(/(\d+)/)?.[1] ?? 1);
+  const campaignId = campaignNumber === 1
+    ? "campanha-1-verao-2026"
+    : campaignNumber === 2
+      ? "campanha-2-outono-2026"
+      : `campanha-${campaignNumber}`;
+  const instructionValues: Record<string, string | number> = {
+    schema_version: RESULTS_SCHEMA_VERSION,
+    campaign_id: campaignId,
+    campaign_number: campaignNumber,
+    campaign_title: campaignTitle,
+    publication_status: "draft",
+    methodology_origin: "Preencher com a fonte homologada",
+    methodology_version: "Preencher com a versão homologada",
+  };
+  RESULTS_INSTRUCTION_FIELDS.forEach((field) =>
+    instructions.addRow([field.key, instructionValues[field.key] ?? ""]),
+  );
+
+  const molecular = workbook.addWorksheet(RESULTS_WORKSHEETS.molecular);
+  molecular.addRow(RESULTS_MOLECULAR_FIELDS.map((field) => field.header));
+  const ranking = workbook.addWorksheet(RESULTS_WORKSHEETS.ranking);
+  ranking.addRow(RESULTS_RANKING_FIELDS.map((field) => field.header));
+
+  const dashboard = workbook.addWorksheet(RESULTS_WORKSHEETS.dashboard);
+  dashboard.addRow([...RESULTS_DASHBOARD_HEADERS]);
+  RESULTS_DASHBOARD_SECTIONS.forEach((section) =>
+    dashboard.addRow([section, "", "Preencher com a fonte homologada", "Preencher com a versão homologada"]),
+  );
+
+  const dictionary = workbook.addWorksheet(RESULTS_WORKSHEETS.dictionary);
+  dictionary.addRow([...RESULTS_DICTIONARY_HEADERS]);
+  const dictionaryRows = [
+    ...RESULTS_MOLECULAR_FIELDS.map((field) => [RESULTS_WORKSHEETS.molecular, field] as const),
+    ...RESULTS_RANKING_FIELDS.map((field) => [RESULTS_WORKSHEETS.ranking, field] as const),
+  ] as const;
+  dictionaryRows.forEach(([sheet, field]) =>
+    dictionary.addRow([
+      sheet,
+      field.header,
+      field.key,
+      field.type,
+      field.unit,
+      field.requirement,
+      field.validation,
+      field.usage,
+    ]),
+  );
+  RESULTS_DASHBOARD_SECTIONS.forEach((section) =>
+    dictionary.addRow([
+      RESULTS_WORKSHEETS.dashboard,
+      section,
+      section,
+      "JSON",
+      "—",
+      "required",
+      "payload explícito validado; sem cálculo de score/classificação",
+      "paridade do golden master",
+    ]),
+  );
+
+  for (const sheet of workbook.worksheets) {
+    sheet.views = [{ state: "frozen", ySplit: 1 }];
+    sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF004262" } };
+    sheet.columns.forEach((column) => { column.width = 24; });
+    sheet.autoFilter = sheet.rowCount > 1 ? { from: "A1", to: `${sheet.getColumn(sheet.columnCount).letter}1` } : undefined;
+  }
+
+  const bytes = await workbook.xlsx.writeBuffer();
+  const url = URL.createObjectURL(new Blob([bytes], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `modelo-resultados-campanha-${campaignNumber}.xlsx`;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 

@@ -194,7 +194,7 @@ export function AppShell({ children }: AppShellProps) {
                 </Link>
               ) : null}
               <div className="min-w-0">
-                <p className="type-caption hidden truncate font-bold uppercase tracking-[0.12em] text-[var(--brand-teal)] min-[390px]:block">
+                <p className="type-eyebrow hidden truncate text-[var(--brand-teal)] min-[390px]:block">
                   {currentItem.summary}
                 </p>
                 <p className="heading-font type-metadata truncate font-bold text-[var(--brand-navy-strong)]">
@@ -235,7 +235,7 @@ export function AppShell({ children }: AppShellProps) {
               <AppVersionStamp />
               <div className="flex flex-col items-start gap-3 md:items-end">
                 <InstitutionalPartners compact />
-                <div className="flex gap-4 text-caption uppercase tracking-[0.18em] text-[var(--ink-soft)]">
+                <div className="type-eyebrow flex gap-4 text-[var(--ink-soft)]">
                   <Link className="transition hover:text-[var(--brand-navy-strong)]" href="/privacidade">
                     Privacidade
                   </Link>

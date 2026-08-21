@@ -28,7 +28,6 @@ export type CampaignView = {
   description: string;
   hasFieldData: boolean;
   hasResultData: boolean;
-  resultsDashboardUrl?: string;
   metrics: {
     plannedPoints: string;
     effectivePoints: string;
@@ -108,7 +107,6 @@ export const defaultCampaigns: CampaignView[] = [
       "Dados de campo da primeira campanha sazonal. O dashboard de resultados eDNA está disponível para consulta.",
     hasFieldData: true,
     hasResultData: true,
-    resultsDashboardUrl: "/dashboards/Painel_eDNA_Campanha1_Sanepar.html",
     metrics: {
       plannedPoints: "81",
       effectivePoints: "76",

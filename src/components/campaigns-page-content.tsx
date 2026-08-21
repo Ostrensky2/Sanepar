@@ -44,6 +44,11 @@ import {
 } from "@/lib/campaign-management";
 import { DashboardSkeleton, ErrorBoundary } from "@/components/operational-feedback";
 import type { LaboratoryRiskPoint } from "@/lib/laboratory-risk";
+import type {
+  ResultsPublication,
+  ResultsPublicationResponse,
+  ResultsViewModel,
+} from "@/lib/imports/results-contract";
 
 const SELECTED_CAMPAIGN_STORAGE_KEY = "yvae:selected-campaign-id";
 const CAMPAIGN_MANAGEMENT_UPDATED_EVENT = "yvae:campaign-management-updated";
@@ -83,13 +88,13 @@ export function CampaignsPageContent({
     readFieldDiaryEntriesFromStorage(),
   );
   const [localCampaignPoints, setLocalCampaignPoints] = useState<CampaignHydroMapPoint[] | null>(null);
-  const [localRiskPoints, setLocalRiskPoints] = useState<CampaignHydroMapPoint[] | null>(null);
+  const [publishedResults, setPublishedResults] = useState<ResultsPublicationResponse | null>(null);
   const [campaignManagement, setCampaignManagement] = useState<CampaignManagementById>(() =>
     buildInitialCampaignManagement(campaigns),
   );
   const [hasLoadedCampaignManagement, setHasLoadedCampaignManagement] = useState(false);
   const [hasLoadedDiaryEntries, setHasLoadedDiaryEntries] = useState(false);
-  const [hasLoadedLocalResults, setHasLoadedLocalResults] = useState(view !== "resultados");
+  const [hasLoadedPublishedResults, setHasLoadedPublishedResults] = useState(view !== "resultados");
   const [selectedExportCampaignIds, setSelectedExportCampaignIds] = useState<string[]>(["all"]);
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
@@ -107,7 +112,6 @@ export function CampaignsPageContent({
     if (typeof window === "undefined") return;
 
     if (!canUseBrowserOnlyPersistence()) {
-      setLocalCampaignPoints(null);
       return;
     }
 
@@ -139,47 +143,6 @@ export function CampaignsPageContent({
 
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    if (view !== "resultados") {
-      setHasLoadedLocalResults(true);
-      return;
-    }
-
-    if (!canUseBrowserOnlyPersistence()) {
-      setHasLoadedLocalResults(true);
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      const storedResults = window.localStorage.getItem("yvae:lab-risk-results");
-
-      if (!storedResults) {
-        setHasLoadedLocalResults(true);
-        return;
-      }
-
-      try {
-        const parsed = JSON.parse(storedResults) as CampaignHydroMapPoint[];
-
-        if (
-          Array.isArray(parsed) &&
-          parsed.length > 0 &&
-          parsed.every((point) => point?.riskLevel)
-        ) {
-          setLocalRiskPoints(parsed);
-        }
-      } catch {
-        window.localStorage.removeItem("yvae:lab-risk-results");
-      } finally {
-        setHasLoadedLocalResults(true);
-      }
-    }, 0);
-
-    return () => window.clearTimeout(timeout);
-  }, [view]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -241,7 +204,44 @@ export function CampaignsPageContent({
 
     return candidate ?? campaigns[0];
   }, [campaigns, selectedCampaignId]);
-  const resultsUnavailable = view === "resultados" && !selectedCampaign.hasResultData;
+
+  useEffect(() => {
+    if (view !== "resultados") return;
+
+    const controller = new AbortController();
+    const campaignNumber = selectedCampaign.id.match(/campanha-(\d+)/)?.[1];
+    const query = new URLSearchParams({ campaignId: selectedCampaign.id });
+    if (campaignNumber) query.set("campaignNumber", campaignNumber);
+
+    queueMicrotask(() => {
+      if (!controller.signal.aborted) {
+        setPublishedResults(null);
+        setHasLoadedPublishedResults(false);
+      }
+    });
+    void fetch(`/api/imports/results?${query}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("results unavailable");
+        return await response.json() as ResultsPublicationResponse;
+      })
+      .then((response) => setPublishedResults(response))
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setPublishedResults({ status: "empty", publication: null, viewModel: null });
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setHasLoadedPublishedResults(true);
+      });
+
+    return () => controller.abort();
+  }, [selectedCampaign.id, view]);
+
+  const resultsUnavailable =
+    view === "resultados" && hasLoadedPublishedResults && publishedResults?.status !== "published";
   const showUnavailableResultsNotice =
     resultsUnavailable && dismissedUnavailableResultsNoticeCampaignId !== selectedCampaign.id;
 
@@ -257,12 +257,17 @@ export function CampaignsPageContent({
   const sampleCollection = selectedStages.find((s) => s.label === "Coleta de amostras");
   const isPreparation = !sampleCollection || sampleCollection.status === "pending";
 
-  const sourceCampaignPoints =
-    view === "resultados" && localRiskPoints?.length
-      ? localRiskPoints
-      : localCampaignPoints?.length
-        ? localCampaignPoints
-        : campaignPoints;
+  const canonicalResultPoints = useMemo(
+    () => publishedResults?.status === "published"
+      ? dashboardPointsToMapPoints(publishedResults.viewModel, publishedResults.publication)
+      : [],
+    [publishedResults],
+  );
+  const sourceCampaignPoints = view === "resultados"
+    ? canonicalResultPoints
+    : localCampaignPoints?.length
+      ? localCampaignPoints
+      : campaignPoints;
 
   const selectedDiaryEntries = useMemo(
     () =>
@@ -355,7 +360,9 @@ export function CampaignsPageContent({
   );
 
   const fieldRowCount = selectedDiaryEntries.length;
-  const effectivePointCount = campaignFieldMapPoints.filter((point) => point.effective).length;
+  const effectivePointCount = view === "resultados"
+    ? canonicalResultPoints.length
+    : campaignFieldMapPoints.filter((point) => point.effective).length;
   const mapEmptyTitle = isPreparation ? "Aguardando importação da planilha" : emptyMapTitle;
   const mapEmptyDescription = isPreparation
     ? "Importe a planilha com os pontos previstos na aba Dados para visualizá-los no mapa."
@@ -363,7 +370,7 @@ export function CampaignsPageContent({
   const isCampaignHydrating =
     !hasLoadedCampaignManagement ||
     !hasLoadedDiaryEntries ||
-    (view === "resultados" && !hasLoadedLocalResults);
+    (view === "resultados" && !hasLoadedPublishedResults);
 
   async function exportFieldDiaryWorkbook() {
     setExportMessage("");
@@ -415,7 +422,10 @@ export function CampaignsPageContent({
   async function exportCampaignResultsWorkbook() {
     setExportMessage("");
 
-    if (!selectedResultExportPoints.length) {
+    const publication = publishedResults?.status === "published"
+      ? publishedResults.publication
+      : null;
+    if (!selectedResultExportPoints.length && !publication) {
       setExportMessage("Esta campanha ainda não possui resultados homologados para exportação.");
       return;
     }
@@ -430,11 +440,15 @@ export function CampaignsPageContent({
       workbook.modified = new Date();
 
       addFieldDiarySummarySheet(workbook, selectedDiaryEntries, selectedCampaign.title, "Resumo");
-      addCampaignResultsSheet(workbook, selectedResultExportPoints, selectedDiaryEntries);
+      if (selectedResultExportPoints.length) {
+        addCampaignResultsSheet(workbook, selectedResultExportPoints, selectedDiaryEntries);
+      } else if (publication) {
+        addPublishedResultsSheets(workbook, publication);
+      }
       addFieldDiaryEntriesSheet(workbook, selectedDiaryEntries);
       await downloadWorkbook(workbook, buildCampaignResultsFileName(selectedCampaign.title));
       setExportMessage(
-        `Planilha exportada com ${selectedResultExportPoints.length} resultados e ${selectedDiaryEntries.length} registros de campo.`,
+        `Planilha exportada com ${publication?.rankingRows.length ?? selectedResultExportPoints.length} resultados e ${selectedDiaryEntries.length} registros de campo.`,
       );
     } catch {
       setExportMessage("Não foi possível gerar a planilha desta campanha agora.");
@@ -489,7 +503,7 @@ export function CampaignsPageContent({
       {/* Header: title + campaign selector */}
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="type-label font-bold uppercase tracking-[0.12em] text-[var(--brand-teal)]">
+          <p className="type-eyebrow text-[var(--brand-teal)]">
             {eyebrow}
           </p>
           <h1 className="heading-font type-page-title text-[var(--brand-navy-strong)]">
@@ -527,7 +541,7 @@ export function CampaignsPageContent({
             <div className="rounded-lg border border-[var(--line-ghost)] bg-white/88 px-2.5 py-2 shadow-[0_10px_28px_-26px_rgba(0,66,98,0.3)]">
               <div className="grid gap-1.5">
                 <div>
-                  <p className="text-[10px] font-bold uppercase leading-none tracking-[0.14em] text-slate-500">
+                  <p className="type-caption font-bold uppercase leading-none tracking-[0.1em] text-[var(--ink-soft)]">
                     Exportar dados por campanha
                   </p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1">
@@ -629,9 +643,11 @@ export function CampaignsPageContent({
             <CampaignMetricCard
               icon={FlaskConical}
               label="Planilha de resultados"
-              value={selectedCampaign.metrics.resultRows}
+              value={publishedResults?.status === "published"
+                ? String(publishedResults.viewModel.meta.linhas)
+                : "0"}
               detail="Resultados importados"
-              tone={selectedCampaign.hasResultData ? "success" : "warning"}
+              tone={publishedResults?.status === "published" ? "success" : "warning"}
             />
           </section>
         )}
@@ -706,10 +722,11 @@ export function CampaignsPageContent({
             resultsUnavailable={resultsUnavailable}
             showUnavailableNotice={showUnavailableResultsNotice}
             campaign={selectedCampaign}
+            publication={publishedResults?.status === "published" ? publishedResults.publication : undefined}
             stages={selectedStages}
             stageTitle={selectedManagement.stageTitle}
             points={visibleResultPoints}
-            canDownload={!isCampaignHydrating && selectedResultExportPoints.length > 0}
+            canDownload={!isCampaignHydrating && publishedResults?.status === "published"}
             isDownloading={isExporting}
             downloadMessage={exportMessage}
             onDownload={() => void exportCampaignResultsWorkbook()}
@@ -752,6 +769,37 @@ function riskPriority(level: CampaignHydroMapPoint["riskLevel"]) {
   }
 
   return level === "baixo" ? 1 : 0;
+}
+
+function dashboardPointsToMapPoints(
+  viewModel: ResultsViewModel,
+  publication: ResultsPublication,
+): CampaignHydroMapPoint[] {
+  return viewModel.points.map((point) => ({
+    id: `${publication.campaignId}:resultado:${point.amostra}`,
+    code: String(point.sia),
+    point: point.ponto,
+    campaign: publication.campaignTitle,
+    municipality: point.municipio,
+    waterBody: point.manancial,
+    original: null,
+    effective: { lat: point.lat, lon: point.lon },
+    accessibility: "",
+    waterAspect: point.turbidez,
+    weatherConditions: point.clima,
+    problems: "",
+    photoUrl: "",
+    riskLevel: dashboardRiskLevel(point.classe),
+    score: point.score,
+  }));
+}
+
+function dashboardRiskLevel(value: string | null): CampaignHydroMapPoint["riskLevel"] {
+  if (value === "Alto") return "alto";
+  if (value === "Moderado") return "moderado";
+  if (value === "Baixo a moderado") return "baixoModerado";
+  if (value === "Baixo") return "baixo";
+  return undefined;
 }
 
 function diaryEntryMatchesSelectedCampaign(
@@ -1484,6 +1532,42 @@ export function addFieldDiaryEntriesSheet(
   }
 
   styleWorksheet(sheet, "Z");
+}
+
+function addPublishedResultsSheets(workbook: Workbook, publication: ResultsPublication) {
+  const ranking = workbook.addWorksheet("Resultados por ponto", {
+    views: [{ state: "frozen", ySplit: 1 }],
+  });
+  ranking.columns = [
+    { header: "Campanha", key: "campaign", width: 34 },
+    { header: "Amostra", key: "sampleId", width: 18 },
+    { header: "Ponto/local", key: "pointName", width: 34 },
+    { header: "Corpo hídrico", key: "waterBody", width: 34 },
+    { header: "Município", key: "municipality", width: 22 },
+    { header: "Data", key: "campaignDate", width: 18 },
+    { header: "Ranking", key: "position", width: 12 },
+    { header: "Score integrado", key: "score", width: 18 },
+    { header: "Classificação integrada", key: "classification", width: 24 },
+    { header: "Confiança", key: "confidence", width: 18 },
+    { header: "Justificativa técnica", key: "technicalJustification", width: 54 },
+    { header: "Recomendações", key: "recommendations", width: 54 },
+  ];
+  publication.rankingRows.forEach((row) => ranking.addRow({
+    campaign: publication.campaignTitle,
+    ...row,
+    position: row.position ?? "Não calculado",
+    score: row.score ?? "Não calculado",
+    classification: row.classification ?? "Não calculado",
+  }));
+  styleWorksheet(ranking, "L");
+
+  const molecular = workbook.addWorksheet("Banco molecular", {
+    views: [{ state: "frozen", ySplit: 1 }],
+  });
+  const keys = Object.keys(publication.molecularRows[0] ?? {});
+  molecular.columns = keys.map((key) => ({ header: key, key, width: 22 }));
+  publication.molecularRows.forEach((row) => molecular.addRow(row));
+  if (keys.length) styleWorksheet(molecular, molecular.getColumn(keys.length).letter);
 }
 
 function styleWorksheet(sheet: Worksheet, lastColumn: string) {

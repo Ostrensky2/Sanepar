@@ -12,11 +12,16 @@ describe("contrato tipográfico global", () => {
     const layout = source("src/app/layout.tsx");
 
     expect(layout).toContain('"Arial, Helvetica, sans-serif"');
-    expect(css).toContain("--text-page-title: clamp(1.75rem");
+    expect(css).toContain("--text-page-title: 2rem");
     expect(css).toContain("--text-body: 1rem");
     expect(css).toContain("--text-metadata: 0.875rem");
     expect(css).toContain("--text-label: 0.8125rem");
     expect(css).toContain("--text-caption: 0.75rem");
+    expect(css).toContain("--text-kpi: 1.75rem");
+    expect(css).toContain(".type-eyebrow");
+    expect(css).toContain(".type-panel-title");
+    expect(css).toContain(".type-table");
+    expect(css).toContain(".type-button");
     expect(css).toContain(".type-kpi");
   });
 
@@ -51,6 +56,17 @@ describe("contrato tipográfico global", () => {
   it("mantém um título principal único na página inicial", () => {
     const home = source("src/app/(dashboard)/page.tsx");
 
-    expect(home).toContain('<h1 className="sr-only">Painel de Monitoramento</h1>');
+    expect(home).toContain('<h1 className="heading-font type-page-title');
+    expect(home).toContain("Painel de Monitoramento");
+  });
+
+  it("harmoniza o dashboard científico apenas por CSS local", () => {
+    const dashboard = source("public/dashboards/Painel_eDNA_Campanha1_Sanepar.html");
+
+    expect(dashboard).toContain("--sans:Arial,Helvetica,sans-serif");
+    expect(dashboard).toContain(".sec-h{color:var(--brand-navy-strong);font-size:20px");
+    expect(dashboard).toContain(".kpi .v{font-size:24px");
+    expect(dashboard).toContain(".disc{margin:12px 0 2px");
+    expect(dashboard).toContain("font-size:14px;line-height:1.55");
   });
 });

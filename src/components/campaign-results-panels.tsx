@@ -1,4 +1,5 @@
 import { BarChart3, Download, ExternalLink, FileSpreadsheet, FlaskConical, Info, X } from "lucide-react";
+import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildPriorityMunicipalities,
@@ -12,6 +13,7 @@ import {
 import { DashboardSkeleton, ErrorBoundary } from "@/components/operational-feedback";
 import { type CampaignView } from "@/lib/campaign-management";
 import { laboratoryRiskColor, laboratoryRiskLabel } from "@/lib/laboratory-risk";
+import type { ResultsPublication } from "@/lib/imports/results-contract";
 
 type CampaignResultsPanelsProps = {
   children?: ReactNode;
@@ -19,6 +21,7 @@ type CampaignResultsPanelsProps = {
   resultsUnavailable?: boolean;
   showUnavailableNotice?: boolean;
   campaign?: CampaignView;
+  publication?: ResultsPublication;
   stages?: MetabarcodingStage[];
   stageTitle?: string;
   points?: CampaignHydroMapPoint[];
@@ -35,6 +38,7 @@ export function CampaignResultsPanels({
   resultsUnavailable,
   showUnavailableNotice,
   campaign,
+  publication,
   stages,
   stageTitle,
   points,
@@ -71,6 +75,7 @@ export function CampaignResultsPanels({
         <>
           <ResultsDashboardSection
             campaign={campaign}
+            publication={publication}
             canDownload={Boolean(canDownload)}
             isDownloading={Boolean(isDownloading)}
             downloadMessage={downloadMessage}
@@ -125,15 +130,15 @@ function AnalyticResultsMap({ points }: { points: CampaignHydroMapPoint[] }) {
 
       <aside className="flex min-h-0 flex-col overflow-hidden radius-panel border border-[var(--line-ghost)] bg-white md:max-h-[500px]">
         <div className="border-b border-[var(--line-ghost)] px-4 py-4">
-          <h3 className="heading-font text-lg font-extrabold text-[var(--brand-navy-strong)]">
+          <h3 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">
             Municípios prioritários
           </h3>
-          <p className="mt-1 text-xs leading-5 text-slate-600">
+          <p className="type-help mt-1 text-[var(--ink-soft)]">
             {municipalities.length} municípios ordenados pelo maior score entre seus {points.length} pontos.
           </p>
         </div>
         <div className="overflow-x-auto md:overflow-y-auto">
-          <table className="w-full min-w-[300px] border-collapse text-left text-xs">
+          <table className="type-table w-full min-w-[300px] border-collapse text-left">
             <thead className="sticky top-0 z-10 bg-[var(--surface-soft)] text-[var(--brand-navy-strong)]">
               <tr>
                 <th className="px-3 py-2 font-black">Município</th>
@@ -158,7 +163,7 @@ function AnalyticResultsMap({ points }: { points: CampaignHydroMapPoint[] }) {
                       >
                         <span className="block">{municipality.municipality}</span>
                         <span
-                          className="mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-black"
+                          className="type-caption mt-1 inline-flex rounded-full border px-2 py-0.5 font-bold"
                           style={{
                             backgroundColor: laboratoryRiskColor(municipality.riskLevel),
                             borderColor: laboratoryRiskColor(municipality.riskLevel),
@@ -194,15 +199,21 @@ function ResultsUnavailablePanel({ campaign }: { campaign: CampaignView }) {
       <div className="mb-5 rounded-2xl bg-[var(--surface-soft)] p-4 text-[var(--brand-navy)]">
         <FlaskConical className="h-9 w-9" />
       </div>
-      <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+      <p className="type-eyebrow text-[var(--brand-teal)]">
         Resultados indisponíveis
       </p>
-      <h3 className="heading-font mt-2 max-w-2xl text-2xl font-extrabold text-[var(--brand-navy-strong)]">
+      <h3 className="heading-font type-section-title mt-2 max-w-2xl text-[var(--brand-navy-strong)]">
         Ainda não temos resultados publicados para {campaign.title}
       </h3>
       <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
-        A campanha pode ser acompanhada nas telas de campo e diário de campo. Esta área será liberada quando a planilha de resultados ou o dashboard eDNA forem publicados.
+        A campanha pode ser acompanhada nas telas de campo e diário de campo. Esta área será liberada após uma publicação válida na Entrada de dados.
       </p>
+      <Link
+        href="/dados/resultados"
+        className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-sm font-bold text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)]"
+      >
+        Ir para Entrada de dados
+      </Link>
     </section>
   );
 }
@@ -241,17 +252,17 @@ function UnavailableResultsNotice({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+        <p className="type-eyebrow text-[var(--brand-teal)]">
           Sem resultados publicados
         </p>
         <h3
-          className="heading-font mt-2 text-2xl font-extrabold text-[var(--brand-navy-strong)]"
+          className="heading-font type-section-title mt-2 text-[var(--brand-navy-strong)]"
           id="unavailable-results-title"
         >
           Ainda não temos resultados da {campaignName}
         </h3>
         <p className="mt-3 text-sm leading-6 text-slate-500">
-          Esta campanha ainda não possui planilha de resultados ou dashboard eDNA publicados. Assim que os dados forem inseridos, a visualização de resultados ficará disponível.
+          Esta campanha ainda não possui uma publicação válida. Assim que o modelo canônico for publicado na Entrada de dados, a visualização ficará disponível.
         </p>
         <div className="mt-5 flex justify-end">
           <button
@@ -269,18 +280,21 @@ function UnavailableResultsNotice({
 
 function ResultsDashboardSection({
   campaign,
+  publication,
   canDownload,
   isDownloading,
   downloadMessage,
   onDownload,
 }: {
   campaign: CampaignView;
+  publication?: ResultsPublication;
   canDownload: boolean;
   isDownloading: boolean;
   downloadMessage?: string;
   onDownload?: () => void;
 }) {
-  const hasDashboard = Boolean(campaign.resultsDashboardUrl);
+  const dashboardUrl = publication ? buildResultsDashboardUrl(publication) : "";
+  const hasDashboard = Boolean(dashboardUrl);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const observerCleanupRef = useRef<(() => void) | null>(null);
   const [iframeHeight, setIframeHeight] = useState(640);
@@ -335,7 +349,7 @@ function ResultsDashboardSection({
             <BarChart3 className="h-4.5 w-4.5" />
           </span>
           <div>
-            <p className="type-caption font-bold uppercase tracking-[0.12em] text-[var(--brand-teal)]">
+            <p className="type-eyebrow text-[var(--brand-teal)]">
               Resultados Monitoramento
             </p>
             <h2 className="heading-font type-section-title mt-1 text-[var(--brand-navy-strong)]">
@@ -348,23 +362,23 @@ function ResultsDashboardSection({
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
           {hasDashboard ? (
             <a
-              href={campaign.resultsDashboardUrl}
+              href={dashboardUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-[var(--brand-navy-strong)] transition hover:bg-[var(--brand-blue-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)] sm:w-auto"
+              className="type-button inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-[var(--brand-navy-strong)] transition hover:bg-[var(--brand-blue-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)] sm:w-auto"
             >
               <ExternalLink className="h-4 w-4" />
-              Abrir dashboard
+              Dashboard
             </a>
           ) : null}
           <button
             type="button"
             onClick={onDownload}
             disabled={!canDownload || isDownloading || !onDownload}
-            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-navy-strong)] px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-white transition hover:bg-[var(--brand-blue)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            className="type-button inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-navy-strong)] px-4 py-3 text-white transition hover:bg-[var(--brand-blue)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           >
             <Download className="h-4 w-4" />
-            {isDownloading ? "Gerando planilha..." : "Baixar planilha (.xlsx)"}
+            {isDownloading ? "Gerando planilha..." : "Resultados"}
           </button>
           {downloadMessage ? (
             <p aria-live="polite" className="text-xs font-semibold text-[var(--ink-soft)] sm:basis-full sm:text-right">
@@ -378,7 +392,7 @@ function ResultsDashboardSection({
         {hasDashboard ? (
           <iframe
             ref={iframeRef}
-            src={campaign.resultsDashboardUrl}
+            src={dashboardUrl}
             title={`Dashboard de resultados - ${campaign.title}`}
             className="block w-full border-0 bg-white"
             style={{ height: iframeHeight }}
@@ -401,6 +415,14 @@ function ResultsDashboardSection({
       </div>
     </section>
   );
+}
+
+function buildResultsDashboardUrl(publication: ResultsPublication) {
+  const query = new URLSearchParams({
+    campaignId: publication.campaignId,
+    campaignNumber: String(publication.campaignNumber),
+  });
+  return `/dashboards/Painel_eDNA_Campanha1_Sanepar.html?${query}`;
 }
 
 function EmptyCampaignPanel({

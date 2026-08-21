@@ -156,7 +156,7 @@ export function HomeRiskMapSection({
             <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
               Mapa de risco eDNA
             </p>
-            <h2 className="heading-font mt-1 text-2xl font-extrabold text-[var(--brand-navy-strong)]">
+            <h2 className="heading-font type-section-title mt-1 text-[var(--brand-navy-strong)]">
               Pontos monitorados e grau de risco estimado
             </h2>
           </div>

@@ -26,7 +26,7 @@ describe("contrato do dashboard de resultados", () => {
       municipios: unknown[];
       coi_all: unknown[];
       alerts: unknown[];
-    }>(/const DATA\s*=\s*(\{[\s\S]*?\});\s*\nconst \$/);
+    }>(/const DATA\s*=\s*(\{[^\n]*\});/);
 
     expect(raw.ranking).toHaveLength(73);
     expect(model.points).toHaveLength(73);
@@ -61,7 +61,7 @@ describe("contrato do dashboard de resultados", () => {
     expect(html).toContain("element.inert=true");
     expect(html).toContain("e.key!=='Tab'");
     expect(html).toContain("scrollIntoView({block:'nearest',inline:'nearest'})");
-    expect(html).toContain("aria-label=\"${r.ponto} — ${H.taxa[index]}: ${v}% dos reads do marcador\"");
+    expect(html).toContain("escapeAttr(`${r.ponto} — ${H.taxa[index]}: ${v}% dos reads do marcador`)");
   });
 
   it("mantém um único mapa de risco e move municípios para a superfície nativa", () => {
@@ -96,5 +96,96 @@ describe("contrato do dashboard de resultados", () => {
     expect(html).toContain('class="distval"');
     expect(html).toContain("{unit:' reads'}");
     expect(html).toContain(".kv{grid-template-columns:1fr");
+  });
+
+  it("usa a publicação canônica por campanha e limita o legado ao fallback explícito", () => {
+    const component = readFileSync(
+      resolve(process.cwd(), "src/components/campaign-results-panels.tsx"),
+      "utf8",
+    );
+    const campaigns = readFileSync(
+      resolve(process.cwd(), "src/lib/campaign-management.ts"),
+      "utf8",
+    );
+
+    expect(html).toContain("fetch('/api/imports/results?'+query");
+    expect(html).toContain("dashboardParams.get('legacy')==='1'");
+    expect(html).toContain("Object.assign(DATA,canonicalData)");
+    expect(html).toContain("Não calculado");
+    expect(component).toContain("campaignId: publication.campaignId");
+    expect(component).toMatch(/<ExternalLink[\s\S]*?Dashboard\s*<\/a>/);
+    expect(component).toContain('"Resultados"');
+    expect(component).not.toContain('type="file"');
+    expect(campaigns).not.toContain("resultsDashboardUrl");
+  });
+
+  it("mantém a Entrada de dados como única superfície de importação", () => {
+    const repository = readFileSync(
+      resolve(process.cwd(), "src/components/spreadsheet-repository.tsx"),
+      "utf8",
+    );
+    const resultsPage = readFileSync(
+      resolve(process.cwd(), "src/app/(dashboard)/dados/resultados/page.tsx"),
+      "utf8",
+    );
+
+    expect(resultsPage).toContain('view="resultados"');
+    expect(repository).toContain('fetch("/api/imports/results"');
+    expect(repository).toContain("downloadResultsTemplate");
+    expect(repository).toContain("RESULTS_SCHEMA_VERSION");
+    expect(repository).toContain('formData.append("selectedCampaign"');
+  });
+
+  it("codifica campos importados antes de inseri-los em markup", () => {
+    const expression = html.match(/const escapeHtml=(.+);\r?\n/)?.[1];
+    expect(expression).toBeTruthy();
+    const escapeHtml = Function(`return (${expression})`)() as (value: unknown) => string;
+    const attack = `<img src=x onerror="globalThis.pwned=1"><svg/onload=alert(1)>"'&`;
+    const rendered = `<td>${escapeHtml(attack)}</td>`;
+
+    expect(rendered).not.toContain("<img");
+    expect(rendered).not.toContain("<svg");
+    expect(rendered).not.toContain("onerror=\"");
+    expect(rendered).toContain("&lt;img");
+    expect(rendered).toContain("&quot;");
+    expect(html).toContain("escapeHtml(p.ponto)");
+    expect(html).toContain("escapeAttr(r.ponto)");
+    expect(html).toContain("escapeHtml(dashboardPublication?.fileName");
+  });
+
+  it("aceita somente a allowlist fechada de tags de atenção", () => {
+    expect(html).toContain("new Set(['tox','odor','inv','mix'])");
+    expect(html).toContain("arr.filter(x=>allowed.has(x))");
+    const allowed = new Set(["tox", "odor", "inv", "mix"]);
+
+    expect(["tox", "odor", "inv", "mix"].filter((tag) => allowed.has(tag))).toEqual([
+      "tox",
+      "odor",
+      "inv",
+      "mix",
+    ]);
+    expect(["constructor", "toString", "__proto__"].filter((tag) => allowed.has(tag))).toEqual([]);
+  });
+
+  it("mantém scores ausentes após os calculados e sem barra equivalente a zero", () => {
+    const source = html.match(/function compareScoreRows\([\s\S]*?\n\}/)?.[0];
+    expect(source).toBeTruthy();
+    const compareScoreRows = Function(`${source}; return compareScoreRows`)() as (
+      left: { score: number | null; pos: number },
+      right: { score: number | null; pos: number },
+      ascending: boolean,
+    ) => number;
+    const rows = [
+      { score: null, pos: 4 },
+      { score: 0.2, pos: 2 },
+      { score: 0.8, pos: 1 },
+      { score: null, pos: 3 },
+    ].sort((left, right) => compareScoreRows(left, right, false));
+
+    expect(rows.map((row) => row.score)).toEqual([0.8, 0.2, null, null]);
+    expect(rows.slice(2).map((row) => row.pos)).toEqual([3, 4]);
+    expect(html).toContain("const bar=calculated?");
+    expect(html).toContain("scoreText(p.score)");
+    expect(html).not.toContain("(p.score||0)");
   });
 });

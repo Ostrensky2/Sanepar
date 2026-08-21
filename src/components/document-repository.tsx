@@ -410,7 +410,7 @@ export function DocumentRepository() {
         </div>
         <button
           ref={insertButtonRef}
-          className="inline-flex w-fit items-center gap-2 radius-control bg-[var(--brand-navy-strong)] px-5 py-2.5 text-xs font-bold text-white transition-opacity hover:opacity-90"
+          className="type-button inline-flex w-fit items-center gap-2 radius-control bg-[var(--brand-navy-strong)] px-5 py-2.5 text-white transition-opacity hover:opacity-90"
           type="button"
           onClick={openInsertDialog}
         >
@@ -478,7 +478,7 @@ export function DocumentRepository() {
                 aria-label="Ordenar documentos"
                 value={sortMode}
                 onChange={(event) => setSortMode(event.target.value as DocumentSortMode)}
-                className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-8 text-xs font-semibold text-[var(--brand-navy-strong)] focus:ring-2 focus:ring-[var(--brand-navy-strong)]/20"
+                className="type-label w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-8 text-[var(--brand-navy-strong)] focus:ring-2 focus:ring-[var(--brand-navy-strong)]/20"
               >
                 {documentSortOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -495,7 +495,7 @@ export function DocumentRepository() {
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Buscar documentos..."
-                className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-4 text-xs focus:ring-2 focus:ring-[var(--brand-navy-strong)]/20"
+                className="type-label w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-4 focus:ring-2 focus:ring-[var(--brand-navy-strong)]/20"
               />
             </div>
           </div>
@@ -580,7 +580,7 @@ export function DocumentRepository() {
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-slate-50 text-xs">
+              <tbody className="type-table divide-y divide-slate-50">
                 {!hasLoadedDocuments ? (
                   <TableSkeletonRows rows={5} columns={7} />
                 ) : (
@@ -643,7 +643,7 @@ function MetricCard({ label, value }: { label: string; value: number }) {
       <p className="text-caption font-bold uppercase tracking-[0.16em] text-[var(--ink-soft)]">
         {label}
       </p>
-      <p className="heading-font mt-2 text-2xl font-black text-[var(--brand-navy-strong)]">
+      <p className="heading-font type-kpi mt-2 text-[var(--brand-navy-strong)]">
         {value}
       </p>
     </article>
@@ -701,10 +701,10 @@ function InsertLinkDialog({
       >
         <div className="flex items-start justify-between gap-4 border-b border-[var(--line-ghost)] px-5 py-4">
           <div>
-            <h3 id="insert-link-dialog-title" className="heading-font text-lg font-bold text-[var(--brand-navy-strong)]">
+            <h3 id="insert-link-dialog-title" className="heading-font type-panel-title text-[var(--brand-navy-strong)]">
               Enviar arquivo
             </h3>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="type-help mt-1 text-[var(--ink-soft)]">
               O arquivo será salvo no Supabase Storage com metadados no repositório.
             </p>
           </div>

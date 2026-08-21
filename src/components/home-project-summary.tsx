@@ -138,10 +138,10 @@ export function HomeProjectSummary({
       <section className="glass-panel radius-panel border border-[var(--line-ghost)] p-4">
         <div className="mb-4 flex flex-col gap-[var(--space-3)] sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+            <p className="type-eyebrow text-[var(--brand-teal)]">
               Síntese do projeto
             </p>
-            <h2 className="heading-font mt-1 text-xl font-bold tracking-tight text-[var(--brand-navy-strong)]">
+            <h2 className="heading-font type-section-title mt-1 text-[var(--brand-navy-strong)]">
               Monitoramento sazonal Yva&apos;e
             </h2>
           </div>
@@ -179,13 +179,13 @@ export function HomeProjectSummary({
           <div className="lg:col-span-1 h-full">
             <div className="radius-card border border-[var(--line-ghost)] border-b-2 bg-white p-3 shadow-[0_12px_30px_-24px_rgba(0,66,98,0.15)] h-full flex flex-col justify-between">
               <div>
-                <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-slate-500 mb-1.5">
+                <h3 className="type-label mb-1.5 text-[var(--ink-soft)]">
                   Etapa atual
                 </h3>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
+                  <table className="type-table w-full border-collapse text-left">
                     <thead>
-                      <tr className="border-b border-slate-100 text-slate-400 font-semibold">
+                      <tr className="border-b border-slate-100 font-semibold text-[var(--ink-soft)]">
                         <th className="pb-1.5 font-bold">Campanha</th>
                         <th className="pb-1.5 font-bold text-left pl-4">Fase atual</th>
                       </tr>
@@ -270,4 +270,3 @@ function SummaryCard({
 function formatCampaignLabel(label: string) {
   return label.replace(" - ", " – ");
 }
-

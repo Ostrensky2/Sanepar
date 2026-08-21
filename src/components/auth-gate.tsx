@@ -100,14 +100,14 @@ export function AuthGate({ children }: AuthGateProps) {
           </div>
 
           <form className="grid gap-4" aria-busy={pending} onSubmit={(event) => { event.preventDefault(); void signIn(); }}>
-            <label className="grid gap-2 text-sm font-bold text-[var(--brand-navy-strong)]">
+            <label className="type-label grid gap-2 text-[var(--brand-navy-strong)]">
               E-mail
               <span className="flex h-12 items-center gap-3 radius-card border border-[var(--line-strong)] bg-white px-4 transition-colors duration-200 hover:border-[var(--brand-blue)] focus-within:border-[var(--brand-blue)] focus-within:ring-2 focus-within:ring-[var(--brand-blue-soft)]">
                 <Mail className="h-4 w-4 text-[var(--ink-soft)]" />
                 <input value={email} onChange={(event) => { setEmail(event.target.value); setError(""); }} type="email" autoComplete="email" required className="h-full min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-[var(--ink-soft)]" placeholder="nome@instituicao.com.br" />
               </span>
             </label>
-            <label className="grid gap-2 text-sm font-bold text-[var(--brand-navy-strong)]">
+            <label className="type-label grid gap-2 text-[var(--brand-navy-strong)]">
               Senha
               <span className="flex h-12 items-center gap-2 radius-card border border-[var(--line-strong)] bg-white pl-4 pr-0.5 transition-colors duration-200 hover:border-[var(--brand-blue)] focus-within:border-[var(--brand-blue)] focus-within:ring-2 focus-within:ring-[var(--brand-blue-soft)]">
                 <LockKeyhole className="h-4 w-4 text-[var(--ink-soft)]" />
@@ -125,7 +125,7 @@ export function AuthGate({ children }: AuthGateProps) {
               <LockKeyhole className="h-4 w-4" /> {pending ? "Entrando…" : "Entrar"}
             </button>
           </form>
-          <p className="mt-5 border-t border-[var(--line-ghost)] pt-4 text-sm leading-5 text-[var(--ink-soft)]">A equipe administrativa nunca cria nem informa sua senha.</p>
+          <p className="type-help mt-5 border-t border-[var(--line-ghost)] pt-4 text-[var(--ink-soft)]">A equipe administrativa nunca cria nem informa sua senha.</p>
         </div>
       </section>
     </main>

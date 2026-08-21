@@ -78,9 +78,9 @@ export function PasswordSetupForm() {
         ) : null}
         {state === "ready" ? (
           <div className="mt-8">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-[var(--brand-teal)]">Link verificado</p>
-            <h1 className="heading-font mt-2 text-2xl font-black text-[var(--brand-navy-strong)]">Defina sua nova senha</h1>
-            <p className="mt-3 text-sm leading-6 text-[var(--ink-soft)]">Use uma senha longa, exclusiva e diferente das utilizadas em outros serviços.</p>
+            <p className="type-eyebrow text-[var(--brand-teal)]">Link verificado</p>
+            <h1 className="heading-font type-page-title mt-2 text-[var(--brand-navy-strong)]">Defina sua nova senha</h1>
+            <p className="type-body mt-3 text-[var(--ink-soft)]">Use uma senha longa, exclusiva e diferente das utilizadas em outros serviços.</p>
             <form className="mt-7 grid gap-4" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
               <PasswordInput ref={firstPasswordRef} label="Nova senha" value={password} onChange={setPassword} show={show} onToggle={() => setShow((current) => !current)} autoComplete="new-password" />
               <PasswordInput label="Confirmar nova senha" value={confirmation} onChange={setConfirmation} show={show} onToggle={() => setShow((current) => !current)} autoComplete="new-password" />
@@ -98,7 +98,7 @@ export function PasswordSetupForm() {
 
 const PasswordInput = forwardRef<HTMLInputElement, { label: string; value: string; onChange: (value: string) => void; show: boolean; onToggle: () => void; autoComplete: string }>(function PasswordInput({ label, value, onChange, show, onToggle, autoComplete }, ref) {
   return (
-    <label className="grid gap-2 text-sm font-bold text-[var(--brand-navy-strong)]">
+    <label className="type-label grid gap-2 text-[var(--brand-navy-strong)]">
       {label}
       <span className="flex h-12 items-center gap-3 rounded-xl border border-[var(--line-strong)] bg-white px-4 focus-within:border-[var(--brand-blue)]">
         <LockKeyhole className="h-4 w-4 text-[var(--ink-soft)]" />

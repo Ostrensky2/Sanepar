@@ -153,12 +153,12 @@ export function CampaignStatusEntryPanel() {
       <section className="glass-panel radius-panel p-5">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+            <p className="type-eyebrow text-[var(--brand-teal)]">
               Ficha da campanha
             </p>
-            <h3 className="heading-font mt-1 text-2xl font-extrabold text-[var(--brand-navy-strong)]">
+            <h1 className="heading-font type-page-title mt-1 text-[var(--brand-navy-strong)]">
               {selectedCampaign.title}
-            </h3>
+            </h1>
           </div>
           <div className="flex min-w-44 items-center gap-3 rounded-2xl bg-[var(--surface-soft)] p-3">
             <Save className="h-5 w-5 text-[var(--brand-teal)]" />
@@ -315,4 +315,3 @@ export function CampaignStatusEntryPanel() {
     </section>
   );
 }
-

@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 const EMBEDDABLE_DASHBOARD = "/dashboards/Painel_eDNA_Campanha1_Sanepar.html";
-const DASHBOARD_SCRIPT_HASH = "'sha256-KNW9kXnemZC8OmnmTJQylN2V0TWRj2ifvbR8itO37Mg='";
+const DASHBOARD_SCRIPT_HASH = "'sha256-HHkGbBPJdQZAgFJs9BGd9MorcTT+JP6Dfe6ur+NMzak='";
 
 export async function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");

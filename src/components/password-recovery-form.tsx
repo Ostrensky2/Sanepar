@@ -26,15 +26,15 @@ export function PasswordRecoveryForm() {
       <section className="w-full max-w-xl rounded-3xl border border-[var(--line-ghost)] bg-white p-6 shadow-[0_34px_100px_-60px_rgba(0,66,98,0.55)] sm:p-9">
         <YvaeMasthead />
         <div className="mt-8">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-[var(--brand-teal)]">Recuperação de acesso</p>
-          <h1 className="heading-font mt-2 text-2xl font-black text-[var(--brand-navy-strong)]">Redefinir minha senha</h1>
-          <p className="mt-3 text-sm leading-6 text-[var(--ink-soft)]">
+          <p className="type-eyebrow text-[var(--brand-teal)]">Recuperação de acesso</p>
+          <h1 className="heading-font type-page-title mt-2 text-[var(--brand-navy-strong)]">Redefinir minha senha</h1>
+          <p className="type-body mt-3 text-[var(--ink-soft)]">
             Informe seu e-mail. Por segurança, a confirmação exibida será a mesma para qualquer endereço.
           </p>
         </div>
 
         <form className="mt-7 grid gap-4" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-          <label className="grid gap-2 text-sm font-bold text-[var(--brand-navy-strong)]">
+          <label className="type-label grid gap-2 text-[var(--brand-navy-strong)]">
             E-mail
             <span className="flex h-12 items-center gap-3 rounded-xl border border-[var(--line-strong)] bg-white px-4 focus-within:border-[var(--brand-blue)]">
               <Mail className="h-4 w-4 text-[var(--ink-soft)]" />

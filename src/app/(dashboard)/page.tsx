@@ -16,7 +16,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="app-container space-y-4">
-      <h1 className="sr-only">Painel de Monitoramento</h1>
+      <h1 className="heading-font type-page-title text-[var(--brand-navy-strong)]">
+        Painel de Monitoramento
+      </h1>
       <HomeCanonicalKpis
         laboratoryRiskPoints={laboratoryRiskPoints}
         pointSummary={pointSummary}

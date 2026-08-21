@@ -134,13 +134,13 @@ function CanonicalKpi({
       ? "text-[var(--brand-navy-strong)]"
       : "border-[var(--line-ghost)] text-[var(--brand-navy-strong)]";
 
-  let fontSizeClass = "text-2xl";
+  let fontSizeClass = "type-kpi";
   if (value.length > 25) {
-    fontSizeClass = "text-[11px] leading-tight font-bold";
+    fontSizeClass = "type-metadata font-bold";
   } else if (value.length > 15) {
-    fontSizeClass = "text-xs leading-tight font-semibold";
+    fontSizeClass = "type-label";
   } else if (value.length > 7) {
-    fontSizeClass = "text-sm leading-tight";
+    fontSizeClass = "type-metadata font-bold";
   }
 
   return (
@@ -157,7 +157,7 @@ function CanonicalKpi({
           style={accentColor ? { color: accentColor } : undefined}
         />
       </div>
-      <p className={`heading-font font-black tracking-0 text-[var(--brand-navy-strong)] ${fontSizeClass}`}>
+      <p className={`heading-font tracking-0 text-[var(--brand-navy-strong)] ${fontSizeClass}`}>
         {value}
       </p>
       <p className="text-label font-semibold leading-4 text-[var(--ink-soft)]">
