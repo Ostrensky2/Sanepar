@@ -85,78 +85,11 @@ export async function GET(request: Request) {
   });
 }
 
-export async function PUT(request: Request) {
-  const auth = await requireApiSession(request, "documents.manage");
-
-  if (!auth.ok) {
-    return auth.response;
-  }
-
-  const supabase = createOptionalSupabaseClient();
-
-  if (!supabase) {
-    return NextResponse.json(
-      { error: "Supabase não configurado para salvar documentos." },
-      { status: 503 },
-    );
-  }
-
-  const payload = (await request.json()) as { documents?: unknown };
-  const documents = normalizeStoredDocuments(payload.documents);
-
-  if (!Array.isArray(payload.documents)) {
-    return NextResponse.json(
-      { error: "A lista de documentos é inválida." },
-      { status: 400 },
-    );
-  }
-
-  const { data: existingRows, error: existingRowsError } = await supabase
-    .from("app_documents")
-    .select("id")
-    .returns<{ id: string }[]>();
-
-  if (existingRowsError) {
-    return NextResponse.json(
-      { error: "Não foi possível ler os documentos na nuvem." },
-      { status: 500 },
-    );
-  }
-
-  const nextIds = new Set(documents.map((document) => document.id));
-  const removedIds = (existingRows ?? [])
-    .map((row) => row.id)
-    .filter((id) => !nextIds.has(id));
-
-  if (removedIds.length) {
-    const { error: deleteError } = await supabase
-      .from("app_documents")
-      .delete()
-      .in("id", removedIds);
-
-    if (deleteError) {
-      return NextResponse.json(
-        { error: "Não foi possível sincronizar exclusões de documentos na nuvem." },
-        { status: 500 },
-      );
-    }
-  }
-
-  if (documents.length) {
-    const { error: upsertError } = await supabase.from("app_documents").upsert(
-      documents.map(toRow),
-      { onConflict: "id" },
-    );
-
-    if (upsertError) {
-      return NextResponse.json(
-        { error: "Não foi possível salvar documentos na nuvem." },
-        { status: 500 },
-      );
-    }
-  }
-
-  return NextResponse.json({ documents, persistence: "cloud" });
+export async function PUT() {
+  return NextResponse.json(
+    { error: "Sincronização de documentos por snapshot não é permitida." },
+    { status: 405, headers: { Allow: "GET, DELETE" } },
+  );
 }
 
 export async function DELETE(request: Request) {
@@ -238,26 +171,5 @@ function fromRow(row: AppDocumentRow): StoredDocument {
     size: row.size_bytes ?? undefined,
     storageBucket: row.storage_bucket ?? undefined,
     storagePath: row.storage_path ?? undefined,
-  };
-}
-
-function toRow(document: StoredDocument) {
-  return {
-    id: document.id,
-    title: document.title,
-    dropbox_url: document.dropboxUrl ?? document.originalUrl ?? null,
-    original_url: document.originalUrl ?? document.dropboxUrl ?? null,
-    campaign: document.campaign,
-    point: document.point,
-    date_label: document.date,
-    type: document.type,
-    status: document.status,
-    source: document.source,
-    original_name: document.originalName ?? null,
-    mime_type: document.mimeType ?? null,
-    size_bytes: document.size ?? null,
-    storage_bucket: document.storageBucket ?? null,
-    storage_path: document.storagePath ?? null,
-    updated_at: new Date().toISOString(),
   };
 }

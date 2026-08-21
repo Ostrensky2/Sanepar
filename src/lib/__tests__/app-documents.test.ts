@@ -12,7 +12,7 @@ const baseDocument = {
 };
 
 describe("document media policy", () => {
-  it("aceita somente documento armazenado no Supabase", () => {
+  it("normaliza documento armazenado no Supabase sem preservar URL externa", () => {
     expect(
       normalizeStoredDocument({
         ...baseDocument,
@@ -33,8 +33,7 @@ describe("document media policy", () => {
   it.each([
     ["Drive", "https://drive.google.com/file/d/redacted"],
     ["Dropbox", "https://dropbox.com/s/redacted"],
-    ["ausente", ""],
-  ])("rejeita documento %s sem Storage", (_label, url) => {
+  ])("preserva documento legado %s como link somente leitura", (_label, url) => {
     expect(
       normalizeStoredDocument({
         ...baseDocument,
@@ -42,6 +41,19 @@ describe("document media policy", () => {
         dropboxUrl: url,
         originalUrl: url,
       }),
+    ).toMatchObject({
+      source: "link",
+      dropboxUrl: url,
+      originalUrl: url,
+      storageBucket: undefined,
+      storagePath: undefined,
+    });
+  });
+
+  it("rejeita link sem URL e origem desconhecida", () => {
+    expect(normalizeStoredDocument({ ...baseDocument, source: "link" })).toBeNull();
+    expect(
+      normalizeStoredDocument({ ...baseDocument, source: "externo", originalUrl: "https://example.com" }),
     ).toBeNull();
   });
 });

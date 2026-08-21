@@ -1,7 +1,6 @@
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 
 export const APP_DOCUMENTS_STORAGE_KEY = "yvae:attached-documents";
-export const APP_DOCUMENTS_CLOUD_MIGRATION_KEY = "yvae:attached-documents-cloud-migrated";
 
 export type DocumentType =
   | "Plano de trabalho"
@@ -111,10 +110,11 @@ export function normalizeStoredDocument(value: unknown): StoredDocument | null {
   const candidate = value as Partial<StoredDocument>;
   const title = String(candidate.title ?? "").trim();
   const dropboxUrl = String(candidate.dropboxUrl ?? "").trim();
+  const originalUrl = String(candidate.originalUrl ?? "").trim();
   const storageBucket = String(candidate.storageBucket ?? "").trim();
   const storagePath = String(candidate.storagePath ?? "").trim();
   const status = String(candidate.status ?? "INSERIDO");
-  const source = storageBucket && storagePath ? "storage" : String(candidate.source ?? "link");
+  const source = String(candidate.source ?? (storageBucket && storagePath ? "storage" : "link"));
 
   if (!title || status.toUpperCase() === "RECUPERADO") {
     return null;
@@ -124,15 +124,19 @@ export function normalizeStoredDocument(value: unknown): StoredDocument | null {
     return null;
   }
 
-  if (source !== "storage" || !storageBucket || !storagePath) {
+  if (source === "link" && !dropboxUrl && !originalUrl) {
+    return null;
+  }
+
+  if (source !== "storage" && source !== "link") {
     return null;
   }
 
   return {
     id: String(candidate.id ?? `${dropboxUrl || storagePath}-${title}`),
     title,
-    dropboxUrl: undefined,
-    originalUrl: undefined,
+    dropboxUrl: source === "link" ? dropboxUrl || originalUrl : undefined,
+    originalUrl: source === "link" ? originalUrl || dropboxUrl : undefined,
     campaign: String(candidate.campaign ?? "Documento inserido"),
     point: String(candidate.point ?? "Repositório oficial"),
     date: String(candidate.date ?? ""),
@@ -141,12 +145,12 @@ export function normalizeStoredDocument(value: unknown): StoredDocument | null {
       ? (candidate.type as DocumentType)
       : "Relatórios",
     status,
-    source: source === "storage" ? "storage" : "link",
+    source,
     originalName: candidate.originalName ? String(candidate.originalName) : undefined,
     mimeType: candidate.mimeType ? String(candidate.mimeType) : undefined,
     size: typeof candidate.size === "number" ? candidate.size : undefined,
-    storageBucket: storageBucket || undefined,
-    storagePath: storagePath || undefined,
+    storageBucket: source === "storage" ? storageBucket : undefined,
+    storagePath: source === "storage" ? storagePath : undefined,
   };
 }
 
@@ -159,11 +163,4 @@ export function normalizeStoredDocuments(value: unknown) {
           .filter(isDocumentAllowedInRepository),
       )
     : [];
-}
-
-export function mergeStoredDocuments(
-  primaryDocuments: StoredDocument[],
-  secondaryDocuments: StoredDocument[],
-) {
-  return dedupeDocuments([...primaryDocuments, ...secondaryDocuments]);
 }

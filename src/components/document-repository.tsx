@@ -17,10 +17,8 @@ import {
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
-  APP_DOCUMENTS_CLOUD_MIGRATION_KEY,
   APP_DOCUMENTS_STORAGE_KEY,
   filterTabs,
-  mergeStoredDocuments,
   normalizeStoredDocuments,
   readStoredDocumentsFromStorage,
   type DocumentType,
@@ -75,6 +73,7 @@ export function DocumentRepository() {
     type: "Plano de trabalho" as DocumentType,
   });
   const insertButtonRef = useRef<HTMLButtonElement>(null);
+  const hasHydratedDocumentsRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -94,29 +93,14 @@ export function DocumentRepository() {
         }
 
         const cloudDocuments = normalizeStoredDocuments(payload.documents);
-        const alreadyMigrated =
-          window.localStorage.getItem(APP_DOCUMENTS_CLOUD_MIGRATION_KEY) === "true";
-        const nextDocuments = alreadyMigrated
-          ? cloudDocuments
-          : mergeStoredDocuments(cloudDocuments, localDocuments);
-
         if (!isMounted) {
           return;
         }
 
-        setDocuments(nextDocuments);
+        setDocuments(cloudDocuments);
         setPersistenceMode("cloud");
         setSyncNotice("Documentos sincronizados na nuvem.");
         setHasLoadedDocuments(true);
-
-        if (!alreadyMigrated && localDocuments.length) {
-          try {
-            await saveDocumentsToCloud(nextDocuments);
-            window.localStorage.setItem(APP_DOCUMENTS_CLOUD_MIGRATION_KEY, "true");
-          } catch {
-            setSyncNotice("Documentos carregados localmente; a nuvem ainda não confirmou a migração.");
-          }
-        }
       } catch {
         if (!isMounted) {
           return;
@@ -146,19 +130,14 @@ export function DocumentRepository() {
       return;
     }
 
+    if (!hasHydratedDocumentsRef.current) {
+      hasHydratedDocumentsRef.current = true;
+      return;
+    }
+
     window.localStorage.setItem(APP_DOCUMENTS_STORAGE_KEY, JSON.stringify(documents));
     window.dispatchEvent(new Event("yvae:documents-updated"));
-
-    if (persistenceMode === "cloud") {
-      saveDocumentsToCloud(documents)
-        .then(() => {
-          setSyncNotice("Documentos sincronizados na nuvem.");
-        })
-        .catch(() => {
-          setSyncNotice("A lista local foi atualizada, mas a nuvem não confirmou a gravação.");
-        });
-    }
-  }, [documents, hasLoadedDocuments, persistenceMode]);
+  }, [documents, hasLoadedDocuments]);
 
   const visibleDocuments = useMemo(() => {
     const normalizedSearch = normalize(searchTerm);
@@ -799,20 +778,6 @@ function InsertLinkDialog({
       </dialog>
     </div>
   );
-}
-
-async function saveDocumentsToCloud(documents: StoredDocument[]) {
-  const response = await fetch("/api/documents", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ documents }),
-  });
-
-  if (!response.ok) {
-    throw new Error("A nuvem não confirmou a gravação dos documentos.");
-  }
-
-  return response.json() as Promise<{ documents?: unknown; persistence?: string }>;
 }
 
 async function deleteDocumentsFromCloud(ids: string[]) {
