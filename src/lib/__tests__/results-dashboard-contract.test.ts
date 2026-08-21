@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { buildPriorityMunicipalities } from "@/components/campaign-hydro-map";
+import { loadCampaign1DashboardMapPoints } from "@/lib/dashboard-data";
 
 const dashboardPath = resolve(
   process.cwd(),
@@ -33,9 +35,9 @@ describe("contrato do dashboard de resultados", () => {
     expect(model.alerts).toHaveLength(39);
   });
 
-  it("preserva oito áreas analíticas e os disclaimers indispensáveis", () => {
-    const views = html.match(/\['(?:panorama|prioridade|alertas|espacial|ciano|bact|coi|metodo)'/g);
-    expect(views).toHaveLength(8);
+  it("preserva sete áreas analíticas e os disclaimers indispensáveis", () => {
+    const views = html.match(/\['(?:panorama|prioridade|alertas|ciano|bact|coi|metodo)'/g);
+    expect(views).toHaveLength(7);
     expect(html).toContain("não abundância absoluta, biomassa ou concentração celular");
     expect(html).toContain("não confirma</b> viabilidade, toxinas, floração nem conformidade legal");
     expect(html).toContain("Reads não equivalem a abundância real");
@@ -60,6 +62,31 @@ describe("contrato do dashboard de resultados", () => {
     expect(html).toContain("e.key!=='Tab'");
     expect(html).toContain("scrollIntoView({block:'nearest',inline:'nearest'})");
     expect(html).toContain("aria-label=\"${r.ponto} — ${H.taxa[index]}: ${v}% dos reads do marcador\"");
+  });
+
+  it("mantém um único mapa de risco e move municípios para a superfície nativa", () => {
+    const component = readFileSync(
+      resolve(process.cwd(), "src/components/campaign-results-panels.tsx"),
+      "utf8",
+    );
+    expect(component.match(/<CampaignHydroMap/g)).toHaveLength(1);
+    expect(component).toContain("buildPriorityMunicipalities(points)");
+    expect(component).toContain("Municípios prioritários");
+    expect(html).not.toContain('id="map"');
+    expect(html).not.toContain('data-v="espacial"');
+    expect(html).not.toContain('class="state-outline"');
+  });
+
+  it("alimenta o mapa nativo com os mesmos 73 pontos e 60 municípios", async () => {
+    const points = await loadCampaign1DashboardMapPoints();
+    const municipalities = buildPriorityMunicipalities(points);
+
+    expect(points).toHaveLength(73);
+    expect(municipalities).toHaveLength(60);
+    expect(municipalities[0]).toMatchObject({ municipality: "Pinhais", maxScore: 0.855 });
+    expect(municipalities.map((item) => item.maxScore)).toEqual(
+      [...municipalities.map((item) => item.maxScore)].sort((left, right) => right - left),
+    );
   });
 
   it("mantém números científicos legíveis e leitura rápida responsiva", () => {

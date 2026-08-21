@@ -1,12 +1,17 @@
-import { BarChart3, ExternalLink, FileSpreadsheet, FlaskConical, Info, X } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
-import { CampaignHydroMap, type CampaignHydroMapPoint } from "@/components/campaign-hydro-map";
+import { BarChart3, Download, ExternalLink, FileSpreadsheet, FlaskConical, Info, X } from "lucide-react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  buildPriorityMunicipalities,
+  CampaignHydroMap,
+  type CampaignHydroMapPoint,
+} from "@/components/campaign-hydro-map";
 import {
   MetabarcodingStagesIndicator,
   type MetabarcodingStage,
 } from "@/components/metabarcoding-stages";
 import { DashboardSkeleton, ErrorBoundary } from "@/components/operational-feedback";
 import { type CampaignView } from "@/lib/campaign-management";
+import { laboratoryRiskColor, laboratoryRiskLabel } from "@/lib/laboratory-risk";
 
 type CampaignResultsPanelsProps = {
   children?: ReactNode;
@@ -17,6 +22,10 @@ type CampaignResultsPanelsProps = {
   stages?: MetabarcodingStage[];
   stageTitle?: string;
   points?: CampaignHydroMapPoint[];
+  canDownload?: boolean;
+  isDownloading?: boolean;
+  downloadMessage?: string;
+  onDownload?: () => void;
   onDismissUnavailableNotice?: () => void;
 };
 
@@ -29,6 +38,10 @@ export function CampaignResultsPanels({
   stages,
   stageTitle,
   points,
+  canDownload,
+  isDownloading,
+  downloadMessage,
+  onDownload,
   onDismissUnavailableNotice,
 }: CampaignResultsPanelsProps) {
   if (children) {
@@ -56,7 +69,13 @@ export function CampaignResultsPanels({
         </>
       ) : (
         <>
-          <ResultsDashboardSection campaign={campaign} />
+          <ResultsDashboardSection
+            campaign={campaign}
+            canDownload={Boolean(canDownload)}
+            isDownloading={Boolean(isDownloading)}
+            downloadMessage={downloadMessage}
+            onDownload={onDownload}
+          />
           <MetabarcodingStagesIndicator stages={stages} title={stageTitle} />
           <AnalyticResultsMap points={points} />
         </>
@@ -66,6 +85,9 @@ export function CampaignResultsPanels({
 }
 
 function AnalyticResultsMap({ points }: { points: CampaignHydroMapPoint[] }) {
+  const [selectedPointId, setSelectedPointId] = useState<string>();
+  const municipalities = useMemo(() => buildPriorityMunicipalities(points), [points]);
+
   if (!points.length) {
     return (
       <EmptyCampaignPanel
@@ -76,25 +98,94 @@ function AnalyticResultsMap({ points }: { points: CampaignHydroMapPoint[] }) {
   }
 
   return (
-    <section className="relative h-[500px] overflow-hidden radius-panel border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)]">
-      <CampaignHydroMap
-        points={points}
-        layers={{
-          roadMap: true,
-          basins: true,
-          dailyRoutes: false,
-          dayTransitions: false,
-          planned: false,
-          effective: true,
-          displacement: false,
-        }}
-        markerMode="risk"
-        showPointTooltip
-        clipBaseTilesToBasins
-        caption="Mapa rodoviário OpenStreetMap · Pontos de coleta da campanha"
-      />
+    <section aria-labelledby="risk-map-title" className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(280px,34%)]">
+      <div className="min-w-0">
+        <h2 id="risk-map-title" className="sr-only">Mapa único de risco molecular</h2>
+        <div className="relative h-[500px] overflow-hidden radius-panel border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)] max-sm:h-[420px]">
+          <CampaignHydroMap
+            points={points}
+            selectedPointId={selectedPointId}
+            onSelectPoint={(point) => setSelectedPointId(point.id)}
+            layers={{
+              roadMap: true,
+              basins: true,
+              dailyRoutes: false,
+              dayTransitions: false,
+              planned: false,
+              effective: true,
+              displacement: false,
+            }}
+            markerMode="risk"
+            showPointTooltip
+            clipBaseTilesToBasins
+            caption="Paraná · cor = classe · área = score integrado"
+          />
+        </div>
+      </div>
+
+      <aside className="flex min-h-0 flex-col overflow-hidden radius-panel border border-[var(--line-ghost)] bg-white md:max-h-[500px]">
+        <div className="border-b border-[var(--line-ghost)] px-4 py-4">
+          <h3 className="heading-font text-lg font-extrabold text-[var(--brand-navy-strong)]">
+            Municípios prioritários
+          </h3>
+          <p className="mt-1 text-xs leading-5 text-slate-600">
+            {municipalities.length} municípios ordenados pelo maior score entre seus {points.length} pontos.
+          </p>
+        </div>
+        <div className="overflow-x-auto md:overflow-y-auto">
+          <table className="w-full min-w-[300px] border-collapse text-left text-xs">
+            <thead className="sticky top-0 z-10 bg-[var(--surface-soft)] text-[var(--brand-navy-strong)]">
+              <tr>
+                <th className="px-3 py-2 font-black">Município</th>
+                <th className="px-2 py-2 text-center font-black">Pts</th>
+                <th className="px-3 py-2 text-right font-black">Score máx.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {municipalities.map((municipality) => {
+                const selected = municipality.priorityPoint.id === selectedPointId;
+                return (
+                  <tr
+                    key={municipality.municipality}
+                    className={`border-t border-[var(--line-ghost)] ${selected ? "bg-[var(--surface-soft)]" : "hover:bg-slate-50"}`}
+                  >
+                    <td className="p-0">
+                      <button
+                        type="button"
+                        className="min-h-11 w-full px-3 py-2 text-left font-bold text-[var(--ink)] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--brand-teal)]"
+                        onClick={() => setSelectedPointId(municipality.priorityPoint.id)}
+                        aria-label={`Selecionar ${municipality.municipality}, ${municipality.pointCount} pontos, score máximo ${formatRiskScore(municipality.maxScore)}, prioridade ${laboratoryRiskLabel(municipality.riskLevel)}`}
+                      >
+                        <span className="block">{municipality.municipality}</span>
+                        <span
+                          className="mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-black"
+                          style={{
+                            backgroundColor: laboratoryRiskColor(municipality.riskLevel),
+                            borderColor: laboratoryRiskColor(municipality.riskLevel),
+                            color: municipality.riskLevel === "baixo" ? "#fff" : "#111827",
+                          }}
+                        >
+                          {laboratoryRiskLabel(municipality.riskLevel)}
+                        </span>
+                      </button>
+                    </td>
+                    <td className="px-2 py-2 text-center font-bold text-slate-700">{municipality.pointCount}</td>
+                    <td className="px-3 py-2 text-right font-black tabular-nums text-[var(--brand-navy-strong)]">
+                      {formatRiskScore(municipality.maxScore)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </aside>
     </section>
   );
+}
+
+function formatRiskScore(score: number) {
+  return score.toFixed(3).replace(".", ",");
 }
 
 function ResultsUnavailablePanel({ campaign }: { campaign: CampaignView }) {
@@ -176,7 +267,19 @@ function UnavailableResultsNotice({
   );
 }
 
-function ResultsDashboardSection({ campaign }: { campaign: CampaignView }) {
+function ResultsDashboardSection({
+  campaign,
+  canDownload,
+  isDownloading,
+  downloadMessage,
+  onDownload,
+}: {
+  campaign: CampaignView;
+  canDownload: boolean;
+  isDownloading: boolean;
+  downloadMessage?: string;
+  onDownload?: () => void;
+}) {
   const hasDashboard = Boolean(campaign.resultsDashboardUrl);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const observerCleanupRef = useRef<(() => void) | null>(null);
@@ -242,17 +345,33 @@ function ResultsDashboardSection({ campaign }: { campaign: CampaignView }) {
           </div>
         </div>
 
-        {hasDashboard ? (
-          <a
-            href={campaign.resultsDashboardUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-[var(--brand-navy-strong)] transition hover:bg-[var(--brand-blue-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)]"
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
+          {hasDashboard ? (
+            <a
+              href={campaign.resultsDashboardUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-[var(--brand-navy-strong)] transition hover:bg-[var(--brand-blue-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)] sm:w-auto"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Abrir dashboard
+            </a>
+          ) : null}
+          <button
+            type="button"
+            onClick={onDownload}
+            disabled={!canDownload || isDownloading || !onDownload}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-navy-strong)] px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-white transition hover:bg-[var(--brand-blue)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           >
-            <ExternalLink className="h-4 w-4" />
-            Abrir dashboard
-          </a>
-        ) : null}
+            <Download className="h-4 w-4" />
+            {isDownloading ? "Gerando planilha..." : "Baixar planilha (.xlsx)"}
+          </button>
+          {downloadMessage ? (
+            <p aria-live="polite" className="text-xs font-semibold text-[var(--ink-soft)] sm:basis-full sm:text-right">
+              {downloadMessage}
+            </p>
+          ) : null}
+        </div>
       </div>
 
       <div>

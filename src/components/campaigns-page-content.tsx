@@ -43,12 +43,14 @@ import {
   type CampaignView,
 } from "@/lib/campaign-management";
 import { DashboardSkeleton, ErrorBoundary } from "@/components/operational-feedback";
+import type { LaboratoryRiskPoint } from "@/lib/laboratory-risk";
 
 const SELECTED_CAMPAIGN_STORAGE_KEY = "yvae:selected-campaign-id";
 const CAMPAIGN_MANAGEMENT_UPDATED_EVENT = "yvae:campaign-management-updated";
 
 export function CampaignsPageContent({
   campaignPoints,
+  resultExportPoints = [],
   campaigns = defaultCampaigns,
   view = "campo",
   eyebrow = "Campanha selecionada",
@@ -57,6 +59,7 @@ export function CampaignsPageContent({
   emptyMapDescription = "Registre pontos com coordenadas no Diário de Campo para que eles apareçam no mapa desta campanha.",
 }: {
   campaignPoints: CampaignHydroMapPoint[];
+  resultExportPoints?: LaboratoryRiskPoint[];
   campaigns?: CampaignView[];
   view?: "campo" | "resultados";
   eyebrow?: string;
@@ -294,6 +297,13 @@ export function CampaignsPageContent({
       ),
     [selectedCampaign.id, selectedCampaign.title, sourceCampaignPoints],
   );
+  const selectedResultExportPoints = useMemo(
+    () =>
+      resultExportPoints.filter((point) =>
+        campaignPointMatchesSelectedCampaign(point, selectedCampaign.id, selectedCampaign.title),
+      ),
+    [resultExportPoints, selectedCampaign.id, selectedCampaign.title],
+  );
 
   const diaryMapPoints = useMemo(
     () =>
@@ -390,22 +400,44 @@ export function CampaignsPageContent({
       addFieldDiarySummarySheet(workbook, sortedEntries, exportCampaignLabel);
       addFieldDiaryEntriesSheet(workbook, sortedEntries);
 
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-
-      link.href = url;
-      link.download = `${slugifyFileName(exportCampaignLabel)}-diario-de-campo.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      await downloadWorkbook(
+        workbook,
+        `${slugifyFileName(exportCampaignLabel)}-diario-de-campo.xlsx`,
+      );
       setExportMessage(`Planilha exportada com ${sortedEntries.length} registros.`);
     } catch {
       setExportMessage("Não foi possível exportar a planilha agora.");
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  async function exportCampaignResultsWorkbook() {
+    setExportMessage("");
+
+    if (!selectedResultExportPoints.length) {
+      setExportMessage("Esta campanha ainda não possui resultados homologados para exportação.");
+      return;
+    }
+
+    setIsExporting(true);
+
+    try {
+      const ExcelJS = await import("exceljs");
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "Yva'e Monitoramento";
+      workbook.created = new Date();
+      workbook.modified = new Date();
+
+      addFieldDiarySummarySheet(workbook, selectedDiaryEntries, selectedCampaign.title, "Resumo");
+      addCampaignResultsSheet(workbook, selectedResultExportPoints, selectedDiaryEntries);
+      addFieldDiaryEntriesSheet(workbook, selectedDiaryEntries);
+      await downloadWorkbook(workbook, buildCampaignResultsFileName(selectedCampaign.title));
+      setExportMessage(
+        `Planilha exportada com ${selectedResultExportPoints.length} resultados e ${selectedDiaryEntries.length} registros de campo.`,
+      );
+    } catch {
+      setExportMessage("Não foi possível gerar a planilha desta campanha agora.");
     } finally {
       setIsExporting(false);
     }
@@ -471,7 +503,10 @@ export function CampaignsPageContent({
             <select
               className="rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-sm font-bold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none transition focus:border-[var(--brand-blue)] focus:ring-2 focus:ring-[var(--brand-blue)]/20"
               value={selectedCampaign.id}
-              onChange={(event) => setSelectedCampaignId(event.target.value)}
+              onChange={(event) => {
+                setSelectedCampaignId(event.target.value);
+                setExportMessage("");
+              }}
             >
               {campaigns.map((campaign) => {
                 const management = campaignManagement[campaign.id];
@@ -674,6 +709,10 @@ export function CampaignsPageContent({
             stages={selectedStages}
             stageTitle={selectedManagement.stageTitle}
             points={visibleResultPoints}
+            canDownload={!isCampaignHydrating && selectedResultExportPoints.length > 0}
+            isDownloading={isExporting}
+            downloadMessage={exportMessage}
+            onDownload={() => void exportCampaignResultsWorkbook()}
             onDismissUnavailableNotice={() => setDismissedUnavailableResultsNoticeCampaignId(selectedCampaign.id)}
           />
         </div>
@@ -1250,12 +1289,13 @@ function formatExportCampaignSelection(campaigns: CampaignView[], selectedCampai
   return labels.length ? labels.join(" + ") : "Campanhas selecionadas";
 }
 
-function addFieldDiarySummarySheet(
+export function addFieldDiarySummarySheet(
   workbook: Workbook,
   entries: FieldDiaryEntry[],
   campaignTitle: string,
+  sheetName = "Resumo agregado",
 ) {
-  const sheet = workbook.addWorksheet("Resumo agregado", {
+  const sheet = workbook.addWorksheet(sheetName, {
     views: [{ state: "frozen", ySplit: 1 }],
   });
   sheet.columns = [
@@ -1298,7 +1338,85 @@ function addFieldDiarySummarySheet(
   styleWorksheet(sheet, "K");
 }
 
-function addFieldDiaryEntriesSheet(
+export function addCampaignResultsSheet(
+  workbook: Workbook,
+  points: LaboratoryRiskPoint[],
+  diaryEntries: FieldDiaryEntry[],
+) {
+  const sheet = workbook.addWorksheet("Resultados por ponto", {
+    views: [{ state: "frozen", ySplit: 1 }],
+  });
+  sheet.columns = [
+    { header: "Campanha", key: "campaign", width: 34 },
+    { header: "SIA", key: "sia", width: 16 },
+    { header: "Amostra", key: "sampleId", width: 18 },
+    { header: "Ponto/local", key: "point", width: 34 },
+    { header: "Corpo hídrico", key: "waterBody", width: 34 },
+    { header: "Município", key: "municipality", width: 22 },
+    { header: "Data", key: "date", width: 14 },
+    { header: "Latitude efetiva", key: "latitude", width: 18 },
+    { header: "Longitude efetiva", key: "longitude", width: 18 },
+    { header: "Ranking", key: "ranking", width: 12 },
+    { header: "Score integrado", key: "score", width: 16 },
+    { header: "Classificação integrada", key: "classification", width: 24 },
+    { header: "Risco ambiental", key: "environmentalRisk", width: 24 },
+    { header: "Risco operacional", key: "operationalRisk", width: 24 },
+    { header: "Risco sanitário", key: "sanitaryRisk", width: 24 },
+    { header: "Marcadores eDNA", key: "markers", width: 42 },
+    { header: "Sinal eDNA", key: "ednaSignal", width: 28 },
+    { header: "Confiança", key: "confidence", width: 18 },
+    { header: "Síntese técnica", key: "summary", width: 54 },
+    { header: "Recomendações", key: "recommendations", width: 54 },
+    { header: "Status laboratorial", key: "laboratoryStatus", width: 20 },
+    { header: "Acessibilidade registrada", key: "accessibility", width: 24 },
+    { header: "Atividades registradas", key: "activities", width: 36 },
+    { header: "Condições da água registradas", key: "waterConditions", width: 42 },
+    { header: "Ocorrência registrada?", key: "hasOccurrence", width: 22 },
+    { header: "Tipo de ocorrência", key: "occurrenceType", width: 28 },
+    { header: "Problema/descrição", key: "occurrenceDescription", width: 48 },
+    { header: "Follow-up", key: "followUp", width: 20 },
+    { header: "Notas de follow-up", key: "followUpNotes", width: 48 },
+  ];
+
+  for (const point of points) {
+    const diaryEntry = findDiaryEntryForMapPoint(point, diaryEntries);
+    sheet.addRow({
+      campaign: point.campaign,
+      sia: point.code,
+      sampleId: point.sampleId,
+      point: point.point ?? point.waterBody,
+      waterBody: point.waterBody,
+      municipality: point.municipality,
+      date: formatExportDate(point.date),
+      latitude: point.effective?.lat ?? "",
+      longitude: point.effective?.lon ?? "",
+      ranking: point.rankingPosition ?? "",
+      score: point.score ?? "",
+      classification: point.riskClassification,
+      environmentalRisk: point.environmentalRisk,
+      operationalRisk: point.operationalRisk,
+      sanitaryRisk: point.sanitaryRisk,
+      markers: point.detectedMarkers.join("; "),
+      ednaSignal: point.ednaSignal,
+      confidence: point.confidence,
+      summary: point.resultSummary,
+      recommendations: point.recommendations,
+      laboratoryStatus: point.laboratoryStatus,
+      accessibility: diaryEntry?.pointAccessibility ?? "",
+      activities: diaryEntry?.activities.join("; ") ?? "",
+      waterConditions: diaryEntry?.waterVisualConditions.join("; ") ?? "",
+      hasOccurrence: diaryEntry ? (diaryEntry.hasOccurrence ? "Sim" : "Não") : "",
+      occurrenceType: diaryEntry?.occurrenceType ?? "",
+      occurrenceDescription: diaryEntry?.occurrenceDescription ?? "",
+      followUp: diaryEntry?.requiresFollowUp ?? "",
+      followUpNotes: diaryEntry?.followUpNotes ?? "",
+    });
+  }
+
+  styleWorksheet(sheet, "AC");
+}
+
+export function addFieldDiaryEntriesSheet(
   workbook: Workbook,
   entries: FieldDiaryEntry[],
 ) {
@@ -1440,4 +1558,28 @@ function slugifyFileName(value: string) {
     .toLowerCase();
 }
 
+export function buildCampaignResultsFileName(campaignTitle: string, date = new Date()) {
+  const dateStamp = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
 
+  return `${slugifyFileName(campaignTitle)}-resultados-${dateStamp}.xlsx`;
+}
+
+async function downloadWorkbook(workbook: Workbook, fileName: string) {
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}

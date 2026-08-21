@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowLeft, CircleHelp, LogOut, Menu, UserRound, X } from "lucide-react";
 import { AuthGate } from "@/components/auth-gate";
+import { AppVersionStamp } from "@/components/app-version-stamp";
 import {
   AUTH_SESSION_UPDATED_EVENT,
   readAuthSession,
@@ -26,7 +27,6 @@ import {
   type UserCategory,
 } from "@/lib/access-control";
 import { recordActivity } from "@/lib/activity-log";
-import { APP_LAST_UPDATED_LABEL, APP_VERSION_LABEL } from "@/lib/app-version";
 import { getNavigationAccessForPath, navigationItems } from "@/lib/navigation";
 import {
   SYNC_STATUS_EVENT,
@@ -231,21 +231,8 @@ export function AppShell({ children }: AppShellProps) {
             )}
           </div>
           <footer className="border-t border-[var(--line-ghost)] bg-[rgba(255,255,255,0.88)] px-4 py-4 backdrop-blur-sm lg:px-8">
-            <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div className="grid w-fit gap-1.5">
-                <p className="heading-font justify-self-center text-sm font-extrabold leading-none tracking-tight text-[var(--brand-navy-strong)]">
-                  Yva&apos;e Monitoramento
-                </p>
-                <p className="text-caption font-semibold uppercase leading-none tracking-[0.16em] text-[var(--brand-teal)]">
-                  Plataforma institucional ATGC + Sanepar
-                </p>
-                <p className="text-caption uppercase leading-none tracking-[0.04em] text-[var(--ink-soft)]">
-                  © 2026 Yva&apos;e - Sistema de Monitoramento Ambiental.
-                </p>
-                <p className="w-fit rounded-md border border-[var(--line-ghost)] bg-white/70 px-2.5 py-1 text-caption font-medium leading-none tracking-0 text-[var(--ink-soft)]">
-                  {APP_VERSION_LABEL} · Última alteração em {APP_LAST_UPDATED_LABEL}
-                </p>
-              </div>
+            <div className="mx-auto flex w-full max-w-[1600px] flex-col items-start gap-4 md:flex-row md:items-end md:justify-between md:gap-6">
+              <AppVersionStamp />
               <div className="flex flex-col items-start gap-3 md:items-end">
                 <InstitutionalPartners compact />
                 <div className="flex gap-4 text-caption uppercase tracking-[0.18em] text-[var(--ink-soft)]">

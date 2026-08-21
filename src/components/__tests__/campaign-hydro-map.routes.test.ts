@@ -1,12 +1,39 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPointDayColorMap,
+  buildPriorityMunicipalities,
   buildRoadRouteRequests,
   dailyRouteColors,
   renderableRouteKinds,
+  riskMarkerRadius,
   type CampaignHydroMapPoint,
   type CampaignMapLayerVisibility,
 } from "@/components/campaign-hydro-map";
+
+describe("mapa único de risco", () => {
+  it("dimensiona área monotonicamente entre os limites de raio", () => {
+    const radii = [0.2, 0.5, 0.8].map((score) => riskMarkerRadius(score, 0.2, 0.8));
+    expect(radii[0]).toBe(5);
+    expect(radii[1]).toBeGreaterThan(radii[0]);
+    expect(radii[2]).toBe(12);
+    expect(riskMarkerRadius(-1, 0.2, 0.8)).toBe(5);
+    expect(riskMarkerRadius(2, 0.2, 0.8)).toBe(12);
+    expect(radii[1] ** 2).toBeCloseTo((5 ** 2 + 12 ** 2) / 2);
+  });
+
+  it("agrega municípios pelos mesmos pontos e ordena pelo score máximo", () => {
+    const points = [
+      point({ lat: -25.4, lon: -49.2, municipality: "Curitiba", riskLevel: "moderado", score: 0.61 }),
+      point({ lat: -25.5, lon: -49.3, municipality: "Curitiba", riskLevel: "alto", score: 0.82 }),
+      point({ lat: -23.3, lon: -51.2, municipality: "Londrina", riskLevel: "baixo", score: 0.3 }),
+    ];
+    const municipalities = buildPriorityMunicipalities(points);
+
+    expect(municipalities.map((item) => item.municipality)).toEqual(["Curitiba", "Londrina"]);
+    expect(municipalities[0]).toMatchObject({ pointCount: 2, maxScore: 0.82, riskLevel: "alto" });
+    expect(municipalities[0].priorityPoint.score).toBe(0.82);
+  });
+});
 
 const allLayers: CampaignMapLayerVisibility = {
   roadMap: true,

@@ -3,7 +3,11 @@
 import { Calendar, Minimize2, Minus, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { normalizeCampaignKey } from "@/lib/campaign-points";
-import { laboratoryRiskColor, type LaboratoryRiskLevel } from "@/lib/laboratory-risk";
+import {
+  laboratoryRiskColor,
+  laboratoryRiskLabel,
+  type LaboratoryRiskLevel,
+} from "@/lib/laboratory-risk";
 
 type Coordinate = {
   lat: number;
@@ -36,7 +40,62 @@ export type CampaignHydroMapPoint = {
     caption?: string | null;
   }>;
   riskLevel?: LaboratoryRiskLevel;
+  score?: number | null;
 };
+
+export type PriorityMunicipality = {
+  municipality: string;
+  pointCount: number;
+  maxScore: number;
+  riskLevel: LaboratoryRiskLevel;
+  priorityPoint: CampaignHydroMapPoint;
+};
+
+const riskMarkerMinRadius = 5;
+const riskMarkerMaxRadius = 12;
+
+export function riskMarkerRadius(score: number | null | undefined, minScore: number, maxScore: number) {
+  if (typeof score !== "number" || !Number.isFinite(score) || maxScore <= minScore) {
+    return 7;
+  }
+
+  const ratio = Math.min(1, Math.max(0, (score - minScore) / (maxScore - minScore)));
+  return Math.sqrt(
+    riskMarkerMinRadius ** 2 + ratio * (riskMarkerMaxRadius ** 2 - riskMarkerMinRadius ** 2),
+  );
+}
+
+export function buildPriorityMunicipalities(points: CampaignHydroMapPoint[]): PriorityMunicipality[] {
+  const municipalities = new Map<string, PriorityMunicipality>();
+
+  for (const point of points) {
+    if (!point.municipality || !point.riskLevel || typeof point.score !== "number") continue;
+    const key = point.municipality.trim().toLocaleLowerCase("pt-BR");
+    const current = municipalities.get(key);
+
+    if (!current) {
+      municipalities.set(key, {
+        municipality: point.municipality.trim(),
+        pointCount: 1,
+        maxScore: point.score,
+        riskLevel: point.riskLevel,
+        priorityPoint: point,
+      });
+    } else {
+      current.pointCount += 1;
+      if (point.score > current.maxScore) {
+        current.maxScore = point.score;
+        current.riskLevel = point.riskLevel;
+        current.priorityPoint = point;
+      }
+    }
+  }
+
+  return [...municipalities.values()].sort(
+    (left, right) =>
+      right.maxScore - left.maxScore || left.municipality.localeCompare(right.municipality, "pt-BR"),
+  );
+}
 
 type BasinFeature = {
   type: "Feature";
@@ -522,6 +581,22 @@ export function CampaignHydroMap({
   }, [constrainedCenter, mapZoom, minimumView.center, minimumZoom, size]);
 
   useEffect(() => {
+    if (!zoomOnSelect || !selectedPointId || !size.width || !size.height) return;
+    const selected = points.find((point) => point.id === selectedPointId);
+    const coordinate = selected ? tooltipCoordinate(selected, layers) : null;
+
+    if (!coordinate) return;
+    userControlledViewRef.current = true;
+    cancelPendingFitFrame();
+    const frame = window.requestAnimationFrame(() => {
+      setCenter(clampCenterToParanaView(coordinate, maxZoom, size));
+      setZoom(maxZoom);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [layers, points, selectedPointId, size, zoomOnSelect]);
+
+  useEffect(() => {
     const wrapper = wrapperRef.current;
 
     if (!wrapper) {
@@ -799,6 +874,20 @@ function PointTooltip({
         <dd className="font-medium text-slate-600">{point.municipality || "—"}</dd>
         <dt className="font-bold text-slate-400">Rio</dt>
         <dd className="max-w-40 font-medium text-slate-600">{point.waterBody || "—"}</dd>
+        {point.riskLevel ? (
+          <>
+            <dt className="font-bold text-slate-400">Prioridade</dt>
+            <dd className="font-bold text-slate-700">{laboratoryRiskLabel(point.riskLevel)}</dd>
+          </>
+        ) : null}
+        {typeof point.score === "number" ? (
+          <>
+            <dt className="font-bold text-slate-400">Score integrado</dt>
+            <dd className="font-black text-[var(--brand-navy-strong)]">
+              {point.score.toFixed(3).replace(".", ",")}
+            </dd>
+          </>
+        ) : null}
       </dl>
     </div>
   );
@@ -1289,6 +1378,13 @@ function drawPoints(
   isPreparation = false,
 ) {
   context.lineCap = "round";
+  const scores = markerMode === "risk"
+    ? points.flatMap((point) =>
+        typeof point.score === "number" && Number.isFinite(point.score) ? [point.score] : [],
+      )
+    : [];
+  const minRiskScore = scores.length ? Math.min(...scores) : 0;
+  const maxRiskScore = scores.length ? Math.max(...scores) : 1;
 
   // Um ponto fica atenuado quando há um dia realçado (hover na legenda ou mapa) e ele
   // NÃO é desse dia. Sem realce ativo, nada é atenuado.
@@ -1361,6 +1457,7 @@ function drawPoints(
         campaignRoute ? pointDayColors?.get(point.id) : undefined,
         Boolean(isHighlightedDay),
         isPreparation,
+        markerMode === "risk" ? riskMarkerRadius(point.score, minRiskScore, maxRiskScore) : undefined,
       );
     }
 
@@ -1857,10 +1954,11 @@ function drawMarkerAt(
   dayColor?: string,
   isHighlightedDay = false,
   isPreparation = false,
+  riskRadius?: number,
 ) {
   if (selected) {
     context.beginPath();
-    context.arc(x, y, isPointAction ? 10 : 9, 0, Math.PI * 2);
+    context.arc(x, y, riskRadius ? riskRadius + 3 : isPointAction ? 10 : 9, 0, Math.PI * 2);
     context.fillStyle = "rgba(255, 255, 255, 0.72)";
     context.fill();
   }
@@ -1897,7 +1995,7 @@ function drawMarkerAt(
       : type === "original"
         ? (isHighlightedDay ? 6.5 : 5)
         : hasOverride || riskLevel
-          ? (isHighlightedDay ? 9 : 7)
+          ? (riskRadius ?? (isHighlightedDay ? 9 : 7))
           : (isHighlightedDay ? 7 : 5.2);
 
   context.arc(
@@ -2059,4 +2157,3 @@ function worldToLonLat(x: number, y: number, zoom: number): Coordinate {
 
   return { lat, lon };
 }
-

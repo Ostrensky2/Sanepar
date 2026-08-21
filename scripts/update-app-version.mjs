@@ -1,65 +1,124 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const scriptDir = dirname(fileURLToPath(import.meta.url));
-const rootDir = join(scriptDir, "..");
-const packageJsonPath = join(rootDir, "package.json");
-const appVersionPath = join(rootDir, "src", "lib", "app-version.ts");
+const scriptPath = fileURLToPath(import.meta.url);
+const rootDir = join(dirname(scriptPath), "..");
 
-const dateLabel = (value) =>
-  new Intl.DateTimeFormat("pt-BR", {
+export function incrementProductionVersion(version) {
+  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`Versão inválida: ${version}`);
+  const parts = version.split(".").map(Number);
+
+  for (let index = 2; index >= 0; index -= 1) {
+    parts[index] += 1;
+    if (parts[index] <= 9 || index === 0) break;
+    parts[index] = 0;
+  }
+
+  return parts.join(".");
+}
+
+export function resolveReleaseState({ version, previousSha, previousRelease, sha, release }) {
+  if (!/^[0-9a-f]{7,40}$/i.test(sha)) throw new Error("SHA de release inválido");
+  if (!/^[a-z0-9][a-z0-9._-]{0,127}$/i.test(release)) throw new Error("Identificador de release inválido");
+  if (!previousSha || !previousRelease) throw new Error("Metadados da release anterior ausentes");
+
+  if (sha === previousSha && release === previousRelease) {
+    return { version, changed: false };
+  }
+  if (sha === previousSha || release === previousRelease) {
+    throw new Error("Colisão entre SHA e identificador de release");
+  }
+
+  return { version: incrementProductionVersion(version), changed: true };
+}
+
+function valueFor(args, name) {
+  const index = args.indexOf(name);
+  if (index < 0 || !args[index + 1] || args[index + 1].startsWith("--")) {
+    throw new Error(`Parâmetro obrigatório ausente: ${name}`);
+  }
+  return args[index + 1];
+}
+
+function saoPauloLabel(value) {
+  return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
     timeZone: "America/Sao_Paulo",
   }).format(value);
-
-// Lê o estado atual da versão a partir do arquivo gerado.
-let currentVersion = "1.0.0";
-let lastLabel = "";
-try {
-  const previous = await readFile(appVersionPath, "utf8");
-  currentVersion = previous.match(/APP_VERSION = "([^"]+)"/)?.[1] ?? currentVersion;
-  lastLabel = previous.match(/APP_LAST_UPDATED_LABEL = "([^"]+)"/)?.[1] ?? "";
-} catch {
-  // Primeira geração: usa a versão do package.json como ponto de partida.
-  const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
-  currentVersion = packageJson.version ?? currentVersion;
 }
 
-const now = new Date();
-const todayLabel = dateLabel(now);
-
-// Incrementa o patch (0.0.1) uma vez por dia em que houver execução/alteração.
-let version = currentVersion;
-if (lastLabel && lastLabel !== todayLabel) {
-  const parts = currentVersion.split(".").map((part) => Number.parseInt(part, 10) || 0);
-  while (parts.length < 3) parts.push(0);
-  // Incrementa o último dígito; ao passar de 9, transporta para o dígito anterior.
-  for (let i = parts.length - 1; i >= 0; i -= 1) {
-    parts[i] += 1;
-    if (parts[i] <= 9 || i === 0) break;
-    parts[i] = 0;
+export async function runProductionRelease(args, now = new Date(), targetRoot = rootDir) {
+  const flags = args.filter((argument) => argument.startsWith("--")).sort();
+  if (
+    args.length !== 5 ||
+    flags.join("|") !== "--production|--release|--sha"
+  ) {
+    throw new Error("Entrada inválida: informe somente --production --sha <sha> --release <id>");
   }
-  version = parts.join(".");
+  const sha = valueFor(args, "--sha");
+  const release = valueFor(args, "--release");
+  const packageJsonPath = join(targetRoot, "package.json");
+  const packageLockPath = join(targetRoot, "package-lock.json");
+  const appVersionPath = join(targetRoot, "src", "lib", "app-version.ts");
+  const [source, packageText, lockText] = await Promise.all([
+    readFile(appVersionPath, "utf8"),
+    readFile(packageJsonPath, "utf8"),
+    readFile(packageLockPath, "utf8"),
+  ]);
+  const currentVersion = source.match(/APP_VERSION = "([^"]+)"/)?.[1];
+  const previousSha = source.match(/APP_RELEASE_SHA = "([^"]+)"/)?.[1];
+  const previousRelease = source.match(/APP_RELEASE_ID = "([^"]+)"/)?.[1];
+
+  if (!currentVersion) throw new Error("APP_VERSION ausente ou inválida");
+  const packageJson = JSON.parse(packageText);
+  const packageLock = JSON.parse(lockText);
+  if (
+    packageJson.version !== currentVersion ||
+    packageLock.version !== currentVersion ||
+    packageLock.packages?.[""]?.version !== currentVersion
+  ) {
+    throw new Error("Estado de versão divergente entre app-version, package e lockfile");
+  }
+
+  const next = resolveReleaseState({
+    version: currentVersion,
+    previousSha,
+    previousRelease,
+    sha,
+    release,
+  });
+  if (!next.changed) return next;
+
+  const generated = `// Generated by scripts/update-app-version.mjs. Do not edit manually.
+export const APP_VERSION = ${JSON.stringify(next.version)};
+export const APP_VERSION_LABEL = \`Versão atual \${APP_VERSION}\`;
+export const APP_LAST_UPDATED_AT = ${JSON.stringify(now.toISOString())};
+export const APP_LAST_UPDATED_LABEL = ${JSON.stringify(saoPauloLabel(now))};
+export const APP_RELEASE_SHA = ${JSON.stringify(sha)};
+export const APP_RELEASE_ID = ${JSON.stringify(release)};
+`;
+  packageJson.version = next.version;
+  packageLock.version = next.version;
+  packageLock.packages[""].version = next.version;
+
+  await Promise.all([
+    writeFile(appVersionPath, generated, "utf8"),
+    writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8"),
+    writeFile(packageLockPath, `${JSON.stringify(packageLock, null, 2)}\n`, "utf8"),
+  ]);
+  return next;
 }
 
-const lastUpdatedAt = now.toISOString();
-const lastUpdatedLabel = todayLabel;
-
-const fileContents = `// Generated by scripts/update-app-version.mjs. Do not edit manually.
-export const APP_VERSION = ${JSON.stringify(version)};
-export const APP_VERSION_LABEL = \`Versão atual \${APP_VERSION}\`;
-export const APP_LAST_UPDATED_AT = ${JSON.stringify(lastUpdatedAt)};
-export const APP_LAST_UPDATED_LABEL = ${JSON.stringify(lastUpdatedLabel)};
-`;
-
-await writeFile(appVersionPath, fileContents, "utf8");
-
-// Mantém o package.json sincronizado com a versão atual.
-const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
-if (packageJson.version !== version) {
-  packageJson.version = version;
-  await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
+if (process.argv[1] && resolve(process.argv[1]) === resolve(scriptPath)) {
+  runProductionRelease(process.argv.slice(2))
+    .then(({ version, changed }) => {
+      console.log(changed ? `Release Production preparada: v${version}` : `Release já preparada: v${version}`);
+    })
+    .catch((error) => {
+      console.error(error instanceof Error ? error.message : error);
+      process.exitCode = 1;
+    });
 }

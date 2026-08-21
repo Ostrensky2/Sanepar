@@ -66,6 +66,61 @@ export type DashboardData = {
   };
 };
 
+export type DashboardRiskMapPoint = CampaignMapPoint & {
+  riskLevel: LaboratoryRiskPoint["riskLevel"];
+  score: number;
+};
+
+export async function loadCampaign1DashboardMapPoints(): Promise<DashboardRiskMapPoint[]> {
+  const html = await readFile(CAMPAIGN_1_DASHBOARD_PATH, "utf8").catch(() => "");
+  const match = html.match(/const DATA\s*=\s*(\{[\s\S]*?\});\s*\nconst \$/);
+
+  if (!match?.[1]) return [];
+
+  try {
+    const model = JSON.parse(match[1]) as {
+      points?: Array<{
+        amostra: number;
+        ponto: string;
+        municipio: string;
+        manancial: string;
+        lat: number;
+        lon: number;
+        sia: number;
+        score: number;
+        classe: string;
+      }>;
+    };
+
+    return (model.points ?? []).flatMap((point) => {
+      if (![point.lat, point.lon, point.score].every(Number.isFinite)) return [];
+      return [{
+        id: `dashboard-c1-${point.amostra}`,
+        code: `SIA-${String(point.sia).padStart(4, "0")}`,
+        point: point.ponto,
+        day: "",
+        campaign: "1ª Campanha - Verão 2026",
+        date: "",
+        waterBody: point.manancial,
+        municipality: point.municipio,
+        original: null,
+        effective: { lat: point.lat, lon: point.lon },
+        accessibility: "",
+        waterAspect: "",
+        weatherConditions: "",
+        problems: "",
+        driveUrl: "",
+        dropboxUrl: "",
+        photoUrl: "",
+        riskLevel: normalizeLaboratoryRiskLevel(point.classe),
+        score: point.score,
+      }];
+    });
+  } catch {
+    return [];
+  }
+}
+
 export async function loadDashboardData(): Promise<DashboardData> {
   const campaignImport = await loadCampaignImport();
   const campaignPoints = overlayBundledCampaignMedia(campaignImport.points);

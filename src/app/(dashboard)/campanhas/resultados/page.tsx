@@ -1,10 +1,19 @@
 import { CampaignsPageContent } from "@/components/campaigns-page-content";
-import { loadDashboardData } from "@/lib/dashboard-data";
+import { loadCampaign1DashboardMapPoints, loadDashboardData } from "@/lib/dashboard-data";
 
 export const dynamic = "force-dynamic";
 
 export default async function CampanhasResultadosPage() {
-  const { laboratoryRiskPoints } = await loadDashboardData();
+  const [{ laboratoryRiskPoints }, dashboardMapPoints] = await Promise.all([
+    loadDashboardData(),
+    loadCampaign1DashboardMapPoints(),
+  ]);
 
-  return <CampaignsPageContent campaignPoints={laboratoryRiskPoints} view="resultados" />;
+  return (
+    <CampaignsPageContent
+      campaignPoints={dashboardMapPoints.length ? dashboardMapPoints : laboratoryRiskPoints}
+      resultExportPoints={laboratoryRiskPoints}
+      view="resultados"
+    />
+  );
 }
