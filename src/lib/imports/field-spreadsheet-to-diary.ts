@@ -12,7 +12,7 @@ export function campaignPointToFieldDiaryPayload(point: CampaignMapPoint): Field
   const coordinates = point.effective;
   const sia = normalizeSia(point.code);
 
-  if (!coordinates || !hasOperationalEvidence(point)) {
+  if (!coordinates || !hasOperationalCollectionEvidence(point)) {
     return null;
   }
 
@@ -52,7 +52,7 @@ export function campaignPointToFieldDiaryPayload(point: CampaignMapPoint): Field
   };
 }
 
-function hasOperationalEvidence(point: CampaignMapPoint) {
+export function hasOperationalCollectionEvidence(point: CampaignMapPoint) {
   return Boolean(
     point.activities?.some(hasMeaningfulValue) ||
     hasMeaningfulValue(point.collectionTime) ||

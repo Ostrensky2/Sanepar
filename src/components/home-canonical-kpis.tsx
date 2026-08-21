@@ -5,9 +5,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   buildInitialCampaignManagement,
   defaultCampaigns,
-  isCampaignActive,
   readCampaignManagement,
   type CampaignManagementById,
+  type CampaignOperationalStatus,
 } from "@/lib/campaign-management";
 import { laboratoryRiskColor, type LaboratoryRiskPoint } from "@/lib/laboratory-risk";
 
@@ -38,10 +38,12 @@ export function HomeCanonicalKpis({
   }, [campaigns]);
 
   const metrics = useMemo(() => {
-    const activeCampaigns = campaigns.filter((campaign) => {
-      const management = campaignManagement[campaign.id];
-      return management ? isCampaignActive(management.status) : false;
-    }).length;
+    const activeCampaigns = countOperationallyActiveCampaigns(
+      campaigns.flatMap((campaign) => {
+        const management = campaignManagement[campaign.id];
+        return management ? [management.status] : [];
+      }),
+    );
     const scores = laboratoryRiskPoints
       .map((point) => point.score)
       .filter((score): score is number => typeof score === "number" && Number.isFinite(score));
@@ -112,6 +114,20 @@ export function HomeCanonicalKpis({
       />
     </section>
   );
+}
+
+export function countOperationallyActiveCampaigns(
+  statuses: CampaignOperationalStatus[],
+) {
+  return statuses.filter((status) =>
+    [
+      "Em preparação",
+      "Em campo",
+      "Coleta concluída",
+      "Aguardando laboratório",
+      "Em análise",
+    ].includes(status),
+  ).length;
 }
 
 function CanonicalKpi({

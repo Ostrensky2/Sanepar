@@ -5,6 +5,8 @@ import {
   readCampaignWorkbookFromPath,
   type CampaignMapPoint,
 } from "@/lib/imports/campaigns";
+import { campaignIdentityKey } from "@/lib/campaign-identity";
+import { hasOperationalCollectionEvidence } from "@/lib/imports/field-spreadsheet-to-diary";
 import {
   parseInternalStorageUrl,
   sanitizeCampaignMedia,
@@ -252,11 +254,13 @@ function countUniqueEffectivePoints(campaignPoints: CampaignMapPoint[]) {
   ).size;
 }
 
-function countCampaignsWithEffectiveCollection(campaignPoints: CampaignMapPoint[]) {
+export function countCampaignsWithEffectiveCollection(campaignPoints: CampaignMapPoint[]) {
   return new Set(
     campaignPoints
-      .filter((point) => point.effective)
-      .map((point) => point.campaign.trim())
+      .filter(
+        (point) => point.effective && hasOperationalCollectionEvidence(point),
+      )
+      .map((point) => campaignIdentityKey(null, point.campaign))
       .filter(Boolean),
   ).size;
 }

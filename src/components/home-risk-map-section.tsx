@@ -34,7 +34,7 @@ export function HomeRiskMapSection({
   points: LaboratoryRiskPoint[];
 }) {
   const [activePoints, setActivePoints] = useState(points);
-  const [campaignFilter, setCampaignFilter] = useState("Todas");
+  const [campaignFilter, setCampaignFilter] = useState(points[0]?.campaign || "Todas");
   const [classificationFilter, setClassificationFilter] = useState("Todas");
   const [riskFilter, setRiskFilter] = useState<LaboratoryRiskLevel | "todos">("todos");
   const [pointSearch, setPointSearch] = useState("");

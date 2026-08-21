@@ -1,6 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
-import type { LaboratoryRiskPoint } from "@/lib/laboratory-risk";
+import { isResultsPublication, type ResultsPublication } from "@/lib/imports/results-contract";
+import {
+  laboratoryRiskLabel,
+  normalizeLaboratoryRiskLevel,
+  type LaboratoryRiskPoint,
+} from "@/lib/laboratory-risk";
 import { sanitizeCampaignMedia } from "@/lib/imports/media-policy";
 
 export const POINT_ACTIONS_SNAPSHOT_FILE_NAME = "__point_actions__";
@@ -137,11 +142,38 @@ export async function getLatestPublishedLaboratoryRiskPoints() {
     .from("lab_risk_results")
     .select("points, created_at")
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle<LabRiskResultRow>();
+    .returns<LabRiskResultRow[]>();
 
-  if (!error && Array.isArray(data?.points)) {
-    return (data.points as LaboratoryRiskPoint[]).map(sanitizeCampaignMedia);
+  if (!error && data) {
+    const publications = data
+      .filter((row): row is LabRiskResultRow & { points: ResultsPublication } =>
+        isResultsPublication(row.points))
+      .sort(compareResultsPublications);
+    const latestCampaigns = new Set<number>();
+    const publishedRiskPoints: LaboratoryRiskPoint[] = [];
+
+    for (const row of publications) {
+      if (latestCampaigns.has(row.points.campaignNumber)) {
+        continue;
+      }
+
+      const riskPoints = publicationToLaboratoryRiskPoints(row.points);
+
+      if (riskPoints) {
+        latestCampaigns.add(row.points.campaignNumber);
+        publishedRiskPoints.push(...riskPoints);
+      }
+    }
+
+    if (publishedRiskPoints.length) {
+      return publishedRiskPoints.map(sanitizeCampaignMedia);
+    }
+
+    const legacy = data.find((row) => isLaboratoryRiskPointArray(row.points));
+
+    if (legacy && isLaboratoryRiskPointArray(legacy.points)) {
+      return legacy.points.map(sanitizeCampaignMedia);
+    }
   }
 
   // Fallback legado: snapshots gravados em campaign_imports antes da
@@ -154,11 +186,87 @@ export async function getLatestPublishedLaboratoryRiskPoints() {
     .limit(1)
     .maybeSingle<JsonSnapshotRow>();
 
-  if (legacyError || !Array.isArray(legacy?.points)) {
+  if (legacyError || !isLaboratoryRiskPointArray(legacy?.points)) {
     return null;
   }
 
-  return (legacy.points as LaboratoryRiskPoint[]).map(sanitizeCampaignMedia);
+  return legacy.points.map(sanitizeCampaignMedia);
+}
+
+function compareResultsPublications(
+  left: LabRiskResultRow & { points: ResultsPublication },
+  right: LabRiskResultRow & { points: ResultsPublication },
+) {
+  return right.points.campaignNumber - left.points.campaignNumber ||
+    Date.parse(right.points.importedAt) - Date.parse(left.points.importedAt) ||
+    Date.parse(right.created_at) - Date.parse(left.created_at) ||
+    right.points.campaignId.localeCompare(left.points.campaignId);
+}
+
+function publicationToLaboratoryRiskPoints(publication: ResultsPublication) {
+  if (!publication.viewModel.points.length || publication.viewModel.points.some((point) =>
+    point.score === null || point.classe === null)) {
+    return null;
+  }
+
+  return publication.viewModel.points.map<LaboratoryRiskPoint>((point) => {
+    const riskLevel = normalizeLaboratoryRiskLevel(point.classe ?? "");
+
+    return {
+      id: `${publication.campaignId}:resultado:${point.amostra}`,
+      code: String(point.sia),
+      point: point.ponto,
+      day: "",
+      campaign: publication.campaignTitle,
+      date: "",
+      waterBody: point.manancial,
+      municipality: point.municipio,
+      original: null,
+      effective: { lat: point.lat, lon: point.lon },
+      accessibility: "",
+      waterAspect: point.turbidez,
+      weatherConditions: point.clima,
+      problems: "",
+      driveUrl: "",
+      dropboxUrl: "",
+      photoUrl: "",
+      riskLevel,
+      riskLabel: laboratoryRiskLabel(riskLevel),
+      riskClassification: point.classe ?? "",
+      environmentalRisk: point.r_amb,
+      operationalRisk: point.r_op,
+      sanitaryRisk: point.r_san,
+      environmentalRiskLevel: normalizeLaboratoryRiskLevel(point.r_amb),
+      operationalRiskLevel: normalizeLaboratoryRiskLevel(point.r_op),
+      sanitaryRiskLevel: normalizeLaboratoryRiskLevel(point.r_san),
+      eta: point.ponto,
+      detectedMarkers: [
+        `Ciano: ${point.ciano_reads} reads`,
+        `Bact.: ${point.bact_reads} reads`,
+        `COI: ${point.coi_inv_reads} reads`,
+      ],
+      ednaSignal: point.classe ?? "",
+      laboratoryStatus: "homologado",
+      resultSummary: point.just,
+      score: point.score,
+      confidence: point.confianca,
+      recommendations: point.rec,
+      rankingPosition: point.pos,
+      sampleId: String(point.amostra),
+    };
+  });
+}
+
+function isLaboratoryRiskPointArray(value: unknown): value is LaboratoryRiskPoint[] {
+  return Array.isArray(value) && value.length > 0 && value.every((point) =>
+    point && typeof point === "object" &&
+    typeof (point as LaboratoryRiskPoint).id === "string" &&
+    typeof (point as LaboratoryRiskPoint).point === "string" &&
+    typeof (point as LaboratoryRiskPoint).campaign === "string" &&
+    typeof (point as LaboratoryRiskPoint).riskClassification === "string" &&
+    typeof (point as LaboratoryRiskPoint).riskLevel === "string" &&
+    ((point as LaboratoryRiskPoint).score === null ||
+      Number.isFinite((point as LaboratoryRiskPoint).score)));
 }
 
 function inferCampaignKeyFromRow(row: CampaignImportRow) {

@@ -22,6 +22,7 @@ export function normalizeCampaignKey(value: unknown) {
   return (
     normalized.match(/^\d+$/)?.[0] ??
     normalized.match(/(\d+)\s*(?:a|ª|º)?\s*campanha/)?.[1] ??
+    normalized.match(/campanha\s*(\d+)/)?.[1] ??
     normalized
   );
 }

@@ -1,5 +1,6 @@
 import { HomeCanonicalKpis } from "@/components/home-canonical-kpis";
 import { HomeProjectSummary } from "@/components/home-project-summary";
+import { HomeRiskEvolution } from "@/components/home-risk-evolution";
 import { HomeRiskMapSection } from "@/components/home-risk-map-section";
 import { ProjectStatusPanel } from "@/components/project-status-panel";
 import { loadDashboardData } from "@/lib/dashboard-data";
@@ -23,6 +24,7 @@ export default async function DashboardPage() {
         laboratoryRiskPoints={laboratoryRiskPoints}
         pointSummary={pointSummary}
       />
+      <HomeRiskEvolution points={laboratoryRiskPoints} />
       <HomeRiskMapSection
         campaignPoints={campaignPoints}
         points={laboratoryRiskPoints}
