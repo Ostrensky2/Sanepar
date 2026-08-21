@@ -9,6 +9,7 @@ export const runtime = "nodejs";
 export async function GET(request: Request) {
   const auth = await requireApiSession(request);
   if (!auth.ok) return auth.response;
+  if (auth.session.localDirect) return NextResponse.json({ active: true, session: auth.session, purpose: "authenticated", canSetPassword: false }, { headers: { "Cache-Control": "no-store" } });
   const admin = createAuthAdminClient();
   const { data: profile } = admin ? await admin.from("auth_users").select("must_change_password").eq("auth_user_id", auth.session.authUserId).maybeSingle() : { data: null };
   const signedPurpose = verifyAuthPurpose(readCookie(request, AUTH_PURPOSE_COOKIE), auth.session.authUserId);

@@ -1,4 +1,4 @@
-import { BarChart3, Download, ExternalLink, FileSpreadsheet, FlaskConical, Info, X } from "lucide-react";
+import { BarChart3, Download, ExternalLink, FileSpreadsheet, FlaskConical, ImageIcon, Info, X } from "lucide-react";
 import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -14,6 +14,7 @@ import { DashboardSkeleton, ErrorBoundary } from "@/components/operational-feedb
 import { type CampaignView } from "@/lib/campaign-management";
 import { laboratoryRiskColor, laboratoryRiskLabel } from "@/lib/laboratory-risk";
 import type { ResultsPublication } from "@/lib/imports/results-contract";
+import { getPhotoPreview } from "@/lib/photo-preview";
 
 type CampaignResultsPanelsProps = {
   children?: ReactNode;
@@ -102,6 +103,8 @@ function AnalyticResultsMap({ points }: { points: CampaignHydroMapPoint[] }) {
     );
   }
 
+  const selectedPoint = points.find((point) => point.id === selectedPointId) ?? points[0];
+
   return (
     <section aria-labelledby="risk-map-title" className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(280px,34%)]">
       <div className="min-w-0">
@@ -109,7 +112,7 @@ function AnalyticResultsMap({ points }: { points: CampaignHydroMapPoint[] }) {
         <div className="relative h-[500px] overflow-hidden radius-panel border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)] max-sm:h-[420px]">
           <CampaignHydroMap
             points={points}
-            selectedPointId={selectedPointId}
+            selectedPointId={selectedPoint.id}
             onSelectPoint={(point) => setSelectedPointId(point.id)}
             layers={{
               roadMap: true,
@@ -129,6 +132,7 @@ function AnalyticResultsMap({ points }: { points: CampaignHydroMapPoint[] }) {
       </div>
 
       <aside className="flex min-h-0 flex-col overflow-hidden radius-panel border border-[var(--line-ghost)] bg-white md:max-h-[500px]">
+        <SelectedResultPoint point={selectedPoint} />
         <div className="border-b border-[var(--line-ghost)] px-4 py-4">
           <h3 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">
             Municípios prioritários
@@ -148,7 +152,7 @@ function AnalyticResultsMap({ points }: { points: CampaignHydroMapPoint[] }) {
             </thead>
             <tbody>
               {municipalities.map((municipality) => {
-                const selected = municipality.priorityPoint.id === selectedPointId;
+                const selected = municipality.priorityPoint.id === selectedPoint.id;
                 return (
                   <tr
                     key={municipality.municipality}
@@ -185,6 +189,51 @@ function AnalyticResultsMap({ points }: { points: CampaignHydroMapPoint[] }) {
           </table>
         </div>
       </aside>
+    </section>
+  );
+}
+
+export function SelectedResultPoint({ point }: { point: CampaignHydroMapPoint }) {
+  const preview = getPhotoPreview(point.photoUrl || point.photos?.[0]?.url);
+  const [failedUrl, setFailedUrl] = useState("");
+  const photoUrl = preview?.kind === "image" ? preview.src : "";
+  const hasPhoto = Boolean(photoUrl && failedUrl !== photoUrl);
+
+  return (
+    <section aria-live="polite" className="border-b border-[var(--line-ghost)] p-4">
+      <div className="flex flex-col gap-3 sm:flex-row md:flex-col xl:flex-row">
+        <div className="h-32 w-full shrink-0 overflow-hidden rounded-xl bg-[var(--surface-soft)] sm:w-44 md:w-full xl:w-40">
+          {hasPhoto ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              alt={`Foto de campo do ponto ${point.code}${point.municipality ? ` em ${point.municipality}` : ""}`}
+              className="h-full w-full object-cover"
+              onError={() => setFailedUrl(photoUrl)}
+              src={photoUrl}
+            />
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center gap-2 px-3 text-center text-slate-500" role="status">
+              <ImageIcon className="h-6 w-6 text-slate-400" />
+              <span className="text-xs font-bold">Foto de campo indisponível</span>
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 self-center">
+          <p className="text-xs font-black text-[var(--brand-teal)]">{point.code}</p>
+          <h3 className="mt-1 text-sm font-black leading-5 text-[var(--brand-navy-strong)]">
+            {point.point || point.waterBody}
+          </h3>
+          <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
+            {point.municipality || "Município não informado"}
+          </p>
+          {point.riskLevel ? (
+            <p className="mt-2 text-xs font-bold text-slate-700">
+              {laboratoryRiskLabel(point.riskLevel)}
+              {typeof point.score === "number" ? ` · Score ${formatRiskScore(point.score)}` : ""}
+            </p>
+          ) : null}
+        </div>
+      </div>
     </section>
   );
 }

@@ -1,20 +1,33 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
-import { normalizeUserCategory, type PrivilegeKey, type UserCategory } from "@/lib/access-control";
+import { hasPrivilege, normalizeUserCategory, type PrivilegeKey, type UserCategory } from "@/lib/access-control";
 import { createAuthAdminClient, createRequestAuthClient, opaqueRateLimitKey } from "@/lib/supabase-auth";
 
-export type ApiSession = { userId: string; authUserId: string; email: string; name: string; role: UserCategory };
+export type ApiSession = { userId: string; authUserId: string; email: string; name: string; role: UserCategory; localDirect?: true };
 export type ApiAuthResult = { ok: true; session: ApiSession } | { ok: false; response: NextResponse };
 
-type ProfileRow = { id: string; auth_user_id: string; email: string; name: string; role: string; status: string };
+type ProfileRow = { id: string; auth_user_id: string | null; email: string; name: string; role: string; status: string };
 
 export async function requireApiSession(request: Request, privilege?: PrivilegeKey): Promise<ApiAuthResult> {
   if (isMutation(request) && !requireTrustedOrigin(request)) return denied(403, "Origem não autorizada.");
 
-  const auth = createRequestAuthClient(request);
   const admin = createAuthAdminClient();
-  if (!auth || !admin) return denied(503, "Servidor de acesso indisponível.");
+  if (!admin) return denied(503, "Servidor de acesso indisponível.");
+
+  if (isLocalDirectRequest(request)) {
+    const { data, error } = await admin.from("auth_users").select("id, auth_user_id, email, name, role, status")
+      .eq("role", "Admin").eq("status", "ativo").limit(2);
+    if (error) return denied(503, "Não foi possível validar a autorização local.");
+    if (!data || data.length !== 1) return denied(403, "Acesso local sem Admin único e ativo.");
+    const profile = data[0] as ProfileRow;
+    const role = normalizeUserCategory(profile.role);
+    if (privilege && !hasPrivilege(role, privilege)) return denied(403, "Seu perfil não tem permissão para esta operação.");
+    return { ok: true, session: { userId: profile.id, authUserId: profile.auth_user_id ?? "00000000-0000-0000-0000-000000000000", email: profile.email, name: profile.name, role, localDirect: true } };
+  }
+
+  const auth = createRequestAuthClient(request);
+  if (!auth) return denied(503, "Servidor de acesso indisponível.");
 
   const { data: { user }, error } = await auth.client.auth.getUser();
   if (error || !user) return denied(401, "Sessão expirada ou inexistente. Entre novamente no sistema.");
@@ -36,6 +49,25 @@ export async function requireApiSession(request: Request, privilege?: PrivilegeK
   }
 
   return { ok: true, session: { userId: profile.id, authUserId: user.id, email: profile.email, name: profile.name, role } };
+}
+
+function isLocalDirectRequest(request: Request) {
+  if (process.env.NODE_ENV !== "development" || process.env.AUTH_LOCAL_DIRECT_ACCESS !== "true") return false;
+  try {
+    const url = new URL(request.url);
+    const host = new URL(`http://${request.headers.get("host") ?? ""}`);
+    const forwardedHost = request.headers.get("x-forwarded-host");
+    return isLocalHostname(url.hostname)
+      && isLocalHostname(host.hostname)
+      && url.port === host.port
+      && (!forwardedHost || isLocalHostname(new URL(`http://${forwardedHost}`).hostname));
+  } catch {
+    return false;
+  }
+}
+
+function isLocalHostname(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1";
 }
 
 export async function checkRateLimit(scope: string, request: Request, identifier: string, maxAttempts: number, windowSeconds: number, blockSeconds = 0) {

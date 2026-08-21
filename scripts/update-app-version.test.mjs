@@ -55,6 +55,7 @@ test("não acopla incremento a dev ou build", () => {
   assert.match(appVersion, /APP_RELEASE_SHA = "2857ec881d659b892ea4cb693319a5a92d4aba7b"/);
   assert.match(appVersion, /APP_RELEASE_ID = "canonical-1\.1\.6"/);
   assert.match(pkg.scripts["release:production"], /--production/);
+  assert.equal(pkg.scripts.dev, "next dev --hostname 127.0.0.1");
   assert.equal(pkg.scripts.build, "next build");
   assert.equal(pkg.scripts.predev, undefined);
   assert.equal(pkg.scripts.prebuild, undefined);

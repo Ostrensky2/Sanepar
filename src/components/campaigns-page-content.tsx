@@ -49,6 +49,7 @@ import type {
   ResultsPublicationResponse,
   ResultsViewModel,
 } from "@/lib/imports/results-contract";
+import { parseInternalStorageUrl } from "@/lib/imports/media-policy";
 
 const SELECTED_CAMPAIGN_STORAGE_KEY = "yvae:selected-campaign-id";
 const CAMPAIGN_MANAGEMENT_UPDATED_EVENT = "yvae:campaign-management-updated";
@@ -257,18 +258,6 @@ export function CampaignsPageContent({
   const sampleCollection = selectedStages.find((s) => s.label === "Coleta de amostras");
   const isPreparation = !sampleCollection || sampleCollection.status === "pending";
 
-  const canonicalResultPoints = useMemo(
-    () => publishedResults?.status === "published"
-      ? dashboardPointsToMapPoints(publishedResults.viewModel, publishedResults.publication)
-      : [],
-    [publishedResults],
-  );
-  const sourceCampaignPoints = view === "resultados"
-    ? canonicalResultPoints
-    : localCampaignPoints?.length
-      ? localCampaignPoints
-      : campaignPoints;
-
   const selectedDiaryEntries = useMemo(
     () =>
       diaryEntries.filter(
@@ -277,6 +266,21 @@ export function CampaignsPageContent({
       ),
     [diaryEntries, selectedCampaign.id, selectedCampaign.title],
   );
+  const canonicalResultPoints = useMemo(
+    () => publishedResults?.status === "published"
+      ? dashboardPointsToMapPoints(
+          publishedResults.viewModel,
+          publishedResults.publication,
+          selectedDiaryEntries,
+        )
+      : [],
+    [publishedResults, selectedDiaryEntries],
+  );
+  const sourceCampaignPoints = view === "resultados"
+    ? canonicalResultPoints
+    : localCampaignPoints?.length
+      ? localCampaignPoints
+      : campaignPoints;
   const validDiaryEntries = useMemo(
     () => dedupeFieldDiaryMapEntries(selectedDiaryEntries.filter(hasValidFieldDiaryMapEntry)),
     [selectedDiaryEntries],
@@ -774,8 +778,9 @@ function riskPriority(level: CampaignHydroMapPoint["riskLevel"]) {
 function dashboardPointsToMapPoints(
   viewModel: ResultsViewModel,
   publication: ResultsPublication,
+  selectedDiaryEntries: FieldDiaryEntry[],
 ): CampaignHydroMapPoint[] {
-  return viewModel.points.map((point) => ({
+  return hydrateResultPointPhotos(viewModel.points.map((point) => ({
     id: `${publication.campaignId}:resultado:${point.amostra}`,
     code: String(point.sia),
     point: point.ponto,
@@ -791,7 +796,41 @@ function dashboardPointsToMapPoints(
     photoUrl: "",
     riskLevel: dashboardRiskLevel(point.classe),
     score: point.score,
-  }));
+  })), publication, selectedDiaryEntries);
+}
+
+export function hydrateResultPointPhotos<T extends CampaignHydroMapPoint>(
+  points: T[],
+  publication: Pick<ResultsPublication, "campaignId">,
+  selectedDiaryEntries: FieldDiaryEntry[],
+): T[] {
+  const photosBySia = new Map<string, Map<string, FieldDiaryEntry["photos"][number]>>();
+
+  for (const entry of selectedDiaryEntries) {
+    if (entry.campaignId !== publication.campaignId) continue;
+
+    const sia = canonicalNumericSia(entry.sia);
+    if (!sia) continue;
+
+    const photos = photosBySia.get(sia) ?? new Map();
+    for (const photo of entry.photos ?? []) {
+      if (parseInternalStorageUrl(photo.url, "photos")) photos.set(photo.url, photo);
+    }
+    if (photos.size) photosBySia.set(sia, photos);
+  }
+
+  return points.map((point) => {
+    const photos = photosBySia.get(canonicalNumericSia(point.code));
+    if (photos?.size !== 1) return { ...point, photoUrl: "", photos: [] };
+
+    const photo = [...photos.values()][0];
+    return { ...point, photoUrl: photo.url, photos: [photo] };
+  });
+}
+
+function canonicalNumericSia(value: unknown) {
+  const matches = String(value ?? "").match(/\d+/g);
+  return matches?.length === 1 ? `sia:${Number(matches[0])}` : "";
 }
 
 function dashboardRiskLevel(value: string | null): CampaignHydroMapPoint["riskLevel"] {

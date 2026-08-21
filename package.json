@@ -1,10 +1,10 @@
 {
   "name": "yvae-monitoramento",
-  "version": "1.1.9",
+  "version": "1.2.0",
   "private": true,
   "scripts": {
     "release:production": "node scripts/update-app-version.mjs --production",
-    "dev": "next dev",
+    "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
