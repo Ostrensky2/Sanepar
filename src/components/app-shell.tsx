@@ -194,12 +194,12 @@ export function AppShell({ children }: AppShellProps) {
                 </Link>
               ) : null}
               <div className="min-w-0">
-                <p className="hidden truncate text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)] min-[390px]:block">
+                <p className="type-caption hidden truncate font-bold uppercase tracking-[0.12em] text-[var(--brand-teal)] min-[390px]:block">
                   {currentItem.summary}
                 </p>
-                <h2 className="heading-font truncate text-sm font-bold text-[var(--brand-navy-strong)] sm:text-base lg:text-lg">
+                <p className="heading-font type-metadata truncate font-bold text-[var(--brand-navy-strong)]">
                   {currentItem.headerTitle}
-                </h2>
+                </p>
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1 sm:gap-2">

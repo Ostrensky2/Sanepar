@@ -86,8 +86,8 @@ export function AuthGate({ children }: AuthGateProps) {
         <div className="hero-gradient flex min-w-0 flex-col justify-center gap-6 p-5 text-white sm:p-7 md:min-h-[430px] md:p-8">
           <YvaeMasthead compact />
           <div>
-            <h1 className="text-balance heading-font text-2xl font-black tracking-[-0.02em] sm:text-3xl">Entrada segura no Yva&apos;e</h1>
-            <p className="mt-3 max-w-md text-sm leading-6 text-white/80">
+            <h1 className="heading-font type-page-title">Entrada segura no Yva&apos;e</h1>
+            <p className="type-metadata mt-3 max-w-md text-white/80">
               Use o e-mail cadastrado e sua senha pessoal.
             </p>
           </div>
@@ -95,8 +95,8 @@ export function AuthGate({ children }: AuthGateProps) {
 
         <div className="flex min-w-0 flex-col justify-center p-5 sm:p-8 md:p-9">
           <div className="mb-6">
-            <h2 className="heading-font text-2xl font-black text-[var(--brand-navy-strong)]">Entrar no sistema</h2>
-            <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">Acesse o painel com sua conta individual.</p>
+            <h2 className="heading-font type-section-title text-[var(--brand-navy-strong)]">Entrar no sistema</h2>
+            <p className="type-metadata mt-2 text-[var(--ink-soft)]">Acesse o painel com sua conta individual.</p>
           </div>
 
           <form className="grid gap-4" aria-busy={pending} onSubmit={(event) => { event.preventDefault(); void signIn(); }}>

@@ -25,14 +25,14 @@ export function OperationalMetric({
     <article className={`glass-panel radius-panel ${compact ? "p-3" : "p-5"}`}>
       <div className={`flex items-start justify-between ${compact ? "gap-3" : "gap-4"}`}>
         <div>
-          <p className={`${compact ? "text-[10px]" : "text-xs"} font-bold uppercase tracking-[0.16em] text-slate-500`}>{label}</p>
-          <p className={`heading-font font-black text-[var(--brand-navy-strong)] ${compact ? "mt-2 text-2xl" : "mt-3 text-3xl"}`}>{value}</p>
+          <p className="type-label uppercase tracking-[0.1em] text-slate-500">{label}</p>
+          <p className={`heading-font type-kpi text-[var(--brand-navy-strong)] ${compact ? "mt-2" : "mt-3"}`}>{value}</p>
         </div>
         <span className={`rounded-2xl bg-[var(--brand-blue-soft)] text-[var(--brand-navy-strong)] ${compact ? "p-2" : "p-3"}`}>
           <Icon className={compact ? "h-4 w-4" : "h-5 w-5"} />
         </span>
       </div>
-      <p className={`${compact ? "mt-2 text-xs leading-5" : "mt-4 text-sm leading-6"} text-[var(--ink-soft)]`}>{detail}</p>
+      <p className={`type-metadata ${compact ? "mt-2" : "mt-4"} text-[var(--ink-soft)]`}>{detail}</p>
     </article>
   );
 }
@@ -62,7 +62,7 @@ export function Dialog({
             <span className="rounded-2xl bg-[var(--brand-blue-soft)] p-3 text-[var(--brand-navy-strong)]">
               <ClipboardList className="h-5 w-5" />
             </span>
-            <h2 className="heading-font text-2xl font-black text-[var(--brand-navy-strong)]">{title}</h2>
+            <h2 className="heading-font type-section-title text-[var(--brand-navy-strong)]">{title}</h2>
           </div>
           <button
             type="button"
@@ -94,7 +94,7 @@ export function Checklist({
 }) {
   return (
     <fieldset className="rounded-2xl border border-[var(--line-ghost)] p-4">
-      <legend className="px-1 text-caption font-bold uppercase tracking-[0.18em] text-slate-500">
+      <legend className="type-label px-1 uppercase tracking-[0.1em] text-slate-500">
         {label}{required ? " *" : ""}
       </legend>
       <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -134,7 +134,7 @@ export function Field({
   children: ReactNode;
 }) {
   return (
-    <label className="grid gap-2 text-caption font-bold uppercase tracking-[0.16em] text-slate-500">
+    <label className="type-label grid gap-2 uppercase tracking-[0.1em] text-slate-500">
       {label}{required ? " *" : ""}
       {children}
     </label>
@@ -202,7 +202,7 @@ export function EmptyState({ title, description }: { title: string; description:
 export function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl bg-[var(--surface-soft)] px-3 py-2">
-      <p className="text-caption font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+      <p className="type-caption font-bold uppercase tracking-[0.1em] text-slate-500">{label}</p>
       <p className="mt-1 text-sm font-bold text-[var(--brand-navy-strong)]">{value}</p>
     </div>
   );
@@ -211,7 +211,7 @@ export function Info({ label, value }: { label: string; value: string }) {
 export function DetailBlock({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-[var(--line-ghost)] bg-white p-4">
-      <p className="text-caption font-bold uppercase tracking-[0.18em] text-slate-400">{label}</p>
+      <p className="type-caption font-bold uppercase tracking-[0.1em] text-slate-500">{label}</p>
       <p className="mt-2 text-sm leading-6 text-slate-700">{value}</p>
     </div>
   );

@@ -29,6 +29,7 @@ import { getStoredSession } from "@/lib/auth-users";
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorBoundary, TableSkeletonRows, emitLocalMode } from "@/components/operational-feedback";
+import { PageHeader } from "@/components/page-header";
 import { SyncStatusBadge } from "@/components/sync-status-badge";
 import { type SyncStatusSnapshot } from "@/lib/sync-status";
 
@@ -389,6 +390,11 @@ export function DocumentRepository() {
 
   return (
     <div className="space-y-8">
+      <PageHeader
+        eyebrow="Documentos"
+        title="Repositório Oficial de Documentos"
+        description="Consulte, envie e organize os arquivos institucionais vinculados às campanhas e aos pontos monitorados."
+      />
       <section className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">

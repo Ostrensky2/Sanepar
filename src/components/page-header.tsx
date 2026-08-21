@@ -34,14 +34,14 @@ export function PageHeader({
           {contextualBackHref ? (
             <Link
               href={contextualBackHref}
-              className="inline-flex items-center gap-2 rounded-lg border border-[var(--line-ghost)] bg-white px-3 py-1.5 text-xs font-bold text-[var(--ink-soft)] transition hover:text-[var(--brand-navy-strong)]"
+              className="type-label inline-flex items-center gap-2 rounded-lg border border-[var(--line-ghost)] bg-white px-3 py-1.5 text-[var(--ink-soft)] transition hover:text-[var(--brand-navy-strong)]"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               Voltar
             </Link>
           ) : null}
           {shouldShowBreadcrumbs ? (
-            <nav aria-label="Breadcrumb" className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs font-bold text-[var(--ink-soft)]">
+            <nav aria-label="Breadcrumb" className="type-label flex min-w-0 flex-wrap items-center gap-1.5 text-[var(--ink-soft)]">
               {breadcrumbs.map((breadcrumb, index) => {
                 const isLast = index === breadcrumbs.length - 1;
 
@@ -62,15 +62,15 @@ export function PageHeader({
           ) : null}
         </div>
         {eyebrow ? (
-          <p className="mb-4 inline-flex items-center gap-2 rounded-full bg-[var(--brand-teal-soft)] px-3 py-1 text-label font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+          <p className="type-label mb-4 inline-flex items-center gap-2 rounded-full bg-[var(--brand-teal-soft)] px-3 py-1 uppercase tracking-[0.12em] text-[var(--brand-teal)]">
             <span className="h-2 w-2 rounded-full bg-[var(--brand-teal)]" />
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="heading-font text-balance text-3xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
+        <h1 className="heading-font type-page-title text-[var(--brand-navy-strong)]">
           {title}
         </h1>
-        <p className="mt-4 max-w-3xl text-base leading-7 text-[var(--ink-soft)] sm:text-lg">
+        <p className="type-body mt-4 max-w-[70ch] text-[var(--ink-soft)]">
           {description}
         </p>
       </div>

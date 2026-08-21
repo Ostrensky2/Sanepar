@@ -335,13 +335,13 @@ function ResultsDashboardSection({
             <BarChart3 className="h-4.5 w-4.5" />
           </span>
           <div>
-            <p className="text-caption font-bold uppercase tracking-[0.16em] text-[var(--brand-teal)]">
+            <p className="type-caption font-bold uppercase tracking-[0.12em] text-[var(--brand-teal)]">
               Resultados Monitoramento
             </p>
-            <p className="heading-font mt-1 text-2xl font-extrabold text-[var(--brand-navy-strong)]">
+            <h2 className="heading-font type-section-title mt-1 text-[var(--brand-navy-strong)]">
               Dashboard de resultados
-            </p>
-            <p className="mt-1 text-sm font-semibold text-[var(--ink-soft)]">{campaign.title}</p>
+            </h2>
+            <p className="type-metadata mt-1 font-semibold text-[var(--ink-soft)]">{campaign.title}</p>
           </div>
         </div>
 

@@ -489,16 +489,16 @@ export function CampaignsPageContent({
       {/* Header: title + campaign selector */}
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+          <p className="type-label font-bold uppercase tracking-[0.12em] text-[var(--brand-teal)]">
             {eyebrow}
           </p>
-          <h2 className="heading-font text-2xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
+          <h1 className="heading-font type-page-title text-[var(--brand-navy-strong)]">
             {selectedCampaign.title}
-          </h2>
+          </h1>
         </div>
 
-        <div className="grid gap-3 lg:min-w-[30rem]">
-          <label className="grid gap-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+        <div className="grid gap-3 lg:w-[30rem] lg:max-w-[55%]">
+          <label className="type-label grid gap-2 uppercase tracking-[0.1em] text-slate-500">
             {selectorLabel}
             <select
               className="rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-sm font-bold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none transition focus:border-[var(--brand-blue)] focus:ring-2 focus:ring-[var(--brand-blue)]/20"

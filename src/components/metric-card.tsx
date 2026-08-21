@@ -43,8 +43,8 @@ export function MetricCard({
       />
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--ink-soft)]">{label}</p>
-          <p className="heading-font mt-2 text-2xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
+          <p className="type-label uppercase tracking-[0.1em] text-[var(--ink-soft)]">{label}</p>
+          <p className="heading-font type-kpi mt-2 tracking-tight text-[var(--brand-navy-strong)]">
             {value}
           </p>
         </div>
@@ -52,7 +52,7 @@ export function MetricCard({
           <Icon className="h-5 w-5" />
         </div>
       </div>
-      <p className="mt-3 max-w-xs text-xs font-semibold leading-5 text-[var(--ink-soft)]">{detail}</p>
+      <p className="type-metadata mt-3 max-w-xs font-semibold text-[var(--ink-soft)]">{detail}</p>
     </article>
   );
 }
