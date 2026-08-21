@@ -6,7 +6,8 @@ import {
   normalizeLaboratoryRiskLevel,
   type LaboratoryRiskPoint,
 } from "@/lib/laboratory-risk";
-import { sanitizeCampaignMedia } from "@/lib/imports/media-policy";
+import { parseInternalStorageUrl, sanitizeCampaignMedia } from "@/lib/imports/media-policy";
+import { resolveCanonicalCampaign } from "@/lib/campaign-identity";
 
 export const POINT_ACTIONS_SNAPSHOT_FILE_NAME = "__point_actions__";
 export const APP_DOCUMENTS_SNAPSHOT_FILE_NAME = "__app_documents__";
@@ -47,6 +48,19 @@ type LabRiskResultRow = {
 type JsonSnapshotRow = {
   points: unknown;
   created_at: string;
+};
+
+type FieldDiaryMediaRow = {
+  campaign_id: string | null;
+  campaign_name: string | null;
+  sia: string | null;
+  photos: unknown;
+};
+
+export type FieldDiaryCampaignMediaCandidate = {
+  campaignKey: string;
+  siaKey: string;
+  photoUrl: string;
 };
 
 export function getCloudRuntimeMode() {
@@ -193,6 +207,53 @@ export async function getLatestPublishedLaboratoryRiskPoints() {
   return legacy.points.map(sanitizeCampaignMedia);
 }
 
+export async function getFieldDiaryCampaignMediaCandidates(): Promise<
+  FieldDiaryCampaignMediaCandidate[]
+> {
+  const supabase = createOptionalSupabaseClient();
+
+  if (!supabase) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("field_diary_entries")
+    .select("campaign_id,campaign_name,sia,photos")
+    .returns<FieldDiaryMediaRow[]>();
+
+  if (error || !data) {
+    return [];
+  }
+
+  const candidates = new Map<string, FieldDiaryCampaignMediaCandidate>();
+
+  for (const row of data) {
+    const campaign =
+      resolveCanonicalCampaign(row.campaign_id) ?? resolveCanonicalCampaign(row.campaign_name);
+    const siaKey = normalizeFieldDiarySia(row.sia);
+
+    if (!campaign || !siaKey || !Array.isArray(row.photos)) {
+      continue;
+    }
+
+    for (const photo of row.photos) {
+      const photoUrl = isRecord(photo) ? String(photo.url ?? "").trim() : "";
+      const storage = parseInternalStorageUrl(photoUrl, "photos");
+
+      if (!storage) {
+        continue;
+      }
+
+      const identity = `${campaign.id}|${siaKey}|${storage.path}`;
+      if (!candidates.has(identity)) {
+        candidates.set(identity, { campaignKey: campaign.id, siaKey, photoUrl });
+      }
+    }
+  }
+
+  return [...candidates.values()];
+}
+
 function compareResultsPublications(
   left: LabRiskResultRow & { points: ResultsPublication },
   right: LabRiskResultRow & { points: ResultsPublication },
@@ -284,6 +345,17 @@ function inferCampaignKeyFromRow(row: CampaignImportRow) {
   }
 
   return row.file_name.trim().toLowerCase();
+}
+
+function normalizeFieldDiarySia(value: unknown) {
+  const normalized = String(value ?? "").trim();
+  const match = normalized.match(/^(?:SIA[\s-]*)?(\d{1,4})$/i);
+
+  return match ? `sia:${Number(match[1])}` : "";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function sanitizeEnvValue(value: string | undefined) {

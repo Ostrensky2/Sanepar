@@ -19,6 +19,7 @@ import {
   type LaboratoryRiskResultRow,
 } from "@/lib/laboratory-risk";
 import {
+  getFieldDiaryCampaignMediaCandidates,
   getLatestPublishedCampaignImport,
   getLatestPublishedLaboratoryRiskPoints,
 } from "@/lib/supabase";
@@ -127,17 +128,27 @@ export async function loadDashboardData(): Promise<DashboardData> {
   const campaignImport = await loadCampaignImport();
   const campaignPoints = overlayBundledCampaignMedia(campaignImport.points);
   const publishedRiskPoints = await getLatestPublishedLaboratoryRiskPoints();
+  const diaryMediaCandidates = await getFieldDiaryCampaignMediaCandidates();
+  const photoSources = [
+    ...campaignPoints,
+    ...diaryMediaCandidates.map((candidate) => ({
+      campaign: candidate.campaignKey,
+      code: candidate.siaKey,
+      photoUrl: candidate.photoUrl,
+      photos: [],
+    })),
+  ];
   const riskRows = publishedRiskPoints?.length
     ? []
     : await loadBundledLaboratoryRiskRows();
   const laboratoryRiskPoints = publishedRiskPoints?.length
     ? hydrateLaboratoryRiskPointPhotos(
         overlayBundledCampaignMedia(publishedRiskPoints),
-        campaignPoints,
+        photoSources,
       )
     : hydrateLaboratoryRiskPointPhotos(
         buildLaboratoryRiskPoints(campaignPoints, riskRows),
-        campaignPoints,
+        photoSources,
       );
 
   return {

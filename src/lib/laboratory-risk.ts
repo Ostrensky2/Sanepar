@@ -1,3 +1,4 @@
+import { campaignIdentityKey } from "@/lib/campaign-identity";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 import { sanitizeCampaignMedia } from "@/lib/imports/media-policy";
 
@@ -99,35 +100,43 @@ export function buildLaboratoryRiskPoints(
 
 export function hydrateLaboratoryRiskPointPhotos(
   riskPoints: LaboratoryRiskPoint[],
-  campaignPoints: CampaignMapPoint[],
+  campaignPoints: CampaignPhotoSource[],
 ): LaboratoryRiskPoint[] {
   if (!riskPoints.length || !campaignPoints.length) {
     return riskPoints;
   }
 
-  const fieldPointByPhotoKey = new Map<string, CampaignMapPoint>();
+  const fieldPointByPhotoKey = new Map<string, CampaignPhotoSource | null>();
 
   for (const point of campaignPoints) {
     const key = campaignPhotoMatchKey(point);
+    const sanitized = sanitizeCampaignMedia(point);
 
-    if (key && !fieldPointByPhotoKey.has(key)) {
-      fieldPointByPhotoKey.set(key, point);
+    if (!key || !sanitized.photoUrl) continue;
+
+    const existing = fieldPointByPhotoKey.get(key);
+    if (!fieldPointByPhotoKey.has(key)) {
+      fieldPointByPhotoKey.set(key, sanitized);
+    } else if (existing?.photoUrl !== sanitized.photoUrl) {
+      fieldPointByPhotoKey.set(key, null);
     }
   }
 
   return riskPoints.map((riskPoint) => {
-    const fieldPoint = fieldPointByPhotoKey.get(campaignPhotoMatchKey(riskPoint));
+    const key = campaignPhotoMatchKey(riskPoint);
+    const fieldPoint = fieldPointByPhotoKey.get(key);
 
-    if (!fieldPoint) {
-      return riskPoint;
+    if (fieldPointByPhotoKey.has(key) && !fieldPoint) {
+      return sanitizeCampaignMedia({ ...riskPoint, photoUrl: "", photos: [] });
     }
 
-    return sanitizeCampaignMedia({
-      ...riskPoint,
-      driveUrl: fieldPoint.driveUrl,
-      dropboxUrl: fieldPoint.dropboxUrl,
-      photoUrl: fieldPoint.photoUrl || fieldPoint.dropboxUrl || fieldPoint.driveUrl,
-    });
+    return fieldPoint
+      ? sanitizeCampaignMedia({
+          ...riskPoint,
+          photoUrl: fieldPoint.photoUrl,
+          photos: fieldPoint.photos ?? [],
+        })
+      : sanitizeCampaignMedia(riskPoint);
   });
 }
 
@@ -270,27 +279,20 @@ function matchScore(row: LaboratoryRiskResultRow, point: CampaignMapPoint) {
   return score;
 }
 
-function campaignPhotoMatchKey(point: Pick<CampaignMapPoint, "campaign" | "code" | "point">) {
-  const campaignKey = normalizeCampaignKey(point.campaign);
-  const pointKey = normalizeSiaKey(point.code) || normalizePointName(point.point);
+type CampaignPhotoSource = Pick<CampaignMapPoint, "campaign" | "code" | "photoUrl" | "photos">;
+
+function campaignPhotoMatchKey(point: Pick<CampaignMapPoint, "campaign" | "code">) {
+  const campaignKey = campaignIdentityKey(null, point.campaign);
+  const pointKey = normalizeSiaKey(point.code);
 
   return campaignKey && pointKey ? `${campaignKey}|${pointKey}` : "";
 }
 
-function normalizeCampaignKey(value: string | undefined) {
-  const normalized = normalizeText(value);
-  const campaignNumber =
-    normalized.match(/\b(\d+)\s*[ao]?\s+campanha\b/)?.[1] ??
-    normalized.match(/\bcampanha\s*(\d+)\b/)?.[1];
-
-  return campaignNumber ? `campanha:${Number(campaignNumber)}` : normalized;
-}
-
 function normalizeSiaKey(value: string | undefined) {
   const normalized = normalizeText(value);
-  const siaNumber = normalized.match(/\d+/)?.[0];
+  const matches = normalized.match(/\d+/g);
 
-  return siaNumber ? `sia:${Number(siaNumber)}` : normalized;
+  return matches?.length === 1 ? `sia:${Number(matches[0])}` : "";
 }
 
 function detectedMarkers(row: LaboratoryRiskResultRow) {

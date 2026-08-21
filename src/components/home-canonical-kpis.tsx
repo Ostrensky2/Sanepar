@@ -55,7 +55,7 @@ export function HomeCanonicalKpis({
     const uniqueMunicipalities = Array.from(
       new Set(highRiskPoints.map((point) => point.municipality).filter(Boolean))
     );
-    const worstPointsLabel = uniqueMunicipalities.length > 0 ? uniqueMunicipalities.join(", ") : "Nenhum";
+    const criticalMunicipalities = buildCriticalMunicipalitySummary(uniqueMunicipalities);
 
     return {
       monitoredPoints: pointSummary.monitored,
@@ -63,7 +63,7 @@ export function HomeCanonicalKpis({
       highRisk: highRiskPoints.length,
       averageScore,
       activeCampaigns,
-      worstPointsLabel,
+      criticalMunicipalities,
     };
   }, [campaignManagement, campaigns, laboratoryRiskPoints, pointSummary.monitored]);
 
@@ -106,9 +106,10 @@ export function HomeCanonicalKpis({
       />
       <CanonicalKpi
         icon={AlertOctagon}
-        label="Pontos críticos"
-        value={metrics.worstPointsLabel}
-        detail="Municípios com risco alto"
+        label="Municípios críticos"
+        value={formatInteger(metrics.criticalMunicipalities.count)}
+        detail={metrics.criticalMunicipalities.summary}
+        expandedDetails={metrics.criticalMunicipalities.names}
         accentColor={laboratoryRiskColor("alto")}
         tone="danger"
       />
@@ -130,11 +131,26 @@ export function countOperationallyActiveCampaigns(
   ).length;
 }
 
+export function buildCriticalMunicipalitySummary(names: string[]) {
+  const uniqueNames = [...new Set(names.filter(Boolean))];
+  const visibleNames = uniqueNames.slice(0, 2);
+  const remaining = uniqueNames.length - visibleNames.length;
+
+  return {
+    count: uniqueNames.length,
+    names: uniqueNames,
+    summary: uniqueNames.length
+      ? `${visibleNames.join(", ")}${remaining > 0 ? ` +${remaining}` : ""}`
+      : "Nenhum município com risco alto",
+  };
+}
+
 function CanonicalKpi({
   icon: Icon,
   label,
   value,
   detail,
+  expandedDetails,
   accentColor,
   tone = "default",
 }: {
@@ -142,6 +158,7 @@ function CanonicalKpi({
   label: string;
   value: string;
   detail: string;
+  expandedDetails?: string[];
   accentColor?: string;
   tone?: "default" | "danger";
 }) {
@@ -149,15 +166,6 @@ function CanonicalKpi({
     tone === "danger"
       ? "text-[var(--brand-navy-strong)]"
       : "border-[var(--line-ghost)] text-[var(--brand-navy-strong)]";
-
-  let fontSizeClass = "type-kpi";
-  if (value.length > 25) {
-    fontSizeClass = "type-metadata font-bold";
-  } else if (value.length > 15) {
-    fontSizeClass = "type-label";
-  } else if (value.length > 7) {
-    fontSizeClass = "type-metadata font-bold";
-  }
 
   return (
     <article
@@ -173,12 +181,22 @@ function CanonicalKpi({
           style={accentColor ? { color: accentColor } : undefined}
         />
       </div>
-      <p className={`heading-font tracking-0 text-[var(--brand-navy-strong)] ${fontSizeClass}`}>
+      <p className="heading-font type-kpi tracking-0 text-[var(--brand-navy-strong)]">
         {value}
       </p>
       <p className="text-label font-semibold leading-4 text-[var(--ink-soft)]">
         {detail}
       </p>
+      {expandedDetails?.length ? (
+        <details className="text-caption text-[var(--ink-soft)]">
+          <summary className="cursor-pointer font-bold text-[var(--brand-navy-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-teal)]">
+            Ver lista completa
+          </summary>
+          <ul className="mt-2 list-disc space-y-1 pl-4">
+            {expandedDetails.map((item) => <li key={item}>{item}</li>)}
+          </ul>
+        </details>
+      ) : null}
     </article>
   );
 }

@@ -91,6 +91,7 @@ describe("mídia dos resultados por campanha", () => {
 
     expect(withPhoto).toContain(`src="${url.replaceAll("&", "&amp;")}"`);
     expect(withPhoto).toContain("Foto de campo do ponto SIA-0780 em Pinhais");
+    expect(withPhoto).toContain("Ampliar foto de campo do ponto SIA-0780");
     expect(withoutPhoto).toContain("Foto de campo indisponível");
   });
 
@@ -104,5 +105,7 @@ describe("mídia dos resultados por campanha", () => {
     expect(source).toContain("selectedPointId={selectedPoint.id}");
     expect(source).toContain("onSelectPoint={(point) => setSelectedPointId(point.id)}");
     expect(source).toContain("onClick={() => setSelectedPointId(municipality.priorityPoint.id)}");
+    expect(source).toContain("onDoubleClick={() => setIsPhotoExpanded(true)}");
+    expect(source).toContain("<RiskPhotoModal");
   });
 });

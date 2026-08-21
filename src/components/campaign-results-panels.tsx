@@ -11,6 +11,7 @@ import {
   type MetabarcodingStage,
 } from "@/components/metabarcoding-stages";
 import { DashboardSkeleton, ErrorBoundary } from "@/components/operational-feedback";
+import { RiskPhotoModal } from "@/components/home-risk-map-section";
 import { type CampaignView } from "@/lib/campaign-management";
 import { laboratoryRiskColor, laboratoryRiskLabel } from "@/lib/laboratory-risk";
 import type { ResultsPublication } from "@/lib/imports/results-contract";
@@ -196,21 +197,34 @@ function AnalyticResultsMap({ points }: { points: CampaignHydroMapPoint[] }) {
 export function SelectedResultPoint({ point }: { point: CampaignHydroMapPoint }) {
   const preview = getPhotoPreview(point.photoUrl || point.photos?.[0]?.url);
   const [failedUrl, setFailedUrl] = useState("");
+  const [isPhotoExpanded, setIsPhotoExpanded] = useState(false);
   const photoUrl = preview?.kind === "image" ? preview.src : "";
   const hasPhoto = Boolean(photoUrl && failedUrl !== photoUrl);
 
   return (
-    <section aria-live="polite" className="border-b border-[var(--line-ghost)] p-4">
-      <div className="flex flex-col gap-3 sm:flex-row md:flex-col xl:flex-row">
+    <>
+      <section aria-live="polite" className="border-b border-[var(--line-ghost)] p-4">
+        <div className="flex flex-col gap-3 sm:flex-row md:flex-col xl:flex-row">
         <div className="h-32 w-full shrink-0 overflow-hidden rounded-xl bg-[var(--surface-soft)] sm:w-44 md:w-full xl:w-40">
           {hasPhoto ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              alt={`Foto de campo do ponto ${point.code}${point.municipality ? ` em ${point.municipality}` : ""}`}
-              className="h-full w-full object-cover"
-              onError={() => setFailedUrl(photoUrl)}
-              src={photoUrl}
-            />
+            <button
+              type="button"
+              className="relative min-h-11 min-w-11 h-full w-full focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--brand-teal)]"
+              aria-label={`Ampliar foto de campo do ponto ${point.code}`}
+              onClick={() => setIsPhotoExpanded(true)}
+              onDoubleClick={() => setIsPhotoExpanded(true)}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                alt={`Foto de campo do ponto ${point.code}${point.municipality ? ` em ${point.municipality}` : ""}`}
+                className="h-full w-full object-cover"
+                onError={() => setFailedUrl(photoUrl)}
+                src={photoUrl}
+              />
+              <span className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-1 text-caption font-bold uppercase tracking-[0.14em] text-white">
+                ampliar
+              </span>
+            </button>
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-2 px-3 text-center text-slate-500" role="status">
               <ImageIcon className="h-6 w-6 text-slate-400" />
@@ -233,8 +247,15 @@ export function SelectedResultPoint({ point }: { point: CampaignHydroMapPoint })
             </p>
           ) : null}
         </div>
-      </div>
-    </section>
+        </div>
+      </section>
+      {isPhotoExpanded && hasPhoto ? (
+        <RiskPhotoModal
+          point={{ code: point.code, municipality: point.municipality, photoUrl }}
+          onClose={() => setIsPhotoExpanded(false)}
+        />
+      ) : null}
+    </>
   );
 }
 

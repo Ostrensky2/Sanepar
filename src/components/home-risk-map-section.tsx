@@ -1,10 +1,11 @@
 "use client";
 
 import { AlertTriangle, ImageIcon, Search, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CampaignHydroMap,
   type CampaignMapLayerVisibility,
+  type CampaignHydroMapPoint,
 } from "@/components/campaign-hydro-map";
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
@@ -559,6 +560,7 @@ function RiskPointPhoto({
       type="button"
       className="relative aspect-[4/3] h-[clamp(176px,22vh,240px)] w-[clamp(235px,29.333vh,320px)] max-w-full flex-shrink-0 self-center overflow-hidden radius-card border border-slate-200 bg-slate-100 text-slate-400 transition hover:brightness-95 disabled:cursor-default disabled:hover:brightness-100"
       onClick={onExpand}
+      onDoubleClick={onExpand}
       aria-label="Expandir foto representativa do ponto"
     >
       {!isLoaded ? (
@@ -608,36 +610,89 @@ function RiskPointPhoto({
   );
 }
 
-function RiskPhotoModal({
+export function RiskPhotoModal({
   point,
   onClose,
 }: {
-  point: LaboratoryRiskPoint;
+  point: Pick<CampaignHydroMapPoint, "code" | "municipality" | "photoUrl">;
   onClose: () => void;
 }) {
   const preview = getPhotoPreview(point.photoUrl);
   const [candidateIndex, setCandidateIndex] = useState(0);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const previousFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialog.showModal();
+    closeButtonRef.current?.focus();
+
+    function trapFocus(event: KeyboardEvent) {
+      if (event.key !== "Tab") return;
+      const focusable = dialog?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    dialog.addEventListener("keydown", trapFocus);
+    return () => {
+      dialog.removeEventListener("keydown", trapFocus);
+      document.body.style.overflow = previousOverflow;
+      if (dialog.open) dialog.close();
+      previousFocus?.focus();
+    };
+  }, []);
 
   if (!preview) {
     return null;
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-      <div className="relative h-full max-h-[82vh] w-full max-w-5xl overflow-hidden radius-panel border border-white/20 bg-white shadow-2xl">
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="risk-photo-title"
+      aria-modal="true"
+      className="m-auto h-[82vh] w-[calc(100%_-_2rem)] max-w-5xl overflow-hidden radius-panel border border-white/20 bg-white p-0 shadow-2xl backdrop:bg-slate-950/70 backdrop:backdrop-blur-sm"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget && event.detail === 1) onClose();
+      }}
+    >
+      <div className="relative h-full w-full overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div>
             <p className="text-caption font-bold uppercase tracking-[0.18em] text-slate-400">
               Foto representativa
             </p>
-            <h3 className="heading-font text-lg font-black text-[var(--brand-navy-strong)]">
+            <h3 id="risk-photo-title" className="heading-font text-lg font-black text-[var(--brand-navy-strong)]">
               {point.code} · {point.municipality}
             </h3>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             aria-label="Fechar foto expandida"
-            className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+            className="min-h-11 min-w-11 rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:ring-2 focus-visible:ring-[var(--brand-teal)] focus-visible:ring-offset-2"
             onClick={onClose}
           >
             <X className="h-5 w-5" />
@@ -662,7 +717,7 @@ function RiskPhotoModal({
           {/* eslint-enable @next/next/no-img-element */}
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }
 

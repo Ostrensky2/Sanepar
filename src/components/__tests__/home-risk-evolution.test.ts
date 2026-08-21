@@ -1,11 +1,17 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { countOperationallyActiveCampaigns } from "@/components/home-canonical-kpis";
+import {
+  buildCriticalMunicipalitySummary,
+  countOperationallyActiveCampaigns,
+} from "@/components/home-canonical-kpis";
+import { RiskPhotoModal } from "@/components/home-risk-map-section";
 import {
   HomeRiskEvolution,
   buildRiskEvolutionPeriods,
   buildRiskPointOptions,
+  filterRiskPointOptions,
   riskPointIdentityKey,
 } from "@/components/home-risk-evolution";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
@@ -33,6 +39,16 @@ describe("home risk evolution", () => {
         "Planejada",
       ]),
     ).toBe(2);
+  });
+
+  it("summarizes critical municipalities with a stable count and complete list", () => {
+    expect(
+      buildCriticalMunicipalitySummary(["Pinhais", "Curitiba", "Pinhais", "Arapongas"]),
+    ).toEqual({
+      count: 3,
+      names: ["Pinhais", "Curitiba", "Arapongas"],
+      summary: "Pinhais, Curitiba +1",
+    });
   });
 
   it("counts only operational collections and canonicalizes duplicate campaign labels", () => {
@@ -113,10 +129,16 @@ describe("home risk evolution", () => {
     expect(periods[1]).toMatchObject({ score: 0.61, riskLabel: "Risco baixo" });
     expect(periods.slice(2).every((period) => period.score === null)).toBe(true);
     expect(options.filter((option) => option.key === "sia:780")).toHaveLength(1);
+    expect(filterRiskPointOptions(options, "sia 0780")).toEqual([
+      expect.objectContaining({ key: "sia:780" }),
+    ]);
+    expect(filterRiskPointOptions(options, "londr")).toEqual([
+      expect.objectContaining({ key: riskPointIdentityKey(points[3]) }),
+    ]);
     expect(riskPointIdentityKey(points[2])).not.toBe(riskPointIdentityKey(points[3]));
   });
 
-  it("renders a searchable native input and column chart without a select", () => {
+  it("renders searchable controls, a compact mobile chart and the mean-color qualifier", () => {
     const markup = renderToStaticMarkup(
       createElement(HomeRiskEvolution, {
         points: [riskPoint("c1", "1", "SIA-0780", 0.855)],
@@ -124,14 +146,79 @@ describe("home risk evolution", () => {
     );
 
     expect(markup).toContain('type="search"');
-    expect(markup).toContain('<datalist id="risk-point-options">');
+    expect(markup).toContain('role="combobox"');
+    expect(markup).not.toContain("<datalist");
     expect(markup).not.toContain("<select");
+    expect(markup).toContain("Limpar");
+    expect(markup).toContain("disabled=\"\"");
+    expect(markup).toContain("Aplicado: ");
+    expect(markup).toContain("min-w-[42rem]");
+    expect(markup).not.toContain("text-[7.5px]");
+    expect(markup).not.toContain("text-[10px]");
+    expect(markup).toContain("Cor da média: faixa do resultado publicado mais próximo.");
     expect(markup).toContain(
       "app-card overflow-hidden border-[var(--line-ghost)] bg-[var(--surface-panel)] p-0 shadow-[var(--shadow-soft)]",
     );
     expect(markup).toContain("height:85.5%");
     expect(markup).toContain("Sem resultado");
-    expect(markup).toContain("C9");
+    for (const label of [
+      "Verão 26",
+      "Outono 26",
+      "Inverno 26",
+      "Primavera 26",
+      "Verão 27",
+      "Outono 27",
+      "Inverno 27",
+      "Primavera 27",
+      "Verão 28",
+    ]) {
+      expect(markup).toContain(`>${label}<`);
+    }
+    expect(markup).not.toContain(">C9<");
+    expect(markup).toContain("9ª Campanha - Verão 2028: Sem resultado");
+    const source = readFileSync(
+      new URL("../home-risk-evolution.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(source).toContain('event.key === "ArrowDown"');
+    expect(source).toContain('event.key === "Enter"');
+    expect(source).toContain('role="listbox"');
+    expect(source).toContain("if (!query) setSelectedPointKey(ALL_POINTS)");
+    expect(source).toContain("disabled={!pointQuery && !hasAppliedPoint}");
+    expect(source).toContain("absolute inset-x-0 top-full z-20");
+    expect(source).toContain("Nenhum ponto encontrado.");
+    expect(source).toContain("onBlurCapture={(event) =>");
+    expect(source).toContain("event.relatedTarget as Node | null");
+    expect(source).toContain("setActiveSuggestion(-1)");
+  });
+
+  it("renders the photo modal as a native accessible dialog and protects its focus lifecycle", () => {
+    const point = riskPoint("photo", "1", "SIA-0780", 0.855);
+    const markup = renderToStaticMarkup(
+      createElement(RiskPhotoModal, {
+        point: { ...point, photoUrl: "https://example.test/photo.jpg" },
+        onClose: () => undefined,
+      }),
+    );
+    const source = readFileSync(
+      new URL("../home-risk-map-section.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(markup).toContain("<dialog");
+    expect(markup).toContain('aria-modal="true"');
+    expect(markup).toContain('aria-labelledby="risk-photo-title"');
+    expect(source).toContain("dialog.showModal()");
+    expect(source).toContain('event.key !== "Tab"');
+    expect(source).toContain('document.body.style.overflow = "hidden"');
+    expect(source).toContain("previousFocus?.focus()");
+    expect(source).toContain("event.target === event.currentTarget");
+    expect(source).toContain("onDoubleClick={onExpand}");
+    expect(source).toContain("event.target === event.currentTarget && event.detail === 1");
+    expect(source).toContain("min-h-11 min-w-11");
+    expect(source).toContain("focus-visible:ring-[var(--brand-teal)]");
+    expect(source).toContain("w-[calc(100%_-_2rem)]");
+    expect(source).not.toContain("w-[calc(100%-2rem)]");
   });
 });
 

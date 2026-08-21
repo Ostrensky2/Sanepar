@@ -142,4 +142,37 @@ describe("legacy campaign media integrated flow", () => {
       "match",
     );
   });
+
+  it("hidrata C2 entre título e número somente por SIA e falha fechado em conflito", () => {
+    const c2Photo = "/api/documents/file?bucket=photos&path=diario%2Fcampanha-2%2Fsia-0780.jpg";
+    const c1Photo = "/api/documents/file?bucket=photos&path=diario%2Fcampanha-1%2Fsia-0780.jpg";
+    const conflictPhoto = "/api/documents/file?bucket=photos&path=diario%2Fcampanha-2%2Fsia-0780-b.jpg";
+    const riskPoint = {
+      ...(campaignPoints as CampaignMapPoint[])[0],
+      campaign: "2",
+      code: "SIA-0780",
+      point: "Nome homônimo",
+      photoUrl: "",
+    } as LaboratoryRiskPoint;
+    const c2FieldPoint = {
+      ...riskPoint,
+      campaign: "Campanha 2",
+      photoUrl: c2Photo,
+    };
+
+    expect(hydrateLaboratoryRiskPointPhotos([riskPoint], [
+      { ...c2FieldPoint, campaign: "Campanha 1", photoUrl: c1Photo },
+      c2FieldPoint,
+      { ...c2FieldPoint, code: "SIA-0999", point: "Nome homônimo" },
+    ])[0].photoUrl).toBe(c2Photo);
+
+    expect(hydrateLaboratoryRiskPointPhotos([riskPoint], [
+      c2FieldPoint,
+      { ...c2FieldPoint, photoUrl: conflictPhoto },
+    ])[0].photoUrl).toBe("");
+
+    expect(hydrateLaboratoryRiskPointPhotos([
+      { ...riskPoint, code: "SIA-0780/0999" },
+    ], [c2FieldPoint])[0].photoUrl).toBe("");
+  });
 });

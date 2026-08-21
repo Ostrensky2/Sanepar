@@ -7,14 +7,17 @@ import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 import type { LaboratoryRiskPoint } from "@/lib/laboratory-risk";
 
 const {
+  getFieldDiaryCampaignMediaCandidates,
   getLatestPublishedCampaignImport,
   getLatestPublishedLaboratoryRiskPoints,
 } = vi.hoisted(() => ({
+  getFieldDiaryCampaignMediaCandidates: vi.fn(),
   getLatestPublishedCampaignImport: vi.fn(),
   getLatestPublishedLaboratoryRiskPoints: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase", () => ({
+  getFieldDiaryCampaignMediaCandidates,
   getLatestPublishedCampaignImport,
   getLatestPublishedLaboratoryRiskPoints,
 }));
@@ -45,6 +48,40 @@ const reassociatedCodes = [
 describe("loadDashboardData canonical private-media overlay", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getFieldDiaryCampaignMediaCandidates.mockResolvedValue([]);
+  });
+
+  it("hidrata 74/74 resultados C2 pelos candidatos canônicos do Diário", async () => {
+    const c2Points = Array.from({ length: 74 }, (_, index) => ({
+      ...bundledPoints[index % bundledPoints.length],
+      id: `c2-${index + 1}`,
+      campaign: "2",
+      code: `SIA-${String(index + 1).padStart(4, "0")}`,
+      point: `Ponto ${index + 1}`,
+      photoUrl: "",
+      photos: [],
+    }));
+    const riskPoints = c2Points.map(toRiskPoint);
+
+    getLatestPublishedCampaignImport.mockResolvedValue({
+      points: c2Points,
+      row_count: c2Points.length,
+      file_name: "campanha-2.xlsx",
+    });
+    getLatestPublishedLaboratoryRiskPoints.mockResolvedValue(riskPoints);
+    getFieldDiaryCampaignMediaCandidates.mockResolvedValue(
+      c2Points.map((point, index) => ({
+        campaignKey: "campanha-2-outono-2026",
+        siaKey: `sia:${index + 1}`,
+        photoUrl: `/api/documents/file?bucket=photos&path=diario%2Fcampanha-2%2F${point.code}.jpg`,
+      })),
+    );
+
+    const dashboard = await loadDashboardData();
+
+    expect(dashboard.laboratoryRiskPoints).toHaveLength(74);
+    expect(dashboard.laboratoryRiskPoints.every((point) => point.photoUrl)).toBe(true);
+    expect(dashboard.laboratoryRiskPoints.every((point) => point.campaign === "2")).toBe(true);
   });
 
   it("overlays audited internal media without changing cloud operational fields", async () => {
