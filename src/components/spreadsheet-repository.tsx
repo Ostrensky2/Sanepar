@@ -94,6 +94,7 @@ const VIEW_CONFIG: Record<
     description:
       "Modelo canônico por campanha. A última publicação válida alimenta Dashboard e Resultados.",
     template: {
+      href: "/modelo-planilha-resultados.xlsx",
       title: "Modelo canônico de resultados",
       description: `Schema ${RESULTS_SCHEMA_VERSION}, com Instruções, Dicionário e todas as leituras do dashboard.`,
     },
