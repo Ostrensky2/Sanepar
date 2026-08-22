@@ -25,6 +25,36 @@ vi.mock("@/lib/supabase", () => ({
 import { countCampaignsWithEffectiveCollection } from "@/lib/dashboard-data";
 
 describe("home risk evolution", () => {
+  it("keeps the C2 review notice singular, static and before the canonical KPIs", () => {
+    const source = readFileSync(
+      new URL("../../app/(dashboard)/page.tsx", import.meta.url),
+      "utf8",
+    );
+    const noticeStart = source.indexOf("{SHOW_C2_RESULTS_REVIEW_NOTICE ? (");
+    const kpisStart = source.indexOf("<HomeCanonicalKpis");
+    const notice = source.slice(noticeStart, kpisStart);
+
+    expect(source.match(/const SHOW_C2_RESULTS_REVIEW_NOTICE = true;/g)).toHaveLength(1);
+    expect(noticeStart).toBeGreaterThan(source.indexOf("Painel de Monitoramento"));
+    expect(noticeStart).toBeLessThan(kpisStart);
+    expect(notice).toContain('role="status"');
+    expect(notice).toContain('aria-live="polite"');
+    expect(notice).toContain(
+      "border-4 border-[var(--brand-danger)] bg-[rgba(186,26,26,0.06)]",
+    );
+    expect(notice).toContain(
+      "heading-font type-section-title text-center font-extrabold text-[var(--brand-danger)]",
+    );
+    expect(notice).toContain(
+      "type-body mx-auto mt-1 max-w-3xl text-center text-[var(--ink)]",
+    );
+    expect(notice).toContain("Resultados da 2ª Campanha em revisão");
+    expect(notice).toContain(
+      "Os resultados atualmente exibidos são preliminares e ainda não são definitivos. Os resultados definitivos serão divulgados em breve.",
+    );
+    expect(notice).not.toContain("<button");
+  });
+
   it("counts only campaigns in execution, not concluded or merely planned", () => {
     expect(
       countOperationallyActiveCampaigns([
