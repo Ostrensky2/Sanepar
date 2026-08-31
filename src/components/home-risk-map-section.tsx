@@ -12,6 +12,7 @@ import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 import {
   hydrateLaboratoryRiskPointPhotos,
   laboratoryRiskColor,
+  laboratoryRiskTextColor,
   type LaboratoryRiskLevel,
   type LaboratoryRiskPoint,
 } from "@/lib/laboratory-risk";
@@ -884,5 +885,5 @@ function riskHexColor(level: LaboratoryRiskLevel) {
 }
 
 function getRiskTextColor(level: LaboratoryRiskLevel) {
-  return level === "baixo" ? "#ffffff" : "#111827";
+  return laboratoryRiskTextColor(level);
 }

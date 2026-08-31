@@ -7,6 +7,7 @@ import {
   countOperationallyActiveCampaigns,
 } from "@/components/home-canonical-kpis";
 import { RiskPhotoModal } from "@/components/home-risk-map-section";
+import { ResultsReviewDialog } from "@/components/results-review-dialog";
 import {
   HomeRiskEvolution,
   buildRiskEvolutionPeriods,
@@ -15,7 +16,11 @@ import {
   riskPointIdentityKey,
 } from "@/components/home-risk-evolution";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
-import type { LaboratoryRiskPoint } from "@/lib/laboratory-risk";
+import {
+  laboratoryRiskColor,
+  laboratoryRiskTextColor,
+  type LaboratoryRiskPoint,
+} from "@/lib/laboratory-risk";
 
 vi.mock("@/lib/supabase", () => ({
   getLatestPublishedCampaignImport: vi.fn(),
@@ -25,34 +30,49 @@ vi.mock("@/lib/supabase", () => ({
 import { countCampaignsWithEffectiveCollection } from "@/lib/dashboard-data";
 
 describe("home risk evolution", () => {
-  it("keeps the C2 review notice singular, static and before the canonical KPIs", () => {
+  it("opens the review dialog from one removable flag and removes the static notice", () => {
     const source = readFileSync(
       new URL("../../app/(dashboard)/page.tsx", import.meta.url),
       "utf8",
     );
-    const noticeStart = source.indexOf("{SHOW_C2_RESULTS_REVIEW_NOTICE ? (");
+    const noticeStart = source.indexOf("{SHOW_RESULTS_REVIEW_NOTICE ?");
     const kpisStart = source.indexOf("<HomeCanonicalKpis");
-    const notice = source.slice(noticeStart, kpisStart);
+    const markup = renderToStaticMarkup(createElement(ResultsReviewDialog));
+    const dialogSource = readFileSync(
+      new URL("../results-review-dialog.tsx", import.meta.url),
+      "utf8",
+    );
 
-    expect(source.match(/const SHOW_C2_RESULTS_REVIEW_NOTICE = true;/g)).toHaveLength(1);
+    expect(source.match(/const SHOW_RESULTS_REVIEW_NOTICE = true;/g)).toHaveLength(1);
     expect(noticeStart).toBeGreaterThan(source.indexOf("Painel de Monitoramento"));
     expect(noticeStart).toBeLessThan(kpisStart);
-    expect(notice).toContain('role="status"');
-    expect(notice).toContain('aria-live="polite"');
-    expect(notice).toContain(
-      "border-4 border-[var(--brand-danger)] bg-[rgba(186,26,26,0.06)]",
+    expect(source).toContain("<ResultsReviewDialog />");
+    expect(source).not.toContain("Resultados da 2ª Campanha em revisão");
+    expect(markup).toContain("<dialog");
+    expect(markup).toContain('aria-modal="true"');
+    expect(markup).toContain(">Aviso<");
+    expect(markup).toContain(
+      "Os resultados da primeira e da segunda campanha serão ainda integralmente revisados para que possamos investigar especificamente os organismos solicitados pela Sanepar. Em breve apresentaremos aqui os resultados finais refinados.",
     );
-    expect(notice).toContain(
-      "heading-font type-section-title text-center font-extrabold text-[var(--brand-danger)]",
-    );
-    expect(notice).toContain(
-      "type-body mx-auto mt-1 max-w-3xl text-center text-[var(--ink)]",
-    );
-    expect(notice).toContain("Resultados da 2ª Campanha em revisão");
-    expect(notice).toContain(
-      "Os resultados atualmente exibidos são preliminares e ainda não são definitivos. Os resultados definitivos serão divulgados em breve.",
-    );
-    expect(notice).not.toContain("<button");
+    expect(markup).toContain("Fechar aviso");
+    expect(dialogSource).toContain("dialog.showModal()");
+    expect(dialogSource).toContain('document.body.style.overflow = "hidden"');
+    expect(dialogSource).toContain("previousFocusRef.current?.focus()");
+    expect(dialogSource).toContain("onClick={closeDialog}");
+    expect(dialogSource).toContain("onCancel={(event) =>");
+    expect(dialogSource).toContain("event.target === event.currentTarget");
+    expect(dialogSource).toContain("min-h-11");
+  });
+
+  it("uses WCAG-safe white text for high and moderate risk", () => {
+    expect(laboratoryRiskColor("alto")).toBe("#E52908");
+    expect(laboratoryRiskColor("moderado")).toBe("#B85A0D");
+    expect(laboratoryRiskTextColor("alto")).toBe("#ffffff");
+    expect(laboratoryRiskTextColor("moderado")).toBe("#ffffff");
+    expect(contrastRatio("#E52908", "#ffffff")).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio("#B85A0D", "#ffffff")).toBeGreaterThanOrEqual(4.5);
+    expect(laboratoryRiskColor("baixoModerado")).toBe("#CDC602");
+    expect(laboratoryRiskColor("baixo")).toBe("#16a34a");
   });
 
   it("counts only campaigns in execution, not concluded or merely planned", () => {
@@ -117,12 +137,12 @@ describe("home risk evolution", () => {
     ]);
 
     expect(periods[0]).toMatchObject({
-      color: "#FC883A",
+      color: "#B85A0D",
       riskLabel: expect.stringContaining("faixa visual derivada"),
     });
     expect(periods[0].score).toBeCloseTo(0.549);
     expect(periods[1]).toMatchObject({
-      color: "#FC883A",
+      color: "#B85A0D",
       riskLabel: expect.stringContaining("Risco moderado"),
     });
     expect(periods[1].score).toBeCloseTo(0.566);
@@ -321,4 +341,22 @@ function riskPoint(
     rankingPosition: 1,
     sampleId: id,
   };
+}
+
+function contrastRatio(first: string, second: string) {
+  const [lighter, darker] = [relativeLuminance(first), relativeLuminance(second)].sort(
+    (left, right) => right - left,
+  );
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function relativeLuminance(hex: string) {
+  const channels = hex
+    .slice(1)
+    .match(/.{2}/g)!
+    .map((value) => Number.parseInt(value, 16) / 255)
+    .map((value) =>
+      value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4,
+    );
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
 }

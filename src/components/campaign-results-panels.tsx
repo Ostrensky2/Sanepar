@@ -13,7 +13,11 @@ import {
 import { DashboardSkeleton, ErrorBoundary } from "@/components/operational-feedback";
 import { RiskPhotoModal } from "@/components/home-risk-map-section";
 import { type CampaignView } from "@/lib/campaign-management";
-import { laboratoryRiskColor, laboratoryRiskLabel } from "@/lib/laboratory-risk";
+import {
+  laboratoryRiskColor,
+  laboratoryRiskLabel,
+  laboratoryRiskTextColor,
+} from "@/lib/laboratory-risk";
 import type { ResultsPublication } from "@/lib/imports/results-contract";
 import { getPhotoPreview } from "@/lib/photo-preview";
 
@@ -172,7 +176,7 @@ function AnalyticResultsMap({ points }: { points: CampaignHydroMapPoint[] }) {
                           style={{
                             backgroundColor: laboratoryRiskColor(municipality.riskLevel),
                             borderColor: laboratoryRiskColor(municipality.riskLevel),
-                            color: municipality.riskLevel === "baixo" ? "#fff" : "#111827",
+                            color: laboratoryRiskTextColor(municipality.riskLevel),
                           }}
                         >
                           {laboratoryRiskLabel(municipality.riskLevel)}

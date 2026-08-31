@@ -64,6 +64,19 @@ describe("contrato do dashboard de resultados", () => {
     expect(html).toContain("escapeAttr(`${r.ponto} — ${H.taxa[index]}: ${v}% dos reads do marcador`)");
   });
 
+  it("mantém badges alto e moderado legíveis em branco", () => {
+    expect(html).toContain("--risk-high:#E52908;--risk-moderate:#B85A0D");
+    expect(html).toContain(
+      ".r-Alto{background:var(--risk-high);color:#fff;border-color:var(--risk-high)}",
+    );
+    expect(html).toContain(
+      ".r-Moderado{background:var(--risk-moderate);color:#fff;border-color:var(--risk-moderate)}",
+    );
+    expect(html).toContain(
+      ".r-Baixoamoderado{background:var(--risk-low-moderate);color:#111827",
+    );
+  });
+
   it("mantém um único mapa de risco e move municípios para a superfície nativa", () => {
     const component = readFileSync(
       resolve(process.cwd(), "src/components/campaign-results-panels.tsx"),

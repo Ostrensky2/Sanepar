@@ -7,12 +7,16 @@ export type LaboratoryRiskLevel = "baixo" | "baixoModerado" | "moderado" | "alto
 export const laboratoryRiskColors: Record<LaboratoryRiskLevel, string> = {
   baixo: "#16a34a",
   baixoModerado: "#CDC602",
-  moderado: "#FC883A",
-  alto: "#FC2D09",
+  moderado: "#B85A0D",
+  alto: "#E52908",
 };
 
 export function laboratoryRiskColor(level: LaboratoryRiskLevel) {
   return laboratoryRiskColors[level];
+}
+
+export function laboratoryRiskTextColor(level: LaboratoryRiskLevel) {
+  return level === "baixoModerado" ? "#111827" : "#ffffff";
 }
 
 export type LaboratoryRiskResultRow = {
