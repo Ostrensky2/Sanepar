@@ -172,6 +172,7 @@ type LaboratoryResultsPayload = {
   analyzedSets: string[];
   speciesCount: number;
   fallbackSampleIdCount: number;
+  discardedOriginalCoordinateCount: number;
   warnings: string[];
   riskRows: LaboratoryRiskResultRow[];
   riskPoints: LaboratoryRiskPoint[];
@@ -444,7 +445,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
         status = "PUBLICADA";
         rowCount = payload.rowCount;
         sheetCount = payload.sheetCount;
-        statusMessage = `${payload.persistence.message} ${payload.rowCount} linhas, ${payload.expectedColumnCount} variáveis validadas${payload.columnCount > payload.expectedColumnCount ? ` e ${payload.columnCount - payload.expectedColumnCount} colunas adicionais` : ""}; ${payload.speciesCount} espécies identificadas; ${payload.matchedRiskPointCount}/${payload.riskRows.length} pontos de risco publicados no Início.${payload.fallbackSampleIdCount ? ` Atenção: ${payload.fallbackSampleIdCount} linha(s) usaram campanha + data + SIA como identificação interna.` : ""}`;
+        statusMessage = `${payload.persistence.message} ${payload.rowCount} linhas, ${payload.expectedColumnCount} variáveis validadas${payload.columnCount > payload.expectedColumnCount ? ` e ${payload.columnCount - payload.expectedColumnCount} colunas adicionais` : ""}; ${payload.speciesCount} espécies identificadas; ${payload.matchedRiskPointCount}/${payload.riskRows.length} pontos de risco publicados no Início.${payload.warnings.length ? ` Atenção: ${payload.warnings.join(" ")}` : ""}`;
       } else {
         const previewData = new FormData();
         previewData.append("file", file);

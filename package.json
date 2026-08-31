@@ -1,6 +1,6 @@
 {
   "name": "yvae-monitoramento",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "private": true,
   "scripts": {
     "release:production": "node scripts/update-app-version.mjs --production",

@@ -142,6 +142,7 @@ describe("/api/imports/results campaign isolation", () => {
       riskPoints: [],
       matchedRiskPointCount: 0,
       fallbackSampleIdCount: 0,
+      discardedOriginalCoordinateCount: 0,
       warnings: [],
     });
     expect(payload).not.toHaveProperty("molecularRows");
@@ -243,7 +244,7 @@ function parsedResult(publicationStatus: "draft" | "published") {
   return {
     fileName: "campanha-2.xlsx", worksheetName: "Banco_consolidado", rankingWorksheetName: "Ranking_score_pontos",
     rowCount: 1, sheetCount: 5, columnCount: 22, expectedColumnCount: 22, headers: [], matchedHeaders: 22,
-    markers: ["16S"], analyzedSets: ["Cianobactérias"], speciesCount: 1, fallbackSampleIdCount: 0, warnings: [], riskRows: [], molecularRows: [], rankingRows: [], viewModel,
+    markers: ["16S"], analyzedSets: ["Cianobactérias"], speciesCount: 1, fallbackSampleIdCount: 0, discardedOriginalCoordinateCount: 0, warnings: [], riskRows: [], molecularRows: [], rankingRows: [], viewModel,
     metadata: {
       schemaVersion: RESULTS_SCHEMA_VERSION, campaignId: "campanha-2", campaignNumber: 2,
       campaignTitle: "Campanha 2", publicationStatus, methodology: { origin: "Método homologado", version: "1" },

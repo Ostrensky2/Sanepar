@@ -41,7 +41,7 @@ describe("results spreadsheet actions contract", () => {
     expect(source).not.toContain('className="text-[10px] leading-tight"');
     expect(source).not.toContain('className="mb-2 flex justify-end"');
     expect(source).toContain('href: "/modelo-planilha-resultados.xlsx"');
-    expect(source).toContain("campanha + data + SIA como identificação interna");
+    expect(source).toContain('payload.warnings.join(" ")');
   });
 
   it("preserva outras campanhas no cache local", () => {

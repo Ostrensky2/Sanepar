@@ -63,6 +63,7 @@ export type LaboratoryResultsImport = {
   analyzedSets: string[];
   speciesCount: number;
   fallbackSampleIdCount: number;
+  discardedOriginalCoordinateCount: number;
   warnings: string[];
   metadata: ResultsWorkbookMetadata;
   molecularRows: MolecularResultRow[];
@@ -116,9 +117,15 @@ export async function parseLaboratoryResultsWorkbook(buffer: ArrayBuffer, fileNa
     analyzedSets: [...new Set(molecularRows.map((row) => row.analyzedSet))].sort(),
     speciesCount: new Set(molecularRows.map((row) => row.taxon)).size,
     fallbackSampleIdCount: molecularImport.fallbackSampleIdCount,
-    warnings: molecularImport.fallbackSampleIdCount
-      ? [`${molecularImport.fallbackSampleIdCount} linha(s) sem Identificação da amostra usaram campanha + data + SIA como vínculo interno.`]
-      : [],
+    discardedOriginalCoordinateCount: molecularImport.discardedOriginalCoordinateCount,
+    warnings: [
+      ...(molecularImport.fallbackSampleIdCount
+        ? [`${molecularImport.fallbackSampleIdCount} linha(s) sem Identificação da amostra usaram campanha + data + SIA como vínculo interno.`]
+        : []),
+      ...(molecularImport.discardedOriginalCoordinateCount
+        ? [`${molecularImport.discardedOriginalCoordinateCount} linha(s) tiveram a coordenada original inválida descartada; o par efetivo válido foi preservado.`]
+        : []),
+    ],
     metadata,
     molecularRows,
     rankingRows,
@@ -182,6 +189,7 @@ function parseMolecularRows(worksheet: ExcelJS.Worksheet, metadata: ResultsWorkb
   const sampleSignatures = new Map<string, string>();
   const identitySignatures = new Map<string, string>();
   let fallbackSampleIdCount = 0;
+  let discardedOriginalCoordinateCount = 0;
 
   for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber += 1) {
     const row = worksheet.getRow(rowNumber);
@@ -202,12 +210,22 @@ function parseMolecularRows(worksheet: ExcelJS.Worksheet, metadata: ResultsWorkb
     const marker = requiredEnum(worksheet, rowNumber, "Marcador", cell(row, 14), ["16S", "COI"] as const);
     const analyzedSet = requiredEnum(worksheet, rowNumber, "Conjunto analisado", cell(row, 15), ["Cianobactérias", "Bactérias", "COI"] as const);
     if ((marker === "COI") !== (analyzedSet === "COI")) fail(worksheet, rowNumber, "Marcador/Conjunto analisado", "combinação incompatível");
-    const originalLatitude = optionalNumber(worksheet, rowNumber, "Latitude original", cell(row, 6), -90, 90);
-    const originalLongitude = optionalNumber(worksheet, rowNumber, "Longitude original", cell(row, 7), -180, 180);
-    const effectiveLatitude = optionalNumber(worksheet, rowNumber, "Latitude efetiva", cell(row, 8), -90, 90);
-    const effectiveLongitude = optionalNumber(worksheet, rowNumber, "Longitude efetiva", cell(row, 9), -180, 180);
-    validateCoordinatePair(worksheet, rowNumber, "original", originalLatitude, originalLongitude);
-    validateCoordinatePair(worksheet, rowNumber, "efetiva", effectiveLatitude, effectiveLongitude);
+    const originalCoordinates = inspectCoordinatePair(
+      "original", "Latitude original", cell(row, 6), "Longitude original", cell(row, 7),
+    );
+    const effectiveCoordinates = inspectCoordinatePair(
+      "efetiva", "Latitude efetiva", cell(row, 8), "Longitude efetiva", cell(row, 9),
+    );
+    if (originalCoordinates.status === "invalid") {
+      if (effectiveCoordinates.status !== "valid") failCoordinatePair(worksheet, rowNumber, originalCoordinates);
+      discardedOriginalCoordinateCount += 1;
+    } else if (effectiveCoordinates.status === "invalid") {
+      failCoordinatePair(worksheet, rowNumber, effectiveCoordinates);
+    }
+    const originalLatitude = originalCoordinates.status === "valid" ? originalCoordinates.latitude : null;
+    const originalLongitude = originalCoordinates.status === "valid" ? originalCoordinates.longitude : null;
+    const effectiveLatitude = effectiveCoordinates.status === "valid" ? effectiveCoordinates.latitude : null;
+    const effectiveLongitude = effectiveCoordinates.status === "valid" ? effectiveCoordinates.longitude : null;
 
     const result: MolecularResultRow = {
       sampleId,
@@ -237,7 +255,7 @@ function parseMolecularRows(worksheet: ExcelJS.Worksheet, metadata: ResultsWorkb
     rows.push(result);
   }
   if (!rows.length) throw new Error(`A aba ${worksheet.name} não possui resultados moleculares.`);
-  return { rows, fallbackSampleIdCount };
+  return { rows, fallbackSampleIdCount, discardedOriginalCoordinateCount };
 }
 
 function parseRankingRows(worksheet: ExcelJS.Worksheet, molecularRows: MolecularResultRow[], metadata: ResultsWorkbookMetadata): RankingResultRow[] {
@@ -460,7 +478,24 @@ function resolveRankingSampleId(
   if (candidates.length > 1) fail(worksheet, row, "Amostra", "SIA corresponde a mais de uma amostra no Banco_consolidado");
   fail(worksheet, row, "Amostra", "não existe no Banco_consolidado");
 }
-function validateCoordinatePair(worksheet: ExcelJS.Worksheet, row: number, label: string, latitude: number | null, longitude: number | null) { if ((latitude === null) !== (longitude === null)) fail(worksheet, row, `Coordenada ${label}`, "latitude e longitude devem ser informadas juntas"); }
+type CoordinatePairInspection =
+  | { status: "missing" }
+  | { status: "valid"; latitude: number; longitude: number }
+  | { status: "invalid"; column: string; detail: string };
+
+function inspectCoordinatePair(label: string, latitudeColumn: string, latitudeValue: string, longitudeColumn: string, longitudeValue: string): CoordinatePairInspection {
+  if (!latitudeValue && !longitudeValue) return { status: "missing" };
+  if (!latitudeValue || !longitudeValue) return { status: "invalid", column: `Coordenada ${label}`, detail: "latitude e longitude devem ser informadas juntas" };
+  const latitude = parseNumber(latitudeValue);
+  if (latitude === null || latitude < -90 || latitude > 90) return { status: "invalid", column: latitudeColumn, detail: "use número entre -90 e 90" };
+  const longitude = parseNumber(longitudeValue);
+  if (longitude === null || longitude < -180 || longitude > 180) return { status: "invalid", column: longitudeColumn, detail: "use número entre -180 e 180" };
+  return { status: "valid", latitude, longitude };
+}
+
+function failCoordinatePair(worksheet: ExcelJS.Worksheet, row: number, inspection: Extract<CoordinatePairInspection, { status: "invalid" }>): never {
+  fail(worksheet, row, inspection.column, inspection.detail);
+}
 function parseNumber(value: string) { if (!value) return null; const normalized = /^-?\d{1,3}(?:\.\d{3})+,\d+$/.test(value) ? value.replace(/\./g, "").replace(",", ".") : value.replace(",", "."); const parsed = Number(normalized); return Number.isFinite(parsed) ? parsed : null; }
 function normalizeHeader(value: string) { return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9%]+/g, " ").trim(); }
 function normalizeCell(value: ExcelJS.CellValue | undefined) {

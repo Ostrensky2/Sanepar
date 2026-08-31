@@ -88,6 +88,70 @@ describe("results schema golden master", () => {
     )).rejects.toThrow("Banco_consolidado, linha 2, Cód. SIA: valor obrigatório ausente.");
   });
 
+  it("descarta coordenada original inválida somente com par efetivo válido", async () => {
+    const { viewModel, ranking } = readGoldenMaster();
+    const workbook = buildWorkbook(viewModel, ranking);
+    const molecular = workbook.getWorksheet(RESULTS_WORKSHEETS.molecular)!;
+    molecular.getCell("F2").value = -234663;
+    molecular.getCell("G2").value = -513082;
+    const bytes = await workbook.xlsx.writeBuffer();
+    const binary = bytes as unknown as { buffer: ArrayBuffer; byteOffset: number; byteLength: number };
+
+    const parsed = await parseLaboratoryResultsWorkbook(
+      binary.buffer.slice(binary.byteOffset, binary.byteOffset + binary.byteLength),
+      "campanha-1.xlsx",
+    );
+
+    expect(parsed.discardedOriginalCoordinateCount).toBe(1);
+    expect(parsed.warnings).toContain("1 linha(s) tiveram a coordenada original inválida descartada; o par efetivo válido foi preservado.");
+    expect(parsed.molecularRows[0]).toMatchObject({
+      originalLatitude: null,
+      originalLongitude: null,
+      effectiveLatitude: viewModel.points[0].lat,
+      effectiveLongitude: viewModel.points[0].lon,
+    });
+  });
+
+  it("mantém fail-closed quando original é inválido e o efetivo não é válido", async () => {
+    const { viewModel, ranking } = readGoldenMaster();
+    const workbook = buildWorkbook(viewModel, ranking);
+    const molecular = workbook.getWorksheet(RESULTS_WORKSHEETS.molecular)!;
+    molecular.getCell("F2").value = -234663;
+    molecular.getCell("G2").value = -513082;
+    molecular.getCell("H2").value = null;
+    molecular.getCell("I2").value = null;
+    const bytes = await workbook.xlsx.writeBuffer();
+    const binary = bytes as unknown as { buffer: ArrayBuffer; byteOffset: number; byteLength: number };
+
+    await expect(parseLaboratoryResultsWorkbook(
+      binary.buffer.slice(binary.byteOffset, binary.byteOffset + binary.byteLength),
+      "campanha-1.xlsx",
+    )).rejects.toThrow("Banco_consolidado, linha 2, Latitude original: use número entre -90 e 90.");
+  });
+
+  it("preserva os dois pares quando original e efetivo são válidos", async () => {
+    const { viewModel, ranking } = readGoldenMaster();
+    const workbook = buildWorkbook(viewModel, ranking);
+    const molecular = workbook.getWorksheet(RESULTS_WORKSHEETS.molecular)!;
+    molecular.getCell("F2").value = -23.4;
+    molecular.getCell("G2").value = -51.3;
+    const bytes = await workbook.xlsx.writeBuffer();
+    const binary = bytes as unknown as { buffer: ArrayBuffer; byteOffset: number; byteLength: number };
+
+    const parsed = await parseLaboratoryResultsWorkbook(
+      binary.buffer.slice(binary.byteOffset, binary.byteOffset + binary.byteLength),
+      "campanha-1.xlsx",
+    );
+
+    expect(parsed.discardedOriginalCoordinateCount).toBe(0);
+    expect(parsed.molecularRows[0]).toMatchObject({
+      originalLatitude: -23.4,
+      originalLongitude: -51.3,
+      effectiveLatitude: viewModel.points[0].lat,
+      effectiveLongitude: viewModel.points[0].lon,
+    });
+  });
+
   it("bloqueia metadados conflitantes para campanha + data + SIA", async () => {
     const { viewModel, ranking } = readGoldenMaster();
     const workbook = buildWorkbook(viewModel, ranking);
