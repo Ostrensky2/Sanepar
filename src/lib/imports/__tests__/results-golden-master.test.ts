@@ -45,6 +45,28 @@ describe("results schema golden master", () => {
       publicationStatus: "published",
     });
   });
+
+  it("não ignora linha parcial sem Identificação da amostra", async () => {
+    const html = readFileSync(
+      resolve(process.cwd(), "public/dashboards/Painel_eDNA_Campanha1_Sanepar.html"),
+      "utf8",
+    );
+    const viewModel = JSON.parse(
+      html.match(/const DATA\s*=\s*(\{[^\n]*\});/)![1],
+    ) as ResultsViewModel;
+    const ranking = JSON.parse(
+      html.match(/<script id="DATA" type="application\/json">([\s\S]*?)<\/script>/)![1],
+    ).ranking as Array<Record<string, unknown>>;
+    const workbook = buildWorkbook(viewModel, ranking);
+    workbook.getWorksheet(RESULTS_WORKSHEETS.molecular)!.getCell("A2").value = null;
+    const bytes = await workbook.xlsx.writeBuffer();
+    const binary = bytes as unknown as { buffer: ArrayBuffer; byteOffset: number; byteLength: number };
+    const buffer = binary.buffer.slice(binary.byteOffset, binary.byteOffset + binary.byteLength);
+
+    await expect(parseLaboratoryResultsWorkbook(buffer, "campanha-1.xlsx")).rejects.toThrow(
+      "Banco_consolidado, linha 2, Identificação da amostra: valor obrigatório ausente.",
+    );
+  });
 });
 
 function buildWorkbook(viewModel: ResultsViewModel, ranking: Array<Record<string, unknown>>) {

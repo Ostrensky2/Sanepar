@@ -6,6 +6,9 @@ const mocks = vi.hoisted(() => ({
   parse: vi.fn(),
   buildRisk: vi.fn(),
   query: vi.fn(),
+  preselect: vi.fn(),
+  deleteEq: vi.fn(),
+  deletedRows: vi.fn(),
   insert: vi.fn(),
 }));
 
@@ -16,13 +19,23 @@ vi.mock("@/lib/supabase", () => ({
   getLatestPublishedCampaignImport: vi.fn().mockResolvedValue({ points: [] }),
   createOptionalSupabaseClient: () => ({
     from: () => ({
-      select: () => ({ order: () => ({ returns: mocks.query }) }),
+      select: (columns: string) => {
+        mocks.preselect(columns);
+        return { order: () => ({ returns: mocks.query }) };
+      },
+      delete: () => ({
+        eq: function eq(column: string, value: string) {
+          mocks.deleteEq(column, value);
+          return this;
+        },
+        select: () => ({ returns: mocks.deletedRows }),
+      }),
       insert: mocks.insert,
     }),
   }),
 }));
 
-import { GET, POST } from "@/app/api/imports/results/route";
+import { DELETE, GET, POST } from "@/app/api/imports/results/route";
 
 const emptyHeat = { taxa: [], rows: [] };
 const viewModel = {
@@ -61,6 +74,10 @@ describe("/api/imports/results campaign isolation", () => {
       error: null,
     });
     mocks.insert.mockResolvedValue({ error: null });
+    mocks.deletedRows.mockResolvedValue({
+      data: [{ id: "result-c2", points: { ...publication, campaignId: "campanha-2-outono-2026" } }],
+      error: null,
+    });
     mocks.buildRisk.mockReturnValue([]);
   });
 
@@ -117,13 +134,107 @@ describe("/api/imports/results campaign isolation", () => {
     expect(mocks.insert.mock.calls[0][0]).toMatchObject({
       points: { campaignId: "campanha-2", campaignNumber: 2, schemaVersion: RESULTS_SCHEMA_VERSION },
     });
+    const payload = await response.json();
+    expect(payload).toMatchObject({
+      fileName: "campanha-2.xlsx",
+      rowCount: 1,
+      riskRows: [],
+      riskPoints: [],
+      matchedRiskPointCount: 0,
+    });
+    expect(payload).not.toHaveProperty("molecularRows");
+    expect(payload).not.toHaveProperty("publication");
+    expect(payload).not.toHaveProperty("viewModel");
+  });
+
+  it("POST exige campanha selecionada e rejeita divergência antes do insert", async () => {
+    expect((await POST(uploadRequest(""))).status).toBe(400);
+    expect(mocks.parse).not.toHaveBeenCalled();
+
+    mocks.parse.mockResolvedValueOnce(parsedResult("published"));
+    expect((await POST(uploadRequest("campanha-1-verao-2026"))).status).toBe(409);
+    expect(mocks.insert).not.toHaveBeenCalled();
+  });
+
+  it("DELETE exige privilégio antes de consultar ou excluir", async () => {
+    mocks.requireApiSession.mockResolvedValueOnce({
+      ok: false,
+      response: Response.json({ error: "Sem permissão." }, { status: 403 }),
+    });
+
+    const response = await DELETE(deleteRequest("campanha-2-outono-2026", "campanha-2-outono-2026"));
+
+    expect(response.status).toBe(403);
+    expect(mocks.requireApiSession).toHaveBeenCalledWith(expect.any(Request), "data.delete");
+    expect(mocks.deletedRows).not.toHaveBeenCalled();
+  });
+
+  it("DELETE não consulta nem exclui sem seletor e confirmação canônicos", async () => {
+    expect((await DELETE(deleteRequest(undefined, undefined))).status).toBe(400);
+    expect((await DELETE(deleteRequest("campanha-2-outono-2026", undefined))).status).toBe(409);
+    expect((await DELETE(deleteRequest("campanha-2-outono-2026", "campanha-1-verao-2026"))).status).toBe(409);
+    expect(mocks.deletedRows).not.toHaveBeenCalled();
+  });
+
+  it("DELETE remove somente envelopes publicados da campanha confirmada", async () => {
+    const response = await DELETE(deleteRequest("Campanha 2", "campanha-2-outono-2026"));
+    const payload = await response.json();
+    expect({ status: response.status, payload }).toEqual({
+      status: 200,
+      payload: { campaignId: "campanha-2-outono-2026", deletedCount: 1 },
+    });
+    expect(mocks.deleteEq.mock.calls).toEqual([
+      ["points->>campaignId", "campanha-2-outono-2026"],
+      ["points->>campaignNumber", "2"],
+      ["points->>schemaVersion", RESULTS_SCHEMA_VERSION],
+    ]);
+    expect(mocks.preselect).not.toHaveBeenCalled();
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it("DELETE é idempotente e falha fechado quando não há publicação", async () => {
+    mocks.deletedRows.mockResolvedValueOnce({ data: [], error: null });
+
+    const response = await DELETE(deleteRequest("campanha-2-outono-2026", "campanha-2-outono-2026"));
+
+    expect(response.status).toBe(404);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it("DELETE retorna 503 quando a instrução atômica falha", async () => {
+    mocks.deletedRows.mockResolvedValueOnce({ data: null, error: { message: "offline" } });
+
+    const response = await DELETE(deleteRequest("campanha-2-outono-2026", "campanha-2-outono-2026"));
+
+    expect(response.status).toBe(503);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it("DELETE falha fechado se o retorno não validar como envelope da campanha", async () => {
+    mocks.deletedRows.mockResolvedValueOnce({
+      data: [{ id: "unexpected", points: { ...publication, campaignId: "campanha-1", campaignNumber: 1 } }],
+      error: null,
+    });
+
+    const response = await DELETE(deleteRequest("campanha-2-outono-2026", "campanha-2-outono-2026"));
+
+    expect(response.status).toBe(503);
   });
 });
 
-function uploadRequest() {
+function uploadRequest(selectedCampaign: string | undefined = "campanha-2-outono-2026") {
   const formData = new FormData();
   formData.set("file", new File(["xlsx"], "campanha-2.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  if (selectedCampaign) formData.set("selectedCampaign", selectedCampaign);
   return new Request("http://local.test/api/imports/results", { method: "POST", body: formData });
+}
+
+function deleteRequest(campaignId: string | undefined, confirmation: string | undefined) {
+  return new Request("http://local.test/api/imports/results", {
+    method: "DELETE",
+    headers: { "content-type": "application/json", origin: "http://local.test" },
+    body: JSON.stringify({ campaignId, confirmation }),
+  });
 }
 
 function parsedResult(publicationStatus: "draft" | "published") {

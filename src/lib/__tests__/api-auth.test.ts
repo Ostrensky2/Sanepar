@@ -28,7 +28,7 @@ const protectedMutations = {
   "src/app/api/field-diary/import/route.ts": ["POST"],
   "src/app/api/imports/campaigns/route.ts": ["POST", "DELETE"],
   "src/app/api/imports/preview/route.ts": ["POST"],
-  "src/app/api/imports/results/route.ts": ["POST"],
+  "src/app/api/imports/results/route.ts": ["POST", "DELETE"],
   "src/app/api/photos/upload/route.ts": ["POST"],
   "src/app/api/point-actions/route.ts": ["PUT"],
   "src/app/api/point-actions/import/route.ts": ["POST"],
@@ -103,7 +103,7 @@ describe("proteções de API auth", () => {
     await expect(requireApiSession(new Request("https://app.invalid/api", { method, headers: { origin: "https://app.invalid" } }))).resolves.toMatchObject({ ok: true });
   });
 
-  it("comprova o inventário mutante 19/19 no guard central de sessão", () => {
+  it("comprova o inventário mutante 20/20 no guard central de sessão", () => {
     let count = 0;
     for (const [file, methods] of Object.entries(protectedMutations)) {
       const source = readFileSync(resolve(process.cwd(), file), "utf8");
@@ -113,7 +113,7 @@ describe("proteções de API auth", () => {
         count += 1;
       }
     }
-    expect(count).toBe(19);
+    expect(count).toBe(20);
   });
 
   it("exige aprovação nas três dimensões sem enviar identificador claro", async () => {

@@ -30,6 +30,11 @@ import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 import type { LaboratoryRiskPoint, LaboratoryRiskResultRow } from "@/lib/laboratory-risk";
 import type { SpreadsheetPreview } from "@/lib/types";
 import type { FieldDiaryEntry } from "@/lib/field-diary";
+import { campaignIdentityKey, resolveCanonicalCampaign } from "@/lib/campaign-identity";
+import {
+  RESULTS_IMPORT_TIMEOUT_MS,
+  readResultsApiPayload,
+} from "@/lib/imports/results-client";
 import {
   RESULTS_DASHBOARD_HEADERS,
   RESULTS_DASHBOARD_SECTIONS,
@@ -201,6 +206,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
   const [conflictHref, setConflictHref] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const [isDeletingResults, setIsDeletingResults] = useState(false);
   const [activeCategory, setActiveCategory] = useState<UserCategory>("Admin");
   const [formState, setFormState] = useState({
     campaign: campaigns[0],
@@ -323,6 +329,8 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
     const spreadsheetId = `${file.name}-${crypto.randomUUID()}`;
     const operationId = `spreadsheet-import:${spreadsheetId}`;
     const controller = new AbortController();
+    let importTimedOut = false;
+    let resultsTimeout: number | null = null;
     const stopOperation = beginGlobalOperation({
       id: operationId,
       title: "Carregando planilha...",
@@ -385,12 +393,19 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
         const resultsData = new FormData();
         resultsData.append("file", file);
         resultsData.append("selectedCampaign", campaign);
+        resultsTimeout = window.setTimeout(() => {
+          importTimedOut = true;
+          controller.abort();
+        }, RESULTS_IMPORT_TIMEOUT_MS);
         const response = await fetch("/api/imports/results", {
           method: "POST",
           body: resultsData,
           signal: controller.signal,
         });
-        const payload = (await response.json()) as LaboratoryResultsPayload | { error: string };
+        const payload = await readResultsApiPayload<LaboratoryResultsPayload>(
+          response,
+          "A importação foi interrompida pelo servidor. Tente novamente; se persistir, contate o administrador.",
+        );
 
         if (!response.ok || "error" in payload) {
           throw new Error(
@@ -412,6 +427,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
           window.localStorage.setItem(
             "yvae:lab-risk-import",
             JSON.stringify({
+              campaignId: resolveCanonicalCampaign(campaign)?.id ?? "",
               fileName: payload.fileName,
               rankingWorksheetName: payload.rankingWorksheetName,
               riskRowCount: payload.riskRows.length,
@@ -475,8 +491,10 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
       setMessage(statusMessage);
     } catch (uploadError) {
       setError(
-        uploadError instanceof DOMException && uploadError.name === "AbortError"
-          ? "Importação cancelada. Nenhum dado novo foi publicado."
+        importTimedOut
+          ? "A importação excedeu 60 segundos. A interface não confirmou a conclusão; consulte o estado da campanha antes de repetir."
+          : uploadError instanceof DOMException && uploadError.name === "AbortError"
+          ? "Importação cancelada. A interface não confirmou a conclusão; consulte o estado da campanha antes de repetir."
           : toActionableErrorMessage(
               uploadError,
               "Não foi possível agregar a planilha.",
@@ -486,8 +504,92 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
         emitLocalMode("Falha durante importação de planilha. Dados podem estar apenas neste navegador.");
       }
     } finally {
+      if (resultsTimeout !== null) {
+        window.clearTimeout(resultsTimeout);
+      }
       window.removeEventListener(OPERATION_CANCEL_EVENT, cancelHandler);
       stopOperation();
+      setIsPending(false);
+    }
+  }
+
+  async function deleteSelectedCampaignResults() {
+    const campaign = formState.scope === "Ordinária"
+      ? resolveCanonicalCampaign(formState.campaign)
+      : null;
+
+    if (view !== "resultados" || !canDeleteSpreadsheets) {
+      setError("Somente administradores podem apagar resultados publicados.");
+      return;
+    }
+    if (!campaign) {
+      setError("Selecione uma campanha ordinária canônica antes de apagar resultados.");
+      return;
+    }
+    if (!window.confirm(
+      `Apagar somente os resultados laboratoriais publicados de “${campaign.name}”? Diário de campo, fotos, documentos e demais campanhas serão preservados. Esta ação não pode ser desfeita.`,
+    )) {
+      return;
+    }
+
+    setIsPending(true);
+    setIsDeletingResults(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/imports/results", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ campaignId: campaign.id, confirmation: campaign.id }),
+      });
+      const payload = await readResultsApiPayload<{ campaignId: string; deletedCount: number }>(
+        response,
+        "Não foi possível apagar os resultados desta campanha.",
+      );
+
+      if (!response.ok || "error" in payload) {
+        throw new Error("error" in payload ? payload.error : "Não foi possível apagar os resultados desta campanha.");
+      }
+      if (payload.campaignId !== campaign.id || !Number.isInteger(payload.deletedCount) || payload.deletedCount < 1) {
+        throw new Error("A nuvem não confirmou a exclusão exata da campanha selecionada.");
+      }
+
+      const storedRisk = window.localStorage.getItem("yvae:lab-risk-results");
+      if (storedRisk) {
+        try {
+          const parsed: unknown = JSON.parse(storedRisk);
+          if (Array.isArray(parsed)) {
+            const retained = (parsed as LaboratoryRiskPoint[]).filter(
+              (point) => campaignIdentityKey(null, point.campaign) !== campaign.id,
+            );
+            window.localStorage.setItem("yvae:lab-risk-results", JSON.stringify(retained));
+          }
+        } catch {
+          // Fail closed: malformed browser data is not deleted.
+        }
+      }
+
+      const storedImport = window.localStorage.getItem("yvae:lab-risk-import");
+      if (storedImport) {
+        try {
+          const parsed = JSON.parse(storedImport) as { campaignId?: unknown };
+          if (campaignIdentityKey(parsed.campaignId, null) === campaign.id) {
+            window.localStorage.removeItem("yvae:lab-risk-import");
+          }
+        } catch {
+          // Fail closed: malformed browser data is not deleted.
+        }
+      }
+
+      window.dispatchEvent(new Event("storage"));
+      setMessage(
+        `${payload.deletedCount} publicação(ões) de resultados de “${campaign.name}” apagada(s). Diário, fotos, documentos e outras campanhas foram preservados.`,
+      );
+    } catch (deleteError) {
+      setError(toActionableErrorMessage(deleteError, "Não foi possível apagar os resultados desta campanha."));
+    } finally {
+      setIsDeletingResults(false);
       setIsPending(false);
     }
   }
@@ -664,6 +766,21 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
                 Baixar Modelo
               </button>
             )}
+          </div>
+        ) : null}
+
+        {view === "resultados" && canDeleteSpreadsheets ? (
+          <div className="mb-2 flex justify-end">
+            <button
+              type="button"
+              disabled={isPending || formState.scope !== "Ordinária"}
+              aria-label={`Apagar resultados da campanha selecionada: ${formState.campaign}`}
+              onClick={() => void deleteSelectedCampaignResults()}
+              className="type-button inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[var(--brand-danger)] bg-white px-3 text-[var(--brand-danger)] transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Trash2 className="h-4 w-4" />
+              {isDeletingResults ? "Apagando resultados..." : "Apagar resultados desta campanha"}
+            </button>
           </div>
         ) : null}
 
@@ -882,7 +999,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
                       >
                         <Download className="h-4 w-4" />
                       </button>
-                      {canDeleteSpreadsheets ? (
+                      {canDeleteSpreadsheets && view === "campo" ? (
                         <button
                           type="button"
                           aria-label={`Remover ${sheet.fileName}`}

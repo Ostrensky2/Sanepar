@@ -20,6 +20,29 @@ import { normalizeLaboratoryRiskLevel, type LaboratoryRiskResultRow } from "@/li
 
 type WorkbookBinary = Parameters<ExcelJS.Workbook["xlsx"]["load"]>[0];
 
+const RESULTS_XLSX_IGNORE_NODES = [
+  "autoFilter",
+  "cols",
+  "conditionalFormatting",
+  "dataValidations",
+  "drawing",
+  "extLst",
+  "headerFooter",
+  "hyperlinks",
+  "mergeCells",
+  "pageMargins",
+  "pageSetup",
+  "picture",
+  "printOptions",
+  "rowBreaks",
+  "sheetFormatPr",
+  "sheetPr",
+  "sheetProtection",
+  "sheetViews",
+  "tableParts",
+] as const;
+const RESULTS_MAX_WORKSHEET_ROWS = 50_000;
+
 export const RESULTS_WORKSHEET_NAME = RESULTS_WORKSHEETS.molecular;
 export const RANKING_WORKSHEET_NAME = RESULTS_WORKSHEETS.ranking;
 export const RESULT_EXPECTED_HEADERS = RESULTS_MOLECULAR_FIELDS.map((field) => field.header);
@@ -50,12 +73,23 @@ export async function parseLaboratoryResultsWorkbook(buffer: ArrayBuffer, fileNa
   if (extension !== "xlsx" && extension !== "xlsm") throw new Error("A planilha de Resultados deve ser enviada em formato .xlsx ou .xlsm.");
 
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(Buffer.from(buffer) as unknown as WorkbookBinary, { ignoreNodes: ["tableParts"] });
+  await workbook.xlsx.load(Buffer.from(buffer) as unknown as WorkbookBinary, {
+    // Only cell values are part of the import contract. Ignoring presentation and
+    // validation XML avoids the multi-minute ExcelJS path seen in the real C2 file.
+    ignoreNodes: [...RESULTS_XLSX_IGNORE_NODES],
+  });
   const instructions = requiredWorksheet(workbook, RESULTS_WORKSHEETS.instructions);
   const dictionary = requiredWorksheet(workbook, RESULTS_WORKSHEETS.dictionary);
   const molecular = requiredWorksheet(workbook, RESULTS_WORKSHEETS.molecular);
   const ranking = requiredWorksheet(workbook, RESULTS_WORKSHEETS.ranking);
   const dashboard = requiredWorksheet(workbook, RESULTS_WORKSHEETS.dashboard);
+  for (const worksheet of workbook.worksheets) {
+    if (worksheet.rowCount > RESULTS_MAX_WORKSHEET_ROWS) {
+      throw new Error(
+        `A aba ${worksheet.name} excede o limite de ${RESULTS_MAX_WORKSHEET_ROWS.toLocaleString("pt-BR")} linhas.`,
+      );
+    }
+  }
   const metadata = parseInstructions(instructions);
 
   validateDictionary(dictionary);
@@ -141,7 +175,9 @@ function parseMolecularRows(worksheet: ExcelJS.Worksheet): MolecularResultRow[] 
 
   for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber += 1) {
     const row = worksheet.getRow(rowNumber);
-    if (!cell(row, 1)) continue;
+    if (RESULT_EXPECTED_HEADERS.every((_, index) => !cell(row, index + 1))) continue;
+    const sampleId = requiredText(worksheet, rowNumber, "Identificação da amostra", cell(row, 1));
+    const siaId = requiredText(worksheet, rowNumber, "Cód. SIA", cell(row, 2));
     const marker = requiredEnum(worksheet, rowNumber, "Marcador", cell(row, 14), ["16S", "COI"] as const);
     const analyzedSet = requiredEnum(worksheet, rowNumber, "Conjunto analisado", cell(row, 15), ["Cianobactérias", "Bactérias", "COI"] as const);
     if ((marker === "COI") !== (analyzedSet === "COI")) fail(worksheet, rowNumber, "Marcador/Conjunto analisado", "combinação incompatível");
@@ -153,8 +189,8 @@ function parseMolecularRows(worksheet: ExcelJS.Worksheet): MolecularResultRow[] 
     validateCoordinatePair(worksheet, rowNumber, "efetiva", effectiveLatitude, effectiveLongitude);
 
     const result: MolecularResultRow = {
-      sampleId: requiredText(worksheet, rowNumber, "Identificação da amostra", cell(row, 1)),
-      siaId: requiredText(worksheet, rowNumber, "Cód. SIA", cell(row, 2)),
+      sampleId,
+      siaId,
       sampleDate: requiredDate(worksheet, rowNumber, "Data", row.getCell(3).value),
       waterBody: requiredText(worksheet, rowNumber, "Manancial / Corpo Hídrico", cell(row, 4)),
       municipality: requiredText(worksheet, rowNumber, "Município", cell(row, 5)),

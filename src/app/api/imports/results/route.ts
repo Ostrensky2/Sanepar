@@ -16,6 +16,7 @@ import {
 } from "@/lib/imports/results-contract";
 import { buildLaboratoryRiskPoints } from "@/lib/laboratory-risk";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
+import { normalizeCampaignKey, resolveCanonicalCampaign } from "@/lib/campaign-identity";
 import {
   createOptionalSupabaseClient,
   getLatestPublishedCampaignImport,
@@ -23,7 +24,7 @@ import {
 
 export const runtime = "nodejs";
 
-type PublishedResultRow = { points: unknown };
+type PublishedResultRow = { id: string; points: unknown };
 
 const CAMPAIGN_1_ID = "campanha-1-verao-2026";
 const CAMPAIGN_1_NUMBER = 1;
@@ -164,6 +165,56 @@ function bundledRankingRows(viewModel: ResultsViewModel): RankingResultRow[] {
   });
 }
 
+export async function DELETE(request: Request) {
+  const auth = await requireApiSession(request, "data.delete");
+  if (!auth.ok) return auth.response;
+
+  const body = await request.json().catch(() => null) as {
+    campaignId?: unknown;
+    confirmation?: unknown;
+  } | null;
+  const campaign = resolveCanonicalCampaign(body?.campaignId);
+
+  if (!campaign) {
+    return NextResponse.json({ error: "Informe uma campanha canônica válida." }, { status: 400 });
+  }
+  if (resolveCanonicalCampaign(body?.confirmation)?.id !== campaign.id) {
+    return NextResponse.json({ error: "A confirmação da campanha não confere." }, { status: 409 });
+  }
+  const campaignNumber = Number(normalizeCampaignKey(campaign.name));
+
+  const supabase = createOptionalSupabaseClient();
+  if (!supabase) {
+    return NextResponse.json({ error: "Exclusão de resultados indisponível." }, { status: 503 });
+  }
+
+  const removed = await supabase
+    .from("lab_risk_results")
+    .delete()
+    .eq("points->>campaignId", campaign.id)
+    .eq("points->>campaignNumber", String(campaignNumber))
+    .eq("points->>schemaVersion", RESULTS_SCHEMA_VERSION)
+    .select("id,points")
+    .returns<PublishedResultRow[]>();
+  if (removed.error) {
+    return NextResponse.json({ error: "Não foi possível excluir as publicações." }, { status: 503 });
+  }
+  const rows = removed.data ?? [];
+  if (rows.length === 0) {
+    return NextResponse.json({ error: "Nenhuma publicação encontrada para a campanha." }, { status: 404 });
+  }
+  if (rows.some((row) =>
+    !isResultsPublication(row.points) ||
+    resolveCanonicalCampaign(row.points.campaignId)?.id !== campaign.id ||
+    resolveCanonicalCampaign(row.points.campaignNumber)?.id !== campaign.id ||
+    row.points.schemaVersion !== RESULTS_SCHEMA_VERSION
+  )) {
+    return NextResponse.json({ error: "A exclusão retornou uma publicação incompatível." }, { status: 503 });
+  }
+
+  return NextResponse.json({ campaignId: campaign.id, deletedCount: rows.length });
+}
+
 export async function POST(request: Request) {
   const auth = await requireApiSession(request, "data.import");
 
@@ -174,6 +225,7 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get("file");
+    const selectedCampaign = resolveCanonicalCampaign(formData.get("selectedCampaign"));
 
     if (!(file instanceof File)) {
       return NextResponse.json(
@@ -205,8 +257,22 @@ export async function POST(request: Request) {
         { status: 413 },
       );
     }
+    if (!selectedCampaign) {
+      return NextResponse.json(
+        { error: "Selecione uma campanha canônica para publicar os resultados." },
+        { status: 400 },
+      );
+    }
 
     const results = await parseLaboratoryResultsWorkbook(await file.arrayBuffer(), file.name);
+    const workbookCampaign = resolveCanonicalCampaign(results.metadata.campaignId) ??
+      resolveCanonicalCampaign(results.metadata.campaignNumber);
+    if (!workbookCampaign || workbookCampaign.id !== selectedCampaign.id) {
+      return NextResponse.json(
+        { error: "A campanha selecionada não confere com a planilha de Resultados." },
+        { status: 409 },
+      );
+    }
     if (results.metadata.publicationStatus !== "published") {
       return NextResponse.json(
         { error: "A planilha está marcada como draft e não substituiu a publicação vigente." },
@@ -248,9 +314,14 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
-      ...results,
-      publication,
-      viewModel: publication.viewModel,
+      fileName: results.fileName,
+      rankingWorksheetName: results.rankingWorksheetName,
+      rowCount: results.rowCount,
+      sheetCount: results.sheetCount,
+      columnCount: results.columnCount,
+      expectedColumnCount: results.expectedColumnCount,
+      speciesCount: results.speciesCount,
+      riskRows: results.riskRows,
       riskPoints,
       matchedRiskPointCount: riskPoints.length,
       persistence,
