@@ -1,5 +1,13 @@
 export const RESULTS_IMPORT_TIMEOUT_MS = 60_000;
 
+export function formatResultsImportError(status: number, serverError: string) {
+  if (status === 409 || status === 422) {
+    return `A planilha não foi importada. ${serverError} Preencha o campo indicado ou use o arquivo correto.`;
+  }
+
+  return serverError;
+}
+
 export async function readResultsApiPayload<T>(
   response: Response,
   fallbackError: string,

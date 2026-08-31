@@ -33,6 +33,7 @@ import type { FieldDiaryEntry } from "@/lib/field-diary";
 import { campaignIdentityKey, resolveCanonicalCampaign } from "@/lib/campaign-identity";
 import {
   RESULTS_IMPORT_TIMEOUT_MS,
+  formatResultsImportError,
   readResultsApiPayload,
 } from "@/lib/imports/results-client";
 import {
@@ -170,6 +171,8 @@ type LaboratoryResultsPayload = {
   markers: string[];
   analyzedSets: string[];
   speciesCount: number;
+  fallbackSampleIdCount: number;
+  warnings: string[];
   riskRows: LaboratoryRiskResultRow[];
   riskPoints: LaboratoryRiskPoint[];
   matchedRiskPointCount: number;
@@ -410,7 +413,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
         if (!response.ok || "error" in payload) {
           throw new Error(
             "error" in payload
-              ? payload.error
+              ? formatResultsImportError(response.status, payload.error)
               : "A planilha de Resultados não segue o modelo consolidado.",
           );
         }
@@ -441,7 +444,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
         status = "PUBLICADA";
         rowCount = payload.rowCount;
         sheetCount = payload.sheetCount;
-        statusMessage = `${payload.persistence.message} ${payload.rowCount} linhas, ${payload.expectedColumnCount} variáveis obrigatórias validadas${payload.columnCount > payload.expectedColumnCount ? ` e ${payload.columnCount - payload.expectedColumnCount} colunas adicionais` : ""}; ${payload.speciesCount} espécies identificadas; ${payload.matchedRiskPointCount}/${payload.riskRows.length} pontos de risco publicados no Início.`;
+        statusMessage = `${payload.persistence.message} ${payload.rowCount} linhas, ${payload.expectedColumnCount} variáveis validadas${payload.columnCount > payload.expectedColumnCount ? ` e ${payload.columnCount - payload.expectedColumnCount} colunas adicionais` : ""}; ${payload.speciesCount} espécies identificadas; ${payload.matchedRiskPointCount}/${payload.riskRows.length} pontos de risco publicados no Início.${payload.fallbackSampleIdCount ? ` Atenção: ${payload.fallbackSampleIdCount} linha(s) usaram campanha + data + SIA como identificação interna.` : ""}`;
       } else {
         const previewData = new FormData();
         previewData.append("file", file);
@@ -769,24 +772,9 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
           </div>
         ) : null}
 
-        {view === "resultados" && canDeleteSpreadsheets ? (
-          <div className="mb-2 flex justify-end">
-            <button
-              type="button"
-              disabled={isPending || formState.scope !== "Ordinária"}
-              aria-label={`Apagar resultados da campanha selecionada: ${formState.campaign}`}
-              onClick={() => void deleteSelectedCampaignResults()}
-              className="type-button inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[var(--brand-danger)] bg-white px-3 text-[var(--brand-danger)] transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Trash2 className="h-4 w-4" />
-              {isDeletingResults ? "Apagando resultados..." : "Apagar resultados desta campanha"}
-            </button>
-          </div>
-        ) : null}
-
-        <form className="grid gap-2 lg:grid-cols-6" onSubmit={addSpreadsheet}>
+        <form className="grid gap-2 lg:grid-cols-12" onSubmit={addSpreadsheet}>
           <select
-            className="type-label h-9 rounded-lg border border-slate-200 bg-white px-3 lg:col-span-1"
+            className="type-label h-9 rounded-lg border border-slate-200 bg-white px-3 lg:col-span-2"
             value={formState.scope}
             disabled={!canImportSpreadsheets || isPending}
             onChange={(event) =>
@@ -847,15 +835,30 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
           <button
             type="submit"
             disabled={isPending || !canImportSpreadsheets}
-            className="type-button flex h-9 items-center justify-center gap-2 rounded-lg bg-[var(--brand-navy-strong)] px-4 text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 lg:col-span-1"
+            className="type-button flex h-9 items-center justify-center gap-2 rounded-lg bg-[var(--brand-navy-strong)] px-4 text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 lg:col-span-3"
           >
             <UploadCloud className="h-4 w-4" />
             {isPending ? "Carregando..." : config.submitLabel}
           </button>
+          {view === "resultados" && canDeleteSpreadsheets ? (
+            <button
+              type="button"
+              disabled={isPending || formState.scope !== "Ordinária"}
+              aria-label={`Apagar resultados desta campanha: ${formState.campaign}`}
+              title="Apagar resultados desta campanha"
+              onClick={() => void deleteSelectedCampaignResults()}
+              className="type-button flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-[var(--brand-danger)] bg-white px-4 text-[var(--brand-danger)] transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 lg:col-span-3"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>
+                {isDeletingResults ? "Apagando resultados desta campanha..." : "Apagar resultados desta campanha"}
+              </span>
+            </button>
+          ) : null}
           
           <input
             className={`h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs ${
-              config.showFieldMapToggle ? "lg:col-span-4" : "lg:col-span-6"
+              config.showFieldMapToggle ? "lg:col-span-8" : "lg:col-span-12"
             }`}
             placeholder="Observação operacional"
             value={formState.note}
@@ -865,7 +868,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
             }
           />
           {config.showFieldMapToggle ? (
-            <label className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[var(--brand-navy-strong)] lg:col-span-2">
+            <label className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[var(--brand-navy-strong)] lg:col-span-4">
               <input
                 type="checkbox"
                 checked={formState.publishFieldMap}

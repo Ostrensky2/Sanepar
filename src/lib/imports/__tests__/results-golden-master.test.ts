@@ -46,7 +46,7 @@ describe("results schema golden master", () => {
     });
   });
 
-  it("não ignora linha parcial sem Identificação da amostra", async () => {
+  it("usa campanha + data + SIA quando a identificação nominal está ausente", async () => {
     const html = readFileSync(
       resolve(process.cwd(), "public/dashboards/Painel_eDNA_Campanha1_Sanepar.html"),
       "utf8",
@@ -58,16 +58,82 @@ describe("results schema golden master", () => {
       html.match(/<script id="DATA" type="application\/json">([\s\S]*?)<\/script>/)![1],
     ).ranking as Array<Record<string, unknown>>;
     const workbook = buildWorkbook(viewModel, ranking);
-    workbook.getWorksheet(RESULTS_WORKSHEETS.molecular)!.getCell("A2").value = null;
+    const molecular = workbook.getWorksheet(RESULTS_WORKSHEETS.molecular)!;
+    const rankingSheet = workbook.getWorksheet(RESULTS_WORKSHEETS.ranking)!;
+    molecular.getCell("A2").value = null;
+    rankingSheet.getCell("B2").value = molecular.getCell("B2").value;
     const bytes = await workbook.xlsx.writeBuffer();
     const binary = bytes as unknown as { buffer: ArrayBuffer; byteOffset: number; byteLength: number };
     const buffer = binary.buffer.slice(binary.byteOffset, binary.byteOffset + binary.byteLength);
 
-    await expect(parseLaboratoryResultsWorkbook(buffer, "campanha-1.xlsx")).rejects.toThrow(
-      "Banco_consolidado, linha 2, Identificação da amostra: valor obrigatório ausente.",
-    );
+    const parsed = await parseLaboratoryResultsWorkbook(buffer, "campanha-1.xlsx");
+
+    expect(parsed.fallbackSampleIdCount).toBe(1);
+    expect(parsed.warnings).toHaveLength(1);
+    expect(parsed.molecularRows[0].sampleId).toMatch(/^campanha-1-verao-2026\|\d{4}-\d{2}-\d{2}\|sia:\d+$/);
+  });
+
+  it("falha fechado quando identificação e SIA estão ausentes", async () => {
+    const { viewModel, ranking } = readGoldenMaster();
+    const workbook = buildWorkbook(viewModel, ranking);
+    const molecular = workbook.getWorksheet(RESULTS_WORKSHEETS.molecular)!;
+    molecular.getCell("A2").value = null;
+    molecular.getCell("B2").value = null;
+    const bytes = await workbook.xlsx.writeBuffer();
+    const binary = bytes as unknown as { buffer: ArrayBuffer; byteOffset: number; byteLength: number };
+
+    await expect(parseLaboratoryResultsWorkbook(
+      binary.buffer.slice(binary.byteOffset, binary.byteOffset + binary.byteLength),
+      "campanha-1.xlsx",
+    )).rejects.toThrow("Banco_consolidado, linha 2, Cód. SIA: valor obrigatório ausente.");
+  });
+
+  it("bloqueia metadados conflitantes para campanha + data + SIA", async () => {
+    const { viewModel, ranking } = readGoldenMaster();
+    const workbook = buildWorkbook(viewModel, ranking);
+    const molecular = workbook.getWorksheet(RESULTS_WORKSHEETS.molecular)!;
+    molecular.getCell("B3").value = molecular.getCell("B2").value;
+    molecular.getCell("C3").value = molecular.getCell("C2").value;
+    const bytes = await workbook.xlsx.writeBuffer();
+    const binary = bytes as unknown as { buffer: ArrayBuffer; byteOffset: number; byteLength: number };
+
+    await expect(parseLaboratoryResultsWorkbook(
+      binary.buffer.slice(binary.byteOffset, binary.byteOffset + binary.byteLength),
+      "campanha-1.xlsx",
+    )).rejects.toThrow("coordenadas ou metadados conflitantes para a mesma identidade");
+  });
+
+  it("bloqueia ranking por SIA quando duas amostras nominais compartilham a identidade", async () => {
+    const { viewModel, ranking } = readGoldenMaster();
+    const workbook = buildWorkbook(viewModel, ranking);
+    const molecular = workbook.getWorksheet(RESULTS_WORKSHEETS.molecular)!;
+    const rankingSheet = workbook.getWorksheet(RESULTS_WORKSHEETS.ranking)!;
+    for (let column = 2; column <= 15; column += 1) {
+      molecular.getRow(3).getCell(column).value = molecular.getRow(2).getCell(column).value;
+    }
+    rankingSheet.getCell("B2").value = molecular.getCell("B2").value;
+    const bytes = await workbook.xlsx.writeBuffer();
+    const binary = bytes as unknown as { buffer: ArrayBuffer; byteOffset: number; byteLength: number };
+
+    await expect(parseLaboratoryResultsWorkbook(
+      binary.buffer.slice(binary.byteOffset, binary.byteOffset + binary.byteLength),
+      "campanha-1.xlsx",
+    )).rejects.toThrow("SIA corresponde a mais de uma amostra no Banco_consolidado");
   });
 });
+
+function readGoldenMaster() {
+  const html = readFileSync(
+    resolve(process.cwd(), "public/dashboards/Painel_eDNA_Campanha1_Sanepar.html"),
+    "utf8",
+  );
+  return {
+    viewModel: JSON.parse(html.match(/const DATA\s*=\s*(\{[^\n]*\});/)![1]) as ResultsViewModel,
+    ranking: JSON.parse(
+      html.match(/<script id="DATA" type="application\/json">([\s\S]*?)<\/script>/)![1],
+    ).ranking as Array<Record<string, unknown>>,
+  };
+}
 
 function buildWorkbook(viewModel: ResultsViewModel, ranking: Array<Record<string, unknown>>) {
   const workbook = new ExcelJS.Workbook();
@@ -93,10 +159,13 @@ function buildWorkbook(viewModel: ResultsViewModel, ranking: Array<Record<string
 
   const molecular = workbook.addWorksheet(RESULTS_WORKSHEETS.molecular);
   molecular.addRow(RESULTS_MOLECULAR_FIELDS.map((field) => field.header));
+  const campaignDatesBySample = new Map(
+    ranking.map((row) => [String(row["Amostra"]), String(row["Campanha/Data"])]),
+  );
   for (const point of viewModel.points) {
     const tags = [point.tox_reads > 0 ? "TOX" : "", point.odor_reads > 0 ? "ODOR" : "", point.inv_reads > 0 ? "INV" : ""].filter(Boolean);
     molecular.addRow([
-      String(point.amostra), String(point.sia), "2026-01-01", point.manancial, point.municipio,
+      String(point.amostra), String(point.sia), campaignDatesBySample.get(String(point.amostra)) ?? "2026-01-01", point.manancial, point.municipio,
       "", "", point.lat, point.lon, "", point.turbidez, "", point.clima,
       "16S", "Cianobactérias", `Táxon explícito ${point.amostra}`, "", tags.join(";"),
       tags.length ? "Associação explícita do golden master" : "", tags.includes("INV") ? "Sim" : "Não",

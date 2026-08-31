@@ -170,7 +170,8 @@ export function LocalModeNotice() {
   }
 
   useEffect(() => {
-    void checkHealth(false);
+    const timeout = window.setTimeout(() => void checkHealth(false), 0);
+    return () => window.clearTimeout(timeout);
   }, []);
 
   useEffect(() => {
@@ -234,7 +235,7 @@ export function requestGlobalOperationCancel(id: string) {
 export function isCloudConnectionError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error ?? "");
 
-  return /supabase|banco|nuvem|conex[aã]o|fetch|network|offline|timeout/i.test(message);
+  return /supabase|banco (?:de dados )?(?:indispon[ií]vel|offline|inacess[ií]vel)|nuvem|conex[aã]o|fetch|network|offline|timeout/i.test(message);
 }
 
 export function toActionableErrorMessage(

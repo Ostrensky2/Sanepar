@@ -70,7 +70,7 @@ export const RESULTS_INSTRUCTION_FIELDS = [
 ] as const;
 
 export const RESULTS_MOLECULAR_FIELDS = [
-  field("sampleId", "Identificação da amostra", "identifier", "—", "required", "texto não vazio; zeros à esquerda preservados", "chave da amostra e vínculo com ranking"),
+  field("sampleId", "Identificação da amostra", "identifier", "—", "conditional", "texto não vazio; quando ausente, exige campanha, data e Cód. SIA inequívocos", "chave nominal; fallback interno por campanha + data + SIA"),
   field("siaId", "Cód. SIA", "identifier", "—", "required", "texto não vazio; zeros à esquerda preservados", "identificação do ponto SIA"),
   field("sampleDate", "Data", "date", "YYYY-MM-DD", "required", "data civil válida", "data de coleta"),
   field("waterBody", "Manancial / Corpo Hídrico", "text", "—", "required", "texto não vazio", "identificação do manancial"),

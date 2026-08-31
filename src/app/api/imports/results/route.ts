@@ -321,6 +321,8 @@ export async function POST(request: Request) {
       columnCount: results.columnCount,
       expectedColumnCount: results.expectedColumnCount,
       speciesCount: results.speciesCount,
+      fallbackSampleIdCount: results.fallbackSampleIdCount,
+      warnings: results.warnings,
       riskRows: results.riskRows,
       riskPoints,
       matchedRiskPointCount: riskPoints.length,

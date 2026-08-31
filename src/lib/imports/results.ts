@@ -17,6 +17,7 @@ import {
   type ResultsWorkbookMetadata,
 } from "@/lib/imports/results-contract";
 import { normalizeLaboratoryRiskLevel, type LaboratoryRiskResultRow } from "@/lib/laboratory-risk";
+import { resolveCanonicalCampaign } from "@/lib/campaign-identity";
 
 type WorkbookBinary = Parameters<ExcelJS.Workbook["xlsx"]["load"]>[0];
 
@@ -61,6 +62,8 @@ export type LaboratoryResultsImport = {
   markers: string[];
   analyzedSets: string[];
   speciesCount: number;
+  fallbackSampleIdCount: number;
+  warnings: string[];
   metadata: ResultsWorkbookMetadata;
   molecularRows: MolecularResultRow[];
   rankingRows: RankingResultRow[];
@@ -93,7 +96,8 @@ export async function parseLaboratoryResultsWorkbook(buffer: ArrayBuffer, fileNa
   const metadata = parseInstructions(instructions);
 
   validateDictionary(dictionary);
-  const molecularRows = parseMolecularRows(molecular);
+  const molecularImport = parseMolecularRows(molecular, metadata);
+  const molecularRows = molecularImport.rows;
   const rankingRows = parseRankingRows(ranking, molecularRows, metadata);
   const viewModel = parseDashboardViewModel(dashboard, metadata);
   const riskRows = rankingRows.flatMap(toLegacyRiskRow);
@@ -111,6 +115,10 @@ export async function parseLaboratoryResultsWorkbook(buffer: ArrayBuffer, fileNa
     markers: [...new Set(molecularRows.map((row) => row.marker))].sort(),
     analyzedSets: [...new Set(molecularRows.map((row) => row.analyzedSet))].sort(),
     speciesCount: new Set(molecularRows.map((row) => row.taxon)).size,
+    fallbackSampleIdCount: molecularImport.fallbackSampleIdCount,
+    warnings: molecularImport.fallbackSampleIdCount
+      ? [`${molecularImport.fallbackSampleIdCount} linha(s) sem Identificação da amostra usaram campanha + data + SIA como vínculo interno.`]
+      : [],
     metadata,
     molecularRows,
     rankingRows,
@@ -167,17 +175,30 @@ function validateDictionary(worksheet: ExcelJS.Worksheet) {
   if (missing.length) throw new Error(`A aba Dicionário não documenta ${missing.slice(0, 3).join(", ")}.`);
 }
 
-function parseMolecularRows(worksheet: ExcelJS.Worksheet): MolecularResultRow[] {
+function parseMolecularRows(worksheet: ExcelJS.Worksheet, metadata: ResultsWorkbookMetadata) {
   validateHeaders(worksheet, RESULT_EXPECTED_HEADERS);
   const rows: MolecularResultRow[] = [];
   const unique = new Set<string>();
   const sampleSignatures = new Map<string, string>();
+  const identitySignatures = new Map<string, string>();
+  let fallbackSampleIdCount = 0;
 
   for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber += 1) {
     const row = worksheet.getRow(rowNumber);
     if (RESULT_EXPECTED_HEADERS.every((_, index) => !cell(row, index + 1))) continue;
-    const sampleId = requiredText(worksheet, rowNumber, "Identificação da amostra", cell(row, 1));
     const siaId = requiredText(worksheet, rowNumber, "Cód. SIA", cell(row, 2));
+    const sampleDate = requiredDate(worksheet, rowNumber, "Data", row.getCell(3).value);
+    const explicitSampleId = cell(row, 1);
+    const pointIdentity = molecularIdentityKey(
+      worksheet,
+      rowNumber,
+      metadata,
+      sampleDate,
+      siaId,
+      !explicitSampleId,
+    );
+    const sampleId = explicitSampleId || pointIdentity;
+    if (!explicitSampleId) fallbackSampleIdCount += 1;
     const marker = requiredEnum(worksheet, rowNumber, "Marcador", cell(row, 14), ["16S", "COI"] as const);
     const analyzedSet = requiredEnum(worksheet, rowNumber, "Conjunto analisado", cell(row, 15), ["Cianobactérias", "Bactérias", "COI"] as const);
     if ((marker === "COI") !== (analyzedSet === "COI")) fail(worksheet, rowNumber, "Marcador/Conjunto analisado", "combinação incompatível");
@@ -191,7 +212,7 @@ function parseMolecularRows(worksheet: ExcelJS.Worksheet): MolecularResultRow[] 
     const result: MolecularResultRow = {
       sampleId,
       siaId,
-      sampleDate: requiredDate(worksheet, rowNumber, "Data", row.getCell(3).value),
+      sampleDate,
       waterBody: requiredText(worksheet, rowNumber, "Manancial / Corpo Hídrico", cell(row, 4)),
       municipality: requiredText(worksheet, rowNumber, "Município", cell(row, 5)),
       originalLatitude, originalLongitude, effectiveLatitude, effectiveLongitude,
@@ -211,22 +232,52 @@ function parseMolecularRows(worksheet: ExcelJS.Worksheet): MolecularResultRow[] 
     const signature = JSON.stringify([result.siaId, result.sampleDate, result.waterBody, result.municipality, result.originalLatitude, result.originalLongitude, result.effectiveLatitude, result.effectiveLongitude]);
     if (sampleSignatures.has(result.sampleId) && sampleSignatures.get(result.sampleId) !== signature) fail(worksheet, rowNumber, "Identificação da amostra", "metadados divergentes para a mesma amostra");
     sampleSignatures.set(result.sampleId, signature);
+    if (identitySignatures.has(pointIdentity) && identitySignatures.get(pointIdentity) !== signature) fail(worksheet, rowNumber, "Campanha/Data/SIA", "coordenadas ou metadados conflitantes para a mesma identidade");
+    identitySignatures.set(pointIdentity, signature);
     rows.push(result);
   }
   if (!rows.length) throw new Error(`A aba ${worksheet.name} não possui resultados moleculares.`);
-  return rows;
+  return { rows, fallbackSampleIdCount };
 }
 
 function parseRankingRows(worksheet: ExcelJS.Worksheet, molecularRows: MolecularResultRow[], metadata: ResultsWorkbookMetadata): RankingResultRow[] {
   validateHeaders(worksheet, RANKING_EXPECTED_HEADERS);
   const sampleIds = new Set(molecularRows.map((row) => row.sampleId));
+  const identitiesBySampleId = new Map<string, Set<string>>();
+  const sampleIdsByIdentity = new Map<string, Set<string>>();
+  for (const molecularRow of molecularRows) {
+    const identity = molecularIdentityKey(
+      worksheet,
+      1,
+      metadata,
+      molecularRow.sampleDate,
+      molecularRow.siaId,
+      false,
+    );
+    const identities = identitiesBySampleId.get(molecularRow.sampleId) ?? new Set<string>();
+    identities.add(identity);
+    identitiesBySampleId.set(molecularRow.sampleId, identities);
+    const ids = sampleIdsByIdentity.get(identity) ?? new Set<string>();
+    ids.add(molecularRow.sampleId);
+    sampleIdsByIdentity.set(identity, ids);
+  }
   const seen = new Set<string>();
   const rows: RankingResultRow[] = [];
   for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber += 1) {
     const row = worksheet.getRow(rowNumber);
     if (!cell(row, 2)) continue;
-    const sampleId = requiredText(worksheet, rowNumber, "Amostra", cell(row, 2));
-    if (!sampleIds.has(sampleId)) fail(worksheet, rowNumber, "Amostra", "não existe no Banco_consolidado");
+    const rankingIdentity = requiredText(worksheet, rowNumber, "Amostra", cell(row, 2));
+    const campaignDate = requiredText(worksheet, rowNumber, "Campanha/Data", cell(row, 6));
+    const sampleId = resolveRankingSampleId(
+      worksheet,
+      rowNumber,
+      metadata,
+      campaignDate,
+      rankingIdentity,
+      sampleIds,
+      identitiesBySampleId,
+      sampleIdsByIdentity,
+    );
     if (seen.has(sampleId)) fail(worksheet, rowNumber, "Amostra", "amostra duplicada no ranking");
     seen.add(sampleId);
     const classificationText = cell(row, 14);
@@ -244,7 +295,7 @@ function parseRankingRows(worksheet: ExcelJS.Worksheet, molecularRows: Molecular
       pointName: requiredText(worksheet, rowNumber, "Ponto de coleta", cell(row, 3)),
       waterBody: requiredText(worksheet, rowNumber, "Manancial/corpo hídrico", cell(row, 4)),
       municipality: requiredText(worksheet, rowNumber, "Município", cell(row, 5)),
-      campaignDate: requiredText(worksheet, rowNumber, "Campanha/Data", cell(row, 6)),
+      campaignDate,
       turbidity: cell(row, 7), weatherCondition: cell(row, 8), mainOrganisms: cell(row, 9), mainDrivers: cell(row, 10),
       environmentalRisk: optionalRisk(worksheet, rowNumber, "Risco ambiental", cell(row, 11)),
       operationalRisk: optionalRisk(worksheet, rowNumber, "Risco operacional", cell(row, 12)),
@@ -343,6 +394,72 @@ function optionalRisk(worksheet: ExcelJS.Worksheet, row: number, column: string,
 function requiredEnum<const T extends readonly string[]>(worksheet: ExcelJS.Worksheet, row: number, column: string, value: string, allowed: T): T[number] { if (!(allowed as readonly string[]).includes(value)) fail(worksheet, row, column, `use ${allowed.join(" ou ")}`); return value as T[number]; }
 function parseTags(worksheet: ExcelJS.Worksheet, row: number, column: string, value: string) { const tags = splitList(value).map((tag) => tag.toUpperCase()); if (tags.some((tag) => !["TOX", "ODOR", "INV"].includes(tag))) fail(worksheet, row, column, "tags permitidas: TOX, ODOR, INV"); return tags as Array<"TOX" | "ODOR" | "INV">; }
 function splitList(value: string) { return value.split(";").map((item) => item.trim()).filter(Boolean); }
+function canonicalSiaIdentifier(worksheet: ExcelJS.Worksheet, row: number, column: string, value: string, strict = true) {
+  const match = value.trim().match(/^(?:SIA[\s-]*)?0*(\d+)$/i);
+  const numeric = match ? Number(match[1]) : Number.NaN;
+  if (Number.isSafeInteger(numeric) && numeric >= 1) return String(numeric);
+  if (strict) fail(worksheet, row, column, "use um identificador SIA numérico inequívoco");
+  const normalized = value.toLowerCase().replace(/\s+/g, "").replace(/\*+$/g, "");
+  if (!normalized) fail(worksheet, row, column, "identificador SIA ausente");
+  return normalized;
+}
+function molecularIdentityKey(
+  worksheet: ExcelJS.Worksheet,
+  row: number,
+  metadata: ResultsWorkbookMetadata,
+  sampleDate: string,
+  siaId: string,
+  strictSia = true,
+) {
+  const campaign = resolveCanonicalCampaign(metadata.campaignId) ??
+    resolveCanonicalCampaign(metadata.campaignNumber);
+  if (!campaign) fail(worksheet, row, "Campanha", "identidade canônica ausente ou inválida");
+  return `${campaign.id}|${sampleDate}|sia:${canonicalSiaIdentifier(worksheet, row, "Cód. SIA", siaId, strictSia)}`;
+}
+function rankingCampaignDateKey(
+  worksheet: ExcelJS.Worksheet,
+  row: number,
+  metadata: ResultsWorkbookMetadata,
+  value: string,
+) {
+  const campaign = resolveCanonicalCampaign(value);
+  const expectedCampaign = resolveCanonicalCampaign(metadata.campaignId) ??
+    resolveCanonicalCampaign(metadata.campaignNumber);
+  const isoDate = value.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? "";
+  const brDate = value.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
+  const date = isoDate || (brDate ? `${brDate[3]}-${brDate[2]}-${brDate[1]}` : "");
+  const resolvedCampaign = campaign ?? (value.trim() === isoDate ? expectedCampaign : null);
+  const parsedDate = date ? new Date(`${date}T00:00:00Z`) : null;
+  const validDate = parsedDate && !Number.isNaN(parsedDate.getTime()) && parsedDate.toISOString().slice(0, 10) === date;
+  if (!resolvedCampaign || !expectedCampaign || resolvedCampaign.id !== expectedCampaign.id || !validDate) {
+    fail(worksheet, row, "Campanha/Data", "campanha canônica e data ISO compatíveis são obrigatórias");
+  }
+  return `${resolvedCampaign.id}|${date}|`;
+}
+function resolveRankingSampleId(
+  worksheet: ExcelJS.Worksheet,
+  row: number,
+  metadata: ResultsWorkbookMetadata,
+  campaignDate: string,
+  rankingIdentity: string,
+  sampleIds: Set<string>,
+  identitiesBySampleId: Map<string, Set<string>>,
+  sampleIdsByIdentity: Map<string, Set<string>>,
+) {
+  const campaignDateKey = rankingCampaignDateKey(worksheet, row, metadata, campaignDate);
+  if (sampleIds.has(rankingIdentity)) {
+    const identities = [...(identitiesBySampleId.get(rankingIdentity) ?? [])]
+      .filter((identity) => identity.startsWith(campaignDateKey));
+    if (identities.length === 1) return rankingIdentity;
+    if (identities.length > 1) fail(worksheet, row, "Amostra", "identidade nominal é ambígua para campanha e data");
+    fail(worksheet, row, "Amostra", "identidade nominal conflita com campanha ou data");
+  }
+  const identity = `${campaignDateKey}sia:${canonicalSiaIdentifier(worksheet, row, "Amostra", rankingIdentity)}`;
+  const candidates = [...(sampleIdsByIdentity.get(identity) ?? [])];
+  if (candidates.length === 1) return candidates[0];
+  if (candidates.length > 1) fail(worksheet, row, "Amostra", "SIA corresponde a mais de uma amostra no Banco_consolidado");
+  fail(worksheet, row, "Amostra", "não existe no Banco_consolidado");
+}
 function validateCoordinatePair(worksheet: ExcelJS.Worksheet, row: number, label: string, latitude: number | null, longitude: number | null) { if ((latitude === null) !== (longitude === null)) fail(worksheet, row, `Coordenada ${label}`, "latitude e longitude devem ser informadas juntas"); }
 function parseNumber(value: string) { if (!value) return null; const normalized = /^-?\d{1,3}(?:\.\d{3})+,\d+$/.test(value) ? value.replace(/\./g, "").replace(",", ".") : value.replace(",", "."); const parsed = Number(normalized); return Number.isFinite(parsed) ? parsed : null; }
 function normalizeHeader(value: string) { return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9%]+/g, " ").trim(); }
