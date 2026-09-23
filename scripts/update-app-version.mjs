@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,7 +18,33 @@ export function incrementProductionVersion(version) {
   return parts.join(".");
 }
 
-export function resolveReleaseState({ version, previousSha, previousRelease, sha, release }) {
+function compareVersions(a, b) {
+  const left = a.split(".").map(Number);
+  const right = b.split(".").map(Number);
+  for (let index = 0; index < 3; index += 1) {
+    if (left[index] !== right[index]) return left[index] - right[index];
+  }
+  return 0;
+}
+
+/**
+ * Plano de versão (release-plan.json): define a PRÓXIMA versão de produção uma única vez,
+ * por exemplo o salto 1.2.7 → 2.0.0. Precisa ser maior que a atual; depois de usado, o
+ * arquivo é apagado e as releases seguintes voltam ao incremento normal (2.0.1, 2.0.2…).
+ */
+export function plannedVersion(plan, version) {
+  if (plan === null) return null;
+  const next = plan?.nextVersion;
+  if (typeof next !== "string" || !/^\d+\.\d+\.\d+$/.test(next)) {
+    throw new Error("release-plan.json inválido: informe nextVersion no formato X.Y.Z");
+  }
+  if (compareVersions(next, version) <= 0) {
+    throw new Error(`release-plan.json pede ${next}, que não é maior que a versão atual ${version}`);
+  }
+  return next;
+}
+
+export function resolveReleaseState({ version, previousSha, previousRelease, sha, release, plan = null }) {
   if (!/^[0-9a-f]{7,40}$/i.test(sha)) throw new Error("SHA de release inválido");
   if (!/^[a-z0-9][a-z0-9._-]{0,127}$/i.test(release)) throw new Error("Identificador de release inválido");
   if (!previousSha || !previousRelease) throw new Error("Metadados da release anterior ausentes");
@@ -30,7 +56,8 @@ export function resolveReleaseState({ version, previousSha, previousRelease, sha
     throw new Error("Colisão entre SHA e identificador de release");
   }
 
-  return { version: incrementProductionVersion(version), changed: true };
+  const planned = plannedVersion(plan, version);
+  return { version: planned ?? incrementProductionVersion(version), changed: true, planned: planned !== null };
 }
 
 function valueFor(args, name) {
@@ -63,6 +90,7 @@ export async function runProductionRelease(args, now = new Date(), targetRoot = 
   const packageJsonPath = join(targetRoot, "package.json");
   const packageLockPath = join(targetRoot, "package-lock.json");
   const appVersionPath = join(targetRoot, "src", "lib", "app-version.ts");
+  const planPath = join(targetRoot, "release-plan.json");
   const [source, packageText, lockText] = await Promise.all([
     readFile(appVersionPath, "utf8"),
     readFile(packageJsonPath, "utf8"),
@@ -83,12 +111,17 @@ export async function runProductionRelease(args, now = new Date(), targetRoot = 
     throw new Error("Estado de versão divergente entre app-version, package e lockfile");
   }
 
+  const planText = await readFile(planPath, "utf8").catch((error) => {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  });
   const next = resolveReleaseState({
     version: currentVersion,
     previousSha,
     previousRelease,
     sha,
     release,
+    plan: planText === null ? null : JSON.parse(planText),
   });
   if (!next.changed) return next;
 
@@ -109,13 +142,15 @@ export const APP_RELEASE_ID = ${JSON.stringify(release)};
     writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8"),
     writeFile(packageLockPath, `${JSON.stringify(packageLock, null, 2)}\n`, "utf8"),
   ]);
+  if (next.planned) await rm(planPath);
   return next;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(scriptPath)) {
   runProductionRelease(process.argv.slice(2))
-    .then(({ version, changed }) => {
-      console.log(changed ? `Release Production preparada: v${version}` : `Release já preparada: v${version}`);
+    .then(({ version, changed, planned }) => {
+      const note = planned ? " (plano de versão aplicado e removido)" : "";
+      console.log(changed ? `Release Production preparada: v${version}${note}` : `Release já preparada: v${version}`);
     })
     .catch((error) => {
       console.error(error instanceof Error ? error.message : error);

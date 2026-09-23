@@ -80,7 +80,7 @@ export function FieldDiaryView({
 
         {photos.length ? (
           <div className="rounded-2xl border border-[var(--line-ghost)] bg-white p-4">
-            <p className="text-caption font-bold uppercase tracking-[0.18em] text-slate-400">Imagens da coleta</p>
+            <p className="text-caption font-bold text-slate-400">Imagens da coleta</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {photos.map((photo, index) => (
                 <figure key={photo.id} className="overflow-hidden rounded-xl border border-[var(--line-ghost)] bg-[var(--surface-soft)]">
@@ -157,7 +157,7 @@ function ChangeHistorySection({ entryId }: { entryId: string }) {
 
   return (
     <div className="rounded-2xl border border-[var(--line-ghost)] bg-white p-4">
-      <p className="text-caption font-bold uppercase tracking-[0.18em] text-slate-400">
+      <p className="text-caption font-bold text-slate-400">
         Histórico de alterações
       </p>
       {state === "loading" ? (
@@ -172,7 +172,7 @@ function ChangeHistorySection({ entryId }: { entryId: string }) {
             <li key={item.id} className="rounded-xl border border-[var(--line-ghost)] px-3 py-2 text-xs">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-bold text-[var(--brand-navy-strong)]">{item.field}</span>
-                <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                <span className="text-xs font-semibold text-slate-400">
                   {item.origin}
                   {item.changedBy ? ` · ${item.changedBy}` : ""}
                   {item.changedAt ? ` · ${formatDate(item.changedAt.slice(0, 10))}` : ""}

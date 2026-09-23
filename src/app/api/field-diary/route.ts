@@ -70,7 +70,7 @@ export async function GET(request: Request) {
 
   if (error) {
     return NextResponse.json(
-      { error: "Não foi possível consultar o Diário de Campo." },
+      { error: "Não foi possível consultar o Diário de campo." },
       { status: 500 },
     );
   }
@@ -100,7 +100,7 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
 
   if (!supabase) {
     return NextResponse.json(
-      { error: "Supabase não configurado para salvar o Diário de Campo." },
+      { error: "Supabase não configurado para salvar o Diário de campo." },
       { status: 503 },
     );
   }
@@ -110,7 +110,7 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
 
   if (!normalized) {
     return NextResponse.json(
-      { error: "O registro do Diário de Campo é inválido." },
+      { error: "O registro do Diário de campo é inválido." },
       { status: 400 },
     );
   }
@@ -147,7 +147,7 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
 
   if (error) {
     return NextResponse.json(
-      { error: "Não foi possível salvar o registro do Diário de Campo." },
+      { error: "Não foi possível salvar o registro do Diário de campo." },
       { status: 500 },
     );
   }

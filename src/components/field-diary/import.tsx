@@ -11,6 +11,7 @@ import {
 } from "@/components/operational-feedback";
 import { Dialog } from "@/components/field-diary/ui";
 import type { FieldDiaryEntry } from "@/lib/field-diary";
+import { countLabel } from "@/lib/number-format";
 
 type ImportReport = {
   novos: number;
@@ -99,7 +100,7 @@ export function FieldDiaryImport({
     const controller = new AbortController();
     const stopOperation = beginGlobalOperation({
       id: operationId,
-      title: mode === "preview" ? "Pré-visualizando importação..." : "Gravando Diário de Campo...",
+      title: mode === "preview" ? "Pré-visualizando importação..." : "Gravando Diário de campo...",
       description:
         mode === "preview"
           ? "Comparando a planilha com o que já existe no aplicativo."
@@ -131,10 +132,10 @@ export function FieldDiaryImport({
       const message =
         importError instanceof DOMException && importError.name === "AbortError"
           ? "Operação cancelada. Nenhum registro foi alterado."
-          : toActionableErrorMessage(importError, "Não foi possível processar a planilha do Diário de Campo.");
+          : toActionableErrorMessage(importError, "Não foi possível processar a planilha do Diário de campo.");
       setError(message);
       if (isCloudConnectionError(importError)) {
-        emitLocalMode("Falha durante a importação do Diário de Campo. Dados podem não ter sincronizado com a nuvem.");
+        emitLocalMode("Falha durante a importação do Diário de campo. Dados podem não ter sincronizado com a nuvem.");
       }
       return null;
     } finally {
@@ -160,7 +161,7 @@ export function FieldDiaryImport({
     }
     const applied = payload as unknown as ApplyResult;
     if (applied.errors?.some((item) => /banco|supabase|nuvem/i.test(item))) {
-      emitLocalMode("O Diário de Campo foi importado no navegador, mas a nuvem não confirmou todos os registros.");
+      emitLocalMode("O Diário de campo foi importado no navegador, mas a nuvem não confirmou todos os registros.");
     }
     setResult(applied);
     setPreview(null);
@@ -169,16 +170,17 @@ export function FieldDiaryImport({
   const hasConflicts = (preview?.report.conflitantes ?? 0) > 0;
 
   return (
-    <Dialog title="Importar via planilha" onClose={onClose}>
+    <Dialog title="Importar planilha de campo" onClose={onClose}>
       <div className="space-y-5">
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--line-ghost)] bg-[var(--surface-soft)] p-4">
           <div className="rounded-xl bg-white p-2 text-[var(--brand-blue)]">
             <Sheet className="h-5 w-5" />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-semibold text-[var(--brand-navy-strong)]">Planilha de ocorrências do Diário</p>
+            <p className="text-sm font-semibold text-[var(--brand-navy-strong)]">Planilha-síntese da campanha ou registros do Diário</p>
             <p className="text-xs text-[var(--ink-soft)]">
-              A importação primeiro mostra uma prévia (o que muda) e só grava após sua confirmação. Nada é apagado automaticamente.
+              Este é o único caminho para trazer dados de campo. Aceita a planilha-síntese (aba Campanhas) e a de registros (aba Registros).
+              Primeiro mostra uma prévia do que muda; só grava depois da sua confirmação. Fotos indicadas por link são copiadas ao gravar. Nada é apagado automaticamente.
             </p>
           </div>
           <a
@@ -187,7 +189,15 @@ export function FieldDiaryImport({
             className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-navy-strong)] px-4 py-2.5 text-sm font-bold text-[#ffffff] transition hover:bg-[var(--brand-navy)]"
           >
             <Download className="h-4 w-4" />
-            Baixar modelo de Campo
+            Modelo da planilha-síntese
+          </a>
+          <a
+            href="/template-diario-de-campo.xlsx"
+            download
+            className="inline-flex items-center gap-2 rounded-xl border border-[var(--line-strong)] bg-white px-4 py-2.5 text-sm font-bold text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)]"
+          >
+            <Download className="h-4 w-4" />
+            Modelo de registros
           </a>
         </div>
 
@@ -293,7 +303,7 @@ export function FieldDiaryImport({
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-[rgba(5,150,105,0.10)] p-4 text-sm font-medium text-emerald-800">
               <CheckCircle2 className="h-5 w-5 shrink-0" />
-              <span>{result.saved} registro(s) gravado(s) (novos + atualizados + forçados).</span>
+              <span>{countLabel(result.saved, "registro gravado", "registros gravados")} (novos, atualizados e forçados).</span>
               <button
                 type="button"
                 onClick={() => onImported(result.entries)}
@@ -305,8 +315,8 @@ export function FieldDiaryImport({
             {result.report ? <ImportReportPanel report={result.report} title="Relatório da importação" /> : null}
             {result.errors.length > 0 ? (
               <div className="rounded-2xl bg-[rgba(234,179,8,0.12)] p-4">
-                <p className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-amber-800">
-                  {result.errors.length} aviso(s)
+                <p className="mb-2 text-xs font-bold text-amber-800">
+                  {countLabel(result.errors.length, "aviso", "avisos")}
                 </p>
                 <ul className="space-y-1">
                   {result.errors.map((err, i) => (
@@ -334,12 +344,12 @@ function ImportReportPanel({ report, title }: { report: ImportReport; title: str
 
   return (
     <div className="rounded-2xl border border-[var(--line-ghost)] bg-white p-4">
-      <p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-[var(--brand-navy-strong)]">{title}</p>
+      <p className="mb-3 text-xs font-black text-[var(--brand-navy-strong)]">{title}</p>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
         {chips.map((chip) => (
           <div key={chip.label} className={`rounded-xl px-3 py-2 ${chip.tone}`}>
             <div className="text-lg font-black leading-none">{chip.value}</div>
-            <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.08em]">{chip.label}</div>
+            <div className="mt-1 text-xs font-bold">{chip.label}</div>
           </div>
         ))}
       </div>
@@ -360,7 +370,7 @@ function ImportReportList({ title, items }: { title: string; items: string[] }) 
 
   return (
     <div className="mt-3">
-      <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">{title}</p>
+      <p className="mb-1 text-xs font-bold text-[var(--ink-soft)]">{title}</p>
       <ul className="space-y-0.5">
         {shown.map((item, i) => (
           <li key={i} className="text-xs text-[var(--ink-soft)]">• {item}</li>
@@ -377,7 +387,7 @@ function ConflictsPanel({ conflicts }: { conflicts: ImportConflictDetail[] }) {
 
   return (
     <div className="rounded-2xl border border-amber-200 bg-white p-4">
-      <p className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-amber-900">
+      <p className="mb-2 flex items-center gap-2 text-xs font-black text-amber-900">
         <AlertTriangle className="h-4 w-4" />
         Conflitos — app × planilha
       </p>
@@ -390,7 +400,7 @@ function ConflictsPanel({ conflicts }: { conflicts: ImportConflictDetail[] }) {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                  <tr className="text-xs font-bold text-slate-400">
                     <th className="pr-2">Campo</th>
                     <th className="pr-2">No app (mantido)</th>
                     <th>Na planilha</th>
@@ -409,7 +419,7 @@ function ConflictsPanel({ conflicts }: { conflicts: ImportConflictDetail[] }) {
             </div>
           </div>
         ))}
-        {rest > 0 ? <p className="text-xs font-semibold text-[var(--ink-soft)]">…e mais {rest} conflito(s).</p> : null}
+        {rest > 0 ? <p className="text-xs font-semibold text-[var(--ink-soft)]">…e mais {countLabel(rest, "conflito", "conflitos")}.</p> : null}
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { Edit3, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { readSelectedCampaignId, writeSelectedCampaignId } from "@/lib/selected-campaign";
 import type {
   MetabarcodingStage,
   MetabarcodingStageStatus,
@@ -11,8 +12,11 @@ import {
   buildInitialCampaignManagement,
   calculateCampaignProgress,
   defaultCampaigns,
-  operationalStatusOptions,
+  campaignPhaseLabel,
+  phaseStatusOptions,
+  phaseStatusValue,
   readCampaignManagement,
+  suggestedCampaignPhase,
   saveCampaignManagement,
   stageStatusOptions,
   type CampaignManagement,
@@ -20,7 +24,6 @@ import {
   type CampaignOperationalStatus,
 } from "@/lib/campaign-management";
 
-const SELECTED_CAMPAIGN_STORAGE_KEY = "yvae:selected-campaign-id";
 
 export function CampaignStatusEntryPanel() {
   const campaigns = defaultCampaigns;
@@ -29,7 +32,7 @@ export function CampaignStatusEntryPanel() {
       return campaigns[0].id;
     }
 
-    const stored = window.localStorage.getItem(SELECTED_CAMPAIGN_STORAGE_KEY);
+    const stored = readSelectedCampaignId();
     return stored && campaigns.some((campaign) => campaign.id === stored)
       ? stored
       : campaigns[0].id;
@@ -43,7 +46,7 @@ export function CampaignStatusEntryPanel() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(SELECTED_CAMPAIGN_STORAGE_KEY, selectedCampaignId);
+    writeSelectedCampaignId(selectedCampaignId);
   }, [selectedCampaignId]);
 
   useEffect(() => {
@@ -58,7 +61,7 @@ export function CampaignStatusEntryPanel() {
         setCampaignManagement(management);
         setHasLoadedCloudManagement(true);
         setHasUnsavedChanges(false);
-        setSaveNotice("Status da campanha carregado.");
+        setSaveNotice("Tudo salvo");
       }
     }
 
@@ -126,16 +129,18 @@ export function CampaignStatusEntryPanel() {
 
   const currentStage =
     selectedManagement.stages.find((stage) => stage.status === "inprogress");
+  const currentPhase = campaignPhaseLabel(selectedManagement.status);
+  const stagePhase = suggestedCampaignPhase(selectedManagement.stages);
+  const stagePhaseOption = phaseStatusOptions.find((option) => option.label === stagePhase);
+  const phaseDiverges =
+    currentPhase !== stagePhase && currentPhase !== "Suspensa" && currentPhase !== "Cancelada";
 
   return (
     <section className="space-y-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <p className="text-sm leading-6 text-[var(--ink-soft)]">
-          Declare status, datas e etapas de cada campanha.
-        </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-end">
 
-        <label className="grid gap-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-500 lg:min-w-96">
-          Campanha editada
+        <label className="type-label grid gap-1 text-[var(--ink-soft)] lg:min-w-96">
+          Campanha
           <select
             className="rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-sm font-bold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none transition focus:border-[var(--brand-blue)] focus:ring-2 focus:ring-[var(--brand-blue)]/20"
             value={selectedCampaignId}
@@ -154,20 +159,20 @@ export function CampaignStatusEntryPanel() {
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="type-eyebrow text-[var(--brand-teal)]">
-              Ficha da campanha
+              {currentPhase}
             </p>
-            <h1 className="heading-font type-page-title mt-1 text-[var(--brand-navy-strong)]">
+            <h2 className="heading-font type-section-title mt-1 text-[var(--brand-navy-strong)]">
               {selectedCampaign.title}
-            </h1>
+            </h2>
           </div>
           <div className="flex min-w-44 items-center gap-3 rounded-2xl bg-[var(--surface-soft)] p-3">
             <Save className="h-5 w-5 text-[var(--brand-teal)]" />
             <div>
-              <p className="text-caption font-bold uppercase tracking-[0.16em] text-slate-500">
-                {saveNotice}
-              </p>
               <p className="heading-font text-xl font-black text-[var(--brand-navy-strong)]">
-                {progress}%
+                {progress}% concluído
+              </p>
+              <p role="status" className="type-metadata text-[var(--ink-soft)]">
+                {saveNotice}
               </p>
             </div>
           </div>
@@ -175,23 +180,35 @@ export function CampaignStatusEntryPanel() {
 
         <div className="grid gap-4 2xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.45fr)]">
           <div className="grid gap-3 rounded-2xl border border-[var(--line-ghost)] bg-white p-4">
-            <label className="grid gap-2 text-caption font-bold uppercase tracking-[0.16em] text-slate-500">
-              Status da campanha
+            <label className="grid gap-2 text-caption font-bold text-slate-500">
+              Fase da campanha
               <select
                 className="rounded-xl border border-[var(--line-strong)] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none focus:border-[var(--brand-blue)]"
-                value={selectedManagement.status}
+                value={phaseStatusValue(selectedManagement.status)}
                 onChange={(event) =>
                   updateField("status", event.target.value as CampaignOperationalStatus)
                 }
               >
-                {operationalStatusOptions.map((status) => (
-                  <option key={status}>{status}</option>
+                {phaseStatusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
             </label>
+            {phaseDiverges && stagePhaseOption ? (
+              <div role="note" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--brand-amber)]/40 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <span>As etapas marcadas indicam a fase <strong>{stagePhase}</strong>.</span>
+                <button
+                  type="button"
+                  className="min-h-9 rounded-lg border border-amber-300 bg-white px-3 text-xs font-bold text-amber-900 hover:bg-amber-100"
+                  onClick={() => updateField("status", stagePhaseOption.value)}
+                >
+                  Usar {stagePhase}
+                </button>
+              </div>
+            ) : null}
 
-            <label className="grid gap-2 text-caption font-bold uppercase tracking-[0.16em] text-slate-500">
-              Sub-status da campanha
+            <label className="grid gap-2 text-caption font-bold text-slate-500">
+              Período (ex.: Verão 2026)
               <input
                 className="rounded-xl border border-[var(--line-strong)] bg-white px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none focus:border-[var(--brand-blue)]"
                 value={selectedManagement.period}
@@ -199,7 +216,7 @@ export function CampaignStatusEntryPanel() {
               />
             </label>
 
-            <label className="grid gap-2 text-caption font-bold uppercase tracking-[0.16em] text-slate-500">
+            <label className="grid gap-2 text-caption font-bold text-slate-500">
               Pontos previstos
               <input
                 className="rounded-xl border border-[var(--line-strong)] bg-white px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none focus:border-[var(--brand-blue)]"
@@ -209,7 +226,7 @@ export function CampaignStatusEntryPanel() {
               />
             </label>
 
-            <label className="grid gap-2 text-caption font-bold uppercase tracking-[0.16em] text-slate-500">
+            <label className="grid gap-2 text-caption font-bold text-slate-500">
               Título do processo
               <input
                 className="rounded-xl border border-[var(--line-strong)] bg-white px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none focus:border-[var(--brand-blue)]"
@@ -218,7 +235,7 @@ export function CampaignStatusEntryPanel() {
               />
             </label>
 
-            <label className="grid gap-2 text-caption font-bold uppercase tracking-[0.16em] text-slate-500">
+            <label className="grid gap-2 text-caption font-bold text-slate-500">
               Observação
               <textarea
                 className="min-h-24 rounded-xl border border-[var(--line-strong)] bg-white px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none focus:border-[var(--brand-blue)]"
@@ -231,7 +248,7 @@ export function CampaignStatusEntryPanel() {
           <div className="overflow-x-auto rounded-2xl border border-[var(--line-ghost)] bg-white">
             <table className="w-full min-w-[860px] text-left text-sm">
               <thead>
-                <tr className="border-b border-[var(--line-ghost)] text-caption uppercase tracking-[0.16em] text-slate-500">
+                <tr className="border-b border-[var(--line-ghost)] text-caption text-slate-500">
                   <th className="px-3 py-3">Etapa</th>
                   <th className="px-3 py-3">Status</th>
                   <th className="px-3 py-3">Prevista</th>

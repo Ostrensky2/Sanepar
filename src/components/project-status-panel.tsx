@@ -1,9 +1,10 @@
 "use client";
 
-import { Activity, CalendarDays, CheckCircle2, FlaskConical } from "lucide-react";
+import { Activity, CheckCircle2, FlaskConical } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   buildInitialCampaignManagement,
+  campaignPhaseLabel,
   calculateCampaignProgress,
   defaultCampaigns,
   getCurrentCampaignStage,
@@ -43,12 +44,13 @@ export function ProjectStatusPanel({
         const stages = management?.stages ?? [];
         const progress = management ? calculateCampaignProgress(stages, management.status) : 0;
         const currentStage = getCurrentCampaignStage(stages);
+        const allDone = stages.length > 0 && stages.every((stage) => stage.status === "done");
 
         return {
           campaign,
           management,
           progress,
-          currentStage: currentStage?.label ?? "—",
+          currentStage: currentStage?.label ?? (allDone ? "Todas as etapas concluídas" : "Etapas ainda não iniciadas"),
         };
       }),
     [campaignManagement, campaigns],
@@ -93,7 +95,7 @@ export function ProjectStatusPanel({
     <div className={reserveRightRail ? "lg:pr-[calc(30%+var(--layout-gutter))]" : ""}>
     <SectionCard
       title="Campanhas, etapas e evolução"
-      description="Leitura operacional alimentada pela Entrada de dados."
+      description="Fase e etapa atual de cada campanha."
       className={compact ? "p-3 [&>div]:mt-3" : "p-4"}
     >
 
@@ -105,11 +107,11 @@ export function ProjectStatusPanel({
           >
             <div className={`${compact ? "mb-1.5" : "mb-2"} flex items-start justify-between gap-3`}>
               <div className={compact ? "min-h-[4.9rem]" : "min-h-[5.3rem]"}>
-                <p className="text-caption font-bold uppercase tracking-[0.16em] text-slate-500">
+                <p className="text-caption font-bold text-slate-500">
                   {campaign.selectorLabel}
                 </p>
                 <p className={`${compact ? "mt-0.5 text-sm" : "mt-1 text-base"} heading-font font-black text-[var(--brand-navy-strong)]`}>
-                  {management?.status ?? campaign.status}
+                  {campaignPhaseLabel(management?.status ?? campaign.status)}
                 </p>
               </div>
               <StatusIcon status={management?.status ?? campaign.status} compact={compact} />
@@ -128,11 +130,7 @@ export function ProjectStatusPanel({
                 {progress}%
               </span>
             </div>
-            <div className={`${compact ? "mt-1.5 gap-1 text-[11px]" : "mt-2 gap-1.5 text-xs"} grid text-[var(--ink-soft)]`}>
-              <span className="flex items-center gap-1.5">
-                <CalendarDays className="h-3.5 w-3.5 text-[var(--brand-teal)]" />
-                {management?.period ?? campaign.period}
-              </span>
+            <div className={`${compact ? "mt-1.5 gap-1 text-xs" : "mt-2 gap-1.5 text-xs"} grid text-[var(--ink-soft)]`}>
               <span className="flex items-center gap-1.5">
                 <FlaskConical className="h-3.5 w-3.5 text-[var(--brand-teal)]" />
                 {currentStage}
@@ -147,7 +145,7 @@ export function ProjectStatusPanel({
         >
           <div className={`${compact ? "mb-1.5" : "mb-2"} flex items-start justify-between gap-3`}>
             <div className={compact ? "min-h-[4.9rem]" : "min-h-[5.3rem]"}>
-              <p className="text-caption font-bold uppercase tracking-[0.16em] text-slate-500">
+              <p className="text-caption font-bold text-slate-500">
                 Total Executado do Projeto
               </p>
               <p className={`${compact ? "mt-0.5 text-sm" : "mt-1 text-base"} heading-font font-black text-[var(--brand-navy-strong)]`}>
@@ -172,7 +170,7 @@ export function ProjectStatusPanel({
               {projectProgressPercent}%
             </span>
           </div>
-          <div className={`${compact ? "mt-1.5 gap-1 text-[11px]" : "mt-2 gap-1.5 text-xs"} grid text-[var(--ink-soft)]`}>
+          <div className={`${compact ? "mt-1.5 gap-1 text-xs" : "mt-2 gap-1.5 text-xs"} grid text-[var(--ink-soft)]`}>
             <span className="flex items-center gap-1.5">
               <CheckCircle2 className="h-3.5 w-3.5 text-[var(--brand-blue)]" />
               {completedStages} de {totalStages} etapas concluídas

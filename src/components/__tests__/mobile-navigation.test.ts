@@ -52,7 +52,6 @@ describe("mobile navigation", () => {
 
   it("marks only the exact route as current while keeping parent visual state", () => {
     expect(sidebarSource).toContain('aria-current={pathname === item.href ? "page" : undefined}');
-    expect(sidebarSource).toContain('aria-current={childIsActive ? "page" : undefined}');
     expect(sidebarSource).not.toContain('aria-current={active ? "page" : undefined}');
   });
 });

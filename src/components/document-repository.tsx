@@ -30,8 +30,6 @@ import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorBoundary, TableSkeletonRows, emitLocalMode } from "@/components/operational-feedback";
 import { PageHeader } from "@/components/page-header";
-import { SyncStatusBadge } from "@/components/sync-status-badge";
-import { type SyncStatusSnapshot } from "@/lib/sync-status";
 
 type DocumentSortMode =
   | "numeric-asc"
@@ -48,10 +46,10 @@ type InsertLinkFormState = {
 };
 
 const documentSortOptions: Array<{ label: string; value: DocumentSortMode }> = [
-  { label: "Numérico crescente", value: "numeric-asc" },
-  { label: "Numérico decrescente", value: "numeric-desc" },
-  { label: "Alfabético A-Z", value: "alpha-asc" },
-  { label: "Alfabético Z-A", value: "alpha-desc" },
+  { label: "Pela numeração (1, 2, 3…)", value: "numeric-asc" },
+  { label: "Pela numeração (do último ao 1)", value: "numeric-desc" },
+  { label: "Título de A a Z", value: "alpha-asc" },
+  { label: "Título de Z a A", value: "alpha-desc" },
 ];
 
 export function DocumentRepository() {
@@ -59,7 +57,7 @@ export function DocumentRepository() {
   const [hasLoadedDocuments, setHasLoadedDocuments] = useState(false);
   const [persistenceMode, setPersistenceMode] = useState<"browser" | "cloud">("browser");
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<DocumentType>("Plano de trabalho");
+  const [activeTab, setActiveTab] = useState<DocumentType | "Todos">("Todos");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortMode, setSortMode] = useState<DocumentSortMode>("numeric-asc");
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
@@ -100,7 +98,7 @@ export function DocumentRepository() {
 
         setDocuments(cloudDocuments);
         setPersistenceMode("cloud");
-        setSyncNotice("Documentos sincronizados na nuvem.");
+        setSyncNotice(null);
         setHasLoadedDocuments(true);
       } catch {
         if (!isMounted) {
@@ -144,7 +142,7 @@ export function DocumentRepository() {
     const normalizedSearch = normalize(searchTerm);
 
     return documents.filter((document) => {
-      const matchesTab = document.type === activeTab;
+      const matchesTab = activeTab === "Todos" || document.type === activeTab;
       const searchable = normalize(
         `${document.title} ${document.campaign} ${document.point} ${document.status}`,
       );
@@ -152,6 +150,7 @@ export function DocumentRepository() {
       return matchesTab && searchable.includes(normalizedSearch);
     }).sort((left, right) => compareDocuments(left, right, sortMode));
   }, [activeTab, documents, searchTerm, sortMode]);
+  const showStatusColumn = new Set(visibleDocuments.map((document) => document.status)).size > 1;
   const selectedDocuments = useMemo(
     () => documents.filter((document) => selectedDocumentIds.includes(document.id)),
     [documents, selectedDocumentIds],
@@ -168,24 +167,7 @@ export function DocumentRepository() {
     [documents],
   );
   const archivedDocumentsCount = documents.length - activeDocumentsCount;
-  const insertedDocumentsCount = useMemo(
-    () => documents.filter((document) => document.source === "storage" || document.status === "INSERIDO").length,
-    [documents],
-  );
   const latestDocument = documents[0];
-  const syncSnapshot = useMemo<SyncStatusSnapshot>(
-    () => ({
-      state: persistenceMode === "cloud" ? "synced" : "offline",
-      reason:
-        syncNotice ??
-        (persistenceMode === "cloud"
-          ? "Documentos sincronizados na nuvem."
-          : "Documentos em modo local."),
-      lastSyncedAt: persistenceMode === "cloud" ? new Date().toISOString() : null,
-      updatedAt: new Date().toISOString(),
-    }),
-    [persistenceMode, syncNotice],
-  );
 
   useEffect(() => {
     if (!shareNotice) {
@@ -391,40 +373,29 @@ export function DocumentRepository() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Documentos"
-        title="Repositório Oficial de Documentos"
-        description="Consulte, envie e organize os arquivos institucionais vinculados às campanhas e aos pontos monitorados."
+        title="Documentos"
+        description={
+          <>
+            {activeDocumentsCount} documentos
+            {archivedDocumentsCount ? ` · ${archivedDocumentsCount} arquivados` : ""}
+            {latestDocument ? ` · último: ${latestDocument.title}` : " · nenhum documento carregado"}
+          </>
+        }
+        actions={
+          <button
+            ref={insertButtonRef}
+            className="type-button inline-flex min-h-11 w-fit items-center gap-2 radius-control bg-[var(--brand-navy-strong)] px-5 text-white transition-opacity hover:opacity-90"
+            type="button"
+            onClick={openInsertDialog}
+          >
+            <Upload className="h-4 w-4" />
+            Enviar arquivo
+          </button>
+        }
       />
-      <section className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-3">
-            <SyncStatusBadge snapshot={syncSnapshot} />
-            <p className="text-label font-semibold text-[var(--ink-soft)]">
-              {activeDocumentsCount} documentos ativos
-              {latestDocument ? ` - último carregado: ${latestDocument.title}` : " - nenhum documento carregado"}
-            </p>
-          </div>
-          {syncNotice ? (
-            <p className="mt-1 text-caption font-semibold text-[var(--ink-soft)]">{syncNotice}</p>
-          ) : null}
-        </div>
-        <button
-          ref={insertButtonRef}
-          className="type-button inline-flex w-fit items-center gap-2 radius-control bg-[var(--brand-navy-strong)] px-5 py-2.5 text-white transition-opacity hover:opacity-90"
-          type="button"
-          onClick={openInsertDialog}
-        >
-          <Upload className="h-4 w-4" />
-          Enviar arquivo
-        </button>
-      </section>
-
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Total" value={documents.length} />
-        <MetricCard label="Ativos" value={activeDocumentsCount} />
-        <MetricCard label="Arquivados" value={archivedDocumentsCount} />
-        <MetricCard label="Inseridos" value={insertedDocumentsCount} />
-      </section>
+      {syncNotice ? (
+        <p className="-mt-4 text-caption font-semibold text-[var(--ink-soft)]">{syncNotice}</p>
+      ) : null}
 
       {isInsertOpen ? (
         <InsertLinkDialog
@@ -455,18 +426,23 @@ export function DocumentRepository() {
       <section className="space-y-6">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <nav className="flex flex-wrap gap-1 rounded-lg bg-[var(--surface-soft)] p-1">
-            {filterTabs.map((tab) => (
+            {/* Categorias vazias ficam fora das abas; continuam disponíveis no envio de arquivo. */}
+            {(["Todos", ...filterTabs] as const).filter((tab) => tab === "Todos" || tab === activeTab || documents.some((document) => document.type === tab)).map((tab) => (
               <button
                 key={tab}
                 type="button"
+                aria-pressed={tab === activeTab}
                 onClick={() => setActiveTab(tab)}
                 className={
                   tab === activeTab
-                    ? "rounded-md border-b-2 border-[var(--brand-blue)] bg-white px-4 py-2 text-xs font-bold text-[var(--brand-navy)] shadow-sm"
+                    ? "rounded-lg border-b-2 border-[var(--brand-blue)] bg-white px-4 py-2 text-xs font-bold text-[var(--brand-navy)] shadow-sm"
                     : "px-4 py-2 text-xs font-medium text-slate-500 transition-colors hover:text-[var(--brand-navy-strong)]"
                 }
               >
-                {tab}
+                {tab}{" "}
+                <span className="font-normal text-slate-400">
+                  {tab === "Todos" ? documents.length : documents.filter((document) => document.type === tab).length}
+                </span>
               </button>
             ))}
           </nav>
@@ -546,8 +522,8 @@ export function DocumentRepository() {
         ) : null}
 
         <ErrorBoundary title="Falha na lista de documentos">
-          <div className="glass-panel overflow-hidden radius-panel">
-            <table className="w-full text-left">
+          <div className="glass-panel overflow-x-auto radius-panel" role="region" aria-label="Lista de documentos (role para os lados no celular)" tabIndex={0}>
+            <table className="w-full min-w-[44rem] text-left">
               <thead className="bg-slate-50/50">
                 <tr>
                   <th className="w-12 px-6 py-4">
@@ -559,22 +535,22 @@ export function DocumentRepository() {
                       className="h-4 w-4 rounded border-slate-300 text-[var(--brand-navy-strong)] focus:ring-[var(--brand-blue)]"
                     />
                   </th>
-                  <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
+                  <th className="px-6 py-4 text-caption font-bold text-slate-500">
                     Arquivo
                   </th>
-                  <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
-                    Campanha / Ponto
+                  <th className="px-6 py-4 text-caption font-bold text-slate-500">
+                    Referente a
                   </th>
-                  <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
+                  <th className="px-6 py-4 text-caption font-bold text-slate-500">
                     Data
                   </th>
-                  <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
+                  <th className="px-6 py-4 text-caption font-bold text-slate-500">
                     Tipo
                   </th>
-                  <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
-                    Status / Disponibilidade
-                  </th>
-                  <th className="px-6 py-4 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
+                  {showStatusColumn ? <th className="px-6 py-4 text-caption font-bold text-slate-500">
+                    Situação
+                  </th> : null}
+                  <th className="px-6 py-4 text-caption font-bold text-slate-500">
                     Ações
                   </th>
                 </tr>
@@ -582,7 +558,7 @@ export function DocumentRepository() {
 
               <tbody className="type-table divide-y divide-slate-50">
                 {!hasLoadedDocuments ? (
-                  <TableSkeletonRows rows={5} columns={7} />
+                  <TableSkeletonRows rows={5} columns={showStatusColumn ? 7 : 6} />
                 ) : (
                 visibleDocuments.map((document) => (
                   <DocumentRow
@@ -592,6 +568,7 @@ export function DocumentRepository() {
                     onToggleSelection={toggleDocumentSelection}
                     onDelete={deleteDocument}
                     onShare={shareDocument}
+                    showStatus={showStatusColumn}
                   />
                 ))
                 )}
@@ -629,7 +606,7 @@ export function DocumentRepository() {
             <span className="font-bold text-[var(--brand-navy-strong)]">
               {documents.length}
             </span>{" "}
-            documentos
+            documentos{!showStatusColumn && visibleDocuments.length > 1 ? ` · todos com situação “${visibleDocuments[0].status.toLocaleLowerCase("pt-BR")}”` : ""}
           </p>
         </div>
       </section>
@@ -637,18 +614,6 @@ export function DocumentRepository() {
   );
 }
 
-function MetricCard({ label, value }: { label: string; value: number }) {
-  return (
-    <article className="radius-card border border-[var(--line-ghost)] bg-white/90 px-4 py-3 shadow-[0_16px_36px_-32px_rgba(0,66,98,0.24)]">
-      <p className="text-caption font-bold uppercase tracking-[0.16em] text-[var(--ink-soft)]">
-        {label}
-      </p>
-      <p className="heading-font type-kpi mt-2 text-[var(--brand-navy-strong)]">
-        {value}
-      </p>
-    </article>
-  );
-}
 
 function InsertLinkDialog({
   formState,
@@ -705,7 +670,7 @@ function InsertLinkDialog({
               Enviar arquivo
             </h3>
             <p className="type-help mt-1 text-[var(--ink-soft)]">
-              O arquivo será salvo no Supabase Storage com metadados no repositório.
+              O arquivo fica guardado no repositório oficial do Yva’e.
             </p>
           </div>
           <button
@@ -832,19 +797,35 @@ async function uploadDocumentToCloud(formState: InsertLinkFormState) {
   return document;
 }
 
+// Textos de preenchimento que não informam vínculo nenhum.
+const PLACEHOLDER_REFERENCES = new Set(["não se aplica", "documento inserido", "repositório oficial", "-", "—"]);
+/** Campanha e observação do documento, sem repetir textos de preenchimento. */
+export function documentReference(document: Pick<StoredDocument, "campaign" | "point">) {
+  const clean = (value: string | null | undefined) => {
+    const text = String(value ?? "").trim();
+    return text && !PLACEHOLDER_REFERENCES.has(text.toLocaleLowerCase("pt-BR")) ? text : "";
+  };
+  const main = clean(document.campaign), detail = clean(document.point);
+  return main ? { main, detail } : { main: detail, detail: "" };
+}
+
 function DocumentRow({
   document,
   selected,
   onToggleSelection,
   onDelete,
   onShare,
+  showStatus = true,
 }: {
   document: StoredDocument;
   selected: boolean;
   onToggleSelection: (documentId: string) => void;
   onDelete: (document: StoredDocument) => void;
   onShare: (document: StoredDocument) => void;
+  /** Situação igual em todas as linhas vira nota no rodapé da tabela. */
+  showStatus?: boolean;
 }) {
+  const reference = documentReference(document);
   return (
     <tr className="group transition-all hover:bg-slate-50">
       <td className="px-6 py-4">
@@ -867,31 +848,29 @@ function DocumentRow({
             >
               {document.title}
             </button>
-            <p className="text-caption text-slate-500">
-              {document.source === "storage" ? "Supabase Storage" : "Link externo"} • Inserido
-            </p>
+            {document.source === "storage" ? null : <p className="text-caption text-slate-500">Link externo</p>}
           </div>
         </div>
       </td>
 
       <td className="px-6 py-4 text-slate-500">
-        <p className="font-bold">{document.campaign}</p>
-        <p className="text-caption">{document.point}</p>
+        {reference.main ? <p className="font-bold">{reference.main}</p> : <p aria-label="Sem vínculo informado">—</p>}
+        {reference.detail ? <p className="text-caption">{reference.detail}</p> : null}
       </td>
 
       <td className="px-6 py-4 text-slate-500">{document.date}</td>
       <td className="px-6 py-4">
         <span className="rounded bg-slate-100 px-2 py-0.5 text-caption font-bold">
-          {document.type.toUpperCase()}
+          {document.type}
         </span>
       </td>
-      <td className="px-6 py-4">
+      {showStatus ? <td className="px-6 py-4">
         <div
           className={`inline-block rounded-sm border-l-[3px] px-2 py-1 text-caption font-bold ${statusClassForDocument(document)}`}
         >
           {document.status}
         </div>
-      </td>
+      </td> : null}
       <td className="px-6 py-4">
         <div className="flex gap-2">
           <button
@@ -1060,14 +1039,15 @@ function compareDocumentTitles(left: StoredDocument, right: StoredDocument) {
   return documentTitleCollator.compare(left.title, right.title);
 }
 
+// Só a numeração do início do título ("4 - Fevereiro"); números no meio ("campanha 1") não contam.
 function firstDocumentNumber(title: string) {
-  const match = title.match(/\d+(?:[,.]\d+)?/);
+  const match = title.match(/^\s*(\d+(?:[,.]\d+)?)/);
 
   if (!match) {
     return null;
   }
 
-  const value = Number(match[0].replace(",", "."));
+  const value = Number(match[1].replace(",", "."));
   return Number.isFinite(value) ? value : null;
 }
 

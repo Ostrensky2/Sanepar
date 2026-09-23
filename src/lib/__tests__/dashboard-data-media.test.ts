@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import bundledCampaignMapPoints from "@/data/campaign-map-points.json";
+import { readPrivateCampaignPoints } from "@/lib/private-campaign-points";
 import { HomeRiskMapSection } from "@/components/home-risk-map-section";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 import type { LaboratoryRiskPoint } from "@/lib/laboratory-risk";
@@ -24,7 +24,7 @@ vi.mock("@/lib/supabase", () => ({
 
 import { loadDashboardData, overlayBundledCampaignMedia } from "@/lib/dashboard-data";
 
-const bundledPoints = bundledCampaignMapPoints as CampaignMapPoint[];
+const bundledPoints = readPrivateCampaignPoints();
 const legacyUrl = "https://legacy.invalid/photo.png";
 const mediaFields = new Set(["driveUrl", "dropboxUrl", "photoUrl", "photos"]);
 const reassociatedCodes = [
@@ -45,7 +45,7 @@ const reassociatedCodes = [
   "SIA-0780",
 ];
 
-describe("loadDashboardData canonical private-media overlay", () => {
+describe.skipIf(!bundledPoints.length)("loadDashboardData canonical private-media overlay", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getFieldDiaryCampaignMediaCandidates.mockResolvedValue([]);

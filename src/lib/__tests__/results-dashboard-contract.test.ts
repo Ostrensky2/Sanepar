@@ -1,14 +1,12 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildPriorityMunicipalities } from "@/components/campaign-hydro-map";
 import { loadCampaign1DashboardMapPoints } from "@/lib/dashboard-data";
 
-const dashboardPath = resolve(
-  process.cwd(),
-  "public/dashboards/Painel_eDNA_Campanha1_Sanepar.html",
-);
-const html = readFileSync(dashboardPath, "utf8");
+const privatePath = process.env.YVAE_PRIVATE_LEGACY_HTML;
+const hasPrivateFixture = Boolean(privatePath && existsSync(privatePath));
+const html = hasPrivateFixture ? readFileSync(privatePath!, "utf8") : "";
 
 function parseJson<T>(pattern: RegExp): T {
   const match = html.match(pattern);
@@ -16,7 +14,7 @@ function parseJson<T>(pattern: RegExp): T {
   return JSON.parse(match![1]) as T;
 }
 
-describe("contrato do dashboard de resultados", () => {
+describe.skipIf(!hasPrivateFixture)("contrato histórico privado opt-in do dashboard de resultados", () => {
   it("preserva os dois datasets e suas cardinalidades científicas", () => {
     const raw = parseJson<{ ranking: unknown[] }>(
       /<script id="DATA" type="application\/json">([\s\S]*?)<\/script>/,
@@ -144,9 +142,10 @@ describe("contrato do dashboard de resultados", () => {
 
     expect(resultsPage).toContain('view="resultados"');
     expect(repository).toContain('fetch("/api/imports/results"');
-    expect(repository).toContain("downloadResultsTemplate");
-    expect(repository).toContain("RESULTS_SCHEMA_VERSION");
-    expect(repository).toContain('formData.append("selectedCampaign"');
+    expect(repository).toContain("Baixar banco oficial C1/C2");
+    expect(repository).toContain("RESULTS_CONTRACT_VERSION");
+    expect(repository).toContain('resultsData.append("selectedCampaign"');
+    expect(repository).toContain('resultsData.append("selectedCampaigns"');
   });
 
   it("codifica campos importados antes de inseri-los em markup", () => {

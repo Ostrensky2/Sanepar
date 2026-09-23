@@ -167,7 +167,7 @@ export default function PrivacidadePage() {
         </article>
 
         <aside className="rounded-2xl border border-[var(--line-ghost)] bg-white/92 p-5">
-          <h2 className="text-label font-black uppercase tracking-[0.16em] text-[var(--ink-soft)]">
+          <h2 className="text-label font-black text-[var(--ink-soft)]">
             Compromissos institucionais
           </h2>
           <p className="mt-2 text-justify text-sm leading-6 text-[var(--ink-soft)]">

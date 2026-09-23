@@ -45,6 +45,11 @@ export async function GET(request: Request) {
     return NextResponse.redirect(data.signedUrl);
   }
 
+  // Arquivo ausente no armazenamento é 404 (a tela mostra "indisponível"), não falha do servidor.
+  if (error && /not.?found/i.test(error.message)) {
+    return NextResponse.json({ error: "Arquivo não encontrado no armazenamento." }, { status: 404 });
+  }
+
   return NextResponse.json(
     { error: "Não foi possível gerar acesso ao arquivo." },
     { status: 500 },

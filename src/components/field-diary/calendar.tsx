@@ -29,10 +29,10 @@ export function CampaignChoicePanel({
     <section className="glass-panel rounded-2xl p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <label
-          className="text-xs font-black uppercase tracking-[0.16em] text-slate-500 sm:w-44"
+          className="type-label text-[var(--ink-soft)] sm:w-28"
           htmlFor="field-diary-campaign"
         >
-          Escolha a campanha
+          Campanha
         </label>
         <select
           id="field-diary-campaign"
@@ -110,7 +110,7 @@ export function FieldDiaryMonthCalendar({
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
-      <div className="grid grid-cols-7 gap-1 text-center text-label font-black uppercase tracking-[0.12em] text-slate-500">
+      <div className="grid grid-cols-7 gap-1 text-center text-label font-black text-slate-500">
         {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((day) => (
           <span key={day} className="py-1">
             {day}
@@ -119,7 +119,8 @@ export function FieldDiaryMonthCalendar({
       </div>
       <div className="mt-1 grid grid-cols-7 gap-1">
         {days.map((day) => {
-          const dayEntries = day.inMonth ? entriesByDate.get(day.date) ?? [] : [];
+          // Dias de outro mês continuam mostrando a contagem e levam ao mês deles.
+          const dayEntries = entriesByDate.get(day.date) ?? [];
           const collectionDay = collectionDaysByDate.get(day.date);
           const isSelected = day.date === selectedDate;
           const hasOccurrence = dayEntries.some((entry) => entry.hasOccurrence);
@@ -128,8 +129,10 @@ export function FieldDiaryMonthCalendar({
             <button
               key={day.date}
               type="button"
-              disabled={!day.inMonth}
-              onClick={() => onSelectDate(day.date)}
+              disabled={!day.inMonth && !dayEntries.length && !collectionDay}
+              onClick={() => { if (!day.inMonth) onMonthChange(`${day.date.slice(0, 7)}-01`); onSelectDate(day.date); }}
+              aria-label={`${Number(day.date.slice(8, 10))}${collectionDay ? `, dia ${collectionDay} da campanha` : ""}${dayEntries.length ? `, ${dayEntries.length} ${dayEntries.length === 1 ? "ponto" : "pontos"}` : ""}${hasOccurrence ? ", com ocorrência" : ""}`}
+              aria-pressed={isSelected}
               className={`flex h-16 flex-col items-center justify-center rounded-lg border text-center transition ${
                 day.inMonth
                   ? isSelected
@@ -139,7 +142,9 @@ export function FieldDiaryMonthCalendar({
                         ? "border-[var(--brand-danger)]/40 bg-red-50 text-[var(--brand-danger)] hover:border-[var(--brand-blue)] hover:bg-white"
                         : "border-[var(--brand-teal)]/40 bg-[var(--brand-green-soft)] text-[var(--brand-navy-strong)] hover:border-[var(--brand-blue)] hover:bg-white"
                       : "border-[var(--line-ghost)] bg-white text-[var(--brand-navy-strong)] hover:border-[var(--brand-blue)] hover:bg-[var(--surface-soft)]"
-                  : "border-transparent bg-slate-50/60 text-slate-300"
+                  : dayEntries.length || collectionDay
+                    ? "border-dashed border-[var(--brand-teal)]/40 bg-white/70 text-slate-500 hover:border-[var(--brand-blue)] hover:bg-white"
+                    : "border-transparent bg-slate-50/60 text-slate-300"
               }`}
             >
               <span className="text-base font-black leading-none">{Number(day.date.slice(8, 10))}</span>
@@ -150,7 +155,7 @@ export function FieldDiaryMonthCalendar({
                     ? "text-[var(--brand-danger)]"
                     : "text-[var(--brand-teal)]"
               }`}>
-                {collectionDay ? collectionDay : ""}
+                {collectionDay ? `D${collectionDay}` : ""}
               </span>
               <span className={`mt-0.5 h-3 text-caption font-bold leading-none ${
                 isSelected
@@ -159,12 +164,15 @@ export function FieldDiaryMonthCalendar({
                     ? "text-[var(--brand-danger)]/80"
                     : "text-slate-500"
               }`}>
-                {dayEntries.length ? `(${dayEntries.length})` : ""}
+                {dayEntries.length ? `${dayEntries.length} pt` : ""}
               </span>
             </button>
           );
         })}
       </div>
+      <p className="mt-2 text-xs text-[var(--ink-soft)]">
+        <strong>D</strong> = dia da campanha · <strong>pt</strong> = pontos registrados · em vermelho: dia com ocorrência · borda tracejada: dia de outro mês (clique para ir até ele).
+      </p>
     </section>
   );
 }
@@ -192,14 +200,14 @@ export function SelectedFieldDiaryDay({
     <section className="glass-panel min-h-80 rounded-2xl p-4">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--line-ghost)] pb-3">
         <div>
-          <p className="text-label font-black uppercase tracking-[0.16em] text-slate-500">
+          <p className="text-label font-black text-slate-500">
             Diário
           </p>
           <h2 className="heading-font mt-1 text-xl font-black text-[var(--brand-navy-strong)]">
             {selectedDate ? formatDate(selectedDate) : "Selecione uma data"}
           </h2>
           <p className="mt-1 text-sm font-semibold text-[var(--ink-soft)]">
-            {group ? `Dia ${group.campaignDay} · ${group.summary.total} ponto(s)` : campaignName}
+            {group ? `Dia ${group.campaignDay} · ${group.summary.total} ${group.summary.total === 1 ? "ponto" : "pontos"}` : campaignName}
           </p>
         </div>
         {onNewEntry ? (
@@ -222,13 +230,13 @@ export function SelectedFieldDiaryDay({
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[700px] text-left text-sm">
             <thead>
-              <tr className="border-b border-[var(--line-ghost)] text-caption uppercase tracking-[0.16em] text-slate-500">
+              <tr className="border-b border-[var(--line-ghost)] text-caption text-slate-500">
                 <th className="px-3 py-3">Ponto / SIA</th>
                 <th className="px-3 py-3">Município</th>
-                <th className="px-3 py-3">Equipe</th>
+                {group.entries.some((entry) => entry.createdByName) ? <th className="px-3 py-3">Equipe</th> : null}
                 <th className="px-3 py-3">Situação</th>
                 <th className="px-3 py-3">Resumo operacional</th>
-                <th className="px-3 py-3">Fotos</th>
+                {group.entries.some((entry) => entry.photos?.length) ? <th className="px-3 py-3">Fotos</th> : null}
                 <th className="px-3 py-3">Ações</th>
               </tr>
             </thead>
@@ -237,6 +245,8 @@ export function SelectedFieldDiaryDay({
                 <OperationalEntryRow
                   key={entry.id}
                   entry={entry}
+                  showTeam={group.entries.some((item) => item.createdByName)}
+                  showPhotos={group.entries.some((item) => item.photos?.length)}
                   onView={() => onViewEntry(entry)}
                   onEdit={onEditEntry ? () => onEditEntry(entry) : undefined}
                 />
@@ -252,7 +262,7 @@ export function SelectedFieldDiaryDay({
             description={
               onNewEntry
                 ? `Use "Registrar ponto" para incluir uma coleta em ${formatDate(selectedDate)}.`
-                : "Não há registros do Diário de Campo para a data selecionada."
+                : "Não há registros do Diário de campo para a data selecionada."
             }
             compact
           />
@@ -262,14 +272,27 @@ export function SelectedFieldDiaryDay({
   );
 }
 
+/** "782" → "SIA-0782": o mesmo formato do restante do app. */
+export function formatSiaCode(value: string | number) {
+  const text = String(value).trim();
+  const digits = text.match(/^(?:SIA[-\s]*)?(\d+)$/i)?.[1];
+  return digits ? `SIA-${digits.padStart(4, "0")}` : text;
+}
+
 export function OperationalEntryRow({
   entry,
   onView,
   onEdit,
+  showTeam = true,
+  showPhotos = true,
 }: {
   entry: FieldDiaryEntry;
   onView: () => void;
   onEdit?: () => void;
+  /** Coluna Equipe só aparece quando algum registro da tabela a informa. */
+  showTeam?: boolean;
+  /** Coluna Fotos só aparece quando algum registro da tabela tem foto. */
+  showPhotos?: boolean;
 }) {
   const stage = getOperationalStage(entry);
   const photos = entry.photos ?? [];
@@ -278,15 +301,15 @@ export function OperationalEntryRow({
     <tr className="border-b border-[var(--line-ghost)] align-top last:border-0">
       <td className="px-3 py-4">
         <span className="block font-bold text-[var(--brand-navy-strong)]">{entry.locationName || "Sem local"}</span>
-        {entry.sia ? <span className="text-xs font-semibold text-slate-500">{entry.sia}</span> : null}
+        {entry.sia ? <span className="text-xs font-semibold text-slate-500">{formatSiaCode(entry.sia)}</span> : null}
       </td>
       <td className="px-3 py-4">{entry.municipality || "Não informado"}</td>
-      <td className="px-3 py-4">{entry.createdByName || "Não informado"}</td>
+      {showTeam ? <td className="px-3 py-4">{entry.createdByName || "Não informado"}</td> : null}
       <td className="px-3 py-4">
         <StageBadge stage={stage} />
       </td>
       <td className="max-w-md px-3 py-4 text-sm leading-6 text-slate-600">{getOperationalSummary(entry)}</td>
-      <td className="px-3 py-4">{photos.length}</td>
+      {showPhotos ? <td className="px-3 py-4">{photos.length}</td> : null}
       <td className="px-3 py-4">
         <div className="flex gap-2">
           <IconButton label="Visualizar" onClick={onView} icon={Eye} />

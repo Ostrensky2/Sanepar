@@ -1,6 +1,5 @@
 import ExcelJS from "exceljs";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseLaboratoryResultsWorkbook } from "@/lib/imports/results";
 import {
@@ -16,10 +15,10 @@ import {
   type ResultsViewModel,
 } from "@/lib/imports/results-contract";
 
-describe("results schema golden master", () => {
+describe.skipIf(!process.env.YVAE_PRIVATE_LEGACY_HTML)("results schema golden master privado opt-in", () => {
   it("round-trips o DATA homologado sem recalcular seus valores", async () => {
     const html = readFileSync(
-      resolve(process.cwd(), "public/dashboards/Painel_eDNA_Campanha1_Sanepar.html"),
+      process.env.YVAE_PRIVATE_LEGACY_HTML!,
       "utf8",
     );
     const viewModel = JSON.parse(
@@ -48,7 +47,7 @@ describe("results schema golden master", () => {
 
   it("usa campanha + data + SIA quando a identificação nominal está ausente", async () => {
     const html = readFileSync(
-      resolve(process.cwd(), "public/dashboards/Painel_eDNA_Campanha1_Sanepar.html"),
+      process.env.YVAE_PRIVATE_LEGACY_HTML!,
       "utf8",
     );
     const viewModel = JSON.parse(
@@ -188,7 +187,7 @@ describe("results schema golden master", () => {
 
 function readGoldenMaster() {
   const html = readFileSync(
-    resolve(process.cwd(), "public/dashboards/Painel_eDNA_Campanha1_Sanepar.html"),
+    process.env.YVAE_PRIVATE_LEGACY_HTML!,
     "utf8",
   );
   return {

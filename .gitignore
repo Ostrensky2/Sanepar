@@ -56,3 +56,7 @@ output/
 supabase/.branches/
 supabase/.temp/
 migration-reports/
+/.private/
+/public/modelo-planilha-resultados.xlsx
+/src/data/campaign-map-points.json
+/public/dashboards/Painel_eDNA_Campanha1_Sanepar.html

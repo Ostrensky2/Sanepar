@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, CircleHelp, LogOut, Menu, UserRound, X } from "lucide-react";
+import { ChevronRight, LogOut, Menu, UserRound, X } from "lucide-react";
 import { AuthGate } from "@/components/auth-gate";
 import { AppVersionStamp } from "@/components/app-version-stamp";
 import {
@@ -13,6 +13,7 @@ import {
   type AuthUiSession,
 } from "@/components/auth-ui-client";
 import { CommandPalette } from "@/components/command-palette";
+import { HelpButton } from "@/components/help-drawer";
 import {
   InstitutionalPartners,
   YvaeMasthead,
@@ -27,7 +28,7 @@ import {
   type UserCategory,
 } from "@/lib/access-control";
 import { recordActivity } from "@/lib/activity-log";
-import { getNavigationAccessForPath, navigationItems } from "@/lib/navigation";
+import { getBreadcrumbsForPath, getNavigationAccessForPath, navigationItems } from "@/lib/navigation";
 import {
   SYNC_STATUS_EVENT,
   readSyncStatusSnapshot,
@@ -142,8 +143,6 @@ export function AppShell({ children }: AppShellProps) {
     window.location.reload();
   }
 
-  const showDataBackButton = pathname.startsWith("/dados/") && pathname !== "/dados/status";
-
   return (
     <AuthGate>
     <div className="min-h-screen bg-[var(--surface-base)] text-[var(--ink)]">
@@ -183,38 +182,14 @@ export function AppShell({ children }: AppShellProps) {
               >
                 <Menu className="h-5 w-5" />
               </button>
-              {showDataBackButton ? (
-                <Link
-                  href="/dados/status"
-                  aria-label="Voltar para Entrada de Dados"
-                  title="Voltar para Entrada de Dados"
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[var(--ink-soft)] transition hover:bg-white hover:text-[var(--brand-navy-strong)]"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </Link>
-              ) : null}
-              <div className="min-w-0">
-                <p className="type-eyebrow hidden truncate text-[var(--brand-teal)] min-[390px]:block">
-                  {currentItem.summary}
-                </p>
-                <p className="heading-font type-metadata truncate font-bold text-[var(--brand-navy-strong)]">
-                  {currentItem.headerTitle}
-                </p>
-              </div>
+              <TopbarTrail pathname={pathname} />
             </div>
             <div className="flex shrink-0 items-center gap-1 sm:gap-2">
                 <div className="hidden md:block">
                   <SyncStatusBadge snapshot={syncStatus} />
                 </div>
                 <CommandPalette responsive />
-                <Link
-                  href="/ajuda"
-                  aria-label="Ajuda"
-                  title="Ajuda"
-                  className="flex h-11 w-11 items-center justify-center rounded-xl text-[var(--ink-soft)] transition hover:bg-white hover:text-[var(--brand-navy-strong)]"
-                >
-                  <CircleHelp className="h-4 w-4" />
-                </Link>
+                <HelpButton pathname={pathname} />
             </div>
           </div>
         </header>
@@ -253,6 +228,43 @@ export function AppShell({ children }: AppShellProps) {
       </div>
     </div>
     </AuthGate>
+  );
+}
+
+/**
+ * Barra superior: mostra só o caminho até a página (ancestrais). O título da
+ * página fica no H1 do conteúdo, para não repetir o mesmo nome duas vezes.
+ */
+function TopbarTrail({ pathname }: { pathname: string }) {
+  const trail = getBreadcrumbsForPath(pathname).slice(0, -1);
+
+  if (!trail.length) {
+    return (
+      <p className="heading-font type-metadata truncate font-bold text-[var(--brand-navy-strong)]">
+        Yva’e Monitoramento
+      </p>
+    );
+  }
+
+  return (
+    <nav aria-label="Você está em" className="min-w-0">
+      <ol className="type-metadata flex min-w-0 items-center gap-1.5 text-[var(--ink-soft)]">
+        {trail.map((crumb, index) => (
+          <li
+            key={crumb.href}
+            className={index < trail.length - 1 ? "hidden min-w-0 items-center gap-1.5 sm:flex" : "flex min-w-0 items-center gap-1.5"}
+          >
+            <Link
+              href={crumb.href}
+              className="truncate font-semibold transition hover:text-[var(--brand-navy-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)]"
+            >
+              {crumb.label}
+            </Link>
+            <ChevronRight aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+          </li>
+        ))}
+      </ol>
+    </nav>
   );
 }
 
@@ -419,7 +431,7 @@ function AccountCard({
 function AccessDeniedPanel({ title }: { title: string }) {
   return (
     <section className="mx-auto max-w-3xl rounded-2xl border border-[var(--line-ghost)] bg-white/90 p-6 shadow-[0_18px_50px_-44px_rgba(0,66,98,0.28)]">
-      <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--brand-danger)]">
+      <p className="text-label font-black uppercase tracking-[0.12em] text-[var(--brand-danger)]">
         Acesso não liberado
       </p>
       <h1 className="heading-font mt-2 text-xl font-black text-[var(--brand-navy-strong)]">

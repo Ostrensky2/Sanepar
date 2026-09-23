@@ -1,0 +1,22 @@
+export type SourcePreviewSection = "molecular" | "catalog" | "evidence" | "components" | "indices" | "alerts";
+export type SourcePreviewCell = string | number | boolean | null;
+export type SourcePreviewRow = Record<string, SourcePreviewCell>;
+export type ResultsSourcePreview = {
+  evidence?: import("./results-evidence-dto").EvidenceDto[];
+  catalog?: import("./results-evidence-dto").CatalogDto[];
+  campaign?: ResultsCampaign;
+  calculationVersion: string;
+  catalogVersion: string;
+  warnings: string[];
+  source: import("./results-publication-contract").ResultsSourceIdentity & { fileName: string };
+  campaignCode: string;
+  section: SourcePreviewSection;
+  scope: "campaign" | "global-reference";
+  columns: string[];
+  rows: SourcePreviewRow[];
+  counts: { population: number; filtered: number; returned: number };
+  readsBySet: Record<string, number>;
+  offset: number;
+  limit: number;
+};
+import type { ResultsCampaign } from "@/modules/results/types";

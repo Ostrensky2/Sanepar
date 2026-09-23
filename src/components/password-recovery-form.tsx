@@ -23,7 +23,7 @@ export function PasswordRecoveryForm() {
 
   return (
     <main className="grid min-h-screen place-items-center px-4 py-10">
-      <section className="w-full max-w-xl rounded-3xl border border-[var(--line-ghost)] bg-white p-6 shadow-[0_34px_100px_-60px_rgba(0,66,98,0.55)] sm:p-9">
+      <section className="w-full max-w-xl rounded-2xl border border-[var(--line-ghost)] bg-white p-6 shadow-[0_34px_100px_-60px_rgba(0,66,98,0.55)] sm:p-9">
         <YvaeMasthead />
         <div className="mt-8">
           <p className="type-eyebrow text-[var(--brand-teal)]">Recuperação de acesso</p>

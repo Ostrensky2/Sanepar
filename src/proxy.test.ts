@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { NextRequest } from "next/server";
 import nextConfig from "../next.config";
 import { proxy } from "@/proxy";
@@ -59,10 +58,10 @@ describe("CSP do proxy", () => {
     expect(directive(responseCsp, "script-src")).not.toContain("'unsafe-inline'");
   });
 
-  it("libera somente o dashboard auditado com hash e frame same-origin", async () => {
+  it.runIf(Boolean(process.env.YVAE_PRIVATE_LEGACY_HTML))("verifica CSP do histórico privado opt-in", async () => {
     const response = await proxy(new NextRequest("https://app.invalid/dashboards/Painel_eDNA_Campanha1_Sanepar.html"));
     const csp = response.headers.get("Content-Security-Policy") ?? "";
-    const html = readFileSync(resolve(process.cwd(), "public/dashboards/Painel_eDNA_Campanha1_Sanepar.html"), "utf8");
+    const html = readFileSync(process.env.YVAE_PRIVATE_LEGACY_HTML!, "utf8");
     const script = html.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1] ?? "";
     const scriptHash = createHash("sha256").update(script.replace(/\r\n/g, "\n")).digest("base64");
     expect(directive(csp, "script-src")).toBe(`script-src 'self' 'sha256-${scriptHash}'`);

@@ -43,7 +43,7 @@ export function MetabarcodingStagesIndicator({
     <section className="glass-panel radius-panel p-6">
       <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+          <p className="text-caption font-bold text-[var(--brand-teal)]">
             Status do processo
           </p>
           <h2 className="heading-font text-xl font-bold tracking-tight text-[var(--brand-navy-strong)]">
@@ -52,7 +52,7 @@ export function MetabarcodingStagesIndicator({
         </div>
         <div className="flex flex-wrap items-center justify-end gap-3">
           {normalizedProgress !== null ? (
-            <span className="rounded-full border border-[var(--line-ghost)] bg-white/80 px-3 py-1.5 text-caption font-black uppercase tracking-[0.14em] text-[var(--brand-navy-strong)] shadow-[0_10px_24px_-20px_rgba(0,66,98,0.35)]">
+            <span className="rounded-full border border-[var(--line-ghost)] bg-white/80 px-3 py-1.5 text-caption font-black text-[var(--brand-navy-strong)] shadow-[0_10px_24px_-20px_rgba(0,66,98,0.35)]">
               Andamento {normalizedProgress}%
             </span>
           ) : null}
@@ -126,7 +126,7 @@ function StageNode({
         {stage.label}
       </p>
       <p
-        className="mt-0.5 text-caption font-bold uppercase tracking-[0.14em]"
+        className="mt-0.5 text-caption font-bold"
         style={{ color: fill }}
       >
         {labelFor(stage.status)}
@@ -154,7 +154,7 @@ function formatShortDate(value?: string) {
 
 function StageLegend() {
   return (
-    <div className="flex items-center gap-3 text-caption font-semibold uppercase tracking-[0.14em] text-slate-500">
+    <div className="flex items-center gap-3 text-caption font-semibold text-slate-500">
       <LegendDot color={METABARCODING_STAGE_COLORS.done} label="Concluído" />
       <LegendDot color={METABARCODING_STAGE_COLORS.inprogress} label="Em curso" />
       <LegendDot color={METABARCODING_STAGE_COLORS.pending} label="A fazer" />

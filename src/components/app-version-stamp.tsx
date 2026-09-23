@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { APP_LAST_UPDATED_LABEL, APP_VERSION } from "@/lib/app-version";
 
 export function AppVersionStamp() {
@@ -15,11 +16,12 @@ export function AppVersionStamp() {
       <p className="text-caption uppercase leading-none tracking-[0.04em] text-[var(--ink-soft)]">
         © 2026 YVA&apos;E - SISTEMA DE MONITORAMENTO AMBIENTAL.
       </p>
-      <p className="w-fit rounded-md border border-[var(--line-ghost)] bg-white/70 px-2.5 py-1 text-caption font-medium leading-none text-[var(--ink-soft)]">
+      {/* Leva a Ajuda › Versões, que explica o que mudou em cada versão. */}
+      <Link href="/ajuda?secao=versoes" title="O que mudou nesta versão" className="w-fit rounded-lg border border-[var(--line-ghost)] bg-white/70 px-2.5 py-1 text-caption font-medium leading-none text-[var(--ink-soft)] transition hover:border-[var(--brand-teal)]">
         <strong className="font-bold text-[var(--brand-navy-strong)]">Versão atual</strong>{" "}
         <span className="font-black text-[var(--brand-navy-strong)]">{APP_VERSION}</span> · Última alteração em{" "}
         {APP_LAST_UPDATED_LABEL}
-      </p>
+      </Link>
     </div>
   );
 }

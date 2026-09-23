@@ -36,16 +36,6 @@ export function PointActionsRegisterPage() {
 
   return (
     <div className="space-y-4">
-      <section>
-        <p className="text-sm leading-6 text-[var(--ink-soft)]">
-          Entrada estruturada de ações pontuais Sanepar.
-        </p>
-        <p className="mt-2 text-xs font-semibold text-slate-500">
-          Perfil <span className="text-[var(--brand-navy-strong)]">{activeCategory}</span>
-          {" "}· registro {canImport ? "permitido" : "bloqueado"}
-        </p>
-      </section>
-
       <PointActionEntryPanel canImport={canImport} />
     </div>
   );

@@ -50,7 +50,7 @@ describe("contrato tipográfico global", () => {
     const repository = source("src/components/document-repository.tsx");
 
     expect(repository).toContain("<PageHeader");
-    expect(repository).toContain('title="Repositório Oficial de Documentos"');
+    expect(repository).toContain('title="Documentos"');
   });
 
   it("mantém um título principal único na página inicial", () => {
@@ -60,13 +60,11 @@ describe("contrato tipográfico global", () => {
     expect(home).toContain("Painel de Monitoramento");
   });
 
-  it("harmoniza o dashboard científico apenas por CSS local", () => {
-    const dashboard = source("public/dashboards/Painel_eDNA_Campanha1_Sanepar.html");
-
-    expect(dashboard).toContain("--sans:Arial,Helvetica,sans-serif");
-    expect(dashboard).toContain(".sec-h{color:var(--brand-navy-strong);font-size:20px");
-    expect(dashboard).toContain(".kpi .v{font-size:24px");
-    expect(dashboard).toContain(".disc{margin:12px 0 2px");
-    expect(dashboard).toContain("font-size:14px;line-height:1.55");
+  it("reutiliza a tipografia do produto no dashboard sem ler dados privados", () => {
+    const dashboard = source("src/modules/results/components/campaign-results-dashboard.tsx");
+    expect(dashboard).toContain("heading-font type-section-title");
+    expect(dashboard).toContain("type-metadata");
+    expect(source("src/modules/results/components/campaign-story.tsx")).toContain("type-kpi");
+    expect(dashboard).toContain("var(--brand-navy-strong)");
   });
 });

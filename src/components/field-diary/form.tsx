@@ -1,15 +1,15 @@
 "use client";
 
 import { Camera, Plus, Trash2, Upload } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   campaignOptions,
   inputClassName,
   textareaClassName,
   type FieldDiaryCampaignScope,
+  type FieldDiaryPointOption,
 } from "@/components/field-diary/constants";
 import {
-  fieldDiaryPointOptions,
   findFieldDiaryPointOption,
   normalizeFieldDiaryPointKey,
   uniqueSorted,
@@ -44,11 +44,24 @@ export function FieldDiaryForm({
 }) {
   const [uploadingPhotoIds, setUploadingPhotoIds] = useState<string[]>([]);
   const [uploadMessage, setUploadMessage] = useState("");
+  const [fieldDiaryPointOptions, setPointOptions] = useState<FieldDiaryPointOption[]>([]);
+  const [pointOptionsMessage, setPointOptionsMessage] = useState("Carregando pontos…");
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/field-diary/point-options", { cache: "no-store", signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) throw new Error("Pontos indisponíveis.");
+        return response.json() as Promise<{options: FieldDiaryPointOption[]}>;
+      })
+      .then(({options}) => { setPointOptions(options); setPointOptionsMessage(""); })
+      .catch(() => { if (!controller.signal.aborted) setPointOptionsMessage("Não foi possível carregar os pontos. Os dados preenchidos foram preservados."); });
+    return () => controller.abort();
+  }, []);
 
   function update(next: Partial<FieldDiaryPayload>) {
     onChange({ ...entry, ...next });
   }
-  const selectedPointOption = findFieldDiaryPointOption(entry);
+  const selectedPointOption = findFieldDiaryPointOption(entry, fieldDiaryPointOptions);
   const selectedPointOptionId = selectedPointOption?.id ?? "";
   const locationSelectValue = selectedPointOptionId || (entry.locationName ? "__current" : "");
   const siaSelectValue = selectedPointOptionId || (entry.sia ? "__current" : "");
@@ -61,7 +74,7 @@ export function FieldDiaryForm({
           (point) => normalizeFieldDiaryPointKey(point.municipality) === municipality,
         )
       : fieldDiaryPointOptions;
-  }, [entry.municipality]);
+  }, [entry.municipality, fieldDiaryPointOptions]);
 
   function selectPoint(optionId: string) {
     const point = fieldDiaryPointOptions.find((item) => item.id === optionId);
@@ -468,14 +481,14 @@ export function FieldDiaryForm({
 
         <fieldset className="rounded-2xl border border-[var(--line-ghost)] p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <legend className="inline-flex items-center gap-2 text-caption font-bold uppercase tracking-[0.18em] text-slate-500">
+            <legend className="inline-flex items-center gap-2 text-caption font-bold text-slate-500">
               <Camera className="h-3.5 w-3.5" />
               Imagens da coleta
             </legend>
             <button
               type="button"
               onClick={addPhoto}
-              className="inline-flex items-center gap-2 rounded-lg bg-[var(--surface-soft)] px-3 py-2 text-caption font-bold uppercase tracking-[0.12em] text-[var(--brand-navy-strong)]"
+              className="inline-flex items-center gap-2 rounded-lg bg-[var(--surface-soft)] px-3 py-2 text-caption font-bold text-[var(--brand-navy-strong)]"
             >
               <Plus className="h-3.5 w-3.5" />
               Foto
@@ -499,7 +512,7 @@ export function FieldDiaryForm({
                     placeholder="Legenda da foto"
                     maxLength={180}
                   />
-                  <label className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-white px-3 py-2 text-caption font-bold uppercase tracking-[0.12em] text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-muted)]">
+                  <label className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-white px-3 py-2 text-caption font-bold text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-muted)]">
                     <Upload className="mr-1 h-3.5 w-3.5" />
                     {uploadingPhotoIds.includes(photo.id) ? "Enviando" : "Upload"}
                     <input
@@ -534,6 +547,7 @@ export function FieldDiaryForm({
           </p>
         </fieldset>
 
+        {pointOptionsMessage ? <p role="status" className="text-sm">{pointOptionsMessage}</p> : null}
         {message || uploadMessage ? (
           <p className="text-sm font-semibold text-[var(--brand-danger)]">{message || uploadMessage}</p>
         ) : null}

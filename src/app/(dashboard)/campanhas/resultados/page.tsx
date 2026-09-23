@@ -1,18 +1,20 @@
 import { CampaignsPageContent } from "@/components/campaigns-page-content";
-import { loadCampaign1DashboardMapPoints, loadDashboardData } from "@/lib/dashboard-data";
+import { loadDashboardData } from "@/lib/dashboard-data";
 
 export const dynamic = "force-dynamic";
 
-export default async function CampanhasResultadosPage() {
-  const [{ laboratoryRiskPoints }, dashboardMapPoints] = await Promise.all([
-    loadDashboardData(),
-    loadCampaign1DashboardMapPoints(),
-  ]);
-
+export default async function CampanhasResultadosPage({ searchParams }: { searchParams: Promise<{ campaign?: string; publicationId?: string; sourceHash?: string; sia?: string }> }) {
+  const { campaign, publicationId, sourceHash, sia } = await searchParams;
+  // Os pontos de campo alimentam o cabeçalho comum (pontos coletados), igual à aba Campo.
+  const { campaignPoints } = await loadDashboardData();
   return (
     <CampaignsPageContent
-      campaignPoints={dashboardMapPoints.length ? dashboardMapPoints : laboratoryRiskPoints}
-      resultExportPoints={laboratoryRiskPoints}
+      key={`${campaign ?? ""}:${publicationId ?? ""}:${sourceHash ?? ""}:${sia ?? ""}`}
+      initialCampaignId={campaign}
+      initialPublicationId={publicationId}
+      initialSourceHash={sourceHash}
+      initialSia={sia}
+      campaignPoints={campaignPoints}
       view="resultados"
     />
   );

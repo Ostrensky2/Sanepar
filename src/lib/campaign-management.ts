@@ -166,17 +166,24 @@ export function buildInitialCampaignManagement(campaigns: CampaignView[]) {
   return loadCampaignManagement(campaigns);
 }
 
+type CampaignManagementPayload = { ok: boolean; management?: unknown; persistence?: "browser" | "cloud" };
+let campaignManagementRequest: Promise<CampaignManagementPayload> | null = null;
+
+/** Várias partes da mesma tela pedem a gestão das campanhas ao mesmo tempo: uma única requisição atende todas. */
+function fetchCampaignManagementPayload() {
+  campaignManagementRequest ??= fetch("/api/campaign-management", { cache: "no-store" })
+    .then(async (response) => ({ ok: response.ok, ...((await response.json()) as Omit<CampaignManagementPayload, "ok">) }))
+    .finally(() => { campaignManagementRequest = null; });
+  return campaignManagementRequest;
+}
+
 export async function readCampaignManagement(campaigns: CampaignView[]) {
   const defaults = buildDefaultCampaignManagementById(campaigns);
 
   try {
-    const response = await fetch("/api/campaign-management", { cache: "no-store" });
-    const payload = (await response.json()) as {
-      management?: unknown;
-      persistence?: "browser" | "cloud";
-    };
+    const payload = await fetchCampaignManagementPayload();
 
-    if (response.ok && payload.persistence === "cloud" && payload.management) {
+    if (payload.ok && payload.persistence === "cloud" && payload.management) {
       const management = normalizeCampaignManagementById(campaigns, payload.management);
       cacheCampaignManagement(management, { notify: false });
       return management;
@@ -515,4 +522,73 @@ function isCampaignInactiveForProgress(status: CampaignOperationalStatus) {
 
 export function hasCampaignCollectionStarted(status: CampaignOperationalStatus) {
   return !["Não previsto", "Planejada", "Aguardando calendário", "Em preparação"].includes(status);
+}
+
+/**
+ * Fases exibidas ao usuário. Os 12 status gravados continuam válidos (compatibilidade),
+ * mas a interface mostra só 6 fases e 2 marcadores, sem sinônimos concorrentes.
+ */
+export type CampaignPhase =
+  | "Planejada"
+  | "Em preparação"
+  | "Em campo"
+  | "Em laboratório"
+  | "Em análise"
+  | "Concluída"
+  | "Suspensa"
+  | "Cancelada";
+
+const PHASE_BY_STATUS: Record<CampaignOperationalStatus, CampaignPhase> = {
+  "Não previsto": "Planejada",
+  Planejada: "Planejada",
+  "Aguardando calendário": "Planejada",
+  "Em preparação": "Em preparação",
+  "Em campo": "Em campo",
+  "Coleta concluída": "Em laboratório",
+  "Aguardando laboratório": "Em laboratório",
+  "Em análise": "Em análise",
+  "Resultados publicados": "Concluída",
+  Concluída: "Concluída",
+  Suspensa: "Suspensa",
+  Cancelada: "Cancelada",
+};
+
+/** Status gravado que representa cada fase quando o usuário escolhe uma fase. */
+export const phaseStatusOptions: Array<{ value: CampaignOperationalStatus; label: CampaignPhase }> = [
+  { value: "Planejada", label: "Planejada" },
+  { value: "Em preparação", label: "Em preparação" },
+  { value: "Em campo", label: "Em campo" },
+  { value: "Aguardando laboratório", label: "Em laboratório" },
+  { value: "Em análise", label: "Em análise" },
+  { value: "Concluída", label: "Concluída" },
+  { value: "Suspensa", label: "Suspensa" },
+  { value: "Cancelada", label: "Cancelada" },
+];
+
+export function campaignPhaseLabel(status: CampaignOperationalStatus | string | null | undefined): CampaignPhase {
+  return PHASE_BY_STATUS[status as CampaignOperationalStatus] ?? "Planejada";
+}
+
+/** Valor do seletor de fase para um status gravado (inclusive os legados). */
+export function phaseStatusValue(status: CampaignOperationalStatus): CampaignOperationalStatus {
+  const label = campaignPhaseLabel(status);
+  return phaseStatusOptions.find((option) => option.label === label)?.value ?? "Planejada";
+}
+
+/** Fase que as etapas marcadas indicam. Usada para sugerir correção quando status e etapas divergem. */
+export function suggestedCampaignPhase(stages: MetabarcodingStage[]): CampaignPhase {
+  if (!stages.length) return "Planejada";
+  const started = (label: string) => stages.some((stage) => stage.label === label && stage.status !== "pending");
+  const done = (label: string) => stages.some((stage) => stage.label === label && stage.status === "done");
+
+  if (stages.every((stage) => stage.status === "done")) return "Concluída";
+  if (["Análise bioinformática", "Atribuição taxonômica", "Conclusão das análises dos dados", "Elaboração de relatório"].some(started)) {
+    return "Em análise";
+  }
+  if (done("Coleta de amostras") || ["Extração de DNA", "Amplificação por PCR", "Sequenciamento"].some(started)) {
+    return "Em laboratório";
+  }
+  if (started("Coleta de amostras")) return "Em campo";
+  if (started("Preparação da campanha")) return "Em preparação";
+  return "Planejada";
 }

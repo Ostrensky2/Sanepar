@@ -119,13 +119,16 @@ describe("campaign results workbook", () => {
       "utf8",
     );
 
-    expect(header).toContain("Baixar planilha (.xlsx)");
+    expect(header).toContain('isDownloading ? "Gerando planilha..." : "Resultados"');
     expect(header).toContain("Gerando planilha...");
     expect(header).toContain("sm:flex-row");
     expect(header).toContain("disabled={!canDownload || isDownloading || !onDownload}");
     expect(page).toContain('addFieldDiarySummarySheet(workbook, selectedDiaryEntries, selectedCampaign.title, "Resumo")');
     expect(page).toContain("addCampaignResultsSheet(workbook, selectedResultExportPoints, selectedDiaryEntries)");
     expect(page).toContain("addFieldDiaryEntriesSheet(workbook, selectedDiaryEntries)");
-    expect(route).toContain("resultExportPoints={laboratoryRiskPoints}");
+    expect(page).toContain("/api/imports/results/template?source=published&campaignCode=");
+    expect(page).toContain("Planilha v2 reimportável exportada");
+    expect(page).not.toContain("addResultsV2Sheet");
+    expect(route).not.toContain("resultExportPoints");
   });
 });

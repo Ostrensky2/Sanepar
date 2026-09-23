@@ -5,114 +5,42 @@ import {
   Download,
   FileSpreadsheet,
   Search,
-  Trash2,
   UploadCloud,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ACCESS_CATEGORY_STORAGE_KEY,
   hasPrivilege,
   normalizeUserCategory,
   type UserCategory,
 } from "@/lib/access-control";
-import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 import {
   OPERATION_CANCEL_EVENT,
   TableSkeletonRows,
   beginGlobalOperation,
-  emitLocalMode,
-  isCloudConnectionError,
   toActionableErrorMessage,
 } from "@/components/operational-feedback";
 import { EmptyState } from "@/components/empty-state";
-import type { CampaignMapPoint } from "@/lib/imports/campaigns";
-import type { LaboratoryRiskPoint, LaboratoryRiskResultRow } from "@/lib/laboratory-risk";
-import type { SpreadsheetPreview } from "@/lib/types";
-import type { FieldDiaryEntry } from "@/lib/field-diary";
-import { campaignIdentityKey, resolveCanonicalCampaign } from "@/lib/campaign-identity";
 import {
   RESULTS_IMPORT_TIMEOUT_MS,
   formatResultsImportError,
   readResultsApiPayload,
 } from "@/lib/imports/results-client";
-import {
-  RESULTS_DASHBOARD_HEADERS,
-  RESULTS_DASHBOARD_SECTIONS,
-  RESULTS_DICTIONARY_HEADERS,
-  RESULTS_INSTRUCTION_FIELDS,
-  RESULTS_INSTRUCTION_HEADERS,
-  RESULTS_MOLECULAR_FIELDS,
-  RESULTS_RANKING_FIELDS,
-  RESULTS_SCHEMA_VERSION,
-  RESULTS_WORKSHEETS,
-} from "@/lib/imports/results-contract";
+import type { ResultsWorkbookPreviewResponse } from "@/lib/imports/results";
+import type { ResultsInventoryResponse } from "@/lib/results-publication-contract";
+import { planCampaignPublicationScope, RESULTS_CONTRACT_VERSION } from "@/modules/results";
+import { ResultsPreparationPanel } from "@/modules/results/components/results-preparation-panel";
+import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
 
-type SpreadsheetKind = "Campo" | "Laboratório";
 type CampaignScope = "Ordinária" | "Extraordinária";
 type SheetStatus = "CARREGADA" | "PUBLICADA" | "PREVIEW" | "ERRO";
 
-export type DataEntryView = "campo" | "resultados";
+/** Planilhas de campo entram só pelo Diário de campo; esta tela publica as planilhas de resultados. */
 
-const VIEW_CONFIG: Record<
-  DataEntryView,
-  {
-    kind: SpreadsheetKind;
-    title: string;
-    description: string;
-    template?: {
-      href?: string;
-      title: string;
-      description: string;
-    };
-    formHeading: string;
-    formDescription: string;
-    submitLabel: string;
-    metricsLabel: string;
-    metricTotalLabel: string;
-    showFieldMapToggle: boolean;
-    emptyTableLabel: string;
-  }
-> = {
-  campo: {
-    kind: "Campo",
-    title: "Entrada de Planilhas de Campo",
-    description:
-      "Planilha-síntese das campanhas. Alimenta mapas e pontos do app.",
-    template: {
-      href: "/template-planilha-de-campo.xlsx",
-      title: "Modelo da planilha-síntese de campanhas",
-      description:
-        "Estrutura esperada: aba Campanhas com SIA, ponto, dia, data, manancial, município, coordenadas, condições e links.",
-    },
-    formHeading: "Nova planilha de Campo",
-    formDescription:
-      "Importe a planilha-síntese da campanha.",
-    submitLabel: "Carregar planilha",
-    metricsLabel: "Campo",
-    metricTotalLabel: "Planilhas de Campo",
-    showFieldMapToggle: true,
-    emptyTableLabel: "Nenhuma planilha-síntese de Campo carregada para o filtro atual.",
-  },
-  resultados: {
-    kind: "Laboratório",
-    title: "Entrada de Planilhas de Resultados",
-    description:
-      "Modelo canônico por campanha. A última publicação válida alimenta Dashboard e Resultados.",
-    template: {
-      href: "/modelo-planilha-resultados.xlsx",
-      title: "Modelo canônico de resultados",
-      description: `Schema ${RESULTS_SCHEMA_VERSION}, com Instruções, Dicionário e todas as leituras do dashboard.`,
-    },
-    formHeading: "Nova planilha de Resultados",
-    formDescription:
-      "Importe o modelo preenchido. Rascunhos ou arquivos inválidos não substituem a última publicação válida.",
-    submitLabel: "Carregar planilha",
-    metricsLabel: "Resultados",
-    metricTotalLabel: "Planilhas de Resultados",
-    showFieldMapToggle: false,
-    emptyTableLabel: "Nenhuma planilha de Resultados carregada para o filtro atual.",
-  },
+const config = {
+  formHeading: "Nova planilha de Resultados",
+  submitLabel: "Publicar campanhas selecionadas",
+  emptyTableLabel: "Nenhuma planilha de Resultados carregada para o filtro atual.",
 };
 
 type StoredSpreadsheet = {
@@ -120,118 +48,89 @@ type StoredSpreadsheet = {
   fileName: string;
   campaign: string;
   scope: CampaignScope;
-  kind: SpreadsheetKind;
   date: string;
   sizeBytes: number;
   status: SheetStatus;
   rows?: number;
   sheets?: number;
   note?: string;
-};
-
-type CampaignPublishPayload = {
-  fileName: string;
-  rowCount: number;
-  points: CampaignMapPoint[];
-  originalPointCount: number;
-  effectivePointCount: number;
-  missingFields: string[];
-  preview: SpreadsheetPreview;
-  persistence: {
-    mode: "cloud" | "browser";
-    message: string;
-  };
-  unifiedImport?: {
-    mode: "cloud" | "browser";
-    batchId?: string;
-    summary: {
-      novos: number;
-      identicos: number;
-      aditivos: number;
-      conflitos: number;
-      fotos: {
-        baixadas: number;
-        avisos: number;
-      };
-    };
-    photoWarnings?: Array<{ pointId: string; sourceUrl: string; message: string }>;
-  };
+  campaignCode?: string;
+  publicationId?: string;
+  canonicalId?: string;
+  downloadAvailable?: boolean;
+  sourceHash?: string | null;
 };
 
 type LaboratoryResultsPayload = {
   fileName: string;
-  worksheetName: string;
-  rankingWorksheetName: string;
-  rowCount: number;
-  sheetCount: number;
-  columnCount: number;
-  expectedColumnCount: number;
-  headers: string[];
-  matchedHeaders: number;
-  markers: string[];
-  analyzedSets: string[];
-  speciesCount: number;
-  fallbackSampleIdCount: number;
-  discardedOriginalCoordinateCount: number;
+  schemaVersion: string;
+  calculationVersion: string;
+  catalogVersion: string;
+  contentHash: string;
+  campaigns: Array<{
+    campaignCode: string;
+    counts: {
+      total: number;
+      complete: number;
+      partialWithTwoSets: number;
+      partialWithOneSet: number;
+      unavailable: number;
+    };
+  }>;
   warnings: string[];
-  riskRows: LaboratoryRiskResultRow[];
-  riskPoints: LaboratoryRiskPoint[];
-  matchedRiskPointCount: number;
   persistence: {
-    mode: "cloud" | "browser";
+    mode: "cloud";
+    state: "published" | "skipped";
+    publicationId: string;
     message: string;
   };
 };
 
-const STORAGE_KEY = "yvae:spreadsheets";
-const DB_NAME = "yvae-spreadsheet-files";
-const DB_STORE = "files";
-const campaigns = [
-  "1ª Campanha - Verão 2026",
-  "2ª Campanha - Outono 2026",
-  "3ª Campanha - Inverno 2026",
-  "4ª Campanha - Primavera 2026",
-  "5ª Campanha - Verão 2027",
-  "6ª Campanha - Outono 2027",
-  "7ª Campanha - Inverno 2027",
-  "8ª Campanha - Primavera 2027",
-  "9ª Campanha - Verão 2028",
-];
-const filters = ["Todos", "Ordinárias", "Extraordinárias"] as const;
-
-export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView } = {}) {
-  const config = VIEW_CONFIG[view];
-  const [spreadsheets, setSpreadsheets] = useState<StoredSpreadsheet[]>([]);
+export function SpreadsheetRepository() {
   const [hasLoaded, setHasLoaded] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<(typeof filters)[number]>("Todos");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [conflictHref, setConflictHref] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
-  const [isDeletingResults, setIsDeletingResults] = useState(false);
+  const [isPreviewingResults, setIsPreviewingResults] = useState(false);
+  const [resultsPreview, setResultsPreview] = useState<ResultsWorkbookPreviewResponse | null>(null);
+  const [selectedResultCampaigns, setSelectedResultCampaigns] = useState<string[]>([]);
+  const resultsRequestRef = useRef<{ key: string; id: string } | null>(null);
+  const [resultsInventory, setResultsInventory] = useState<ResultsInventoryResponse | null>(null);
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const resultsPreviewAbortRef = useRef<AbortController | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [activeCategory, setActiveCategory] = useState<UserCategory>("Admin");
-  const [formState, setFormState] = useState({
-    campaign: campaigns[0],
-    scope: "Ordinária" as CampaignScope,
-    kind: config.kind,
-    extraordinaryName: "",
-    note: "",
-    publishFieldMap: view === "campo",
-  });
+  useEffect(() => () => resultsPreviewAbortRef.current?.abort(), []);
+
+  const refreshResultsInventory = useCallback(async (signal?: AbortSignal) => {
+    setInventoryLoading(true);
+    setInventoryError(null);
+    try {
+      const response = await fetch("/api/imports/results?inventory=1", { cache: "no-store", signal });
+      const payload = await readResultsApiPayload<ResultsInventoryResponse>(response, "Não foi possível consultar as publicações vigentes.");
+      if (!response.ok || "error" in payload) throw new Error("error" in payload ? payload.error : "Inventário indisponível.");
+      if (!signal?.aborted) setResultsInventory(payload);
+    } catch (error) {
+      if (!signal?.aborted) {
+        setResultsInventory(null);
+        setInventoryError(toActionableErrorMessage(error, "Inventário indisponível; o estado vigente não foi confirmado."));
+      }
+    } finally {
+      if (!signal?.aborted) setInventoryLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    queueMicrotask(() => setFormState((current) => ({
-      ...current,
-      kind: config.kind,
-      publishFieldMap: view === "campo" ? current.publishFieldMap : false,
-    })));
-  }, [config.kind, view]);
+    const controller = new AbortController();
+    queueMicrotask(() => { if (!controller.signal.aborted) void refreshResultsInventory(controller.signal); });
+    return () => controller.abort();
+  }, [refreshResultsInventory]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      setSpreadsheets(readStoredSpreadsheets());
       setActiveCategory(normalizeUserCategory(window.localStorage.getItem(ACCESS_CATEGORY_STORAGE_KEY)));
       setHasLoaded(true);
     }, 0);
@@ -253,57 +152,91 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
     };
   }, []);
 
-  useEffect(() => {
-    if (!hasLoaded) {
-      return;
-    }
-
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(spreadsheets));
-    window.dispatchEvent(new Event("yvae:spreadsheets-updated"));
-  }, [hasLoaded, spreadsheets]);
-
   const canImportSpreadsheets = hasPrivilege(activeCategory, "data.import");
-  const canDeleteSpreadsheets = hasPrivilege(activeCategory, "data.delete");
+  const selectedResultPublicationScope = useMemo(() => {
+    if (!resultsPreview || !selectedResultCampaigns.length) return null;
+    return planCampaignPublicationScope(resultsPreview.currentCampaigns, resultsPreview.campaigns
+      .filter((campaign) => selectedResultCampaigns.includes(campaign.code))
+      .map((campaign) => ({ campaignCode: campaign.code, publicationKey: campaign.publicationKey })));
+  }, [selectedResultCampaigns, resultsPreview]);
 
   const viewSpreadsheets = useMemo(
-    () => spreadsheets.filter((sheet) => sheet.kind === config.kind),
-    [config.kind, spreadsheets],
+    (): StoredSpreadsheet[] => (resultsInventory?.campaigns ?? []).map((item) => ({
+      id: `${item.campaignCode}:${item.publicationId}`, campaign: item.canonicalName,
+      campaignCode: item.campaignCode, publicationId: item.publicationId,
+      canonicalId: item.canonicalId, downloadAvailable: item.downloadAvailable,
+      sourceHash: item.source.sha256,
+      note: item.sourceAvailability === "missing_source_artifact" ? "Resultados publicados preservados; arquivo-fonte indisponível neste ambiente" : undefined,
+      fileName: item.source.fileName, date: new Date(item.publishedAt).toLocaleString("pt-BR"),
+      scope: "Ordinária", sizeBytes: 0, status: "PUBLICADA", rows: item.counts.total,
+    })),
+    [resultsInventory],
   );
-
-  const metrics = useMemo(() => {
-    const ordinaryCampaigns = new Set(
-      viewSpreadsheets
-        .filter((sheet) => sheet.scope === "Ordinária")
-        .map((sheet) => sheet.campaign),
-    );
-
-    return {
-      total: viewSpreadsheets.length,
-      ordinary: ordinaryCampaigns.size,
-      extraordinary: viewSpreadsheets.filter((sheet) => sheet.scope === "Extraordinária").length,
-      published: viewSpreadsheets.filter((sheet) => sheet.status === "PUBLICADA").length,
-    };
-  }, [viewSpreadsheets]);
 
   const visibleSpreadsheets = useMemo(() => {
     const normalizedSearch = normalize(searchTerm);
 
-    return viewSpreadsheets.filter((sheet) => {
-      const matchesFilter =
-        activeFilter === "Todos" ||
-        (activeFilter === "Ordinárias" && sheet.scope === "Ordinária") ||
-        (activeFilter === "Extraordinárias" && sheet.scope === "Extraordinária");
-      const searchable = normalize(`${sheet.fileName} ${sheet.campaign} ${sheet.kind} ${sheet.status}`);
+    return viewSpreadsheets.filter((sheet) => normalize(`${sheet.fileName} ${sheet.campaign} ${sheet.status}`).includes(normalizedSearch));
+  }, [searchTerm, viewSpreadsheets]);
 
-      return matchesFilter && searchable.includes(normalizedSearch);
-    });
-  }, [activeFilter, searchTerm, viewSpreadsheets]);
+  async function previewSelectedResultsFile(file: File | null) {
+    resultsPreviewAbortRef.current?.abort();
+    resultsPreviewAbortRef.current = null;
+    setIsPreviewingResults(false);
+    setSelectedFileName(file?.name ?? null);
+    setResultsPreview(null);
+    setSelectedResultCampaigns([]);
+    resultsRequestRef.current = null;
+    setError(null);
+    if (!file) return;
+
+    const controller = new AbortController();
+    resultsPreviewAbortRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), RESULTS_IMPORT_TIMEOUT_MS);
+    setIsPreviewingResults(true);
+
+    try {
+      const previewData = new FormData();
+      previewData.append("file", file);
+      const response = await fetch("/api/imports/results/preview", {
+        method: "POST",
+        body: previewData,
+        signal: controller.signal,
+      });
+      const payload = await readResultsApiPayload<ResultsWorkbookPreviewResponse>(
+        response,
+        "Não foi possível validar a prévia da planilha de Resultados.",
+      );
+      if (!response.ok || "error" in payload) {
+        throw new Error(
+          "error" in payload
+            ? formatResultsImportError(response.status, payload.error)
+            : "Não foi possível validar a prévia da planilha de Resultados.",
+        );
+      }
+      if (resultsPreviewAbortRef.current !== controller) return;
+      setResultsPreview(payload);
+      setSelectedResultCampaigns(payload.campaigns.map((campaign) => campaign.code));
+    } catch (previewError) {
+      if (resultsPreviewAbortRef.current !== controller) return;
+      setError(
+        previewError instanceof DOMException && previewError.name === "AbortError"
+          ? "A prévia excedeu 60 segundos ou foi substituída por outro arquivo. Selecione a planilha novamente."
+          : toActionableErrorMessage(previewError, "Não foi possível validar a prévia da planilha de Resultados."),
+      );
+    } finally {
+      window.clearTimeout(timeout);
+      if (resultsPreviewAbortRef.current === controller) {
+        resultsPreviewAbortRef.current = null;
+        setIsPreviewingResults(false);
+      }
+    }
+  }
 
   async function addSpreadsheet(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setMessage(null);
-    setConflictHref(null);
 
     if (!canImportSpreadsheets) {
       setError("A categoria ativa pode consultar Dados, mas não pode importar planilhas.");
@@ -311,30 +244,28 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
     }
 
     const form = event.currentTarget;
-    const formData = new FormData(form);
-    const file = formData.get("file");
+    const file = new FormData(form).get("file");
 
     if (!(file instanceof File) || file.size === 0) {
-      setError("A planilha a ser agregada ao repositório de dados deve ser selecionada.");
+      setError("Selecione a planilha de resultados.");
+      return;
+    }
+    if (!resultsPreview || resultsPreview.fileName !== file.name) {
+      setError("Aguarde uma prévia válida desta planilha antes de publicar os resultados.");
+      return;
+    }
+    if (resultsPreview.contractVersion !== RESULTS_CONTRACT_VERSION) {
+      setError(`O leitor legado identificou ${resultsPreview.contractVersion}; a publicação exige ${RESULTS_CONTRACT_VERSION}.`);
+      return;
+    }
+    if (!selectedResultCampaigns.length) {
+      setError("Selecione ao menos uma campanha identificada na prévia antes de publicar.");
       return;
     }
 
-    const campaign =
-      formState.scope === "Extraordinária"
-        ? formState.extraordinaryName.trim() || "Campanha extraordinária"
-        : formState.campaign;
-
-    formData.append("selectedCampaign", campaign);
-
-    let status: SheetStatus = "CARREGADA";
-    let rowCount: number | undefined;
-    let sheetCount: number | undefined;
-    let statusMessage = "Planilha registrada no módulo Dados.";
-    const spreadsheetId = `${file.name}-${crypto.randomUUID()}`;
-    const operationId = `spreadsheet-import:${spreadsheetId}`;
+    const operationId = `spreadsheet-import:${file.name}-${crypto.randomUUID()}`;
     const controller = new AbortController();
     let importTimedOut = false;
-    let resultsTimeout: number | null = null;
     const stopOperation = beginGlobalOperation({
       id: operationId,
       title: "Carregando planilha...",
@@ -347,379 +278,100 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
         controller.abort();
       }
     };
+    const resultsTimeout = window.setTimeout(() => {
+      importTimedOut = true;
+      controller.abort();
+    }, RESULTS_IMPORT_TIMEOUT_MS);
 
     setIsPending(true);
     window.addEventListener(OPERATION_CANCEL_EVENT, cancelHandler);
 
     try {
-      if (formState.kind === "Campo" && formState.publishFieldMap) {
-        const response = await fetch("/api/imports/campaigns", {
-          method: "POST",
-          body: formData,
-          signal: controller.signal,
-        });
-        const payload = (await response.json()) as CampaignPublishPayload | { error: string };
+      const resultsData = new FormData();
+      resultsData.append("file", file);
+      for (const code of selectedResultCampaigns) resultsData.append("selectedCampaigns", code);
+      resultsData.append("expectedHeads", JSON.stringify(resultsPreview.expectedHeads));
+      resultsData.append("sourceSha256", resultsPreview.sourceSha256 ?? "");
+      const requestKey = JSON.stringify([resultsPreview.sourceSha256, [...selectedResultCampaigns].sort()]);
+      if (resultsRequestRef.current?.key !== requestKey) resultsRequestRef.current = { key: requestKey, id: crypto.randomUUID() };
+      resultsData.append("requestId", resultsRequestRef.current.id);
+      const response = await fetch("/api/imports/results", {
+        method: "POST",
+        body: resultsData,
+        signal: controller.signal,
+      });
+      const payload = await readResultsApiPayload<LaboratoryResultsPayload>(
+        response,
+        "A importação foi interrompida pelo servidor. Tente novamente; se persistir, contate o administrador.",
+      );
 
-        if (!response.ok || "error" in payload) {
-          throw new Error("error" in payload ? payload.error : "A planilha de Campo não pôde ser publicada.");
+      if (!response.ok || "error" in payload) {
+        if (response.status === 409) {
+          setResultsPreview(null);
+          setSelectedResultCampaigns([]);
+          resultsRequestRef.current = null;
         }
-
-        if (payload.persistence.mode !== "cloud" && !canUseBrowserOnlyPersistence()) {
-          throw new Error(payload.persistence.message);
-        }
-
-        if (payload.persistence.mode === "cloud" || canUseBrowserOnlyPersistence()) {
-          if (payload.persistence.mode !== "cloud") {
-            emitLocalMode("A planilha de Campo foi salva neste navegador porque a nuvem não confirmou sincronização.");
-          }
-          window.localStorage.setItem("yvae:campaign-map-points", JSON.stringify(payload.points));
-          window.localStorage.setItem(
-            "yvae:campaign-map-import",
-            JSON.stringify({
-              fileName: payload.fileName,
-              pointCount: payload.points.length,
-              originalPointCount: payload.originalPointCount,
-              effectivePointCount: payload.effectivePointCount,
-              importedAt: new Date().toISOString(),
-              persistenceMode: payload.persistence.mode,
-            }),
-          );
-        }
-
-        status = "PUBLICADA";
-        rowCount = payload.rowCount;
-        sheetCount = payload.preview.sheetCount;
-        statusMessage = formatFieldImportMessage(payload);
-        if (payload.unifiedImport?.summary.conflitos) {
-          setConflictHref("/dados/pendencias");
-        }
-      } else if (formState.kind === "Laboratório") {
-        const resultsData = new FormData();
-        resultsData.append("file", file);
-        resultsData.append("selectedCampaign", campaign);
-        resultsTimeout = window.setTimeout(() => {
-          importTimedOut = true;
-          controller.abort();
-        }, RESULTS_IMPORT_TIMEOUT_MS);
-        const response = await fetch("/api/imports/results", {
-          method: "POST",
-          body: resultsData,
-          signal: controller.signal,
-        });
-        const payload = await readResultsApiPayload<LaboratoryResultsPayload>(
-          response,
-          "A importação foi interrompida pelo servidor. Tente novamente; se persistir, contate o administrador.",
+        throw new Error(
+          "error" in payload
+            ? formatResultsImportError(response.status, payload.error)
+            : "A planilha de Resultados não segue o modelo consolidado.",
         );
-
-        if (!response.ok || "error" in payload) {
-          throw new Error(
-            "error" in payload
-              ? formatResultsImportError(response.status, payload.error)
-              : "A planilha de Resultados não segue o modelo consolidado.",
-          );
-        }
-
-        if (payload.persistence.mode !== "cloud" && !canUseBrowserOnlyPersistence()) {
-          throw new Error(payload.persistence.message);
-        }
-
-        if (payload.persistence.mode === "cloud" || canUseBrowserOnlyPersistence()) {
-          if (payload.persistence.mode !== "cloud") {
-            emitLocalMode("A planilha de Resultados foi salva neste navegador porque a nuvem não confirmou sincronização.");
-          }
-          window.localStorage.setItem("yvae:lab-risk-results", JSON.stringify(payload.riskPoints));
-          window.localStorage.setItem(
-            "yvae:lab-risk-import",
-            JSON.stringify({
-              campaignId: resolveCanonicalCampaign(campaign)?.id ?? "",
-              fileName: payload.fileName,
-              rankingWorksheetName: payload.rankingWorksheetName,
-              riskRowCount: payload.riskRows.length,
-              matchedRiskPointCount: payload.matchedRiskPointCount,
-              importedAt: new Date().toISOString(),
-              persistenceMode: payload.persistence.mode,
-            }),
-          );
-        }
-
-        status = "PUBLICADA";
-        rowCount = payload.rowCount;
-        sheetCount = payload.sheetCount;
-        statusMessage = `${payload.persistence.message} ${payload.rowCount} linhas, ${payload.expectedColumnCount} variáveis validadas${payload.columnCount > payload.expectedColumnCount ? ` e ${payload.columnCount - payload.expectedColumnCount} colunas adicionais` : ""}; ${payload.speciesCount} espécies identificadas; ${payload.matchedRiskPointCount}/${payload.riskRows.length} pontos de risco publicados no Início.${payload.warnings.length ? ` Atenção: ${payload.warnings.join(" ")}` : ""}`;
-      } else {
-        const previewData = new FormData();
-        previewData.append("file", file);
-        const response = await fetch("/api/imports/preview", {
-          method: "POST",
-          body: previewData,
-          signal: controller.signal,
-        });
-        const payload = (await response.json()) as SpreadsheetPreview | { error: string };
-
-        if (response.ok && !("error" in payload)) {
-          status = "PREVIEW";
-          rowCount = payload.totalRows;
-          sheetCount = payload.sheetCount;
-        }
       }
 
-      const today = new Intl.DateTimeFormat("pt-BR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }).format(new Date());
-
-      const newSpreadsheet: StoredSpreadsheet = {
-        id: spreadsheetId,
-        fileName: file.name,
-        campaign,
-        scope: formState.scope,
-        kind: formState.kind,
-        date: today,
-        sizeBytes: file.size,
-        status,
-        rows: rowCount,
-        sheets: sheetCount,
-        note: formState.note.trim(),
-      };
-
-      await saveSpreadsheetFile(spreadsheetId, file);
-      setSpreadsheets((current) => [newSpreadsheet, ...current]);
+      const rowCount = payload.campaigns.reduce((sum, item) => sum + item.counts.total, 0);
       setSelectedFileName(null);
+      setResultsPreview(null);
+      setSelectedResultCampaigns([]);
+      resultsRequestRef.current = null;
       form.reset();
-      setFormState((current) => ({
-        ...current,
-        note: "",
-        extraordinaryName: "",
-      }));
-      setMessage(statusMessage);
+      setMessage(`${payload.persistence.message} ${rowCount} pontos de ${payload.campaigns.map((item) => item.campaignCode).join(" e ")} validados.${payload.warnings.length ? ` Atenção: ${payload.warnings.join(" ")}` : ""}`);
     } catch (uploadError) {
       setError(
         importTimedOut
           ? "A importação excedeu 60 segundos. A interface não confirmou a conclusão; consulte o estado da campanha antes de repetir."
           : uploadError instanceof DOMException && uploadError.name === "AbortError"
           ? "Importação cancelada. A interface não confirmou a conclusão; consulte o estado da campanha antes de repetir."
-          : toActionableErrorMessage(
-              uploadError,
-              "Não foi possível agregar a planilha.",
-            ),
+          : toActionableErrorMessage(uploadError, "Não foi possível publicar a planilha."),
       );
-      if (isCloudConnectionError(uploadError)) {
-        emitLocalMode("Falha durante importação de planilha. Dados podem estar apenas neste navegador.");
-      }
     } finally {
-      if (resultsTimeout !== null) {
-        window.clearTimeout(resultsTimeout);
-      }
+      window.clearTimeout(resultsTimeout);
       window.removeEventListener(OPERATION_CANCEL_EVENT, cancelHandler);
       stopOperation();
       setIsPending(false);
-    }
-  }
-
-  async function deleteSelectedCampaignResults() {
-    const campaign = formState.scope === "Ordinária"
-      ? resolveCanonicalCampaign(formState.campaign)
-      : null;
-
-    if (view !== "resultados" || !canDeleteSpreadsheets) {
-      setError("Somente administradores podem apagar resultados publicados.");
-      return;
-    }
-    if (!campaign) {
-      setError("Selecione uma campanha ordinária canônica antes de apagar resultados.");
-      return;
-    }
-    if (!window.confirm(
-      `Apagar somente os resultados laboratoriais publicados de “${campaign.name}”? Diário de campo, fotos, documentos e demais campanhas serão preservados. Esta ação não pode ser desfeita.`,
-    )) {
-      return;
-    }
-
-    setIsPending(true);
-    setIsDeletingResults(true);
-    setError(null);
-    setMessage(null);
-
-    try {
-      const response = await fetch("/api/imports/results", {
-        method: "DELETE",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ campaignId: campaign.id, confirmation: campaign.id }),
-      });
-      const payload = await readResultsApiPayload<{ campaignId: string; deletedCount: number }>(
-        response,
-        "Não foi possível apagar os resultados desta campanha.",
-      );
-
-      if (!response.ok || "error" in payload) {
-        throw new Error("error" in payload ? payload.error : "Não foi possível apagar os resultados desta campanha.");
-      }
-      if (payload.campaignId !== campaign.id || !Number.isInteger(payload.deletedCount) || payload.deletedCount < 1) {
-        throw new Error("A nuvem não confirmou a exclusão exata da campanha selecionada.");
-      }
-
-      const storedRisk = window.localStorage.getItem("yvae:lab-risk-results");
-      if (storedRisk) {
-        try {
-          const parsed: unknown = JSON.parse(storedRisk);
-          if (Array.isArray(parsed)) {
-            const retained = (parsed as LaboratoryRiskPoint[]).filter(
-              (point) => campaignIdentityKey(null, point.campaign) !== campaign.id,
-            );
-            window.localStorage.setItem("yvae:lab-risk-results", JSON.stringify(retained));
-          }
-        } catch {
-          // Fail closed: malformed browser data is not deleted.
-        }
-      }
-
-      const storedImport = window.localStorage.getItem("yvae:lab-risk-import");
-      if (storedImport) {
-        try {
-          const parsed = JSON.parse(storedImport) as { campaignId?: unknown };
-          if (campaignIdentityKey(parsed.campaignId, null) === campaign.id) {
-            window.localStorage.removeItem("yvae:lab-risk-import");
-          }
-        } catch {
-          // Fail closed: malformed browser data is not deleted.
-        }
-      }
-
-      window.dispatchEvent(new Event("storage"));
-      setMessage(
-        `${payload.deletedCount} publicação(ões) de resultados de “${campaign.name}” apagada(s). Diário, fotos, documentos e outras campanhas foram preservados.`,
-      );
-    } catch (deleteError) {
-      setError(toActionableErrorMessage(deleteError, "Não foi possível apagar os resultados desta campanha."));
-    } finally {
-      setIsDeletingResults(false);
-      setIsPending(false);
+      await refreshResultsInventory();
     }
   }
 
   async function downloadSpreadsheet(sheet: StoredSpreadsheet) {
-    const file = await readSpreadsheetFile(sheet.id);
-
-    if (!file) {
-      setError("Arquivo da planilha não encontrado neste navegador. Recarregue a planilha para habilitar o download.");
+    if (!sheet.campaignCode || !sheet.publicationId || !sheet.sourceHash || !sheet.downloadAvailable) {
+      setError("Esta publicação não tem um arquivo-fonte verificável disponível para download.");
       return;
     }
-
-    const url = URL.createObjectURL(file);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = sheet.fileName;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-  }
-
-  async function deleteSpreadsheet(sheet: StoredSpreadsheet) {
-    if (!canDeleteSpreadsheets) {
-      setError("A categoria ativa pode consultar Dados, mas não pode excluir planilhas.");
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `ATENÇÃO: A exclusão removerá permanentemente a planilha "${sheet.fileName}" e TODOS os dados associados à campanha "${sheet.campaign}" do diário de campo e mapas. Confirmar exclusão?`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setIsPending(true);
-    setError(null);
-    setMessage(null);
-
     try {
-      const response = await fetch(
-        `/api/imports/campaigns?campaignName=${encodeURIComponent(
-          sheet.campaign
-        )}&campaignKey=${encodeURIComponent(sheet.campaign.toLowerCase())}`,
-        {
-          method: "DELETE",
-        }
-      );
-
+      const response = await fetch(`/api/imports/results/template?source=published&campaignCode=${encodeURIComponent(sheet.campaignCode)}&publicationId=${encodeURIComponent(sheet.publicationId)}&sourceHash=${encodeURIComponent(sheet.sourceHash)}`, { cache: "no-store" });
       if (!response.ok) {
-        const errPayload = await response.json();
-        throw new Error(errPayload.error || "Erro ao excluir dados da nuvem.");
+        const payload = await readResultsApiPayload<{ error: string }>(response, "Fonte indisponível para esta publicação.");
+        throw new Error(payload.error);
       }
-
-      setSpreadsheets((current) => current.filter((item) => item.id !== sheet.id));
-      await deleteSpreadsheetFile(sheet.id);
-
-      const storedPointsRaw = window.localStorage.getItem("yvae:campaign-map-points");
-      if (storedPointsRaw) {
-        const storedPoints = JSON.parse(storedPointsRaw) as CampaignMapPoint[];
-        const filteredPoints = storedPoints.filter(
-          (p) => p.campaign.trim().toLowerCase() !== sheet.campaign.trim().toLowerCase()
-        );
-        if (filteredPoints.length === 0) {
-          window.localStorage.removeItem("yvae:campaign-map-points");
-        } else {
-          window.localStorage.setItem("yvae:campaign-map-points", JSON.stringify(filteredPoints));
-        }
-        window.dispatchEvent(new Event("storage"));
-      }
-
-      const storedImportRaw = window.localStorage.getItem("yvae:campaign-map-import");
-      if (storedImportRaw) {
-        const storedImport = JSON.parse(storedImportRaw);
-        if (storedImport.fileName === sheet.fileName) {
-          window.localStorage.removeItem("yvae:campaign-map-import");
-        }
-      }
-
-      const storedDiaryRaw = window.localStorage.getItem("yvae:field-diary-entries");
-      if (storedDiaryRaw) {
-        const storedDiary = JSON.parse(storedDiaryRaw) as FieldDiaryEntry[];
-        const filteredDiary = storedDiary.filter(
-          (d) => d.campaignName.trim().toLowerCase() !== sheet.campaign.trim().toLowerCase()
-        );
-        window.localStorage.setItem("yvae:field-diary-entries", JSON.stringify(filteredDiary));
-        window.dispatchEvent(new Event("yvae:field-diary-updated"));
-      }
-
-      setMessage(`Dados da campanha "${sheet.campaign}" excluídos com sucesso.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro desconhecido ao excluir dados.");
-    } finally {
-      setIsPending(false);
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = sheet.fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setError(toActionableErrorMessage(error, "Não foi possível baixar a fonte desta publicação."));
     }
   }
 
   return (
     <div className="space-y-4">
-      <section className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
-        <p className="type-metadata text-[var(--ink-soft)]">
-          {config.description}
-        </p>
-        <span className="type-caption whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-[var(--ink-soft)]">
-          Perfil: <strong className="text-[var(--brand-navy-strong)]">{activeCategory}</strong> · Exclusão {canDeleteSpreadsheets ? "liberada" : "bloqueada"}
-        </span>
-      </section>
-
-      <section>
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="heading-font type-section-title text-[var(--brand-navy-strong)]">
-            Controle de importação
-          </h2>
-          <span className="type-eyebrow text-[var(--brand-teal)]">
-            {viewSpreadsheets.length} de {config.metricsLabel}
-          </span>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-4">
-          <MetricTile label={config.metricTotalLabel} value={metrics.total} />
-          <MetricTile label="Campanhas ordinárias" value={`${metrics.ordinary}/9`} />
-          <MetricTile label="Extraordinárias" value={metrics.extraordinary} />
-          <MetricTile label="Publicadas" value={metrics.published} />
-        </div>
-      </section>
+      {/* Resumo em uma linha: os 4 cartões anteriores repetiam o mesmo número. */}
+      <p role="status" className="type-metadata rounded-xl bg-[var(--surface-soft)] px-4 py-2 font-semibold text-[var(--brand-navy-strong)]">
+        {resultsInventory
+          ? `${resultsInventory.publishedCount} de ${resultsInventory.totalCampaigns} campanhas com resultados publicados`
+          : inventoryLoading ? "Consultando publicações…" : "Estado não confirmado"}
+      </p>
 
       <section className="glass-panel radius-panel p-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-2">
@@ -733,7 +385,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
               </h3>
             </div>
             {!canImportSpreadsheets ? (
-              <p className="mt-1 rounded bg-[rgba(197,122,0,0.08)] px-2 py-0.5 text-[10px] font-semibold text-[var(--brand-amber)]">
+              <p className="mt-1 rounded bg-[rgba(197,122,0,0.08)] px-2 py-0.5 text-xs font-semibold text-[var(--brand-amber)]">
                 Importação bloqueada para a categoria ativa. Revise as permissões em Configurações.
               </p>
             ) : null}
@@ -743,188 +395,125 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
           </div>
         </div>
 
-        {config.template ? (
-          <div className="mb-2 flex items-center justify-between rounded-lg bg-[var(--surface-soft)] px-3 py-1.5">
-            <div className="flex items-center gap-2 min-w-0">
-              <FileSpreadsheet className="h-4 w-4 text-[var(--brand-blue)] shrink-0" />
-              <p className="type-caption truncate text-[var(--ink-soft)]">
-                {config.template.description}
-              </p>
-            </div>
-            {config.template.href ? (
-              <a
-                href={config.template.href}
-                download
-                className="type-button inline-flex shrink-0 items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[var(--brand-navy-strong)] shadow-sm transition hover:bg-slate-50"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Baixar Modelo
-              </a>
-            ) : (
-              <button
-                type="button"
-                className="type-button inline-flex shrink-0 items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[var(--brand-navy-strong)] shadow-sm transition hover:bg-slate-50"
-                onClick={() => void downloadResultsTemplate(formState.campaign)}
-              >
-                <Download className="h-3.5 w-3.5" />
-                Baixar Modelo
-              </button>
-            )}
-          </div>
-        ) : null}
-
         <form className="grid gap-2 lg:grid-cols-12" onSubmit={addSpreadsheet}>
-          <select
-            className="type-label h-9 rounded-lg border border-slate-200 bg-white px-3 lg:col-span-2"
-            value={formState.scope}
-            disabled={!canImportSpreadsheets || isPending}
-            onChange={(event) =>
-              setFormState((current) => ({
-                ...current,
-                scope: event.target.value as CampaignScope,
-              }))
-            }
-          >
-            <option value="Ordinária">Campanha ordinária</option>
-            <option value="Extraordinária">Campanha extraordinária</option>
-          </select>
-          {formState.scope === "Ordinária" ? (
-            <select
-              className="type-label h-9 rounded-lg border border-slate-200 bg-white px-3 lg:col-span-2"
-              value={formState.campaign}
-              disabled={!canImportSpreadsheets || isPending}
-              onChange={(event) =>
-                setFormState((current) => ({ ...current, campaign: event.target.value }))
-              }
-            >
-              {campaigns.map((campaign) => (
-                <option key={campaign} value={campaign}>
-                  {campaign}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              className="type-label h-9 rounded-lg border border-slate-200 bg-white px-3 lg:col-span-2"
-              placeholder="Nome da campanha extraordinária"
-              value={formState.extraordinaryName}
-              disabled={!canImportSpreadsheets || isPending}
-              onChange={(event) =>
-                setFormState((current) => ({
-                  ...current,
-                  extraordinaryName: event.target.value,
-                }))
-              }
-            />
-          )}
+          <p className="type-metadata self-center lg:col-span-4">Selecione o arquivo e confira abaixo as campanhas identificadas antes de publicar.</p>
           <label className="type-button flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--brand-navy)]/40 bg-[var(--surface-soft)] px-3 text-[var(--brand-navy-strong)] transition hover:border-[var(--brand-navy)] hover:bg-[var(--brand-blue-soft)] lg:col-span-2">
             <UploadCloud className="h-4 w-4 shrink-0 text-[var(--brand-navy)]" />
             <span className="min-w-0 flex-1 truncate text-center">
               {selectedFileName ?? "Selecionar planilha"}
             </span>
             <input
+              ref={fileInputRef}
               name="file"
               type="file"
               accept=".xlsx,.xlsm"
               disabled={!canImportSpreadsheets || isPending}
               className="sr-only"
-              onChange={(event) =>
-                setSelectedFileName(event.currentTarget.files?.[0]?.name ?? null)
-              }
+              onChange={(event) => void previewSelectedResultsFile(event.currentTarget.files?.[0] ?? null)}
             />
           </label>
           <button
             type="submit"
-            disabled={isPending || !canImportSpreadsheets}
+            disabled={isPending || isPreviewingResults || !canImportSpreadsheets || !resultsPreview || !selectedResultCampaigns.length}
             className="type-button flex h-9 items-center justify-center gap-2 rounded-lg bg-[var(--brand-navy-strong)] px-4 text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 lg:col-span-3"
           >
             <UploadCloud className="h-4 w-4" />
-            {isPending ? "Carregando..." : config.submitLabel}
+            {isPreviewingResults ? "Validando prévia..." : isPending ? "Carregando..." : config.submitLabel}
           </button>
-          {view === "resultados" && canDeleteSpreadsheets ? (
-            <button
-              type="button"
-              disabled={isPending || formState.scope !== "Ordinária"}
-              aria-label={`Apagar resultados desta campanha: ${formState.campaign}`}
-              title="Apagar resultados desta campanha"
-              onClick={() => void deleteSelectedCampaignResults()}
-              className="type-button flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-[var(--brand-danger)] bg-white px-4 text-[var(--brand-danger)] transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 lg:col-span-3"
-            >
-              <Trash2 className="h-4 w-4" />
-              <span>
-                {isDeletingResults ? "Apagando resultados desta campanha..." : "Apagar resultados desta campanha"}
-              </span>
-            </button>
-          ) : null}
-          
-          <input
-            className={`h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs ${
-              config.showFieldMapToggle ? "lg:col-span-8" : "lg:col-span-12"
-            }`}
-            placeholder="Observação operacional"
-            value={formState.note}
-            disabled={!canImportSpreadsheets || isPending}
-            onChange={(event) =>
-              setFormState((current) => ({ ...current, note: event.target.value }))
-            }
-          />
-          {config.showFieldMapToggle ? (
-            <label className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[var(--brand-navy-strong)] lg:col-span-4">
-              <input
-                type="checkbox"
-                checked={formState.publishFieldMap}
-                disabled={!canImportSpreadsheets || isPending}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    publishFieldMap: event.target.checked,
-                  }))
-                }
-                className="h-4 w-4 shrink-0 rounded border-slate-300 text-[var(--brand-navy-strong)]"
-              />
-              Mapa será atualizado
-            </label>
-          ) : null}
         </form>
 
-        {message ? (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[rgba(0,168,107,0.08)] px-4 py-3 text-xs font-semibold text-[#0b5f40]">
-            <span>{message}</span>
-            {conflictHref ? (
-              <Link
-                href={conflictHref}
-                className="rounded-md bg-white px-3 py-1.5 font-bold text-[var(--brand-navy-strong)] shadow-sm"
-              >
-                Resolver agora
-              </Link>
+        {resultsPreview ? (
+          <section
+            aria-live="polite"
+            aria-label="Prévia da planilha de Resultados"
+            className="mt-3 rounded-lg border border-slate-200 bg-white p-3"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="type-eyebrow text-[var(--brand-teal)]">Prévia validada</p>
+                <p className="type-caption text-[var(--ink-soft)]">
+                  {resultsPreview.molecularRecordCount.toLocaleString("pt-BR")} registros moleculares · {resultsPreview.totalPointCount} pontos
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs font-semibold text-[var(--brand-navy-strong)]">
+                <span>{resultsPreview.completePointCount} completos</span>
+                <span>{resultsPreview.partialPointCount} parciais</span>
+                <span>{resultsPreview.unavailablePointCount} indisponíveis</span>
+              </div>
+            </div>
+            <fieldset className="mt-2" disabled={isPending || isPreviewingResults || !canImportSpreadsheets}>
+              <legend className="type-label">Campanhas a publicar — todas as presentes no arquivo vêm selecionadas</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+              {resultsPreview.campaigns.map((campaign) => (
+                <label key={campaign.code} className="type-metadata flex min-h-11 cursor-pointer items-start gap-3 rounded-lg bg-[var(--surface-soft)] px-3 py-2">
+                  <input type="checkbox" className="mt-1 h-4 w-4 shrink-0" checked={selectedResultCampaigns.includes(campaign.code)} onChange={(event) => {
+                    setSelectedResultCampaigns((current) => event.target.checked ? [...current, campaign.code] : current.filter((code) => code !== campaign.code));
+                    resultsRequestRef.current = null;
+                  }} />
+                  <span>
+                  <strong className="text-[var(--brand-navy-strong)]">{campaign.code} · {campaign.canonicalName}</strong>
+                  <span className="mt-1 block text-[var(--ink-soft)]">
+                    {campaign.totalPointCount} pontos · {campaign.completePointCount} completos · {campaign.partialPointCount} parciais · {campaign.unavailablePointCount} indisponíveis
+                  </span>
+                  </span>
+                </label>
+              ))}
+              </div>
+            </fieldset>
+            {selectedResultPublicationScope ? (
+              <div className="mt-3 rounded-lg border border-slate-200 p-3" aria-label="Escopo da publicação">
+                <p className="text-xs font-black text-[var(--brand-navy-strong)]">Escopo da publicação selecionada</p>
+                <dl className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
+                  <PublicationScopeItem label="Adicionar" codes={selectedResultPublicationScope.add} />
+                  <PublicationScopeItem label="Substituir integralmente" codes={selectedResultPublicationScope.replace} />
+                  <PublicationScopeItem label="Já vigente, sem nova publicação" codes={selectedResultPublicationScope.unchanged} />
+                  <PublicationScopeItem label="Preservar fora do escopo" codes={selectedResultPublicationScope.preserve} />
+                </dl>
+                <p className="mt-2 text-xs text-[var(--ink-soft)]">
+                  Cada campanha selecionada substitui seu conjunto inteiro de pontos; campanhas ausentes do arquivo ou desmarcadas permanecem fora do escopo. Não há merge com pontos da publicação anterior. O servidor reconfirma a vigência antes da publicação.
+                </p>
+              </div>
             ) : null}
-          </div>
+            {!selectedResultCampaigns.length ? (
+              <p className="mt-2 text-xs font-semibold text-[var(--brand-amber)]">
+                Selecione ao menos uma campanha antes de publicar.
+              </p>
+            ) : null}
+            {resultsPreview.warnings.length ? (
+              <p className="mt-2 text-xs text-[var(--brand-amber)]">Atenção: {resultsPreview.warnings.join(" ")}</p>
+            ) : null}
+          </section>
+        ) : null}
+
+        {message ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[var(--status-success-soft)] px-4 py-3 text-xs font-semibold text-[var(--status-success-strong)]">
+            <span>{message}</span>
+              </div>
         ) : null}
         {error ? (
-          <p className="mt-4 rounded-lg bg-[rgba(186,26,26,0.08)] px-4 py-3 text-xs font-semibold text-[var(--brand-danger)]">
+          <p role="alert" className="mt-4 rounded-lg bg-[rgba(186,26,26,0.08)] px-4 py-3 type-metadata font-semibold text-[var(--brand-danger)]">
             {error}
           </p>
         ) : null}
+        {selectedFileName && !resultsPreview ? <button type="button" disabled={isPending || isPreviewingResults || !canImportSpreadsheets} className="type-button mt-2 min-h-11 rounded border border-[var(--line-ghost)] px-3 disabled:opacity-50" onClick={() => void previewSelectedResultsFile(fileInputRef.current?.files?.[0] ?? null)}>Revalidar prévia do arquivo selecionado</button> : null}
       </section>
 
+      <ResultsPreparationPanel canImport={canImportSpreadsheets} />
+      {!!resultsInventory?.historicalPublications?.length && <section className="space-y-2" aria-label="Histórico sem campanha demonstrada">
+        <h3 className="type-panel-title">Histórico preservado — sem campanha demonstrada</h3>
+        <p className="type-metadata">Estes registros não foram atribuídos a uma campanha e não substituem publicações vigentes. Arquivo-fonte indisponível; download não oferecido.</p>
+        <ul className="space-y-2">{resultsInventory.historicalPublications.map((item) => <li key={item.publicationId} className="type-metadata break-words">{item.publicationId} · {item.createdAt} · {item.format} · {item.recordCount === null ? "Quantidade não informada" : `${item.recordCount} registros`}</li>)}</ul>
+      </section>}
       <section className="space-y-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <nav className="flex flex-wrap gap-1 rounded-lg bg-[var(--surface-soft)] p-1">
-            {filters.map((filter) => (
-              <button
-                key={filter}
-                type="button"
-                onClick={() => setActiveFilter(filter)}
-                className={
-                  filter === activeFilter
-                    ? "rounded-md border-b-2 border-[var(--brand-blue)] bg-white px-4 py-2 text-xs font-bold text-[var(--brand-navy)] shadow-sm"
-                    : "px-4 py-2 text-xs font-medium text-slate-500 transition-colors hover:text-[var(--brand-navy-strong)]"
-                }
-              >
-                {filter}
-              </button>
-            ))}
-          </nav>
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="heading-font type-panel-title">Publicações vigentes</h3>
+            <button type="button" disabled={inventoryLoading || isPending} className="type-button min-h-11 rounded border border-[var(--line-ghost)] px-3 disabled:opacity-50" onClick={() => void refreshResultsInventory()}>{inventoryLoading ? "Consultando…" : "Atualizar lista"}</button>
+          </div>
+          <ResultsInterpretationHelp><p>O download contém o arquivo-fonte integral da publicação, podendo incluir outras campanhas. Não é um recorte da campanha selecionada.</p><p>A última publicação válida é a fonte de consulta. A prévia permite conferir as campanhas antes de publicar; arquivos inválidos não substituem publicações vigentes.</p></ResultsInterpretationHelp>
+          {inventoryError ? <p role="alert" className="type-metadata text-[var(--brand-danger)]">{inventoryError}</p> : null}
+        </div>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
 
           <div className="relative w-full lg:w-72">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -938,26 +527,26 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
           </div>
         </div>
 
-        <div className="glass-panel overflow-hidden radius-panel">
+        <div className="glass-panel overflow-x-auto radius-panel">
           <table className="w-full text-left">
             <thead className="bg-slate-50/50">
               <tr>
-                <th className="px-4 py-2 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
+                <th className="px-4 py-2 text-caption font-bold text-slate-500">
                   Campanha
                 </th>
-                <th className="px-4 py-2 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
+                <th className="px-4 py-2 text-caption font-bold text-slate-500">
                   Data de Importação
                 </th>
-                <th className="px-4 py-2 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
+                <th className="px-4 py-2 text-caption font-bold text-slate-500">
                   Status
                 </th>
-                <th className="px-4 py-2 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
+                <th className="px-4 py-2 text-caption font-bold text-slate-500">
                   Ações
                 </th>
               </tr>
             </thead>
             <tbody className="type-table divide-y divide-slate-50">
-              {!hasLoaded ? (
+              {!hasLoaded || inventoryLoading ? (
                 <TableSkeletonRows rows={5} columns={4} />
               ) : (
               visibleSpreadsheets.map((sheet) => (
@@ -970,17 +559,10 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
                           <p className="font-bold text-[var(--brand-navy-strong)]">
                             {sheet.campaign}
                           </p>
-                          <span className={`type-caption rounded px-1.5 py-0.5 font-bold ${
-                            sheet.scope === "Ordinária" 
-                              ? "bg-[var(--brand-navy-strong)]/10 text-[var(--brand-navy-strong)]" 
-                              : "bg-amber-100 text-amber-800"
-                          }`}>
-                            {sheet.scope}
-                          </span>
                         </div>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          {sheet.fileName} • {formatBytes(sheet.sizeBytes)}
-                          {sheet.rows ? ` • ${sheet.rows} linhas` : ""}
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {sheet.fileName}
+                          {sheet.rows !== undefined ? ` • ${sheet.rows} pontos` : ""}
                           {sheet.sheets ? ` • ${sheet.sheets} abas` : ""}
                           {sheet.note ? ` • Obs: "${sheet.note}"` : ""}
                         </p>
@@ -990,7 +572,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
                   <td className="px-4 py-2 text-slate-500 whitespace-nowrap">{sheet.date}</td>
                   <td className="px-4 py-2">
                     <span className={`rounded-sm border-l-[3px] px-2 py-0.5 text-caption font-bold ${statusClass(sheet.status)}`}>
-                      {sheet.status}
+                      {SHEET_STATUS_LABELS[sheet.status]}
                     </span>
                   </td>
                   <td className="px-4 py-2">
@@ -998,22 +580,13 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
                       <button
                         type="button"
                         aria-label={`Baixar ${sheet.fileName}`}
-                        className="rounded p-1 text-slate-500 transition-colors hover:bg-slate-100"
+                        disabled={!sheet.downloadAvailable || !sheet.sourceHash}
+                        title={!sheet.downloadAvailable ? "Fonte verificável indisponível nesta publicação" : "Baixar arquivo-fonte integral"}
+                        className="min-h-11 min-w-11 rounded p-1 text-slate-500 transition-colors hover:bg-slate-100 disabled:opacity-50"
                         onClick={() => void downloadSpreadsheet(sheet)}
                       >
                         <Download className="h-4 w-4" />
                       </button>
-                      {canDeleteSpreadsheets && view === "campo" ? (
-                        <button
-                          type="button"
-                          aria-label={`Remover ${sheet.fileName}`}
-                          disabled={isPending}
-                          className="rounded p-1 text-[var(--brand-danger)] transition-colors hover:bg-red-50 disabled:opacity-50"
-                          onClick={() => void deleteSpreadsheet(sheet)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -1022,7 +595,7 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
             </tbody>
           </table>
 
-          {hasLoaded && !visibleSpreadsheets.length ? (
+          {hasLoaded && !visibleSpreadsheets.length && !inventoryLoading && resultsInventory ? (
             <div className="p-4">
               <EmptyState
                 title={config.emptyTableLabel}
@@ -1037,83 +610,14 @@ export function SpreadsheetRepository({ view = "campo" }: { view?: DataEntryView
   );
 }
 
-function openSpreadsheetDb() {
-  return new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
 
-    request.onupgradeneeded = () => {
-      request.result.createObjectStore(DB_STORE);
-    };
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result);
-  });
-}
-
-async function saveSpreadsheetFile(id: string, file: File) {
-  const db = await openSpreadsheetDb();
-
-  await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction(DB_STORE, "readwrite");
-    transaction.objectStore(DB_STORE).put(file, id);
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
-  });
-
-  db.close();
-}
-
-async function readSpreadsheetFile(id: string) {
-  const db = await openSpreadsheetDb();
-
-  const file = await new Promise<File | null>((resolve, reject) => {
-    const transaction = db.transaction(DB_STORE, "readonly");
-    const request = transaction.objectStore(DB_STORE).get(id);
-    request.onsuccess = () => resolve(request.result instanceof File ? request.result : null);
-    request.onerror = () => reject(request.error);
-  });
-
-  db.close();
-  return file;
-}
-
-async function deleteSpreadsheetFile(id: string) {
-  const db = await openSpreadsheetDb();
-
-  await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction(DB_STORE, "readwrite");
-    transaction.objectStore(DB_STORE).delete(id);
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
-  });
-
-  db.close();
-}
-
-function MetricTile({ label, value }: { label: string; value: string | number }) {
+function PublicationScopeItem({ label, codes }: { label: string; codes: string[] }) {
   return (
-    <article className="glass-panel radius-card p-2.5 flex items-center justify-between gap-4">
-      <p className="type-label truncate uppercase tracking-[0.1em] text-[var(--ink-soft)]">
-        {label}
-      </p>
-      <p className="heading-font type-kpi shrink-0 text-[var(--brand-navy-strong)]">
-        {value}
-      </p>
-    </article>
+    <div className="rounded bg-[var(--surface-soft)] px-2 py-1.5">
+      <dt className="font-bold text-[var(--ink-soft)]">{label}</dt>
+      <dd className="mt-0.5 font-black text-[var(--brand-navy-strong)]">{codes.join(", ") || "Nenhuma"}</dd>
+    </div>
   );
-}
-
-function readStoredSpreadsheets() {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as StoredSpreadsheet[]) : [];
-  } catch {
-    return [];
-  }
 }
 
 function normalize(value: string) {
@@ -1123,17 +627,8 @@ function normalize(value: string) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-function formatBytes(value: number) {
-  if (value === 0) {
-    return "0 B";
-  }
-
-  const units = ["B", "KB", "MB", "GB"];
-  const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
-  const amount = value / 1024 ** index;
-
-  return `${amount.toFixed(amount >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
-}
+// O valor interno fica em caixa alta; a tela mostra a palavra comum.
+const SHEET_STATUS_LABELS: Record<SheetStatus, string> = { CARREGADA: "Carregada", PUBLICADA: "Publicada", PREVIEW: "Prévia", ERRO: "Erro" };
 
 function statusClass(status: SheetStatus) {
   if (status === "PUBLICADA") {
@@ -1150,117 +645,3 @@ function statusClass(status: SheetStatus) {
 
   return "border-[var(--brand-teal)] bg-cyan-50 text-cyan-700";
 }
-
-function formatFieldImportMessage(payload: CampaignPublishPayload) {
-  const unified = payload.unifiedImport;
-
-  if (!unified) {
-    return payload.persistence.message;
-  }
-
-  const parts = [
-    payload.persistence.message,
-    `Diário: ${unified.summary.novos} novos, ${unified.summary.aditivos} aditivos, ${unified.summary.identicos} idênticos`,
-  ];
-
-  if (unified.summary.conflitos) {
-    parts.push(`${unified.summary.conflitos} conflitos em Pendências`);
-  }
-
-  parts.push(
-    `Fotos: ${unified.summary.fotos.baixadas} convertidas${
-      unified.summary.fotos.avisos ? `, ${unified.summary.fotos.avisos} avisos` : ""
-    }`,
-  );
-
-  return parts.join(" · ");
-}
-
-async function downloadResultsTemplate(campaignTitle: string) {
-  const ExcelJS = await import("exceljs");
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Yva'e Monitoramento";
-  workbook.created = new Date();
-
-  const instructions = workbook.addWorksheet(RESULTS_WORKSHEETS.instructions);
-  instructions.addRow([...RESULTS_INSTRUCTION_HEADERS]);
-  const campaignNumber = Number(campaignTitle.match(/(\d+)/)?.[1] ?? 1);
-  const campaignId = campaignNumber === 1
-    ? "campanha-1-verao-2026"
-    : campaignNumber === 2
-      ? "campanha-2-outono-2026"
-      : `campanha-${campaignNumber}`;
-  const instructionValues: Record<string, string | number> = {
-    schema_version: RESULTS_SCHEMA_VERSION,
-    campaign_id: campaignId,
-    campaign_number: campaignNumber,
-    campaign_title: campaignTitle,
-    publication_status: "draft",
-    methodology_origin: "Preencher com a fonte homologada",
-    methodology_version: "Preencher com a versão homologada",
-  };
-  RESULTS_INSTRUCTION_FIELDS.forEach((field) =>
-    instructions.addRow([field.key, instructionValues[field.key] ?? ""]),
-  );
-
-  const molecular = workbook.addWorksheet(RESULTS_WORKSHEETS.molecular);
-  molecular.addRow(RESULTS_MOLECULAR_FIELDS.map((field) => field.header));
-  const ranking = workbook.addWorksheet(RESULTS_WORKSHEETS.ranking);
-  ranking.addRow(RESULTS_RANKING_FIELDS.map((field) => field.header));
-
-  const dashboard = workbook.addWorksheet(RESULTS_WORKSHEETS.dashboard);
-  dashboard.addRow([...RESULTS_DASHBOARD_HEADERS]);
-  RESULTS_DASHBOARD_SECTIONS.forEach((section) =>
-    dashboard.addRow([section, "", "Preencher com a fonte homologada", "Preencher com a versão homologada"]),
-  );
-
-  const dictionary = workbook.addWorksheet(RESULTS_WORKSHEETS.dictionary);
-  dictionary.addRow([...RESULTS_DICTIONARY_HEADERS]);
-  const dictionaryRows = [
-    ...RESULTS_MOLECULAR_FIELDS.map((field) => [RESULTS_WORKSHEETS.molecular, field] as const),
-    ...RESULTS_RANKING_FIELDS.map((field) => [RESULTS_WORKSHEETS.ranking, field] as const),
-  ] as const;
-  dictionaryRows.forEach(([sheet, field]) =>
-    dictionary.addRow([
-      sheet,
-      field.header,
-      field.key,
-      field.type,
-      field.unit,
-      field.requirement,
-      field.validation,
-      field.usage,
-    ]),
-  );
-  RESULTS_DASHBOARD_SECTIONS.forEach((section) =>
-    dictionary.addRow([
-      RESULTS_WORKSHEETS.dashboard,
-      section,
-      section,
-      "JSON",
-      "—",
-      "required",
-      "payload explícito validado; sem cálculo de score/classificação",
-      "paridade do golden master",
-    ]),
-  );
-
-  for (const sheet of workbook.worksheets) {
-    sheet.views = [{ state: "frozen", ySplit: 1 }];
-    sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-    sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF004262" } };
-    sheet.columns.forEach((column) => { column.width = 24; });
-    sheet.autoFilter = sheet.rowCount > 1 ? { from: "A1", to: `${sheet.getColumn(sheet.columnCount).letter}1` } : undefined;
-  }
-
-  const bytes = await workbook.xlsx.writeBuffer();
-  const url = URL.createObjectURL(new Blob([bytes], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `modelo-resultados-campanha-${campaignNumber}.xlsx`;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-

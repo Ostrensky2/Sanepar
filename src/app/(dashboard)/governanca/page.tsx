@@ -113,7 +113,7 @@ export default async function GovernancaPage({ searchParams }: GovernancaPagePro
       ? {
           key: "sincronizacao",
           label: "Sincronização",
-          description: "Runtime, nuvem, build e estado de publicação.",
+          description: "Conexão com a nuvem, versão publicada e sincronização.",
           icon: CloudCog,
         }
       : null,
@@ -148,24 +148,21 @@ export default async function GovernancaPage({ searchParams }: GovernancaPagePro
 
   return (
     <div className="space-y-5">
-      <SettingsSectionNav sections={sections} activeSection={activeSection} />
-
-      <header className="flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-[var(--line-ghost)] bg-white/82 px-5 py-4 shadow-[var(--shadow-soft)]">
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="type-eyebrow text-[var(--brand-teal)]">
-            Painel administrativo
-          </p>
-          <h1 className="heading-font type-page-title mt-1 text-[var(--brand-navy-strong)]">
+          <h1 className="heading-font type-page-title text-[var(--brand-navy-strong)]">
             Configurações
           </h1>
           <p className="type-body mt-2 text-[var(--ink-soft)]">
-            Operação, acesso, backups e diagnóstico do ambiente.
+            Usuários, permissões, backups e diagnóstico do ambiente.
           </p>
         </div>
-        <span className="rounded-lg border border-[rgba(186,26,26,0.2)] bg-[rgba(186,26,26,0.06)] px-3 py-1.5 text-label font-black uppercase tracking-[0.12em] text-[var(--brand-danger)]">
-          Master
+        <span className="rounded-lg border border-[rgba(186,26,26,0.2)] bg-[rgba(186,26,26,0.06)] px-3 py-1.5 text-label font-bold text-[var(--brand-danger)]">
+          Área administrativa
         </span>
       </header>
+
+      <SettingsSectionNav sections={sections} activeSection={activeSection} />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {canViewBackups ? (
@@ -184,8 +181,8 @@ export default async function GovernancaPage({ searchParams }: GovernancaPagePro
         ) : null}
         {canViewBuildSync || canViewDiagnostics ? (
           <ControlStat
-            label="Runtime"
-            value={cloudMode === "nuvem pronta" ? "Nuvem pronta" : "Local"}
+            label="Dados"
+            value={cloudMode === "nuvem pronta" ? "Nuvem conectada" : "Somente local"}
             icon={CloudCog}
             tone="amber"
           />
@@ -339,7 +336,7 @@ function SettingsSectionNav({
             >
               <span
                 className={cn(
-                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
                   isActive
                     ? "bg-white text-[var(--brand-teal)]"
                     : "bg-white/70 text-[var(--brand-navy)] group-hover:bg-white",
@@ -375,7 +372,7 @@ function ControlStat({ label, value, icon: Icon, tone }: ControlStatProps) {
     <article className="rounded-xl border border-[var(--line-ghost)] bg-white/86 p-4 shadow-[0_12px_36px_-32px_rgba(0,66,98,0.4)]">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+          <p className="text-label font-black text-[var(--ink-soft)]">
             {label}
           </p>
           <p className="mt-1 text-base font-black text-[var(--brand-navy-strong)]">{value}</p>

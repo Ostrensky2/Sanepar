@@ -10,7 +10,11 @@ import {
 } from "@/lib/field-diary";
 import { classifyFieldDiaryImport, diffFieldDiaryEntries } from "@/lib/imports/conflict-detection";
 import { parseCampaignWorkbook } from "@/lib/imports/campaigns";
+import { MAX_IMPORT_FILE_BYTES } from "@/lib/imports/excel";
 import { campaignPointToFieldDiaryPayload } from "@/lib/imports/field-spreadsheet-to-diary";
+import { attachStoredPhotos, campaignSheetScopeError, normalizeCampaignKeys, persistCampaignImport, type CampaignSheetImport } from "@/lib/imports/campaign-sheet-import";
+import { sanitizeCampaignMedia } from "@/lib/imports/media-policy";
+import { countLabel } from "@/lib/number-format";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 
 export const runtime = "nodejs";
@@ -138,6 +142,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Nenhum arquivo enviado." }, { status: 400 });
   }
 
+  if (file.size > MAX_IMPORT_FILE_BYTES) {
+    return NextResponse.json({ error: "A planilha precisa ter até 12 MB para publicação direta." }, { status: 413 });
+  }
+
   const arrayBuffer = await file.arrayBuffer();
   const wb = new ExcelJS.Workbook();
 
@@ -154,10 +162,23 @@ export async function POST(request: Request) {
 
   const errors: string[] = [];
   let payloads: FieldDiaryPayload[] = [];
+  // Planilha-síntese (aba "Campanhas"): mesmo importador do Diário; fotos e registro da planilha só ao gravar.
+  let campaignSheet: CampaignSheetImport | null = null;
 
   if (ws.name === "Campanhas") {
     try {
       const campaignImport = await parseCampaignWorkbook(arrayBuffer, file.name);
+      normalizeCampaignKeys(campaignImport.points);
+      const scopeError = campaignSheetScopeError(campaignImport.points);
+      if (scopeError) return NextResponse.json({ error: scopeError }, { status: 400 });
+      const cloud = createOptionalSupabaseClient();
+      if (cloud && String(formData.get("mode") ?? "apply") !== "preview") {
+        const photos = await attachStoredPhotos(campaignImport, cloud);
+        if (photos.baixadas) errors.push(`${countLabel(photos.baixadas, "foto copiada", "fotos copiadas")} dos links da planilha para o armazenamento do app.`);
+        if (photos.avisos) errors.push(`${countLabel(photos.avisos, "foto não copiada", "fotos não copiadas")}; confira os links e o SIA no nome do arquivo.`);
+      }
+      campaignImport.points = campaignImport.points.map(sanitizeCampaignMedia);
+      campaignSheet = campaignImport;
       payloads = campaignImport.points
         .map(campaignPointToFieldDiaryPayload)
         .filter((payload): payload is FieldDiaryPayload => payload !== null);
@@ -253,7 +274,7 @@ export async function POST(request: Request) {
 
   if (!supabase && !allowBrowserFallback) {
     return NextResponse.json(
-      { error: "Supabase não configurado para importar o Diário de Campo." },
+      { error: "Supabase não configurado para importar o Diário de campo." },
       { status: 503 },
     );
   }
@@ -286,7 +307,7 @@ export async function POST(request: Request) {
       if (error) {
         if (!allowBrowserFallback) {
           return NextResponse.json(
-            { error: "O banco recusou a importação do Diário de Campo." },
+            { error: "O banco recusou a importação do Diário de campo." },
             { status: 500 },
           );
         }
@@ -307,6 +328,9 @@ export async function POST(request: Request) {
         }));
         await supabase.from("field_diary_change_log").insert(logRows);
       }
+    }
+    if (campaignSheet && !(await persistCampaignImport(campaignSheet, supabase))) {
+      errors.push("Os registros foram gravados, mas a cópia da planilha-síntese não foi guardada.");
     }
   }
 
@@ -696,4 +720,3 @@ function mergeRows(existing: FieldDiaryImportRow, incoming: FieldDiaryImportRow)
     photos: Array.isArray(incoming.photos) && incoming.photos.length ? incoming.photos : existing.photos,
   };
 }
-

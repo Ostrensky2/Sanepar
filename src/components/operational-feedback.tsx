@@ -57,7 +57,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             <AlertTriangle className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-label font-black uppercase tracking-[0.16em] text-[var(--brand-danger)]">
+            <p className="text-label font-black text-[var(--brand-danger)]">
               Seção indisponível
             </p>
             <h2 className="heading-font mt-1 text-lg font-black text-[var(--brand-navy-strong)]">

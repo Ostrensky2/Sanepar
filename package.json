@@ -1,6 +1,6 @@
 {
   "name": "yvae-monitoramento",
-  "version": "1.2.7",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "release:production": "node scripts/update-app-version.mjs --production",
@@ -21,6 +21,7 @@
     "lucide-react": "^1.7.0",
     "next": "16.3.1",
     "nodemailer": "^8.0.7",
+    "pdfmake": "0.3.11",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "server-only": "0.0.1",

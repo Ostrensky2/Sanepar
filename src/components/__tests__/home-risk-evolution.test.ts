@@ -36,7 +36,7 @@ describe("home risk evolution", () => {
       "utf8",
     );
     const noticeStart = source.indexOf("{SHOW_RESULTS_REVIEW_NOTICE ?");
-    const kpisStart = source.indexOf("<HomeCanonicalKpis");
+    const resultsStart = source.indexOf("<HomeResultsV2");
     const markup = renderToStaticMarkup(createElement(ResultsReviewDialog));
     const dialogSource = readFileSync(
       new URL("../results-review-dialog.tsx", import.meta.url),
@@ -45,21 +45,28 @@ describe("home risk evolution", () => {
 
     expect(source.match(/const SHOW_RESULTS_REVIEW_NOTICE = true;/g)).toHaveLength(1);
     expect(noticeStart).toBeGreaterThan(source.indexOf("Painel de Monitoramento"));
-    expect(noticeStart).toBeLessThan(kpisStart);
+    expect(noticeStart).toBeLessThan(resultsStart);
     expect(source).toContain("<ResultsReviewDialog />");
+    expect(source).toContain("<HomeResultsV2");
     expect(source).not.toContain("Resultados da 2ª Campanha em revisão");
     expect(markup).toContain("<dialog");
     expect(markup).toContain('aria-modal="true"');
-    expect(markup).toContain(">Aviso<");
+    expect(markup).toContain(">Conheça a nova versão do Yva’e<");
     expect(markup).toContain(
-      "Os resultados da primeira e da segunda campanha serão ainda integralmente revisados para que possamos investigar especificamente os organismos solicitados pela Sanepar. Em breve apresentaremos aqui os resultados finais refinados.",
+      "O aplicativo evoluiu! Esta versão apresenta índices aperfeiçoados e novas ferramentas para explorar os resultados do monitoramento, consultar impactos potenciais e compreender os cálculos e a metodologia utilizados.",
     );
-    expect(markup).toContain("Fechar aviso");
+    expect(markup).toContain("Uma apresentação mais clara, organizada e transparente para apoiar a análise dos resultados.");
+    expect(markup).toContain("Explorar a nova versão");
+    expect(dialogSource).toContain("setIsOpen(false)");
+    expect(dialogSource).not.toContain("router.push");
     expect(dialogSource).toContain("dialog.showModal()");
     expect(dialogSource).toContain('document.body.style.overflow = "hidden"');
     expect(dialogSource).toContain("previousFocusRef.current?.focus()");
     expect(dialogSource).toContain("onClick={closeDialog}");
     expect(dialogSource).toContain("onCancel={(event) =>");
+    expect(dialogSource).toContain('event.key !== "Tab"');
+    expect(dialogSource).toContain("event.shiftKey && document.activeElement === first");
+    expect(dialogSource).toContain("!event.shiftKey && document.activeElement === last");
     expect(dialogSource).toContain("event.target === event.currentTarget");
     expect(dialogSource).toContain("min-h-11");
   });

@@ -1,18 +1,16 @@
 "use client";
 
 import {
-  BarChart3,
   CalendarDays,
-  CheckCircle2,
   Eye,
   FileSpreadsheet,
   ListFilter,
   Lock,
   LoaderCircle,
-  MapPin,
   Pencil,
   Search,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SectionCard } from "@/components/section-card";
 import {
@@ -41,6 +39,7 @@ import {
 import {
   CampaignChoicePanel,
   FieldDiaryMonthCalendar,
+  formatSiaCode,
   SelectedFieldDiaryDay,
 } from "@/components/field-diary/calendar";
 import { FieldDiaryForm } from "@/components/field-diary/form";
@@ -52,7 +51,6 @@ import {
   IconButton,
   ImportButton,
   NewEntryButton,
-  OperationalMetric,
   StageBadge,
 } from "@/components/field-diary/ui";
 import { FieldDiaryView } from "@/components/field-diary/view";
@@ -68,7 +66,9 @@ import {
   type FieldDiaryPayload,
 } from "@/lib/field-diary";
 import { campaignIdentityMatches } from "@/lib/campaign-identity";
+import { readSelectedCampaignId, writeSelectedCampaignId } from "@/lib/selected-campaign";
 import { getStoredSession } from "@/lib/auth-users";
+import { countLabel } from "@/lib/number-format";
 
 type Filters = {
   campaign: string;
@@ -225,7 +225,7 @@ export function FieldDiaryPageContent({
 
       setEntries(consolidatedEntries);
       cacheFieldDiaryEntries(consolidatedEntries);
-      setMessage(`Campanha consolidada: ${payload.consolidated ?? 0} registro(s) travado(s) contra sobrescrita.`);
+      setMessage(`Campanha consolidada: ${countLabel(payload.consolidated ?? 0, "registro protegido", "registros protegidos")} contra sobrescrita.`);
     } catch {
       setMessage("Não foi possível consolidar a campanha agora.");
     } finally {
@@ -249,6 +249,12 @@ export function FieldDiaryPageContent({
 
     void loadEntries();
   }, []);
+
+  // Link antigo "Planilhas de campo" (/dados/campo) chega com ?importar=1 e abre o importador único.
+  useEffect(() => {
+    if (readOnly || new URLSearchParams(window.location.search).get("importar") !== "1") return;
+    queueMicrotask(() => setIsImportOpen(true));
+  }, [readOnly]);
 
   const scopedEntries = useMemo(
     () =>
@@ -402,7 +408,9 @@ export function FieldDiaryPageContent({
     () => groupEntriesByFieldDay(selectedDayEntries)[0] ?? null,
     [selectedDayEntries],
   );
+  // O dia escolhido no calendário é navegação, não filtro avançado.
   const activeFilterCount = Object.entries(filters).filter(([key, value]) => {
+    if (key === "date") return false;
     if (key === "occurrence" || key === "hasCoordinates" || key === "hasFollowUpNotes") {
       return value !== "todos";
     }
@@ -415,7 +423,7 @@ export function FieldDiaryPageContent({
 
   function openNewForm(defaults: Partial<FieldDiaryPayload> = {}) {
     if (!isCampaignScoped && !selectedDiaryCampaign && !defaults.campaignName && !defaults.campaignId) {
-      setMessage("Escolha a campanha antes de criar um registro no Diário de Campo.");
+      setMessage("Escolha a campanha antes de criar um registro no Diário de campo.");
       return;
     }
 
@@ -516,16 +524,55 @@ export function FieldDiaryPageContent({
     setFormEntry(null);
     setMessage(
       result.persistence === "cloud"
-        ? "Registro salvo no Diário de Campo."
+        ? "Registro salvo no Diário de campo."
         : "Registro salvo localmente. A nuvem será usada quando estiver disponível.",
     );
   }
+
+  function selectDiaryCampaign(campaignId: string) {
+    setSelectedDiaryCampaignId(campaignId);
+    const selected = campaignOptions.find((campaign) => campaign.id === campaignId);
+    setFilters((current) => ({
+      ...current,
+      campaign: "",
+      date: "",
+      dateFrom: "",
+      dateTo: "",
+      campaignDay: "",
+      dayFrom: "",
+      dayTo: "",
+    }));
+    const campaignStart = selected
+      ? getCampaignCalendarMonthStart(selected.id, selected.name, entries)
+      : "";
+    hasUserPickedDiaryDateRef.current = false;
+    setSelectedDiaryDate(campaignStart);
+    setVisibleCalendarMonth(campaignStart);
+    setViewMode("daily");
+    setMessage("");
+    writeSelectedCampaignId(campaignId);
+  }
+
+  // Abre direto na campanha em foco (escolhida em qualquer tela) em vez de pedir a escolha.
+  const hasAutoSelectedCampaignRef = useRef(false);
+  useEffect(() => {
+    if (isCampaignScoped || isLoading || hasAutoSelectedCampaignRef.current) return;
+    hasAutoSelectedCampaignRef.current = true;
+    if (selectedDiaryCampaignId) return;
+    const stored = readSelectedCampaignId();
+    const latestEntry = [...entries].sort((a, b) => b.entryDate.localeCompare(a.entryDate))[0];
+    const fallback = latestEntry
+      ? campaignOptions.find((campaign) => campaignIdentityMatches({ campaignId: latestEntry.campaignId, campaignName: latestEntry.campaignName }, { campaignId: campaign.id, campaignName: campaign.name }))?.id
+      : undefined;
+    const initialId = campaignOptions.some((campaign) => campaign.id === stored) ? stored : fallback ?? campaignOptions[0]?.id;
+    if (initialId) queueMicrotask(() => selectDiaryCampaign(initialId));
+  });
 
   return (
     <div className="space-y-6">
       {!hideHeader && campaignScope ? (
         <SectionCard
-          title="Diário de Campo"
+          title="Diário de campo"
           description={
             readOnly
               ? `Consulta operacional vinculada à ${campaignScope.name}.`
@@ -546,14 +593,11 @@ export function FieldDiaryPageContent({
           }
         >
           <p className="text-sm leading-6 text-[var(--ink-soft)]">
-            Memória operacional da campanha. Detalhes de uso em Ajuda → Diário de Campo.
+            Memória operacional da campanha. Detalhes de uso em Ajuda → Diário de campo.
           </p>
         </SectionCard>
       ) : !hideHeader ? (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm leading-6 text-[var(--ink-soft)]">
-            {hasActiveDiaryCampaign ? activeCampaignName : "Escolha a campanha."}
-          </p>
+        <div className="flex flex-wrap items-center justify-end gap-3">
           {readOnly ? null : (
             <div className="flex flex-wrap items-start justify-end gap-2">
               <ImportButton onClick={() => setIsImportOpen(true)} />
@@ -571,7 +615,7 @@ export function FieldDiaryPageContent({
       {readOnly && hideHeader ? (
         <div className={compactSummaryMetrics ? "lg:pr-[19rem]" : ""}>
           <div className={`rounded-2xl border border-[var(--line-ghost)] bg-[var(--surface-soft)] text-xs font-semibold text-[var(--ink-soft)] ${compactSummaryMetrics ? "px-3 py-2" : "px-4 py-3"}`}>
-          Dados espelhados de Entrada de dados - Diário de Campo. Esta visualização é somente leitura.
+          Somente leitura. Para editar, use <Link className="underline underline-offset-2" href="/dados/diario-de-campo">Central de dados › Diário de campo</Link>.
           </div>
         </div>
       ) : null}
@@ -579,28 +623,7 @@ export function FieldDiaryPageContent({
       {!isCampaignScoped && !hideHeader ? (
         <CampaignChoicePanel
           selectedCampaignId={selectedDiaryCampaignId}
-          onSelectCampaign={(campaignId) => {
-            setSelectedDiaryCampaignId(campaignId);
-            const selected = campaignOptions.find((campaign) => campaign.id === campaignId);
-            setFilters((current) => ({
-              ...current,
-              campaign: "",
-              date: "",
-              dateFrom: "",
-              dateTo: "",
-              campaignDay: "",
-              dayFrom: "",
-              dayTo: "",
-            }));
-            const campaignStart = selected
-              ? getCampaignCalendarMonthStart(selected.id, selected.name, entries)
-              : "";
-            hasUserPickedDiaryDateRef.current = false;
-            setSelectedDiaryDate(campaignStart);
-            setVisibleCalendarMonth(campaignStart);
-            setViewMode("daily");
-            setMessage("");
-          }}
+          onSelectCampaign={selectDiaryCampaign}
         />
       ) : null}
 
@@ -612,91 +635,28 @@ export function FieldDiaryPageContent({
 
       {hasActiveDiaryCampaign ? (
         <>
-          <ErrorBoundary title="Falha no resumo do Diário de Campo">
+          <ErrorBoundary title="Falha no resumo do Diário de campo">
             <div className={compactSummaryMetrics ? "lg:pr-[19rem]" : ""}>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <OperationalMetric
-                icon={BarChart3}
-                label="Registros no diário"
-                value={String(scopedSummary.total)}
-                detail={`${filteredSummary.total} visível(is) na consulta atual.`}
-                compact={compactSummaryMetrics}
-              />
-              <OperationalMetric
-                icon={CheckCircle2}
-                label="Preenchidos"
-                value={String(scopedSummary.recorded + scopedSummary.occurrence)}
-                detail={`${scopedSummary.recorded} registrado(s), ${scopedSummary.occurrence} com ocorrência.`}
-                compact={compactSummaryMetrics}
-              />
-              <OperationalMetric
-                icon={CalendarDays}
-                label="Planejados"
-                value={String(scopedSummary.planned)}
-                detail="Pontos importados ainda sem relato operacional."
-                compact={compactSummaryMetrics}
-              />
-              <OperationalMetric
-                icon={MapPin}
-                label="Sem coordenada"
-                value={String(scopedSummary.withoutCoordinates)}
-                detail="Registros que dependem de localização complementar."
-                compact={compactSummaryMetrics}
-              />
-            </div>
+            {/* Uma linha no lugar de 4 cartões: só o que tem número, e a ocorrência sempre (é o que importa em campo). */}
+            <p role="status" className="rounded-2xl border border-[var(--line-ghost)] bg-white px-4 py-3 text-sm text-[var(--ink-soft)]">
+              {diarySummaryParts(scopedSummary).map((part, index) => (
+                <span key={part.text} className={part.tone === "alert" ? "font-bold text-[var(--brand-danger)]" : index === 0 ? "font-bold text-[var(--brand-navy-strong)]" : undefined}>
+                  {index ? " · " : ""}{part.text}
+                </span>
+              ))}
+              {filteredSummary.total !== scopedSummary.total ? (
+                <span className="font-semibold text-[var(--brand-navy-strong)]">
+                  {" — "}{activeFilterCount === 0 && filters.date ? `${filteredSummary.total} no dia ${filters.date.split("-").reverse().join("/")}` : `${filteredSummary.total} com os filtros atuais`}
+                </span>
+              ) : null}
+            </p>
             </div>
           </ErrorBoundary>
 
-          <ErrorBoundary title="Falha no calendário do Diário de Campo">
-            <div className="grid items-start gap-4 xl:grid-cols-[minmax(18rem,1fr)_minmax(0,2fr)]">
-              <FieldDiaryMonthCalendar
-                campaignName={activeCampaignName}
-                monthStart={activeCalendarMonth}
-                entries={scopedEntries}
-                selectedDate={selectedDiaryDate}
-                onMonthChange={setVisibleCalendarMonth}
-                onSelectDate={(date) => {
-                  hasUserPickedDiaryDateRef.current = true;
-                  setSelectedDiaryDate(date);
-                  setFilters((current) => ({
-                    ...current,
-                    date,
-                    dateFrom: "",
-                    dateTo: "",
-                  }));
-                }}
-              />
-              <SelectedFieldDiaryDay
-                campaignId={activeCampaignId}
-                campaignName={activeCampaignName}
-                selectedDate={selectedDiaryDate}
-                group={selectedDayGroup}
-                onNewEntry={
-                  readOnly
-                    ? undefined
-                    : (date) =>
-                        openNewForm({
-                          campaignId: activeCampaignId,
-                          campaignName: activeCampaignName,
-                          campaignDay: getCollectionDayForDate(scopedEntries, date),
-                          entryDate: date,
-                        })
-                }
-                onViewEntry={setViewEntry}
-                onEditEntry={readOnly ? undefined : openEditForm}
-              />
-            </div>
-          </ErrorBoundary>
-        </>
-      ) : (
-        null
-      )}
-
-      {hasActiveDiaryCampaign ? (
-      <ErrorBoundary title="Falha na consulta do Diário de Campo">
+          <ErrorBoundary title="Falha na consulta do Diário de campo">
       <SectionCard
-        title="Consulta operacional"
-        description="Use os filtros principais para localizar rapidamente dias e pontos de campo."
+        title="Filtros"
+        description="Localize dias e pontos de campo."
         action={
           <div className="flex flex-wrap gap-2">
             <button
@@ -965,14 +925,59 @@ export function FieldDiaryPageContent({
           </div>
         ) : null}
       </SectionCard>
-      </ErrorBoundary>
-      ) : null}
+          </ErrorBoundary>
+
+          <ErrorBoundary title="Falha no calendário do Diário de campo">
+            <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-[minmax(18rem,1fr)_minmax(0,2fr)]">
+              <FieldDiaryMonthCalendar
+                campaignName={activeCampaignName}
+                monthStart={activeCalendarMonth}
+                entries={scopedEntries}
+                selectedDate={selectedDiaryDate}
+                onMonthChange={setVisibleCalendarMonth}
+                onSelectDate={(date) => {
+                  hasUserPickedDiaryDateRef.current = true;
+                  setSelectedDiaryDate(date);
+                  setFilters((current) => ({
+                    ...current,
+                    date,
+                    dateFrom: "",
+                    dateTo: "",
+                  }));
+                }}
+              />
+              <SelectedFieldDiaryDay
+                campaignId={activeCampaignId}
+                campaignName={activeCampaignName}
+                selectedDate={selectedDiaryDate}
+                group={selectedDayGroup}
+                onNewEntry={
+                  readOnly
+                    ? undefined
+                    : (date) =>
+                        openNewForm({
+                          campaignId: activeCampaignId,
+                          campaignName: activeCampaignName,
+                          campaignDay: getCollectionDayForDate(scopedEntries, date),
+                          entryDate: date,
+                        })
+                }
+                onViewEntry={setViewEntry}
+                onEditEntry={readOnly ? undefined : openEditForm}
+              />
+            </div>
+          </ErrorBoundary>
+        </>
+      ) : (
+        null
+      )}
+
 
       {shouldShowCompleteList ? (
-      <ErrorBoundary title="Falha na lista do Diário de Campo">
+      <ErrorBoundary title="Falha na lista do Diário de campo">
       <SectionCard
         title="Lista completa"
-        description={`${filteredEntries.length} registro(s) encontrado(s).`}
+        description={`${countLabel(filteredEntries.length, "registro encontrado", "registros encontrados")}.`}
         action={
           <div className="inline-flex rounded-xl border border-[var(--line-ghost)] bg-white p-1">
             <button
@@ -1000,7 +1005,7 @@ export function FieldDiaryPageContent({
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1080px] text-left text-sm">
               <thead>
-                <tr className="border-b border-[var(--line-ghost)] text-caption uppercase tracking-[0.16em] text-slate-500">
+                <tr className="border-b border-[var(--line-ghost)] text-caption text-slate-500">
                   <th className="px-3 py-3">Data</th>
                   <th className="px-3 py-3">Campanha</th>
                   <th className="px-3 py-3">Dia</th>
@@ -1025,7 +1030,7 @@ export function FieldDiaryPageContent({
                       <td className="px-3 py-4">{entry.campaignDay}</td>
                       <td className="px-3 py-4">
                         <span className="block font-semibold">{entry.locationName || "Sem local"}</span>
-                        {entry.sia ? <span className="text-xs text-slate-500">{entry.sia}</span> : null}
+                        {entry.sia ? <span className="text-xs text-slate-500">{formatSiaCode(entry.sia)}</span> : null}
                       </td>
                       <td className="px-3 py-4 text-xs font-semibold text-slate-600">
                         {formatCoordinatePair(entry.latitude, entry.longitude)}
@@ -1077,7 +1082,7 @@ export function FieldDiaryPageContent({
             setEntries(dedupedEntries);
             cacheFieldDiaryEntries(dedupedEntries);
             setIsImportOpen(false);
-            setMessage(`${imported.length} registro(s) importado(s) com sucesso.`);
+            setMessage(`${countLabel(imported.length, "registro importado", "registros importados")} com sucesso.`);
           }}
         />
       ) : null}
@@ -1138,7 +1143,7 @@ function ConsolidateCampaignButton({
 function GovernanceBadge({ entry }: { entry: FieldDiaryEntry }) {
   if (entry.missingInImport) {
     return (
-      <span className="mt-1 inline-block rounded bg-[rgba(190,18,60,0.10)] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] text-rose-900">
+      <span className="mt-1 inline-block rounded bg-[rgba(190,18,60,0.10)] px-1.5 py-0.5 text-xs font-black text-rose-900">
         Ausente na importação
       </span>
     );
@@ -1154,8 +1159,19 @@ function GovernanceBadge({ entry }: { entry: FieldDiaryEntry }) {
   const { label, className } = config[governance] ?? config.importado;
 
   return (
-    <span className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] ${className}`}>
+    <span className={`mt-1 inline-block rounded px-1.5 py-0.5 text-xs font-black ${className}`}>
       {label}
     </span>
   );
+}
+
+/** Resumo do diário em partes legíveis; zeros saem, exceto ocorrências (sempre ditas). */
+function diarySummaryParts(summary: { total: number; recorded: number; occurrence: number; planned: number; incomplete: number }) {
+  const count = (value: number, one: string, many: string) => `${value.toLocaleString("pt-BR")} ${value === 1 ? one : many}`;
+  const parts: Array<{ text: string; tone?: "alert" }> = [{ text: count(summary.total, "registro", "registros") }];
+  if (summary.recorded + summary.occurrence) parts.push({ text: `${(summary.recorded + summary.occurrence).toLocaleString("pt-BR")} com relato de campo` });
+  if (summary.planned) parts.push({ text: count(summary.planned, "planejado, ainda sem relato", "planejados, ainda sem relato") });
+  if (summary.incomplete) parts.push({ text: count(summary.incomplete, "incompleto", "incompletos") });
+  parts.push(summary.occurrence ? { text: count(summary.occurrence, "com ocorrência", "com ocorrência"), tone: "alert" } : { text: "nenhuma ocorrência relatada" });
+  return parts;
 }

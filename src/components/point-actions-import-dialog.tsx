@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { type PointActionEvent } from "@/lib/point-actions";
+import { countLabel } from "@/lib/number-format";
 
 type ImportResult = {
   events: PointActionEvent[];
@@ -80,7 +81,7 @@ export function PointActionsImportDialog({
               <ClipboardList className="h-5 w-5" />
             </span>
             <h2 className="heading-font text-2xl font-black text-[var(--brand-navy-strong)]">
-              Importar ações pontuais via planilha
+              Importar atividades complementares via planilha
             </h2>
           </div>
           <button
@@ -191,7 +192,7 @@ export function PointActionsImportDialog({
               <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-[rgba(5,150,105,0.10)] p-4 text-sm font-medium text-emerald-800">
                 <CheckCircle2 className="h-5 w-5 shrink-0" />
                 <span>
-                  {result.eventCount} evento(s) e {result.pointCount} ponto(s) prontos para importar.
+                  {countLabel(result.eventCount, "evento", "eventos")} e {countLabel(result.pointCount, "ponto", "pontos")} prontos para importar.
                 </span>
                 {result.eventCount > 0 ? (
                   <button
@@ -205,8 +206,8 @@ export function PointActionsImportDialog({
               </div>
               {result.errors.length > 0 ? (
                 <div className="rounded-2xl bg-[rgba(186,26,26,0.06)] p-4">
-                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-[var(--brand-danger)]">
-                    {result.errors.length} linha(s) com erro
+                  <p className="mb-2 text-xs font-bold text-[var(--brand-danger)]">
+                    {countLabel(result.errors.length, "linha", "linhas")} com erro
                   </p>
                   <ul className="space-y-1">
                     {result.errors.map((err, i) => (
@@ -224,5 +225,5 @@ export function PointActionsImportDialog({
     </div>
   );
 }
-
+
 

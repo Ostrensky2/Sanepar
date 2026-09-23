@@ -1,20 +1,38 @@
 "use client";
 
 import {
-  Activity,
-  CalendarDays,
   Download,
   FileSpreadsheet,
-  FlaskConical,
-  MapPinned,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import type { Workbook, Worksheet } from "exceljs";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { readSelectedCampaignId, writeSelectedCampaignId } from "@/lib/selected-campaign";
 import { CampaignMapSection } from "@/components/campaign-map-section";
 import { CampaignResultsPanels } from "@/components/campaign-results-panels";
 import { FieldDiaryForm } from "@/components/field-diary/form";
 import { FieldDiaryPageContent } from "@/components/field-diary-page-content";
-import { MetabarcodingStagesIndicator } from "@/components/metabarcoding-stages";
+import { MetabarcodingStagesIndicator, type MetabarcodingStage } from "@/components/metabarcoding-stages";
+import { SectionTabs } from "@/components/section-tabs";
+import {
+  addCampaignResultsSheet,
+  addFieldDiaryEntriesSheet,
+  addFieldDiarySummarySheet,
+  addPublishedResultsSheets,
+  buildCampaignResultsFileName,
+  downloadBlob,
+  downloadWorkbook,
+  formatExportCampaignSelection,
+  getExportDiaryEntries,
+  slugifyFileName,
+} from "@/lib/campaign-workbook-export";
+import {
+  dayNumber,
+  diaryEntryMatchesSelectedCampaign,
+  findDiaryEntryForMapPoint,
+  mapDiaryEntryMatchKeys,
+  mapPointMatchKeys,
+  normalizeMapPointDateKey,
+  normalizeMapPointKey,
+} from "@/lib/campaign-point-matching";
 import {
   type CampaignHydroMapPoint,
 } from "@/components/campaign-hydro-map";
@@ -37,7 +55,9 @@ import {
   buildInitialCampaignManagement,
   CAMPAIGN_MANAGEMENT_STORAGE_KEY,
   calculateCampaignProgress,
+  campaignPhaseLabel,
   defaultCampaigns,
+  getCurrentCampaignStage,
   readCampaignManagement,
   type CampaignManagementById,
   type CampaignView,
@@ -46,27 +66,53 @@ import { DashboardSkeleton, ErrorBoundary } from "@/components/operational-feedb
 import type { LaboratoryRiskPoint } from "@/lib/laboratory-risk";
 import type {
   ResultsPublication,
-  ResultsPublicationResponse,
   ResultsViewModel,
 } from "@/lib/imports/results-contract";
 import { parseInternalStorageUrl } from "@/lib/imports/media-policy";
+import type {
+  ResultsPublicationV2,
+} from "@/lib/results-v2-persistence";
+import type { ResultsCampaign } from "@/modules/results";
+import type { ResultsInventoryItem, ResultsInventoryResponse } from "@/lib/results-publication-contract";
+import { CampaignPointFicha } from "@/modules/results/components/campaign-point-ficha";
 
-const SELECTED_CAMPAIGN_STORAGE_KEY = "yvae:selected-campaign-id";
+import { isPublishedLegacyResponse, isPublishedV2Response, type PublishedResultsResponse as CampaignResultsResponse } from "@/modules/results/published-response";
+
 const CAMPAIGN_MANAGEMENT_UPDATED_EVENT = "yvae:campaign-management-updated";
+
+export function matchesRequestedResults(publication: Pick<ResultsPublicationV2, "publicationId" | "source"> | null, publicationId?: string, sourceHash?: string) {
+  if (!publicationId && !sourceHash) return true;
+  return !!publicationId && !!sourceHash && publication?.publicationId === publicationId && publication.source.sha256.toLowerCase() === sourceHash.toLowerCase();
+}
+
+export function linkedResultPoint(campaign: ResultsCampaign | null, sia?: string) {
+  const normalize = (value: string) => value.trim().match(/^(?:SIA-)?(\d+)$/i)?.[1].replace(/^0+(?=\d)/, "");
+  if (!sia || !normalize(sia)) return undefined;
+  const matches = campaign?.points.filter((point) => normalize(point.siaCode) === normalize(sia)) ?? [];
+  return matches.length === 1 ? matches[0] : undefined;
+}
 
 export function CampaignsPageContent({
   campaignPoints,
   resultExportPoints = [],
   campaigns = defaultCampaigns,
+  initialCampaignId,
+  initialPublicationId,
+  initialSourceHash,
+  initialSia,
   view = "campo",
   eyebrow = "Campanha selecionada",
   selectorLabel = "Campanha exibida",
   emptyMapTitle = "Mapa aguardando dados de campo",
-  emptyMapDescription = "Registre pontos com coordenadas no Diário de Campo para que eles apareçam no mapa desta campanha.",
+  emptyMapDescription = "Registre pontos com coordenadas no Diário de campo para que eles apareçam no mapa desta campanha.",
 }: {
   campaignPoints: CampaignHydroMapPoint[];
   resultExportPoints?: LaboratoryRiskPoint[];
   campaigns?: CampaignView[];
+  initialCampaignId?: string;
+  initialPublicationId?: string;
+  initialSourceHash?: string;
+  initialSia?: string;
   view?: "campo" | "resultados";
   eyebrow?: string;
   selectorLabel?: string;
@@ -74,13 +120,15 @@ export function CampaignsPageContent({
   emptyMapDescription?: string;
 }) {
   const [selectedCampaignId, setSelectedCampaignId] = useState(() => {
+    const requestedCampaign = campaigns.find((campaign) => campaign.id === initialCampaignId);
+    if (requestedCampaign) return requestedCampaign.id;
     const defaultCampaignId = campaigns[0].id;
 
     if (typeof window === "undefined") {
       return defaultCampaignId;
     }
 
-    const stored = window.localStorage.getItem(SELECTED_CAMPAIGN_STORAGE_KEY);
+    const stored = readSelectedCampaignId();
     const storedCampaign = campaigns.find((campaign) => campaign.id === stored);
 
     return storedCampaign ? storedCampaign.id : defaultCampaignId;
@@ -89,24 +137,26 @@ export function CampaignsPageContent({
     readFieldDiaryEntriesFromStorage(),
   );
   const [localCampaignPoints, setLocalCampaignPoints] = useState<CampaignHydroMapPoint[] | null>(null);
-  const [publishedResults, setPublishedResults] = useState<ResultsPublicationResponse | null>(null);
+  const [publishedResults, setPublishedResults] = useState<CampaignResultsResponse | null>(null);
+  const [resultLinkError, setResultLinkError] = useState("");
+  const [linkedPointClosed, setLinkedPointClosed] = useState(false);
   const [campaignManagement, setCampaignManagement] = useState<CampaignManagementById>(() =>
     buildInitialCampaignManagement(campaigns),
   );
   const [hasLoadedCampaignManagement, setHasLoadedCampaignManagement] = useState(false);
   const [hasLoadedDiaryEntries, setHasLoadedDiaryEntries] = useState(false);
   const [hasLoadedPublishedResults, setHasLoadedPublishedResults] = useState(view !== "resultados");
-  const [selectedExportCampaignIds, setSelectedExportCampaignIds] = useState<string[]>(["all"]);
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
   const [dismissedUnavailableResultsNoticeCampaignId, setDismissedUnavailableResultsNoticeCampaignId] =
     useState<string | null>(null);
+  const [resultsInventory, setResultsInventory] = useState<ResultsInventoryItem[] | null>(null);
   const [mapEditEntry, setMapEditEntry] = useState<FieldDiaryPayload | null>(null);
   const [mapEditMessage, setMapEditMessage] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(SELECTED_CAMPAIGN_STORAGE_KEY, selectedCampaignId);
+    writeSelectedCampaignId(selectedCampaignId);
   }, [campaigns, selectedCampaignId, view]);
 
   useEffect(() => {
@@ -200,6 +250,18 @@ export function CampaignsPageContent({
     };
   }, []);
 
+  useEffect(() => {
+    // Inventário leve das publicações vigentes: alimenta o card de resultados também na aba Campo.
+    const controller = new AbortController();
+    void fetch("/api/imports/results?inventory=1", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => (response.ok ? ((await response.json()) as ResultsInventoryResponse) : null))
+      .then((value) => {
+        if (!controller.signal.aborted && Array.isArray(value?.campaigns)) setResultsInventory(value.campaigns);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
+
   const selectedCampaign = useMemo(() => {
     const candidate = campaigns.find((campaign) => campaign.id === selectedCampaignId);
 
@@ -217,6 +279,7 @@ export function CampaignsPageContent({
     queueMicrotask(() => {
       if (!controller.signal.aborted) {
         setPublishedResults(null);
+        setResultLinkError("");
         setHasLoadedPublishedResults(false);
       }
     });
@@ -225,13 +288,25 @@ export function CampaignsPageContent({
       signal: controller.signal,
     })
       .then(async (response) => {
-        if (!response.ok) throw new Error("results unavailable");
-        return await response.json() as ResultsPublicationResponse;
+        if (!response.ok) {
+          const failure = await response.json().catch(() => null) as { code?: string } | null;
+          throw new Error(failure?.code === "legacy_head_unavailable" ? "Há resultados legados preservados, mas a publicação vigente ainda não pôde ser confirmada neste ambiente. Nenhum resultado foi tratado como vazio." : "Não foi possível consultar a publicação desta campanha. Isso não significa ausência de resultados.");
+        }
+        return await response.json() as CampaignResultsResponse;
       })
-      .then((response) => setPublishedResults(response))
+      .then((response) => {
+        if (controller.signal.aborted) return;
+        if ((initialPublicationId || initialSourceHash) && (!initialCampaignId || !campaigns.some((item) => item.id === initialCampaignId) || (selectedCampaign.id === initialCampaignId && !matchesRequestedResults(isPublishedV2Response(response) ? response.publication : null, initialPublicationId, initialSourceHash)))) {
+          setResultLinkError("A publicação vinculada não está mais vigente ou não corresponde à fonte solicitada. Nenhuma outra versão foi exibida automaticamente.");
+          setPublishedResults(null);
+          return;
+        }
+        setPublishedResults(response);
+      })
       .catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === "AbortError")) {
-          setPublishedResults({ status: "empty", publication: null, viewModel: null });
+          setPublishedResults(null);
+          setResultLinkError(error instanceof Error ? error.message : "Publicação indisponível para consulta.");
         }
       })
       .finally(() => {
@@ -239,7 +314,7 @@ export function CampaignsPageContent({
       });
 
     return () => controller.abort();
-  }, [selectedCampaign.id, view]);
+  }, [selectedCampaign.id, view, initialCampaignId, initialPublicationId, initialSourceHash, campaigns]);
 
   const resultsUnavailable =
     view === "resultados" && hasLoadedPublishedResults && publishedResults?.status !== "published";
@@ -266,8 +341,16 @@ export function CampaignsPageContent({
       ),
     [diaryEntries, selectedCampaign.id, selectedCampaign.title],
   );
+  const v2Campaign = useMemo<ResultsCampaign | null>(() => {
+    if (!isPublishedV2Response(publishedResults) || !publishedResults.campaign.points) return null;
+    return {
+      campaignCode: publishedResults.campaign.campaignCode,
+      points: publishedResults.campaign.points,
+      counts: publishedResults.campaign.counts,
+    };
+  }, [publishedResults]);
   const canonicalResultPoints = useMemo(
-    () => publishedResults?.status === "published"
+    () => isPublishedLegacyResponse(publishedResults)
       ? dashboardPointsToMapPoints(
           publishedResults.viewModel,
           publishedResults.publication,
@@ -275,6 +358,10 @@ export function CampaignsPageContent({
         )
       : [],
     [publishedResults, selectedDiaryEntries],
+  );
+  const v2FieldPhotos = useMemo(
+    () => v2Campaign ? buildResultsV2PhotoMap(v2Campaign, selectedDiaryEntries) : {},
+    [selectedDiaryEntries, v2Campaign],
   );
   const sourceCampaignPoints = view === "resultados"
     ? canonicalResultPoints
@@ -306,6 +393,15 @@ export function CampaignsPageContent({
       ),
     [selectedCampaign.id, selectedCampaign.title, sourceCampaignPoints],
   );
+  // Pontos de campo (percurso) independem da aba: Campo e Resultados mostram a mesma contagem.
+  const fieldSourcePoints = localCampaignPoints?.length ? localCampaignPoints : campaignPoints;
+  const selectedFieldCampaignPoints = useMemo(
+    () =>
+      fieldSourcePoints.filter((point) =>
+        campaignPointMatchesSelectedCampaign(point, selectedCampaign.id, selectedCampaign.title),
+      ),
+    [selectedCampaign.id, selectedCampaign.title, fieldSourcePoints],
+  );
   const selectedResultExportPoints = useMemo(
     () =>
       resultExportPoints.filter((point) =>
@@ -317,22 +413,22 @@ export function CampaignsPageContent({
   const diaryMapPoints = useMemo(
     () =>
       validDiaryEntries
-        .map((entry) => diaryEntryToMapPoint(entry, selectedCampaignPoints))
+        .map((entry) => diaryEntryToMapPoint(entry, selectedFieldCampaignPoints))
         .filter((p): p is CampaignHydroMapPoint => p !== null),
-    [selectedCampaignPoints, validDiaryEntries],
+    [selectedFieldCampaignPoints, validDiaryEntries],
   );
   const importedFieldMapPoints = useMemo(
-    () => selectedCampaignPoints.filter(hasImportedFieldMapPoint),
-    [selectedCampaignPoints],
+    () => selectedFieldCampaignPoints.filter(hasImportedFieldMapPoint),
+    [selectedFieldCampaignPoints],
   );
-  // Da Campanha 2 em diante, o Diário de Campo (planilha de campo importada) é a
+  // Da Campanha 2 em diante, o Diário de campo (planilha de campo importada) é a
   // fonte autoritativa do percurso — dias, coordenadas e sequência de coleta.
   // A Campanha 1 permanece como está: consolidada a partir da planilha importada.
   const selectedCampaignNumber = selectedCampaign.id.match(/campanha-(\d+)/)?.[1] ?? "";
   const campaignFieldMapPoints = useMemo(
     () => {
       if (isPreparation) {
-        return selectedCampaignPoints.filter((point) => point.original || point.effective);
+        return selectedFieldCampaignPoints.filter((point) => point.original || point.effective);
       }
 
       if (selectedCampaignNumber !== "1" && diaryMapPoints.length) {
@@ -345,7 +441,7 @@ export function CampaignsPageContent({
 
       return diaryMapPoints;
     },
-    [diaryMapPoints, importedFieldMapPoints, selectedCampaignNumber, selectedCampaignPoints, isPreparation],
+    [diaryMapPoints, importedFieldMapPoints, selectedCampaignNumber, selectedFieldCampaignPoints, isPreparation],
   );
 
   const visiblePoints = useMemo(() => {
@@ -364,9 +460,14 @@ export function CampaignsPageContent({
   );
 
   const fieldRowCount = selectedDiaryEntries.length;
-  const effectivePointCount = view === "resultados"
-    ? canonicalResultPoints.length
-    : campaignFieldMapPoints.filter((point) => point.effective).length;
+  const collectedPointCount = campaignFieldMapPoints.filter((point) => point.effective).length;
+  const inventoryResult = resultsInventory?.find((item) => item.canonicalId === selectedCampaign.id) ?? null;
+  const resultPointCount = v2Campaign
+    ? v2Campaign.counts.total
+    : isPublishedLegacyResponse(publishedResults)
+      ? publishedResults.viewModel.meta.linhas
+      : inventoryResult?.counts.total ?? 0;
+  const hasPublishedResults = Boolean(v2Campaign || isPublishedLegacyResponse(publishedResults) || inventoryResult);
   const mapEmptyTitle = isPreparation ? "Aguardando importação da planilha" : emptyMapTitle;
   const mapEmptyDescription = isPreparation
     ? "Importe a planilha com os pontos previstos na aba Dados para visualizá-los no mapa."
@@ -376,17 +477,18 @@ export function CampaignsPageContent({
     !hasLoadedDiaryEntries ||
     (view === "resultados" && !hasLoadedPublishedResults);
 
-  async function exportFieldDiaryWorkbook() {
+  async function exportFieldDiaryWorkbook(exportCampaignIds: string[]) {
     setExportMessage("");
 
     const exportEntries = getExportDiaryEntries(
       diaryEntries,
       campaigns,
-      selectedExportCampaignIds,
+      exportCampaignIds,
     );
-    const exportCampaignLabel = formatExportCampaignSelection(campaigns, selectedExportCampaignIds);
+    const exportCampaignLabel = formatExportCampaignSelection(campaigns, exportCampaignIds);
 
     if (!exportEntries.length) {
+      setExportMessage("Não há registros de campo para exportar nesta seleção.");
       return;
     }
 
@@ -426,10 +528,10 @@ export function CampaignsPageContent({
   async function exportCampaignResultsWorkbook() {
     setExportMessage("");
 
-    const publication = publishedResults?.status === "published"
+    const publication = isPublishedLegacyResponse(publishedResults)
       ? publishedResults.publication
       : null;
-    if (!selectedResultExportPoints.length && !publication) {
+    if (!selectedResultExportPoints.length && !publication && !v2Campaign) {
       setExportMessage("Esta campanha ainda não possui resultados homologados para exportação.");
       return;
     }
@@ -437,6 +539,19 @@ export function CampaignsPageContent({
     setIsExporting(true);
 
     try {
+      if (v2Campaign) {
+        const response = await fetch(
+          `/api/imports/results/template?source=published&campaignCode=${encodeURIComponent(v2Campaign.campaignCode)}`,
+          { cache: "no-store" },
+        );
+        if (!response.ok) throw new Error("O binário verificável da publicação não está disponível; nenhuma fonte antiga foi usada.");
+        downloadBlob(await response.blob(), buildCampaignResultsFileName(selectedCampaign.title));
+        setExportMessage(
+          `Planilha v2 reimportável exportada com ${v2Campaign.points.length} resultados em sete abas. O Diário de campo permanece no download próprio.`,
+        );
+        return;
+      }
+
       const ExcelJS = await import("exceljs");
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "Yva'e Monitoramento";
@@ -465,7 +580,7 @@ export function CampaignsPageContent({
     const entry = findDiaryEntryForMapPoint(point, selectedDiaryEntries);
 
     if (!entry) {
-      setMapEditMessage("Não encontrei um registro do Diário de Campo para editar as fotos deste ponto.");
+      setMapEditMessage("Não encontrei um registro do Diário de campo para editar as fotos deste ponto.");
       return;
     }
 
@@ -497,106 +612,66 @@ export function CampaignsPageContent({
     setMapEditEntry(null);
     setMapEditMessage(
       result.persistence === "cloud"
-        ? "Fotos atualizadas no Diário de Campo."
+        ? "Fotos atualizadas no Diário de campo."
         : "Fotos atualizadas localmente. A nuvem será usada quando estiver disponível.",
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header: title + campaign selector */}
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="type-eyebrow text-[var(--brand-teal)]">
-            {eyebrow}
-          </p>
-          <h1 className="heading-font type-page-title text-[var(--brand-navy-strong)]">
-            {selectedCampaign.title}
-          </h1>
+      {/* Cabeçalho comum às abas Campo e Resultados */}
+      <section className="space-y-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <p className="type-eyebrow text-[var(--brand-teal)]">
+              {eyebrow}
+            </p>
+            <h1 className="heading-font type-page-title text-[var(--brand-navy-strong)]">
+              {selectedCampaign.title}
+            </h1>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-2 lg:max-w-[55%]">
+            <label className="type-label grid min-w-[16rem] flex-1 gap-1 text-[var(--ink-soft)]">
+              {selectorLabel}
+              <select
+                className="min-h-11 rounded-xl border border-[var(--line-strong)] bg-white px-4 py-2 text-sm font-bold text-[var(--brand-navy-strong)] outline-none transition focus:border-[var(--brand-blue)] focus:ring-2 focus:ring-[var(--brand-blue)]/20"
+                value={selectedCampaign.id}
+                onChange={(event) => {
+                  setSelectedCampaignId(event.target.value);
+                  setExportMessage("");
+                }}
+              >
+                {campaigns.map((campaign) => {
+                  const management = campaignManagement[campaign.id];
+                  const status = management?.status ?? campaign.status;
+                  const phase = campaignPhaseLabel(status);
+                  // Fase escrita por extenso: caracteres como ✓ e ⏳ variam por sistema e não dizem nada ao leitor de tela.
+                  return (
+                    <option key={campaign.id} value={campaign.id}>
+                      {campaign.selectorLabel} — {phase}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+
+            {view === "campo" ? (
+              <CampaignExportMenu
+                disabled={isExporting || isCampaignHydrating}
+                isExporting={isExporting}
+                canExportSelected={exportableCampaignIds.has(selectedCampaign.id)}
+                canExportAll={exportableCampaignIds.size > 0}
+                onExportSelected={() => void exportFieldDiaryWorkbook([selectedCampaign.id])}
+                onExportAll={() => void exportFieldDiaryWorkbook(["all"])}
+              />
+            ) : null}
+          </div>
         </div>
-
-        <div className="grid gap-3 lg:w-[30rem] lg:max-w-[55%]">
-          <label className="type-label grid gap-2 uppercase tracking-[0.1em] text-slate-500">
-            {selectorLabel}
-            <select
-              className="rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-sm font-bold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none transition focus:border-[var(--brand-blue)] focus:ring-2 focus:ring-[var(--brand-blue)]/20"
-              value={selectedCampaign.id}
-              onChange={(event) => {
-                setSelectedCampaignId(event.target.value);
-                setExportMessage("");
-              }}
-            >
-              {campaigns.map((campaign) => {
-                const management = campaignManagement[campaign.id];
-                const status = management?.status ?? campaign.status;
-                const statusMark =
-                  status === "Concluída" || status === "Resultados publicados" ? "✓ " :
-                  status === "Em preparação" || status === "Em campo" || status === "Em análise" ? "⏳ " : "· ";
-                return (
-                  <option key={campaign.id} value={campaign.id}>
-                    {statusMark}{campaign.selectorLabel}
-                  </option>
-                );
-              })}
-            </select>
-          </label>
-
-          {view === "campo" ? (
-            <div className="rounded-lg border border-[var(--line-ghost)] bg-white/88 px-2.5 py-2 shadow-[0_10px_28px_-26px_rgba(0,66,98,0.3)]">
-              <div className="grid gap-1.5">
-                <div>
-                  <p className="type-caption font-bold uppercase leading-none tracking-[0.1em] text-[var(--ink-soft)]">
-                    Exportar dados por campanha
-                  </p>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                    <ExportCampaignToggle
-                      label="Todas"
-                      selected={selectedExportCampaignIds.includes("all")}
-                      onClick={() => setSelectedExportCampaignIds(["all"])}
-                      disabled={exportableCampaignIds.size === 0}
-                    />
-                    {campaigns.map((campaign, index) => {
-                      const hasData = exportableCampaignIds.has(campaign.id);
-
-                      return (
-                        <ExportCampaignToggle
-                          key={campaign.id}
-                          label={String(index + 1)}
-                          selected={selectedExportCampaignIds.includes(campaign.id)}
-                          disabled={!hasData}
-                          onClick={() =>
-                            setSelectedExportCampaignIds((current) => {
-                              setExportMessage("");
-                              return toggleExportCampaign(current, campaign.id);
-                            })
-                          }
-                        />
-                      );
-                    })}
-                    <button
-                      type="button"
-                      onClick={() => void exportFieldDiaryWorkbook()}
-                      aria-label={isExporting ? "Exportando Excel" : "Exportar Excel"}
-                      title={isExporting ? "Exportando Excel" : "Exportar Excel"}
-                      disabled={
-                        isExporting ||
-                        isCampaignHydrating ||
-                        !selectedExportCampaignIds.length ||
-                        exportableCampaignIds.size === 0
-                      }
-                      className="inline-flex h-7 min-w-7 items-center justify-center rounded-md border border-[var(--line-strong)] bg-white px-2 text-xs font-black text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)] disabled:cursor-not-allowed disabled:opacity-45"
-                    >
-                      <Download className="h-3 w-3" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-              {exportMessage ? (
-                <p className="mt-1.5 text-[11px] font-semibold leading-tight text-[var(--ink-soft)]">{exportMessage}</p>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
+        {view === "campo" && exportMessage ? (
+          <p role="status" className="type-metadata text-[var(--ink-soft)]">{exportMessage}</p>
+        ) : null}
+        <SectionTabs />
       </section>
 
       {mapEditMessage && !mapEditEntry ? (
@@ -605,71 +680,27 @@ export function CampaignsPageContent({
         </div>
       ) : null}
 
-      {/* Metrics cards */}
+      {/* Faixa de resumo em uma linha; a trilha de etapas fica recolhida no próprio resumo. */}
       <ErrorBoundary title="Falha nos indicadores da campanha">
         {isCampaignHydrating ? (
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="animate-pulse rounded-2xl border border-[var(--line-ghost)] bg-white p-4">
-                <div className="h-3 w-28 rounded bg-slate-200" />
-                <div className="mt-4 h-7 w-20 rounded bg-slate-200" />
-                <div className="mt-3 h-3 w-32 rounded bg-slate-100" />
-              </div>
-            ))}
-          </section>
+          <div className="h-14 animate-pulse rounded-2xl border border-[var(--line-ghost)] bg-white" />
         ) : (
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <CampaignMetricCard
-              icon={CalendarDays}
-              label="Status da campanha"
-              value={selectedManagement.status}
-              detail={selectedManagement.period}
-              tone="primary"
-            />
-            <CampaignMetricCard
-              icon={MapPinned}
-              label={view === "resultados" ? "Pontos com resultado" : "Pontos de campo"}
-              value={`${effectivePointCount}/${selectedManagement.plannedPoints}`}
-              detail={
-                view === "resultados"
-                  ? "Com resultado eDNA / previstos"
-                  : "Coletados em campo / previstos"
-              }
-              tone="success"
-            />
-            <CampaignMetricCard
-              icon={FileSpreadsheet}
-              label="Planilha de campo"
-              value={String(fieldRowCount)}
-              detail="Registros importados"
-              tone={fieldRowCount > 0 || selectedCampaign.hasFieldData ? "success" : "neutral"}
-            />
-            <CampaignMetricCard
-              icon={FlaskConical}
-              label="Planilha de resultados"
-              value={publishedResults?.status === "published"
-                ? String(publishedResults.viewModel.meta.linhas)
-                : "0"}
-              detail="Resultados importados"
-              tone={publishedResults?.status === "published" ? "success" : "warning"}
-            />
-          </section>
-        )}
-      </ErrorBoundary>
-
-      {view === "campo" ? (
-        <ErrorBoundary title="Falha no andamento da campanha">
-          {isCampaignHydrating ? (
-            <DashboardSkeleton rows={2} />
-          ) : (
+          <CampaignSummaryStrip
+            phase={campaignPhaseLabel(selectedManagement.status)}
+            currentStage={getCurrentCampaignStage(selectedStages)?.label}
+            collected={`${collectedPointCount}/${selectedManagement.plannedPoints}`}
+            fieldRows={fieldRowCount}
+            resultPoints={hasPublishedResults ? resultPointCount : null}
+            stages={selectedStages}
+          >
             <MetabarcodingStagesIndicator
               stages={selectedStages}
               title={selectedManagement.stageTitle}
               progress={selectedCampaignProgress}
             />
-          )}
-        </ErrorBoundary>
-      ) : null}
+          </CampaignSummaryStrip>
+        )}
+      </ErrorBoundary>
 
       {/* Campo view */}
       {view === "campo" && (
@@ -719,18 +750,26 @@ export function CampaignsPageContent({
       )}
 
       {/* Resultados view */}
-      {view === "resultados" && (
+      {view === "resultados" && resultLinkError && <p role="alert">{resultLinkError}</p>}
+      {view === "resultados" && !resultLinkError && (
         <div className="space-y-6">
+          {initialSia && selectedCampaign.id === initialCampaignId && !linkedPointClosed && v2Campaign && isPublishedV2Response(publishedResults) && (linkedResultPoint(v2Campaign, initialSia) ? <CampaignPointFicha point={linkedResultPoint(v2Campaign, initialSia)!} campaign={v2Campaign} publicationId={publishedResults.publication.publicationId} sourceHash={publishedResults.publication.source.sha256} photoUrl={v2FieldPhotos[linkedResultPoint(v2Campaign, initialSia)!.siaCode]} onClose={() => setLinkedPointClosed(true)} /> : <p role="status">O SIA vinculado não existe de forma inequívoca nesta publicação. Nenhum homônimo foi selecionado.</p>)}
           <CampaignResultsPanels
             isHydrating={isCampaignHydrating}
             resultsUnavailable={resultsUnavailable}
             showUnavailableNotice={showUnavailableResultsNotice}
             campaign={selectedCampaign}
-            publication={publishedResults?.status === "published" ? publishedResults.publication : undefined}
+            publication={isPublishedLegacyResponse(publishedResults) ? publishedResults.publication : undefined}
+            resultsV2={v2Campaign ? [v2Campaign] : undefined}
+            resultsV2Publication={isPublishedV2Response(publishedResults) ? publishedResults.publication : undefined}
+            resultsV2Photos={v2FieldPhotos}
+            resultsV2PayloadUnavailable={
+              isPublishedV2Response(publishedResults) && publishedResults.campaign.points === null
+            }
             stages={selectedStages}
             stageTitle={selectedManagement.stageTitle}
             points={visibleResultPoints}
-            canDownload={!isCampaignHydrating && publishedResults?.status === "published"}
+            canDownload={!isCampaignHydrating && Boolean(v2Campaign || isPublishedLegacyResponse(publishedResults))}
             isDownloading={isExporting}
             downloadMessage={exportMessage}
             onDownload={() => void exportCampaignResultsWorkbook()}
@@ -828,6 +867,31 @@ export function hydrateResultPointPhotos<T extends CampaignHydroMapPoint>(
   });
 }
 
+export function buildResultsV2PhotoMap(
+  campaign: ResultsCampaign,
+  selectedDiaryEntries: FieldDiaryEntry[],
+) {
+  const pointSias = new Set(campaign.points.map((point) => canonicalNumericSia(point.siaCode)));
+  const candidates = new Map<string, Set<string>>();
+
+  for (const entry of selectedDiaryEntries) {
+    const sia = canonicalNumericSia(entry.sia);
+    if (!sia || !pointSias.has(sia)) continue;
+    const urls = candidates.get(sia) ?? new Set<string>();
+    for (const photo of entry.photos ?? []) {
+      if (parseInternalStorageUrl(photo.url, "photos")) urls.add(photo.url);
+    }
+    if (urls.size) candidates.set(sia, urls);
+  }
+
+  return Object.fromEntries(campaign.points.flatMap((point) => {
+    const urls = candidates.get(canonicalNumericSia(point.siaCode));
+    return urls?.size === 1
+      ? [[`${campaign.campaignCode}|${point.siaCode}`, [...urls][0]]]
+      : [];
+  }));
+}
+
 function canonicalNumericSia(value: unknown) {
   const matches = String(value ?? "").match(/\d+/g);
   return matches?.length === 1 ? `sia:${Number(matches[0])}` : "";
@@ -841,21 +905,6 @@ function dashboardRiskLevel(value: string | null): CampaignHydroMapPoint["riskLe
   return undefined;
 }
 
-function diaryEntryMatchesSelectedCampaign(
-  entry: FieldDiaryEntry,
-  selectedCampaignId: string,
-  selectedCampaignTitle: string,
-) {
-  if (entry.campaignId === selectedCampaignId) {
-    return true;
-  }
-
-  const campaignNumber = selectedCampaignId.match(/campanha-(\d+)/)?.[1];
-  const entryKey = normalizeCampaignKey(entry.campaignName);
-  const titleKey = normalizeCampaignKey(selectedCampaignTitle);
-
-  return entryKey === titleKey || Boolean(campaignNumber && entryKey === campaignNumber);
-}
 
 function hasImportedFieldMapPoint(point: CampaignHydroMapPoint) {
   return Boolean(point.effective);
@@ -987,21 +1036,7 @@ function fieldMapPointMergeKey(point: CampaignHydroMapPoint) {
   ].join("|");
 }
 
-function dayNumber(value: unknown) {
-  const match = String(value ?? "").match(/\d+/);
-  return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER;
-}
 
-function normalizeMapPointDateKey(value: unknown) {
-  const text = String(value ?? "").trim();
-  const brazilianDate = text.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-
-  if (brazilianDate) {
-    return `${brazilianDate[3]}-${brazilianDate[2]}-${brazilianDate[1]}`;
-  }
-
-  return text.slice(0, 10);
-}
 
 function collectionSequence(point: CampaignHydroMapPoint) {
   const value = String(point.point ?? "").trim();
@@ -1059,43 +1094,8 @@ function fieldDiaryMapEntryScore(entry: FieldDiaryEntry) {
     (entry.hasOccurrence ? 1 : 0);
 }
 
-function mapPointMatchKeys(point: CampaignHydroMapPoint) {
-  const values = [
-    point.code,
-    point.point,
-    point.waterBody,
-  ];
-  const textKeys = values
-    .map(normalizeMapPointKey)
-    .filter(Boolean);
-  const numericKeys = values
-    .map(pointNumberKey)
-    .filter(Boolean);
 
-  return [...new Set([...textKeys, ...numericKeys])];
-}
 
-function normalizeMapPointKey(value: unknown) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\bsia\b/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function pointNumberKey(value: unknown) {
-  const match = String(value ?? "").match(/\d+/);
-
-  if (!match) {
-    return "";
-  }
-
-  return `numero:${Number(match[0])}`;
-}
 
 function diaryEntryToMapPoint(
   entry: FieldDiaryEntry,
@@ -1142,28 +1142,6 @@ function pointPhotos(point?: CampaignHydroMapPoint | null) {
   return point?.photos?.filter((photo) => photo.url) ?? [];
 }
 
-function findDiaryEntryForMapPoint(
-  point: CampaignHydroMapPoint,
-  entries: FieldDiaryEntry[],
-) {
-  const pointKeys = new Set(mapPointMatchKeys(point));
-  const pointDate = normalizeMapPointDateKey(point.date);
-  const pointDay = dayNumber(point.day);
-
-  return entries.find((entry) => {
-    const samePoint = mapDiaryEntryMatchKeys(entry).some((key) => pointKeys.has(key));
-
-    if (!samePoint) {
-      return false;
-    }
-
-    if (pointDate && entry.entryDate !== pointDate) {
-      return false;
-    }
-
-    return pointDay === Number.MAX_SAFE_INTEGER || entry.campaignDay === pointDay;
-  }) ?? null;
-}
 
 function fieldDiaryEntryToPayload(
   entry: FieldDiaryEntry,
@@ -1222,17 +1200,6 @@ function findKnownPointForDiaryEntry(
   );
 }
 
-function mapDiaryEntryMatchKeys(entry: FieldDiaryEntry) {
-  const values = [entry.sia, entry.locationName];
-  const textKeys = values
-    .map(normalizeMapPointKey)
-    .filter(Boolean);
-  const numericKeys = values
-    .map(pointNumberKey)
-    .filter(Boolean);
-
-  return [...new Set([...textKeys, ...numericKeys])];
-}
 
 function formatDiarySiaCode(value: unknown) {
   const match = String(value ?? "").match(/\d+/);
@@ -1244,74 +1211,98 @@ function formatDiarySiaCode(value: unknown) {
   return `SIA-${match[0].padStart(4, "0")}`;
 }
 
-function CampaignMetricCard({
-  icon: Icon,
-  label,
-  value,
-  detail,
-  tone,
+function CampaignExportMenu({
+  disabled,
+  isExporting,
+  canExportSelected,
+  canExportAll,
+  onExportSelected,
+  onExportAll,
 }: {
-  icon: typeof Activity;
-  label: string;
-  value: string;
-  detail: string;
-  tone: "primary" | "success" | "warning" | "neutral";
+  disabled: boolean;
+  isExporting: boolean;
+  canExportSelected: boolean;
+  canExportAll: boolean;
+  onExportSelected: () => void;
+  onExportAll: () => void;
 }) {
-  const toneClass = {
-    primary: "border-[var(--brand-blue)] text-[var(--brand-navy-strong)]",
-    success: "border-[var(--brand-green)] text-[var(--brand-navy-strong)]",
-    warning: "border-[var(--brand-amber)] text-[var(--brand-amber)]",
-    neutral: "border-slate-300 text-slate-500",
-  }[tone];
+  const itemClass =
+    "flex min-h-11 w-full items-center rounded-lg px-3 text-left text-sm font-semibold text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)] disabled:cursor-not-allowed disabled:opacity-45";
 
   return (
-    <article className={`glass-panel radius-panel border-b-2 p-4 ${toneClass}`}>
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <p className="text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
-          {label}
-        </p>
-        <Icon className="h-4 w-4" />
+    <details className="relative">
+      <summary
+        aria-disabled={disabled}
+        className={`inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-xl border border-[var(--line-strong)] bg-white px-4 text-sm font-bold text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)] [&::-webkit-details-marker]:hidden ${disabled ? "pointer-events-none opacity-50" : ""}`}
+      >
+        <Download aria-hidden="true" className="h-4 w-4" />
+        {isExporting ? "Exportando…" : "Exportar"}
+      </summary>
+      <div className="absolute right-0 z-30 mt-1 w-64 rounded-xl border border-[var(--line-ghost)] bg-white p-1 shadow-[var(--shadow-soft)]">
+        <button
+          type="button"
+          className={itemClass}
+          disabled={!canExportSelected}
+          onClick={(event) => {
+            event.currentTarget.closest("details")?.removeAttribute("open");
+            onExportSelected();
+          }}
+        >
+          Diário desta campanha (.xlsx)
+        </button>
+        <button
+          type="button"
+          className={itemClass}
+          disabled={!canExportAll}
+          onClick={(event) => {
+            event.currentTarget.closest("details")?.removeAttribute("open");
+            onExportAll();
+          }}
+        >
+          Diário de todas as campanhas (.xlsx)
+        </button>
       </div>
-      <p className="heading-font text-2xl font-black text-[var(--brand-navy-strong)]">
-        {value}
-      </p>
-      <p className="mt-2 text-xs font-semibold text-[var(--brand-teal)]">{detail}</p>
-    </article>
+    </details>
   );
 }
 
-function ExportCampaignToggle({
-  label,
-  selected,
-  disabled = false,
-  onClick,
+function CampaignSummaryStrip({
+  phase,
+  currentStage,
+  collected,
+  fieldRows,
+  resultPoints,
+  stages,
+  children,
 }: {
-  label: string;
-  selected: boolean;
-  disabled?: boolean;
-  onClick: () => void;
+  phase: string;
+  currentStage?: string;
+  collected: string;
+  fieldRows: number;
+  resultPoints: number | null;
+  stages: MetabarcodingStage[];
+  children: ReactNode;
 }) {
+  const done = stages.filter((stage) => stage.status === "done").length;
+  const items = [
+    phase === "Concluída" || !currentStage ? null : currentStage,
+    <><strong className="tabular-nums">{collected}</strong> coletados</>,
+    <><strong className="tabular-nums">{fieldRows.toLocaleString("pt-BR")}</strong> registros de campo</>,
+    resultPoints === null ? "resultados ainda não publicados" : <><strong className="tabular-nums">{resultPoints.toLocaleString("pt-BR")}</strong> com resultado</>,
+  ].filter(Boolean);
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-pressed={selected}
-      className={[
-        "h-7 rounded-md border px-2 text-xs font-black transition disabled:cursor-not-allowed",
-        "min-w-7",
-        disabled
-          ? "border-slate-200 bg-slate-50 text-slate-300"
-          : "",
-        selected && !disabled
-          ? "border-[var(--brand-navy-strong)] bg-[var(--brand-navy-strong)] text-white"
-          : disabled
-            ? ""
-            : "border-[var(--line-strong)] bg-white text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)]",
-      ].join(" ")}
-    >
-      {label}
-    </button>
+    <details className="app-card group px-4 py-1" aria-label="Resumo da campanha">
+      <summary className="flex min-h-12 cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[var(--ink)] [&::-webkit-details-marker]:hidden">
+        <strong className="text-[var(--brand-navy-strong)]">{phase}</strong>
+        {items.map((item, index) => <span key={index} className="before:mr-2 before:text-[var(--ink-soft)] before:content-['·']">{item}</span>)}
+        <span className="ml-auto inline-flex min-h-11 items-center gap-1 font-bold text-[var(--brand-navy-strong)]">
+          {done}/{stages.length} etapas
+          <span aria-hidden="true" className="transition group-open:rotate-90">▸</span>
+        </span>
+      </summary>
+      <div className="pb-3">{children}</div>
+    </details>
   );
 }
 
@@ -1331,378 +1322,5 @@ function EmptyCampaignPanel({
   );
 }
 
-function toggleExportCampaign(current: string[], campaignId: string) {
-  const withoutAll = current.filter((id) => id !== "all");
-
-  if (withoutAll.includes(campaignId)) {
-    const next = withoutAll.filter((id) => id !== campaignId);
-    return next.length ? next : ["all"];
-  }
-
-  return [...withoutAll, campaignId];
-}
-
-function getExportDiaryEntries(
-  entries: FieldDiaryEntry[],
-  campaigns: CampaignView[],
-  selectedCampaignIds: string[],
-) {
-  if (selectedCampaignIds.includes("all")) {
-    return entries;
-  }
-
-  const selectedCampaigns = campaigns.filter((campaign) => selectedCampaignIds.includes(campaign.id));
-
-  return entries.filter((entry) =>
-    selectedCampaigns.some((campaign) =>
-      diaryEntryMatchesSelectedCampaign(entry, campaign.id, campaign.title),
-    ),
-  );
-}
-
-function formatExportCampaignSelection(campaigns: CampaignView[], selectedCampaignIds: string[]) {
-  if (selectedCampaignIds.includes("all")) {
-    return "Todas as campanhas";
-  }
-
-  const labels = campaigns
-    .map((campaign, index) => ({
-      id: campaign.id,
-      label: `Campanha ${index + 1}`,
-    }))
-    .filter((campaign) => selectedCampaignIds.includes(campaign.id))
-    .map((campaign) => campaign.label);
-
-  return labels.length ? labels.join(" + ") : "Campanhas selecionadas";
-}
-
-export function addFieldDiarySummarySheet(
-  workbook: Workbook,
-  entries: FieldDiaryEntry[],
-  campaignTitle: string,
-  sheetName = "Resumo agregado",
-) {
-  const sheet = workbook.addWorksheet(sheetName, {
-    views: [{ state: "frozen", ySplit: 1 }],
-  });
-  sheet.columns = [
-    { header: "Campanha", key: "campaign", width: 34 },
-    { header: "Dia da campanha", key: "campaignDay", width: 16 },
-    { header: "Data", key: "entryDate", width: 14 },
-    { header: "Registros", key: "entries", width: 12 },
-    { header: "Pontos/SIA distintos", key: "points", width: 18 },
-    { header: "Municípios distintos", key: "municipalities", width: 20 },
-    { header: "Com coordenadas", key: "coordinates", width: 16 },
-    { header: "Com ocorrência", key: "occurrences", width: 16 },
-    { header: "Com follow-up", key: "followUps", width: 16 },
-    { header: "Atividades", key: "activities", width: 36 },
-    { header: "Condições visuais da água", key: "waterConditions", width: 40 },
-  ];
-
-  const grouped = new Map<string, FieldDiaryEntry[]>();
-
-  for (const entry of entries) {
-    const key = [entry.campaignName || campaignTitle, entry.campaignDay, entry.entryDate].join("|");
-    grouped.set(key, [...(grouped.get(key) ?? []), entry]);
-  }
-
-  for (const groupEntries of [...grouped.values()].sort(compareFieldDiaryGroups)) {
-    sheet.addRow({
-      campaign: groupEntries[0]?.campaignName || campaignTitle,
-      campaignDay: groupEntries[0]?.campaignDay ?? "",
-      entryDate: formatExportDate(groupEntries[0]?.entryDate),
-      entries: groupEntries.length,
-      points: uniqueExportValues(groupEntries.map((entry) => entry.sia || entry.locationName)).length,
-      municipalities: uniqueExportValues(groupEntries.map((entry) => entry.municipality)).length,
-      coordinates: groupEntries.filter((entry) => entry.latitude && entry.longitude).length,
-      occurrences: groupEntries.filter((entry) => entry.hasOccurrence).length,
-      followUps: groupEntries.filter((entry) => entry.requiresFollowUp !== "Não").length,
-      activities: uniqueExportValues(groupEntries.flatMap((entry) => entry.activities)).join("; "),
-      waterConditions: uniqueExportValues(groupEntries.flatMap((entry) => entry.waterVisualConditions)).join("; "),
-    });
-  }
-
-  styleWorksheet(sheet, "K");
-}
-
-export function addCampaignResultsSheet(
-  workbook: Workbook,
-  points: LaboratoryRiskPoint[],
-  diaryEntries: FieldDiaryEntry[],
-) {
-  const sheet = workbook.addWorksheet("Resultados por ponto", {
-    views: [{ state: "frozen", ySplit: 1 }],
-  });
-  sheet.columns = [
-    { header: "Campanha", key: "campaign", width: 34 },
-    { header: "SIA", key: "sia", width: 16 },
-    { header: "Amostra", key: "sampleId", width: 18 },
-    { header: "Ponto/local", key: "point", width: 34 },
-    { header: "Corpo hídrico", key: "waterBody", width: 34 },
-    { header: "Município", key: "municipality", width: 22 },
-    { header: "Data", key: "date", width: 14 },
-    { header: "Latitude efetiva", key: "latitude", width: 18 },
-    { header: "Longitude efetiva", key: "longitude", width: 18 },
-    { header: "Ranking", key: "ranking", width: 12 },
-    { header: "Score integrado", key: "score", width: 16 },
-    { header: "Classificação integrada", key: "classification", width: 24 },
-    { header: "Risco ambiental", key: "environmentalRisk", width: 24 },
-    { header: "Risco operacional", key: "operationalRisk", width: 24 },
-    { header: "Risco sanitário", key: "sanitaryRisk", width: 24 },
-    { header: "Marcadores eDNA", key: "markers", width: 42 },
-    { header: "Sinal eDNA", key: "ednaSignal", width: 28 },
-    { header: "Confiança", key: "confidence", width: 18 },
-    { header: "Síntese técnica", key: "summary", width: 54 },
-    { header: "Recomendações", key: "recommendations", width: 54 },
-    { header: "Status laboratorial", key: "laboratoryStatus", width: 20 },
-    { header: "Acessibilidade registrada", key: "accessibility", width: 24 },
-    { header: "Atividades registradas", key: "activities", width: 36 },
-    { header: "Condições da água registradas", key: "waterConditions", width: 42 },
-    { header: "Ocorrência registrada?", key: "hasOccurrence", width: 22 },
-    { header: "Tipo de ocorrência", key: "occurrenceType", width: 28 },
-    { header: "Problema/descrição", key: "occurrenceDescription", width: 48 },
-    { header: "Follow-up", key: "followUp", width: 20 },
-    { header: "Notas de follow-up", key: "followUpNotes", width: 48 },
-  ];
-
-  for (const point of points) {
-    const diaryEntry = findDiaryEntryForMapPoint(point, diaryEntries);
-    sheet.addRow({
-      campaign: point.campaign,
-      sia: point.code,
-      sampleId: point.sampleId,
-      point: point.point ?? point.waterBody,
-      waterBody: point.waterBody,
-      municipality: point.municipality,
-      date: formatExportDate(point.date),
-      latitude: point.effective?.lat ?? "",
-      longitude: point.effective?.lon ?? "",
-      ranking: point.rankingPosition ?? "",
-      score: point.score ?? "",
-      classification: point.riskClassification,
-      environmentalRisk: point.environmentalRisk,
-      operationalRisk: point.operationalRisk,
-      sanitaryRisk: point.sanitaryRisk,
-      markers: point.detectedMarkers.join("; "),
-      ednaSignal: point.ednaSignal,
-      confidence: point.confidence,
-      summary: point.resultSummary,
-      recommendations: point.recommendations,
-      laboratoryStatus: point.laboratoryStatus,
-      accessibility: diaryEntry?.pointAccessibility ?? "",
-      activities: diaryEntry?.activities.join("; ") ?? "",
-      waterConditions: diaryEntry?.waterVisualConditions.join("; ") ?? "",
-      hasOccurrence: diaryEntry ? (diaryEntry.hasOccurrence ? "Sim" : "Não") : "",
-      occurrenceType: diaryEntry?.occurrenceType ?? "",
-      occurrenceDescription: diaryEntry?.occurrenceDescription ?? "",
-      followUp: diaryEntry?.requiresFollowUp ?? "",
-      followUpNotes: diaryEntry?.followUpNotes ?? "",
-    });
-  }
-
-  styleWorksheet(sheet, "AC");
-}
-
-export function addFieldDiaryEntriesSheet(
-  workbook: Workbook,
-  entries: FieldDiaryEntry[],
-) {
-  const sheet = workbook.addWorksheet("Diário de campo completo", {
-    views: [{ state: "frozen", ySplit: 1 }],
-  });
-  sheet.columns = [
-    { header: "Campanha", key: "campaignName", width: 34 },
-    { header: "ID da campanha", key: "campaignId", width: 26 },
-    { header: "Dia da campanha", key: "campaignDay", width: 16 },
-    { header: "Data", key: "entryDate", width: 14 },
-    { header: "Horário", key: "collectionTime", width: 12 },
-    { header: "Local/ponto", key: "locationName", width: 32 },
-    { header: "SIA", key: "sia", width: 16 },
-    { header: "Amostras/réplicas eDNA", key: "samplesReplicasEdna", width: 22 },
-    { header: "ID Zooplâncton", key: "zooplanktonId", width: 18 },
-    { header: "Latitude", key: "latitude", width: 14 },
-    { header: "Longitude", key: "longitude", width: 14 },
-    { header: "Município", key: "municipality", width: 22 },
-    { header: "Atividades", key: "activities", width: 36 },
-    { header: "Condições visuais da água", key: "waterVisualConditions", width: 40 },
-    { header: "Ocorrência?", key: "hasOccurrence", width: 14 },
-    { header: "Tipo de ocorrência", key: "occurrenceType", width: 26 },
-    { header: "Descrição da ocorrência", key: "occurrenceDescription", width: 44 },
-    { header: "Requer follow-up", key: "requiresFollowUp", width: 18 },
-    { header: "Notas de follow-up", key: "followUpNotes", width: 44 },
-    { header: "Clima", key: "weatherConditions", width: 20 },
-    { header: "Acessibilidade", key: "pointAccessibility", width: 18 },
-    { header: "Resumo diário", key: "dailySummary", width: 48 },
-    { header: "Status", key: "status", width: 14 },
-    { header: "Equipe", key: "createdByName", width: 24 },
-    { header: "Criado em", key: "createdAt", width: 22 },
-    { header: "Atualizado em", key: "updatedAt", width: 22 },
-  ];
-
-  for (const entry of entries) {
-    sheet.addRow({
-      campaignName: entry.campaignName,
-      campaignId: entry.campaignId ?? "",
-      campaignDay: entry.campaignDay,
-      entryDate: formatExportDate(entry.entryDate),
-      collectionTime: entry.collectionTime,
-      locationName: entry.locationName,
-      sia: entry.sia ?? "",
-      samplesReplicasEdna: entry.samplesReplicasEdna ?? "",
-      zooplanktonId: entry.zooplanktonId ?? "",
-      latitude: entry.latitude ?? "",
-      longitude: entry.longitude ?? "",
-      municipality: entry.municipality,
-      activities: entry.activities.join("; "),
-      waterVisualConditions: entry.waterVisualConditions.join("; "),
-      hasOccurrence: entry.hasOccurrence ? "Sim" : "Não",
-      occurrenceType: entry.occurrenceType ?? "",
-      occurrenceDescription: entry.occurrenceDescription ?? "",
-      requiresFollowUp: entry.requiresFollowUp,
-      followUpNotes: entry.followUpNotes ?? "",
-      weatherConditions: entry.weatherConditions ?? "",
-      pointAccessibility: entry.pointAccessibility ?? "",
-      dailySummary: entry.dailySummary,
-      status: entry.status,
-      createdByName: entry.createdByName ?? "",
-      createdAt: formatExportDateTime(entry.createdAt),
-      updatedAt: formatExportDateTime(entry.updatedAt),
-    });
-  }
-
-  styleWorksheet(sheet, "Z");
-}
-
-function addPublishedResultsSheets(workbook: Workbook, publication: ResultsPublication) {
-  const ranking = workbook.addWorksheet("Resultados por ponto", {
-    views: [{ state: "frozen", ySplit: 1 }],
-  });
-  ranking.columns = [
-    { header: "Campanha", key: "campaign", width: 34 },
-    { header: "Amostra", key: "sampleId", width: 18 },
-    { header: "Ponto/local", key: "pointName", width: 34 },
-    { header: "Corpo hídrico", key: "waterBody", width: 34 },
-    { header: "Município", key: "municipality", width: 22 },
-    { header: "Data", key: "campaignDate", width: 18 },
-    { header: "Ranking", key: "position", width: 12 },
-    { header: "Score integrado", key: "score", width: 18 },
-    { header: "Classificação integrada", key: "classification", width: 24 },
-    { header: "Confiança", key: "confidence", width: 18 },
-    { header: "Justificativa técnica", key: "technicalJustification", width: 54 },
-    { header: "Recomendações", key: "recommendations", width: 54 },
-  ];
-  publication.rankingRows.forEach((row) => ranking.addRow({
-    campaign: publication.campaignTitle,
-    ...row,
-    position: row.position ?? "Não calculado",
-    score: row.score ?? "Não calculado",
-    classification: row.classification ?? "Não calculado",
-  }));
-  styleWorksheet(ranking, "L");
-
-  const molecular = workbook.addWorksheet("Banco molecular", {
-    views: [{ state: "frozen", ySplit: 1 }],
-  });
-  const keys = Object.keys(publication.molecularRows[0] ?? {});
-  molecular.columns = keys.map((key) => ({ header: key, key, width: 22 }));
-  publication.molecularRows.forEach((row) => molecular.addRow(row));
-  if (keys.length) styleWorksheet(molecular, molecular.getColumn(keys.length).letter);
-}
-
-function styleWorksheet(sheet: Worksheet, lastColumn: string) {
-  const header = sheet.getRow(1);
-  header.font = { bold: true, color: { argb: "FFFFFFFF" } };
-  header.fill = {
-    type: "pattern",
-    pattern: "solid",
-    fgColor: { argb: "FF004262" },
-  };
-  sheet.autoFilter = `A1:${lastColumn}1`;
-}
-
-function compareFieldDiaryGroups(left: FieldDiaryEntry[], right: FieldDiaryEntry[]) {
-  const leftEntry = left[0];
-  const rightEntry = right[0];
-
-  if (!leftEntry || !rightEntry) {
-    return left.length - right.length;
-  }
-
-  return (
-    leftEntry.entryDate.localeCompare(rightEntry.entryDate) ||
-    leftEntry.campaignDay - rightEntry.campaignDay ||
-    leftEntry.campaignName.localeCompare(rightEntry.campaignName, "pt-BR")
-  );
-}
-
-function uniqueExportValues(values: Array<string | number | null | undefined>) {
-  return [...new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean))].sort((a, b) =>
-    a.localeCompare(b, "pt-BR", { numeric: true }),
-  );
-}
-
-function formatExportDate(value: string | undefined | null) {
-  if (!value) {
-    return "";
-  }
-
-  const datePart = value.slice(0, 10);
-  const match = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-
-  return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
-}
-
-function formatExportDateTime(value: string | undefined | null) {
-  if (!value) {
-    return "";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function slugifyFileName(value: string) {
-  return String(value || "campanha")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .toLowerCase();
-}
-
-export function buildCampaignResultsFileName(campaignTitle: string, date = new Date()) {
-  const dateStamp = [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0"),
-  ].join("-");
-
-  return `${slugifyFileName(campaignTitle)}-resultados-${dateStamp}.xlsx`;
-}
-
-async function downloadWorkbook(workbook: Workbook, fileName: string) {
-  const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
+// Mantidos no módulo da página por compatibilidade com importações existentes.
+export { addCampaignResultsSheet, addFieldDiaryEntriesSheet, addFieldDiarySummarySheet, buildCampaignResultsFileName };

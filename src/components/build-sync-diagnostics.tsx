@@ -38,7 +38,7 @@ export function BuildSyncDiagnostics({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-lg border border-[rgba(0,168,107,0.16)] bg-[rgba(0,168,107,0.06)] px-3 py-1.5 text-label font-black uppercase tracking-[0.12em] text-[#0b5f40]">
+          <span className="rounded-lg border border-[rgba(0,168,107,0.16)] bg-[rgba(0,168,107,0.06)] px-3 py-1.5 text-label font-black text-[var(--status-success-strong)]">
             Sincronizado
           </span>
           <button
@@ -108,21 +108,21 @@ function DiagnosticBox({
 }) {
   return (
     <article className="rounded-xl border border-[var(--line-ghost)] bg-white/84 p-4">
-      <p className="inline-flex items-center gap-2 text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+      <p className="inline-flex items-center gap-2 text-label font-black text-[var(--ink-soft)]">
         <Icon className="h-4 w-4 text-[var(--brand-teal)]" />
         {title}
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {items.map(([label, value]) => (
           <div key={label} className="min-w-0 rounded-lg border border-[var(--line-ghost)] bg-white px-3 py-2">
-            <p className="text-label font-black uppercase tracking-[0.12em] text-[var(--ink-soft)]">
+            <p className="text-label font-black text-[var(--ink-soft)]">
               {label}
             </p>
             <p className="mt-1 truncate text-sm font-black text-[var(--brand-navy-strong)]">{value}</p>
           </div>
         ))}
       </div>
-      <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-[var(--line-ghost)] bg-[var(--surface-soft)]/58 px-3 py-2 font-mono text-label uppercase text-[var(--ink-soft)]">
+      <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-[var(--line-ghost)] bg-[var(--surface-soft)]/58 px-3 py-2 font-mono text-label text-[var(--ink-soft)]">
         <span>{footerLabel}</span>
         <span className="truncate text-[var(--brand-navy-strong)]">{footerValue}</span>
       </div>

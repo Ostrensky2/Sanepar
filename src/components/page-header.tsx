@@ -1,81 +1,39 @@
-"use client";
-
 import type { ReactNode } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { ArrowLeft, ChevronRight } from "lucide-react";
-import { getBreadcrumbsForPath } from "@/lib/navigation";
 
 type PageHeaderProps = {
   eyebrow?: string;
   title: string;
-  description: string;
+  /** Uma linha de contexto. Explicações longas vão para o ícone de ajuda (`help`). */
+  description?: ReactNode;
+  /** Ícone "?" de explicação, exibido logo após o título. */
+  help?: ReactNode;
+  /** Ações principais da página (botões), alinhadas à direita no desktop. */
+  actions?: ReactNode;
   aside?: ReactNode;
-  backHref?: string;
+  /** Abas de seção (SectionTabs) logo abaixo do título. */
+  tabs?: ReactNode;
 };
 
-export function PageHeader({
-  eyebrow,
-  title,
-  description,
-  aside,
-  backHref,
-}: PageHeaderProps) {
-  const pathname = usePathname();
-  const breadcrumbs = getBreadcrumbsForPath(pathname);
-  const shouldShowBreadcrumbs = breadcrumbs.length > 2;
-  const contextualBackHref =
-    backHref ?? (pathname.startsWith("/dados/") && pathname !== "/dados/status" ? "/dados/status" : null);
-
+/**
+ * Cabeçalho padrão das páginas. O caminho (breadcrumb) fica na barra superior,
+ * então aqui aparecem só o título, uma linha de contexto e as ações.
+ */
+export function PageHeader({ eyebrow, title, description, help, actions, aside, tabs }: PageHeaderProps) {
+  const heading = <h1 className="heading-font type-page-title text-balance text-[var(--brand-navy-strong)]">{title}</h1>;
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.85fr)] xl:items-start">
-      <div>
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          {contextualBackHref ? (
-            <Link
-              href={contextualBackHref}
-              className="type-label inline-flex items-center gap-2 rounded-lg border border-[var(--line-ghost)] bg-white px-3 py-1.5 text-[var(--ink-soft)] transition hover:text-[var(--brand-navy-strong)]"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Voltar
-            </Link>
-          ) : null}
-          {shouldShowBreadcrumbs ? (
-            <nav aria-label="Breadcrumb" className="type-label flex min-w-0 flex-wrap items-center gap-1.5 text-[var(--ink-soft)]">
-              {breadcrumbs.map((breadcrumb, index) => {
-                const isLast = index === breadcrumbs.length - 1;
-
-                return (
-                  <span key={`${breadcrumb.href}-${breadcrumb.label}`} className="inline-flex items-center gap-1.5">
-                    {isLast ? (
-                      <span className="text-[var(--brand-navy-strong)]">{breadcrumb.label}</span>
-                    ) : (
-                      <Link className="transition hover:text-[var(--brand-navy-strong)]" href={breadcrumb.href}>
-                        {breadcrumb.label}
-                      </Link>
-                    )}
-                    {!isLast ? <ChevronRight className="h-3 w-3 text-slate-400" /> : null}
-                  </span>
-                );
-              })}
-            </nav>
+    <header className="space-y-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          {eyebrow ? <p className="type-eyebrow mb-1 text-[var(--brand-teal)]">{eyebrow}</p> : null}
+          {help ? <div className="flex items-center gap-1">{heading}{help}</div> : heading}
+          {description ? (
+            <p className="type-body mt-2 max-w-[70ch] text-[var(--ink-soft)]">{description}</p>
           ) : null}
         </div>
-        {eyebrow ? (
-          <p className="type-eyebrow mb-4 inline-flex items-center gap-2 rounded-full bg-[var(--brand-teal-soft)] px-3 py-1 text-[var(--brand-teal)]">
-            <span className="h-2 w-2 rounded-full bg-[var(--brand-teal)]" />
-            {eyebrow}
-          </p>
-        ) : null}
-        <h1 className="heading-font type-page-title text-[var(--brand-navy-strong)]">
-          {title}
-        </h1>
-        <p className="type-body mt-4 max-w-[70ch] text-[var(--ink-soft)]">
-          {description}
-        </p>
+        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+        {aside}
       </div>
-      {aside}
-    </div>
+      {tabs}
+    </header>
   );
 }
-

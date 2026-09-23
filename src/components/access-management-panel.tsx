@@ -40,8 +40,7 @@ const generalVisualizationLabels = [
   "Início",
   "Campanhas",
   "Resultados",
-  "Ações Pontuais",
-  "Solicitações",
+  "Atividades complementares",
   "Ajuda",
 ];
 
@@ -507,7 +506,7 @@ export function AccessManagementPanel({
         <AccessStat label="Usuários ativos" value={`${activeUsers}/${visibleUsers.length}`} icon={ShieldCheck} />
         <AccessStat label="Convites pendentes" value={String(firstAccessCount)} icon={KeyRound} />
         <div className="rounded-xl border border-[var(--line-ghost)] bg-white/76 p-4">
-          <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+          <p className="text-label font-black text-[var(--ink-soft)]">
             Categoria da sessão
           </p>
           <select
@@ -555,7 +554,7 @@ export function AccessManagementPanel({
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-sm">
             <thead>
-              <tr className="border-b border-[var(--line-ghost)] bg-[var(--surface-soft)]/70 text-left text-label font-black uppercase tracking-[0.12em] text-[var(--ink-soft)]">
+              <tr className="border-b border-[var(--line-ghost)] bg-[var(--surface-soft)]/70 text-left text-label font-black text-[var(--ink-soft)]">
                 <th className="w-[34%] px-4 py-3">Função restrita</th>
                 {visibleCategories.map((category) => (
                   <th key={category} className="px-3 py-3 text-center">
@@ -571,7 +570,7 @@ export function AccessManagementPanel({
                     <td className="px-4 py-3">
                       {index === 0 ? (
                         <div className="mb-2">
-                          <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--brand-teal)]">
+                          <p className="text-label font-black text-[var(--brand-teal)]">
                             {group.title}
                           </p>
                           <p className="mt-1 text-xs text-[var(--ink-soft)]">{group.description}</p>
@@ -686,7 +685,7 @@ export function AccessManagementPanel({
           <div className="mt-4 rounded-xl border border-[var(--line-ghost)] bg-[var(--surface-soft)] p-4">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--brand-teal)]">
+                <p className="text-label font-black text-[var(--brand-teal)]">
                   Editar usuário autorizado
                 </p>
                 <h3 className="heading-font mt-1 text-lg font-black text-[var(--brand-navy-strong)]">
@@ -761,7 +760,7 @@ export function AccessManagementPanel({
         <div className="mt-4 overflow-x-auto rounded-xl border border-[var(--line-ghost)]">
           <table className="w-full min-w-[880px] text-sm">
             <thead>
-              <tr className="border-b border-[var(--line-ghost)] bg-[var(--surface-soft)]/70 text-left text-label font-black uppercase tracking-[0.12em] text-[var(--ink-soft)]">
+              <tr className="border-b border-[var(--line-ghost)] bg-[var(--surface-soft)]/70 text-left text-label font-black text-[var(--ink-soft)]">
                 <th className="px-4 py-3">Usuário</th>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Categoria</th>
@@ -862,7 +861,7 @@ export function AccessManagementPanel({
 
       {showSection("audit") ? (
       <section className="rounded-xl border border-[var(--line-ghost)] bg-[var(--surface-soft)] p-4">
-        <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+        <p className="text-label font-black text-[var(--ink-soft)]">
           Registro de acessos
         </p>
         <div className="mt-3 grid gap-2">
@@ -894,7 +893,7 @@ function AccessStat({
     <div className="rounded-xl border border-[var(--line-ghost)] bg-white/76 p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-label font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+          <p className="text-label font-black text-[var(--ink-soft)]">
             {label}
           </p>
           <p className="mt-1 text-xl font-black text-[var(--brand-navy-strong)]">{value}</p>

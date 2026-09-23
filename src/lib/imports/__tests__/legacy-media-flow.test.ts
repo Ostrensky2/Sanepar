@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import campaignPoints from "@/data/campaign-map-points.json";
+import { readPrivateCampaignPoints } from "@/lib/private-campaign-points";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 import {
   hydrateLaboratoryRiskPointPhotos,
@@ -11,6 +11,7 @@ import {
   sanitizeCampaignMedia,
 } from "@/lib/imports/media-policy";
 import { getPhotoPreview } from "@/lib/photo-preview";
+const campaignPoints = readPrivateCampaignPoints();
 
 const migrationReport = {
   items: [
@@ -63,7 +64,7 @@ const cycleSamples = [
   "SIA-0780",
 ];
 
-describe("legacy campaign media integrated flow", () => {
+describe.skipIf(!campaignPoints.length)("legacy campaign media integrated flow", () => {
   it.each(cycleSamples)(
     "preserva a associação auditada de %s do snapshot até o storage autenticado",
     async (code) => {

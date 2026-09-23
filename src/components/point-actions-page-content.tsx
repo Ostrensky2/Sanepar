@@ -1,7 +1,9 @@
 "use client";
 
-import { Camera, CheckCircle2, ExternalLink, FileSpreadsheet, FlaskConical, Link2, MapPinned, Target, X } from "lucide-react";
+import { Camera, CheckCircle2, ExternalLink, FileSpreadsheet, Link2, MapPinned, Target, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ReadMore } from "@/components/read-more";
+import { SectionTabs } from "@/components/section-tabs";
 import {
   CampaignHydroMap,
   type CampaignHydroMapPoint,
@@ -90,7 +92,7 @@ export function PointActionsPageContent() {
         <div className="flex min-h-80 flex-col items-center justify-center radius-panel border border-dashed border-slate-300 bg-[var(--surface-soft)] p-8 text-center">
           <FileSpreadsheet className="mb-4 h-10 w-10 animate-pulse text-slate-400" />
           <p className="heading-font text-xl font-bold text-[var(--brand-navy-strong)]">
-            Carregando ações pontuais
+            Carregando atividades complementares
           </p>
           <p className="mt-2 max-w-lg text-sm leading-6 text-slate-500">
             Consultando os registros cadastrados.
@@ -106,10 +108,10 @@ export function PointActionsPageContent() {
         <div className="flex min-h-80 flex-col items-center justify-center radius-panel border border-dashed border-slate-300 bg-[var(--surface-soft)] p-8 text-center">
           <FileSpreadsheet className="mb-4 h-10 w-10 text-slate-400" />
           <p className="heading-font text-xl font-bold text-[var(--brand-navy-strong)]">
-            Nenhuma ação pontual registrada
+            Nenhuma atividade complementar registrada
           </p>
           <p className="mt-2 max-w-lg text-sm leading-6 text-slate-500">
-            Cadastre ações pontuais em Entrada de dados para liberar esta página.
+            Use a aba Registrar para cadastrar a primeira atividade.
           </p>
         </div>
       </div>
@@ -118,14 +120,15 @@ export function PointActionsPageContent() {
 
   return (
     <div className="space-y-6">
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <section className="space-y-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
-            Ação pontual selecionada
+          <p className="type-eyebrow text-[var(--brand-teal)]">
+            Atividades complementares
           </p>
-          <h2 className="heading-font text-2xl font-extrabold tracking-tight text-[var(--brand-navy-strong)]">
+          <h1 className="heading-font type-page-title text-[var(--brand-navy-strong)]">
             {selectedAction.eventName}
-          </h2>
+          </h1>
           {selectedAction.document && selectedDocumentUrl ? (
             <a
               href={selectedDocumentUrl}
@@ -139,8 +142,8 @@ export function PointActionsPageContent() {
           ) : null}
         </div>
 
-        <label className="grid gap-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-500 lg:min-w-96">
-          Ação exibida
+        <label className="type-label grid gap-1 text-[var(--ink-soft)] lg:min-w-96">
+          Atividade exibida
           <select
             className="rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-sm font-bold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none transition focus:border-[var(--brand-blue)] focus:ring-2 focus:ring-[var(--brand-blue)]/20"
             value={selectedAction.id}
@@ -157,18 +160,21 @@ export function PointActionsPageContent() {
             ))}
           </select>
         </label>
+      </div>
+      <SectionTabs />
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard icon={Target} label="Registro" value="Pontual" detail={selectedAction.createdAt} />
-        <MetricCard icon={MapPinned} label="Pontos de coleta" value={selectedAction.points.length} detail="Pontos vinculados" />
-        <MetricCard icon={FlaskConical} label="Resultados" value={selectedAction.points.length} detail="Descrições registradas" />
-        <MetricCard icon={Camera} label="Fotos" value={totalPhotos} detail="Arquivos vinculados" />
-      </section>
+      {/* Resumo numa linha: zero foto não merece cartão de destaque; o espaço vai para mapa e resultado. */}
+      <p className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[var(--ink-soft)]">
+        <span className="inline-flex items-center gap-1.5"><Target aria-hidden="true" className="h-4 w-4 text-[var(--brand-teal)]" />Atividade em <strong className="text-[var(--ink)]">{selectedAction.points[0]?.dates || "data não informada"}</strong></span>
+        <span className="inline-flex items-center gap-1.5"><MapPinned aria-hidden="true" className="h-4 w-4 text-[var(--brand-teal)]" /><strong className="text-[var(--ink)]">{selectedAction.points.length}</strong> {selectedAction.points.length === 1 ? "ponto de coleta" : "pontos de coleta"}</span>
+        <span className="inline-flex items-center gap-1.5"><Camera aria-hidden="true" className="h-4 w-4 text-[var(--brand-teal)]" />{totalPhotos ? <><strong className="text-[var(--ink)]">{totalPhotos}</strong> {totalPhotos === 1 ? "foto" : "fotos"}</> : "sem fotos"}</span>
+        <span>registrada em {selectedAction.createdAt}</span>
+      </p>
 
       <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
         <div className="space-y-4">
-          <div className="relative h-[420px] overflow-hidden radius-panel border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)]">
+          <div className="relative h-[420px] overflow-hidden radius-panel border border-[var(--line-ghost)] bg-[image:var(--map-surface)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)]">
             <CampaignHydroMap
               points={mapPoints}
               selectedPointId={selectedPoint?.id}
@@ -176,7 +182,7 @@ export function PointActionsPageContent() {
               markerMode="pointAction"
               showPointTooltip
               clipBaseTilesToBasins
-              caption="Ações pontuais · Pontos efetivos · Sanepar"
+              caption="Atividades complementares · Pontos efetivos · Sanepar"
               onSelectPoint={(point) => setSelectedPointId(point.id)}
             />
           </div>
@@ -189,8 +195,8 @@ export function PointActionsPageContent() {
         <aside className="glass-panel radius-panel p-5 shadow-[0_24px_72px_-48px_rgba(0,66,98,0.32)]">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <p className="text-caption font-bold uppercase tracking-[0.22em] text-slate-400">
-                Ação pontual
+              <p className="text-caption font-bold text-slate-400">
+                Atividade complementar
               </p>
               <h3 className="heading-font mt-1 text-2xl font-black text-[var(--brand-navy-strong)]">
                 {selectedAction.eventName}
@@ -214,33 +220,6 @@ export function PointActionsPageContent() {
         </aside>
       </section>
     </div>
-  );
-}
-
-function MetricCard({
-  icon: Icon,
-  label,
-  value,
-  detail,
-}: {
-  icon: typeof Target;
-  label: string;
-  value: string | number;
-  detail: string;
-}) {
-  return (
-    <article className="glass-panel radius-panel border-b-2 border-[var(--brand-blue)] p-4 shadow-[0_18px_54px_-42px_rgba(0,66,98,0.35)]">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <p className="text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
-          {label}
-        </p>
-        <Icon className="h-4 w-4 text-[var(--brand-navy-strong)]" />
-      </div>
-      <p className="heading-font text-2xl font-black text-[var(--brand-navy-strong)]">
-        {value}
-      </p>
-      <p className="mt-2 text-xs font-semibold text-[var(--brand-teal)]">{detail}</p>
-    </article>
   );
 }
 
@@ -269,17 +248,17 @@ function PointActionCard({
 
       <div className="grid gap-3 lg:grid-cols-2">
         <div className="radius-card border border-[var(--line-ghost)] bg-white p-4 shadow-[0_18px_48px_-42px_rgba(0,66,98,0.28)]">
-          <p className="text-caption font-bold uppercase tracking-[0.18em] text-slate-400">
+          <p className="text-caption font-bold text-slate-400">
             Objetivos
           </p>
-          <p className="mt-2 text-justify text-sm leading-6 text-slate-600">{objectives}</p>
+          <ReadMore className="mt-2" text={objectives} />
         </div>
 
         <div className="radius-card border border-[var(--line-ghost)] bg-white p-4 shadow-[0_18px_48px_-42px_rgba(0,66,98,0.28)]">
-          <p className="text-caption font-bold uppercase tracking-[0.18em] text-slate-400">
+          <p className="text-caption font-bold text-slate-400">
             Resultados
           </p>
-          <p className="mt-2 text-justify text-sm leading-6 text-slate-600">{point.results}</p>
+          <ReadMore className="mt-2" text={point.results} />
         </div>
       </div>
 
@@ -291,7 +270,7 @@ function PointActionCard({
           className="flex items-center justify-between gap-3 radius-card border border-blue-100 bg-white p-4 text-sm font-bold text-blue-700 transition-colors hover:border-blue-200 hover:bg-blue-50"
         >
           <span className="min-w-0">
-            <span className="block text-caption uppercase tracking-[0.18em] text-slate-400">
+            <span className="block text-caption text-slate-400">
               Documento do evento
             </span>
             <span className="mt-1 block truncate underline decoration-blue-300 underline-offset-4">
@@ -317,7 +296,7 @@ function PointActionPhotos({ point }: { point: PointActionSamplePoint }) {
 
   return (
     <section className="glass-panel radius-panel p-4 shadow-[0_24px_72px_-48px_rgba(0,66,98,0.32)]">
-      <p className="mb-3 text-caption font-bold uppercase tracking-[0.18em] text-slate-400">
+      <p className="mb-3 text-caption font-bold text-slate-400">
         Fotos do ponto selecionado
       </p>
       <div className="grid gap-3 md:grid-cols-2">
@@ -422,7 +401,7 @@ function PhotoDialog({
       <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden radius-panel bg-white shadow-[0_28px_90px_-24px_rgba(0,0,0,0.5)]">
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
           <div className="flex items-center gap-3">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+            <p className="text-xs font-bold text-slate-500">
               Foto da ação pontual
             </p>
             {photos.length > 1 && (
@@ -494,7 +473,7 @@ function PhotoDialog({
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg bg-[var(--surface-soft)] px-3 py-2">
-      <p className="text-caption font-bold uppercase tracking-[0.16em] text-slate-400">
+      <p className="text-caption font-bold text-slate-400">
         {label}
       </p>
       <p className="mt-1 font-semibold text-slate-700">{value}</p>

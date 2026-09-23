@@ -38,7 +38,7 @@ export function YvaeMasthead({
 
       {!compact ? (
         <div className="mt-4">
-          <p className="text-center text-caption font-bold uppercase tracking-[0.28em] text-[var(--brand-teal)]">
+          <p className="text-center text-caption font-bold uppercase tracking-[0.16em] text-[var(--brand-teal)]">
             Sistema de monitoramento
           </p>
         </div>
@@ -54,7 +54,7 @@ export function InstitutionalPartners({
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       {!compact ? (
-        <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+        <p className="text-caption font-bold uppercase tracking-[0.16em] text-[var(--brand-teal)]">
           Parceria institucional
         </p>
       ) : null}

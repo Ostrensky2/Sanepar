@@ -445,7 +445,7 @@ export function LocalBackupPanel({
                 Rotina diária do BD e retenção mensal.
               </p>
             </div>
-            <span className="rounded-lg border border-[var(--line-ghost)] bg-white px-3 py-1 text-label font-normal uppercase tracking-[0.12em] text-[var(--brand-navy-strong)]">
+            <span className="rounded-lg border border-[var(--line-ghost)] bg-white px-3 py-1 text-label font-normal text-[var(--brand-navy-strong)]">
               {enabled ? "Host operacional" : "Somente leitura"}
             </span>
           </div>
@@ -513,7 +513,7 @@ export function LocalBackupPanel({
 
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="bg-white text-xs uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+              <thead className="bg-white text-xs text-[var(--ink-soft)]">
                 <tr>
                   <th className="px-4 py-3">Data</th>
                   <th className="px-4 py-3">Tamanho</th>
@@ -529,7 +529,7 @@ export function LocalBackupPanel({
                     </td>
                     <td className="px-4 py-4">{formatBytes(backup.sizeBytes)}</td>
                     <td className="px-4 py-4">
-                      <span className="inline-flex items-center gap-1 rounded-lg border border-[rgba(0,168,107,0.16)] bg-[rgba(0,168,107,0.06)] px-2.5 py-1 text-xs font-normal text-[#0b5f40]">
+                      <span className="inline-flex items-center gap-1 rounded-lg border border-[rgba(0,168,107,0.16)] bg-[rgba(0,168,107,0.06)] px-2.5 py-1 text-xs font-normal text-[var(--status-success-strong)]">
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         {backup.status}
                       </span>
@@ -634,7 +634,7 @@ export function LocalBackupPanel({
                 O arquivo de BD configurado em YVAE_DATABASE_PATH ou BACKUP_DATABASE_PATH
                 é salvo e restaurado. O Supabase remoto exige exportação própria.
               </p>
-              <p className="mt-3 text-xs font-normal uppercase tracking-[0.18em] text-[var(--brand-teal)]">
+              <p className="mt-3 text-xs font-normal text-[var(--brand-teal)]">
                 Destino: {resolvedDatabaseRoot}
               </p>
             </div>
@@ -746,7 +746,7 @@ export function LocalBackupPanel({
 
         <div className="mt-5 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
-            <thead className="text-xs uppercase tracking-[0.16em] text-[var(--ink-soft)]">
+            <thead className="text-xs text-[var(--ink-soft)]">
               <tr>
                 <th className="px-3 py-3">Data</th>
                 <th className="px-3 py-3">Tipo</th>
@@ -769,7 +769,7 @@ export function LocalBackupPanel({
                   <td className="px-3 py-4">{backupTypeLabel(backup.type)}</td>
                   <td className="px-3 py-4">{formatBytes(backup.sizeBytes)}</td>
                   <td className="px-3 py-4">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-normal text-[#0b5f40] shadow-sm border border-[rgba(0,168,107,0.1)]">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-normal text-[var(--status-success-strong)] shadow-sm border border-[rgba(0,168,107,0.1)]">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       {backup.status}
                     </span>
@@ -848,7 +848,7 @@ export function LocalBackupPanel({
             <div key={`${log.timestamp}-${index}`} className="rounded-xl bg-white px-4 py-3 text-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="font-normal text-[var(--brand-navy-strong)]">{log.operation}</p>
-                <span className="text-xs uppercase tracking-[0.16em] text-[var(--ink-soft)]">
+                <span className="text-xs text-[var(--ink-soft)]">
                   {formatDateTime(log.timestamp)} - {log.status}
                 </span>
               </div>
@@ -924,8 +924,8 @@ function BackupOverviewCard({
         </div>
         <span className={
           tone === "danger"
-            ? "shrink-0 rounded-lg border border-[rgba(186,26,26,0.18)] bg-[rgba(186,26,26,0.05)] px-2.5 py-1 text-[10px] font-normal uppercase tracking-[0.1em] text-[var(--brand-danger)]"
-            : "shrink-0 rounded-lg border border-[var(--line-ghost)] bg-[var(--surface-soft)] px-2.5 py-1 text-[10px] font-normal uppercase tracking-[0.1em] text-[var(--brand-navy-strong)]"
+            ? "shrink-0 rounded-lg border border-[rgba(186,26,26,0.18)] bg-[rgba(186,26,26,0.05)] px-2.5 py-1 text-xs font-normal text-[var(--brand-danger)]"
+            : "shrink-0 rounded-lg border border-[var(--line-ghost)] bg-[var(--surface-soft)] px-2.5 py-1 text-xs font-normal text-[var(--brand-navy-strong)]"
         }>
           {badge}
         </span>
@@ -973,7 +973,7 @@ function BackupOverviewCard({
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-lg border border-[var(--line-ghost)] bg-white px-3 py-2">
-      <p className="text-caption font-black uppercase tracking-[0.1em] text-[var(--ink-soft)]">
+      <p className="text-caption font-black text-[var(--ink-soft)]">
         {label}
       </p>
       <p className="mt-1 truncate text-sm font-normal text-[var(--brand-navy-strong)]">{value}</p>
@@ -1001,7 +1001,7 @@ function ActionCard({
             {title}
           </p>
           <p className="mt-2 text-xs font-normal leading-5 text-[var(--ink-soft)]">{description}</p>
-          <p className="mt-3 text-xs font-normal uppercase tracking-[0.18em] text-[var(--brand-teal)]">
+          <p className="mt-3 text-xs font-normal text-[var(--brand-teal)]">
             {detail}
           </p>
         </div>
@@ -1021,7 +1021,7 @@ function ActionCard({
 
 function StatusMessage({ tone, message }: { tone: "success" | "error" | "info"; message: string }) {
   const classes = {
-    success: "bg-[rgba(0,168,107,0.06)] text-[#0b5f40] border border-[rgba(0,168,107,0.15)]",
+    success: "bg-[rgba(0,168,107,0.06)] text-[var(--status-success-strong)] border border-[rgba(0,168,107,0.15)]",
     error: "bg-[rgba(186,26,26,0.06)] text-[var(--brand-danger)] border border-[rgba(186,26,26,0.15)]",
     info: "bg-[var(--brand-blue-soft)]/60 text-[var(--brand-navy-strong)] border border-[var(--brand-blue-soft)]",
   };

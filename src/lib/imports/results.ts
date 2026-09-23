@@ -1,5 +1,7 @@
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 import {
   RESULTS_DASHBOARD_HEADERS,
   RESULTS_DASHBOARD_SECTIONS,
@@ -18,6 +20,12 @@ import {
 } from "@/lib/imports/results-contract";
 import { normalizeLaboratoryRiskLevel, type LaboratoryRiskResultRow } from "@/lib/laboratory-risk";
 import { resolveCanonicalCampaign } from "@/lib/campaign-identity";
+import {
+  RESULTS_CONTRACT_VERSION,
+  parseResultsWorkbookV2,
+  type CampaignPublicationIdentity,
+  type ResultsCampaign,
+} from "@/modules/results";
 
 type WorkbookBinary = Parameters<ExcelJS.Workbook["xlsx"]["load"]>[0];
 
@@ -71,6 +79,135 @@ export type LaboratoryResultsImport = {
   riskRows: LaboratoryRiskResultRow[];
   viewModel: ResultsViewModel;
 };
+
+export type ResultsWorkbookPreview = {
+  contractVersion: string;
+  fileName: string;
+  sourceSha256: string | null;
+  molecularRecordCount: number;
+  totalPointCount: number;
+  completePointCount: number;
+  partialPointCount: number;
+  unavailablePointCount: number;
+  campaigns: Array<{
+    code: string;
+    publicationKey: string;
+    canonicalId: string;
+    canonicalName: string;
+    totalPointCount: number;
+    completePointCount: number;
+    partialPointCount: number;
+    unavailablePointCount: number;
+  }>;
+  warnings: string[];
+};
+
+export type ResultsWorkbookPreviewResponse = ResultsWorkbookPreview & {
+  currentCampaigns: CampaignPublicationIdentity[];
+  expectedHeads: import("@/lib/results-publication-contract").ResultsExpectedHeads;
+};
+
+const RESULTS_V2_SHEETS = [
+  "Metadados",
+  "Riscos_bibliografia",
+  "Evidencias_risco",
+  "Criterios_scores",
+  "Indices_pontos",
+  "Calculo_conjuntos",
+  "Metodo_calculo",
+] as const;
+
+export async function previewResultsWorkbook(
+  buffer: ArrayBuffer,
+  fileName: string,
+): Promise<ResultsWorkbookPreview> {
+  const sheetNames = await readWorkbookSheetNames(buffer);
+  const hasV2Signature = sheetNames.includes("Metadados") || RESULTS_V2_SHEETS.some((name) => sheetNames.includes(name));
+
+  if (hasV2Signature) {
+    const parsed = await parseResultsWorkbookV2(buffer, fileName);
+    const campaigns = parsed.campaigns.map((campaign) => {
+      const canonical = canonicalCampaignForV2(campaign.campaignCode);
+      const partialPointCount = campaign.counts.partialWithTwoSets + campaign.counts.partialWithOneSet;
+      return {
+        code: campaign.campaignCode,
+        publicationKey: resultsCampaignPublicationKey(campaign, parsed),
+        canonicalId: canonical.id,
+        canonicalName: canonical.name,
+        totalPointCount: campaign.counts.total,
+        completePointCount: campaign.counts.complete,
+        partialPointCount,
+        unavailablePointCount: campaign.counts.unavailable,
+      };
+    });
+    return {
+      contractVersion: RESULTS_CONTRACT_VERSION,
+      fileName,
+      sourceSha256: parsed.source.sha256,
+      molecularRecordCount: parsed.molecularRecordCount,
+      totalPointCount: campaigns.reduce((sum, campaign) => sum + campaign.totalPointCount, 0),
+      completePointCount: campaigns.reduce((sum, campaign) => sum + campaign.completePointCount, 0),
+      partialPointCount: campaigns.reduce((sum, campaign) => sum + campaign.partialPointCount, 0),
+      unavailablePointCount: campaigns.reduce((sum, campaign) => sum + campaign.unavailablePointCount, 0),
+      campaigns,
+      warnings: parsed.warnings,
+    };
+  }
+
+  const legacy = await parseLaboratoryResultsWorkbook(buffer, fileName);
+  const canonical = resolveCanonicalCampaign(legacy.metadata.campaignId) ??
+    resolveCanonicalCampaign(legacy.metadata.campaignNumber);
+  if (!canonical) throw new Error("A campanha do arquivo legado não possui vínculo canônico.");
+  return {
+    contractVersion: legacy.metadata.schemaVersion,
+    fileName,
+    sourceSha256: null,
+    molecularRecordCount: legacy.rowCount,
+    totalPointCount: legacy.rankingRows.length,
+    completePointCount: legacy.rankingRows.length,
+    partialPointCount: 0,
+    unavailablePointCount: 0,
+    campaigns: [{
+      code: `C${legacy.metadata.campaignNumber}`,
+      publicationKey: resultsCampaignPublicationKey({
+        campaignCode: `C${legacy.metadata.campaignNumber}`,
+        points: legacy.rankingRows,
+        counts: { total: legacy.rankingRows.length },
+      }, {
+        contractVersion: legacy.metadata.schemaVersion,
+        calculationVersion: legacy.metadata.methodology.version,
+        catalogVersion: legacy.metadata.methodology.origin,
+      }),
+      canonicalId: canonical.id,
+      canonicalName: canonical.name,
+      totalPointCount: legacy.rankingRows.length,
+      completePointCount: legacy.rankingRows.length,
+      partialPointCount: 0,
+      unavailablePointCount: 0,
+    }],
+    warnings: legacy.warnings,
+  };
+}
+
+export function resultsCampaignPublicationKey(
+  campaign: Pick<ResultsCampaign, "campaignCode" | "points" | "counts"> | {
+    campaignCode: string;
+    points: unknown;
+    counts: unknown;
+  },
+  versions: {
+    contractVersion: string;
+    calculationVersion: string;
+    catalogVersion: string;
+  },
+) {
+  return createHash("sha256").update(canonicalJson({
+    contractVersion: versions.contractVersion,
+    calculationVersion: versions.calculationVersion,
+    catalogVersion: versions.catalogVersion,
+    campaign,
+  })).digest("hex").toUpperCase();
+}
 
 export async function parseLaboratoryResultsWorkbook(buffer: ArrayBuffer, fileName: string): Promise<LaboratoryResultsImport> {
   const extension = fileName.toLowerCase().split(".").pop();
@@ -508,5 +645,40 @@ function normalizeCell(value: ExcelJS.CellValue | undefined) {
     return "";
   }
   return String(value).trim();
+}
+
+async function readWorkbookSheetNames(buffer: ArrayBuffer) {
+  const zip = await JSZip.loadAsync(Buffer.from(buffer));
+  const workbookXml = await zip.file("xl/workbook.xml")?.async("string");
+  if (!workbookXml) throw new Error("O arquivo não contém uma estrutura XLSX reconhecível.");
+  return [...workbookXml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?sheet\b[^>]*\bname="([^"]+)"/g)]
+    .map((match) => decodeXmlAttribute(match[1]));
+}
+
+function decodeXmlAttribute(value: string) {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+function canonicalCampaignForV2(code: string) {
+  const match = /^C(\d+)$/i.exec(code.trim());
+  const campaign = match ? resolveCanonicalCampaign(Number(match[1])) : null;
+  if (!campaign) throw new Error(`A campanha ${code} do contrato ${RESULTS_CONTRACT_VERSION} não possui vínculo canônico.`);
+  return campaign;
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
 }
 function fail(worksheet: ExcelJS.Worksheet, row: number, column: string, reason: string): never { throw new Error(`${worksheet.name}, linha ${row}, ${column}: ${reason}.`); }

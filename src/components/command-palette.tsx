@@ -185,14 +185,14 @@ export function readLocalRecordItems() {
         id: `diary:${readString(entry, "id", String(index))}`,
         href: "/dados/diario-de-campo",
         label: readString(entry, "locationName", "Registro do diário"),
-        group: "Diário de Campo",
+        group: "Diário de campo",
         keywords: `${readString(entry, "locationName")} ${readString(entry, "sia")} ${readString(entry, "municipality")} ${readString(entry, "campaignName")}`,
       }))
     : [];
 
   const spreadsheets = readArray(SPREADSHEET_STORAGE_KEY).map((sheet, index) => ({
     id: `sheet:${readString(sheet, "id", String(index))}`,
-    href: readString(sheet, "kind") === "Laboratório" ? "/dados/resultados" : "/dados/campo",
+    href: readString(sheet, "kind") === "Laboratório" ? "/dados/resultados" : "/dados/diario-de-campo",
     label: readString(sheet, "fileName", "Planilha"),
     group: "Planilhas",
     keywords: `${readString(sheet, "fileName")} ${readString(sheet, "campaign")} ${readString(sheet, "kind")}`,
@@ -201,8 +201,8 @@ export function readLocalRecordItems() {
   const pointActions = readArray(POINT_ACTIONS_STORAGE_KEY).map((action, index) => ({
     id: `action:${readString(action, "id", String(index))}`,
     href: "/acoes-pontuais",
-    label: readString(action, "eventName", "Ação pontual"),
-    group: "Ações Pontuais",
+    label: readString(action, "eventName", "Atividade complementar"),
+    group: "Atividades complementares",
     keywords: `${readString(action, "eventName")} ${readString(action, "objectives")}`,
   }));
 

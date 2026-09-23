@@ -25,6 +25,7 @@ import {
 } from "@/lib/app-documents";
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 import { PointActionsImportDialog } from "@/components/point-actions-import-dialog";
+import { countLabel } from "@/lib/number-format";
 
 type PointForm = {
   id: string;
@@ -195,8 +196,8 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
     const totalPoints = imported.reduce((t, e) => t + e.points.length, 0);
     setMessage(
       savedInCloud
-        ? `${imported.length} evento(s) e ${totalPoints} ponto(s) importados na nuvem.`
-        : `${imported.length} evento(s) e ${totalPoints} ponto(s) importados neste navegador.`,
+        ? `${countLabel(imported.length, "evento", "eventos")} e ${countLabel(totalPoints, "ponto", "pontos")} importados na nuvem.`
+        : `${countLabel(imported.length, "evento", "eventos")} e ${countLabel(totalPoints, "ponto", "pontos")} importados neste navegador.`,
     );
   }
 
@@ -259,7 +260,7 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
     setMessage(null);
 
     if (!canImport) {
-      setError("A categoria ativa não pode registrar ações pontuais.");
+      setError("A categoria ativa não pode registrar atividades complementares.");
       return;
     }
 
@@ -346,7 +347,7 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
     const savedInCloud = await writePointActions(nextActions);
 
     if (!savedInCloud && !canUseBrowserOnlyPersistence()) {
-      setError("A nuvem não confirmou a gravação. A ação pontual não foi publicada para outros usuários.");
+      setError("A nuvem não confirmou a gravação. A atividade complementar não foi publicada para outros usuários.");
       return;
     }
 
@@ -355,11 +356,11 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
     setMessage(
       editingActionId
         ? savedInCloud
-          ? "Ação pontual atualizada na nuvem e disponível no módulo Ações pontuais."
-          : "Ação pontual atualizada neste navegador. Verifique a configuração do Supabase para aparecer em outros computadores."
+          ? "Atividade complementar atualizada na nuvem e disponível no módulo Atividades complementares."
+          : "Atividade complementar atualizada neste navegador. Verifique a configuração do Supabase para aparecer em outros computadores."
         : savedInCloud
-          ? "Ação pontual registrada na nuvem e disponível no módulo Ações pontuais."
-          : "Ação pontual registrada neste navegador. Verifique a configuração do Supabase para aparecer em outros computadores.",
+          ? "Atividade complementar registrada na nuvem e disponível no módulo Atividades complementares."
+          : "Atividade complementar registrada neste navegador. Verifique a configuração do Supabase para aparecer em outros computadores.",
     );
   }
 
@@ -367,15 +368,15 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
     <section className="glass-panel radius-panel p-3">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <span className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-[var(--brand-blue-soft)] px-2.5 py-0.5 text-caption font-bold uppercase tracking-[0.18em] text-[var(--brand-navy-strong)]">
+          <span className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-[var(--brand-blue-soft)] px-2.5 py-0.5 text-caption font-bold text-[var(--brand-navy-strong)]">
             <Target className="h-3.5 w-3.5" />
-            Ações pontuais
+            Atividades complementares
           </span>
           <h3 className="heading-font text-xl font-extrabold text-[var(--brand-navy-strong)]">
-            Novo registro de ação pontual
+            Novo registro de atividade complementar
           </h3>
           <p className="mt-1 text-xs leading-5 text-slate-500">
-            Registro de campanhas pontuais a pedido da Sanepar.
+            Registro de atividades complementares a pedido da Sanepar.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -408,13 +409,13 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
         <form className="space-y-2" onSubmit={savePointAction}>
           <div className="radius-card border border-[var(--line-ghost)] bg-white p-3">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[var(--brand-navy-strong)]">
+              <p className="text-xs font-black text-[var(--brand-navy-strong)]">
                 {editingActionId ? "Edição do evento" : "Novo evento"}
               </p>
               {editingActionId ? (
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-lg bg-[var(--surface-soft)] px-3 py-2 text-caption font-bold uppercase tracking-[0.12em] text-[var(--brand-navy-strong)]"
+                  className="inline-flex items-center gap-1 rounded-lg bg-[var(--surface-soft)] px-3 py-2 text-caption font-bold text-[var(--brand-navy-strong)]"
                   onClick={resetForm}
                 >
                   <X className="h-3.5 w-3.5" />
@@ -431,7 +432,7 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
                 disabled={!canImport}
                 onChange={(event) => setEventName(event.target.value)}
               />
-              <label className="grid gap-1 text-caption font-bold uppercase tracking-[0.14em] text-slate-500">
+              <label className="grid gap-1 text-caption font-bold text-slate-500">
                 Documento descritivo do evento
                 <select
                   className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold normal-case tracking-normal text-[var(--brand-navy-strong)]"
@@ -468,7 +469,7 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
               className="radius-card border border-[var(--line-ghost)] bg-white p-3"
             >
               <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-[var(--brand-navy-strong)]">
+                <p className="inline-flex items-center gap-2 text-xs font-black text-[var(--brand-navy-strong)]">
                   <MapPinned className="h-4 w-4 text-[var(--brand-blue)]" />
                   Ponto de coleta {pointIndex + 1}
                 </p>
@@ -530,13 +531,13 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
 
               <div className="mt-4 space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="inline-flex items-center gap-2 text-caption font-black uppercase tracking-[0.18em] text-slate-500">
+                  <p className="inline-flex items-center gap-2 text-caption font-black text-slate-500">
                     <Camera className="h-3.5 w-3.5" />
                     Fotos e legendas
                   </p>
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 rounded-lg bg-[var(--surface-soft)] px-3 py-2 text-caption font-bold uppercase tracking-[0.12em] text-[var(--brand-navy-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex items-center gap-1 rounded-lg bg-[var(--surface-soft)] px-3 py-2 text-caption font-bold text-[var(--brand-navy-strong)] disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!canImport}
                     onClick={() => addPhoto(point.id)}
                   >
@@ -565,7 +566,7 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
                         updatePhoto(point.id, photo.id, { caption: event.target.value })
                       }
                     />
-                    <label className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-[var(--surface-soft)] px-3 py-2 text-caption font-bold uppercase tracking-[0.12em] text-[var(--brand-navy-strong)] transition-colors hover:bg-[var(--surface-muted)] has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+                    <label className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-[var(--surface-soft)] px-3 py-2 text-caption font-bold text-[var(--brand-navy-strong)] transition-colors hover:bg-[var(--surface-muted)] has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
                       <Upload className="mr-1 h-3.5 w-3.5" />
                       {uploadingPhotoIds.includes(photo.id) ? "Enviando" : "Upload"}
                       <input
@@ -610,15 +611,15 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
             disabled={!canImport}
             className="rounded-lg bg-[var(--brand-navy-strong)] px-5 py-2 text-xs font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {editingActionId ? "Ação pontual será atualizada" : "Ação pontual será registrada"}
+            {editingActionId ? "Salvar alterações" : "Registrar atividade"}
           </button>
           </div>
         </form>
 
         <aside>
           <div className="radius-card border border-[var(--line-ghost)] bg-white p-3">
-            <p className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-[var(--brand-navy-strong)]">
-              Ações cadastradas
+            <p className="mb-3 text-xs font-black text-[var(--brand-navy-strong)]">
+              Atividades registradas · clique para editar
             </p>
             <div className="max-h-[560px] space-y-2 overflow-y-auto pr-1">
               {actions.length ? (
@@ -639,7 +640,7 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
                           {action.eventName}
                         </span>
                         <span className="mt-1 block text-xs font-semibold text-slate-500">
-                          {action.points.length} ponto(s) · {action.createdAt}
+                          {countLabel(action.points.length, "ponto", "pontos")} · {action.createdAt}
                         </span>
                         <span className="mt-1 block truncate text-label font-semibold text-[var(--brand-teal)]">
                           {action.document?.title ?? "Sem documento vinculado"}
@@ -651,7 +652,7 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
                 ))
               ) : (
                 <p className="radius-card bg-[var(--surface-soft)] p-3 text-justify text-xs leading-5 text-slate-500">
-                  Nenhuma ação pontual cadastrada. Os eventos salvos nesta tela serão exibidos aqui para edição rápida.
+                  Nenhuma atividade complementar cadastrada. Os eventos salvos nesta tela serão exibidos aqui para edição rápida.
                 </p>
               )}
             </div>
@@ -661,7 +662,7 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
       </div>
 
       {message ? (
-        <p className="mt-4 rounded-lg bg-[rgba(0,168,107,0.08)] px-4 py-3 text-xs font-semibold text-[#0b5f40]">
+        <p className="mt-4 rounded-lg bg-[var(--status-success-soft)] px-4 py-3 text-xs font-semibold text-[var(--status-success-strong)]">
           {message}
         </p>
       ) : null}
@@ -678,7 +679,7 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
 function MiniMetric({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-2xl bg-[var(--surface-soft)] px-3 py-2">
-      <p className="text-caption font-bold uppercase tracking-[0.16em] text-slate-400">
+      <p className="text-caption font-bold text-slate-400">
         {label}
       </p>
       <p className="heading-font text-xl font-black text-[var(--brand-navy-strong)]">

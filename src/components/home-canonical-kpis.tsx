@@ -18,6 +18,10 @@ type HomeCanonicalKpisProps = {
   laboratoryRiskPoints: LaboratoryRiskPoint[];
 };
 
+export function HomeOperationalKpis({ monitored }: { monitored: number }) {
+  return <CanonicalKpi icon={MapPinned} label="Pontos já amostrados" value={formatInteger(monitored)} detail="em todas as campanhas, sem contar o mesmo ponto duas vezes" />;
+}
+
 export function HomeCanonicalKpis({
   pointSummary,
   laboratoryRiskPoints,
@@ -145,7 +149,7 @@ export function buildCriticalMunicipalitySummary(names: string[]) {
   };
 }
 
-function CanonicalKpi({
+export function CanonicalKpi({
   icon: Icon,
   label,
   value,
@@ -167,26 +171,24 @@ function CanonicalKpi({
       ? "text-[var(--brand-navy-strong)]"
       : "border-[var(--line-ghost)] text-[var(--brand-navy-strong)]";
 
+  // O detalhe é texto visível: funciona no toque, no teclado e no leitor de tela, sem depender do mouse.
   return (
     <article
-      className={`app-card flex h-full min-h-32 flex-col justify-between gap-2 p-3 ${toneClass}`}
+      className={`app-card flex h-full flex-col justify-between gap-1 p-3 ${toneClass}`}
       style={accentColor ? { borderColor: `${accentColor}66` } : undefined}
     >
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-caption font-bold uppercase tracking-[0.14em] text-slate-500">
-          {label}
-        </p>
-        <Icon
-          className="h-4 w-4 flex-shrink-0"
-          style={accentColor ? { color: accentColor } : undefined}
-        />
-      </div>
       <p className="heading-font type-kpi tracking-0 text-[var(--brand-navy-strong)]">
         {value}
       </p>
-      <p className="text-label font-semibold leading-4 text-[var(--ink-soft)]">
-        {detail}
-      </p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-label font-semibold text-[var(--ink-soft)]">{label}</p>
+        <Icon
+          aria-hidden="true"
+          className="h-4 w-4 flex-shrink-0 text-[var(--ink-soft)]"
+          style={accentColor ? { color: accentColor } : undefined}
+        />
+      </div>
+      <p className="text-caption text-[var(--ink-soft)]">{detail}</p>
       {expandedDetails?.length ? (
         <details className="text-caption text-[var(--ink-soft)]">
           <summary className="cursor-pointer font-bold text-[var(--brand-navy-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-teal)]">

@@ -10,6 +10,7 @@ import {
   Pencil,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   CampaignHydroMap,
@@ -47,7 +48,8 @@ export function CampaignMapSection({
         campaignStatus === "Aguardando calendário" ||
         campaignStatus === "Planejada";
   const [cachedPoints, setCachedPoints] = useState<CampaignHydroMapPoint[] | null>(null);
-  const [selectedPointId, setSelectedPointId] = useState(points[0]?.id);
+  // Nenhum ponto pré-selecionado: o mapa abre enquadrando o percurso inteiro.
+  const [selectedPointId, setSelectedPointId] = useState<string | undefined>(undefined);
   const [isDetailsPanelOpen, setIsDetailsPanelOpen] = useState(true);
   const [localImportLabel, setLocalImportLabel] = useState<string | null>(null);
   const [expandedPhoto, setExpandedPhoto] = useState<{
@@ -91,7 +93,7 @@ export function CampaignMapSection({
   );
   const selectedPoint = useMemo(
     () =>
-      activePoints.find((point) => point.id === selectedPointId) ?? activePoints[0],
+      activePoints.find((point) => point.id === selectedPointId),
     [activePoints, selectedPointId],
   );
 
@@ -162,14 +164,14 @@ export function CampaignMapSection({
     <section className="relative grid items-start gap-4 overflow-visible lg:grid-cols-[14rem_minmax(0,1fr)_18rem]">
       <aside className={`flex flex-col gap-4 overflow-y-auto pr-1 ${mapHeightClass}`}>
         {localImportLabel && cacheMatchesSelectedCampaign ? (
-          <div className="radius-card border border-emerald-200 bg-white px-4 py-3 text-label font-bold uppercase tracking-[0.12em] text-emerald-800 shadow">
+          <div className="radius-card border border-emerald-200 bg-white px-4 py-3 text-label font-bold text-emerald-800 shadow">
             {localImportLabel}
           </div>
         ) : null}
 
         <div className="overflow-hidden radius-card border border-[var(--line-ghost)] bg-white shadow">
           <div className="flex items-center justify-between border-b border-[var(--line-ghost)] bg-[var(--surface-soft)] px-3 py-2">
-            <span className="text-label font-black uppercase tracking-[0.18em] text-slate-500">
+            <span className="text-label font-black text-slate-500">
               Camadas
             </span>
             <Layers3 className="h-4 w-4 text-slate-400" />
@@ -196,7 +198,7 @@ export function CampaignMapSection({
             ))}
           </div>
           <div className="flex flex-col gap-1.5 border-t border-[var(--line-ghost)] px-3 py-2 text-slate-500">
-            <span className="flex items-center gap-1.5 text-caption font-bold uppercase tracking-[0.12em]">
+            <span className="flex items-center gap-1.5 text-caption font-bold">
               <span className="flex items-center -space-x-0.5">
                 {dailyRouteColors.slice(0, 5).map((color) => (
                   <span
@@ -208,19 +210,19 @@ export function CampaignMapSection({
               </span>
               {isPreparation ? "Cores = rotas previstas" : "Cores = dias de coleta"}
             </span>
-            <p className="text-[10px] font-medium normal-case leading-3 tracking-normal text-slate-400">
+            <p className="text-xs font-medium normal-case leading-3 tracking-normal text-slate-400">
               {isPreparation
                 ? "Linhas da mesma cor pertencem ao mesmo dia planejado."
                 : "Pontos e linhas da mesma cor pertencem ao mesmo dia."}
             </p>
-            <span className="flex items-center gap-1.5 text-caption font-bold uppercase tracking-[0.12em]">
+            <span className="flex items-center gap-1.5 text-caption font-bold">
               <span
                 className="h-0.5 w-4 rounded"
                 style={{ backgroundImage: "repeating-linear-gradient(90deg,#475569 0 3px,transparent 3px 6px)" }}
               />
               Ligação entre dias
             </span>
-            <span className="flex items-center gap-1.5 text-caption font-bold uppercase tracking-[0.12em]">
+            <span className="flex items-center gap-1.5 text-caption font-bold">
               <span className="h-2.5 w-2.5 rounded-full border border-white bg-black shadow" />
               {isPreparation ? "Pontos previstos" : "Coordenada de apoio"}
             </span>
@@ -230,7 +232,7 @@ export function CampaignMapSection({
 
       </aside>
 
-      <div className={`relative overflow-hidden radius-panel border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)] ${mapHeightClass}`}>
+      <div className={`relative overflow-hidden radius-panel border border-[var(--line-ghost)] bg-[image:var(--map-surface)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)] ${mapHeightClass}`}>
         <CampaignHydroMap
           points={activePoints}
           selectedPointId={selectedPoint?.id}
@@ -238,7 +240,7 @@ export function CampaignMapSection({
           showPointTooltip
           zoomOnSelect
           clipBaseTilesToBasins
-          caption="Mapa rodoviário OpenStreetMap · Diário de Campo · Sanepar"
+          caption="Mapa rodoviário OpenStreetMap · Diário de campo · Sanepar"
           onSelectPoint={(point) => {
             // Clicar no marcador apenas seleciona e dá zoom (zoomOnSelect); as
             // fotos são exibidas no card lateral do ponto, não no mapa.
@@ -250,7 +252,12 @@ export function CampaignMapSection({
       </div>
 
       <aside className={`flex min-h-0 flex-col gap-4 pr-1 ${sidePanelHeightClass} ${sidePanelPlacementClass}`}>
-        {isDetailsPanelOpen ? (
+        {!selectedPoint ? (
+          <div className="radius-card border border-dashed border-[var(--line-strong)] bg-white/80 p-4 text-sm text-[var(--ink-soft)]">
+            <p className="font-bold text-[var(--brand-navy-strong)]">{activePoints.length} pontos no percurso</p>
+            <p className="mt-1">Clique em um ponto do mapa para ver data, manancial, fotos e coordenadas.</p>
+          </div>
+        ) : isDetailsPanelOpen ? (
         <div className="flex h-full min-h-0 flex-col overflow-hidden radius-card border border-[var(--line-ghost)] bg-white shadow-[0_30px_80px_-42px_rgba(0,66,98,0.34)]">
           <div className="flex-shrink-0 bg-[var(--brand-navy-strong)] p-2.5 text-white">
             <div className="mb-1.5 flex items-start justify-between">
@@ -266,7 +273,7 @@ export function CampaignMapSection({
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="flex items-center gap-2 rounded bg-white/10 px-2 py-1 text-caption font-bold uppercase tracking-[0.16em]">
+            <div className="flex items-center gap-2 rounded bg-white/10 px-2 py-1 text-caption font-bold">
               <span className="h-1.5 w-1.5 rounded-full bg-[#eaff00]" />
               {isPreparation ? "Planejamento da campanha" : "Dados da campanha"}
             </div>
@@ -284,7 +291,7 @@ export function CampaignMapSection({
               <button
                 type="button"
                 onClick={() => onEditPointPhotos(selectedPoint)}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--line-strong)] bg-white px-3 py-2 text-caption font-black uppercase tracking-[0.12em] text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)]"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--line-strong)] bg-white px-3 py-2 text-caption font-black text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)]"
               >
                 <Pencil className="h-3.5 w-3.5" />
                 Editar fotos
@@ -292,8 +299,8 @@ export function CampaignMapSection({
             ) : null}
 
             {isPreparation && (
-              <div className="rounded-lg border border-amber-100 bg-amber-50/70 p-2 px-2.5 text-[11px] font-semibold leading-relaxed text-amber-700">
-                <span className="flex items-center gap-1.5 font-black uppercase tracking-wider text-amber-800">
+              <div className="rounded-lg border border-amber-100 bg-amber-50/70 p-2 px-2.5 text-xs font-semibold leading-relaxed text-amber-700">
+                <span className="flex items-center gap-1.5 font-black tracking-wider text-amber-800">
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
                   Coleta não iniciada
                 </span>
@@ -335,14 +342,17 @@ export function CampaignMapSection({
             </div>
 
             <div className="grid grid-cols-2 gap-1.5">
-              <button className="flex flex-col items-center gap-1 rounded border border-slate-100 bg-slate-50 p-1.5 text-caption font-bold uppercase text-slate-500 transition-colors hover:bg-slate-100">
+              <Link href="/documentos" className="flex flex-col items-center gap-1 rounded border border-slate-100 bg-slate-50 p-1.5 text-caption font-bold text-slate-500 transition-colors hover:bg-slate-100">
                 <FileText className="h-4 w-4 text-[var(--brand-navy-strong)]" />
                 Documentos
-              </button>
-              <button className="flex flex-col items-center gap-1 rounded border border-slate-100 bg-slate-50 p-1.5 text-caption font-bold uppercase text-slate-500 transition-colors hover:bg-slate-100">
+              </Link>
+              <Link
+                href={`/campanhas/resultados?${new URLSearchParams({ ...(selectedCampaignId ? { campaign: selectedCampaignId } : {}), ...(selectedPoint.code ? { sia: selectedPoint.code } : {}) })}`}
+                className="flex flex-col items-center gap-1 rounded border border-slate-100 bg-slate-50 p-1.5 text-caption font-bold text-slate-500 transition-colors hover:bg-slate-100"
+              >
                 <BarChart3 className="h-4 w-4 text-[var(--brand-navy-strong)]" />
                 Resultados
-              </button>
+              </Link>
             </div>
           </div>
         </div>
@@ -350,7 +360,7 @@ export function CampaignMapSection({
         <button
           type="button"
           aria-label="Abrir painel do ponto"
-          className="rounded-full border border-[var(--line-ghost)] bg-white px-4 py-2 text-caption font-black uppercase tracking-[0.16em] text-[var(--brand-navy-strong)] shadow transition-colors hover:bg-[var(--surface-soft)]"
+          className="rounded-full border border-[var(--line-ghost)] bg-white px-4 py-2 text-caption font-black text-[var(--brand-navy-strong)] shadow transition-colors hover:bg-[var(--surface-soft)]"
           onClick={() => setIsDetailsPanelOpen(true)}
         >
           Abrir painel
@@ -373,10 +383,10 @@ export function CampaignMapSection({
 function InfoTile({ label, value }: { label: string; value?: string }) {
   return (
     <div className="rounded border border-slate-100 bg-slate-50 px-2 py-1">
-      <span className="block text-[9px] font-bold uppercase leading-3 tracking-[0.12em] text-slate-400">
+      <span className="block text-xs font-bold leading-3 text-slate-400">
         {label}
       </span>
-      <span className="block truncate text-[11px] font-semibold leading-4 text-slate-700">{value || "Não informado"}</span>
+      <span className="block truncate text-xs font-semibold leading-4 text-slate-700">{value || "Não informado"}</span>
     </div>
   );
 }
@@ -384,10 +394,10 @@ function InfoTile({ label, value }: { label: string; value?: string }) {
 function InfoBlock({ label, value }: { label: string; value?: string }) {
   return (
     <div className="rounded border border-slate-100 bg-white px-2 py-1 text-xs">
-      <span className="mb-0.5 block text-[9px] font-bold uppercase leading-3 tracking-[0.14em] text-slate-400">
+      <span className="mb-0.5 block text-xs font-bold leading-3 text-slate-400">
         {label}
       </span>
-      <p className="text-[11px] font-medium leading-4 text-slate-700">{value || "Não informado"}</p>
+      <p className="text-xs font-medium leading-4 text-slate-700">{value || "Não informado"}</p>
     </div>
   );
 }
@@ -479,7 +489,7 @@ function PointPhotoPreview({
           </div>
         )}
         {preview && !imageFailed ? (
-          <span className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-1 text-caption font-bold uppercase tracking-[0.14em] text-white">
+          <span className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-1 text-caption font-bold text-white">
             {hasMultiple ? `${safeIndex + 1}/${photos.length}` : "ampliar"}
           </span>
         ) : null}
@@ -533,7 +543,7 @@ function PhotoModal({
       <div className="relative h-full max-h-[82vh] w-full max-w-5xl overflow-hidden radius-panel border border-white/20 bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div>
-            <p className="text-caption font-bold uppercase tracking-[0.18em] text-slate-400">
+            <p className="text-caption font-bold text-slate-400">
               Fotos da campanha
             </p>
             <h3 className="heading-font text-lg font-black text-[var(--brand-navy-strong)]">

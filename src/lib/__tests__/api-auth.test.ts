@@ -26,15 +26,13 @@ const protectedMutations = {
   "src/app/api/field-diary/route.ts": ["POST", "PUT"],
   "src/app/api/field-diary/consolidate/route.ts": ["POST"],
   "src/app/api/field-diary/import/route.ts": ["POST"],
-  "src/app/api/imports/campaigns/route.ts": ["POST", "DELETE"],
+  "src/app/api/imports/campaigns/route.ts": ["DELETE"],
   "src/app/api/imports/preview/route.ts": ["POST"],
   "src/app/api/imports/results/route.ts": ["POST", "DELETE"],
   "src/app/api/photos/upload/route.ts": ["POST"],
   "src/app/api/point-actions/route.ts": ["PUT"],
   "src/app/api/point-actions/import/route.ts": ["POST"],
   "src/app/api/roads/route/route.ts": ["POST"],
-  "src/app/api/support-requests/route.ts": ["PUT"],
-  "src/app/api/support-requests/notify/route.ts": ["POST"],
 } as const;
 
 describe("proteções de API auth", () => {
@@ -103,7 +101,7 @@ describe("proteções de API auth", () => {
     await expect(requireApiSession(new Request("https://app.invalid/api", { method, headers: { origin: "https://app.invalid" } }))).resolves.toMatchObject({ ok: true });
   });
 
-  it("comprova o inventário mutante 20/20 no guard central de sessão", () => {
+  it("comprova o inventário mutante 18/18 no guard central de sessão", () => {
     let count = 0;
     for (const [file, methods] of Object.entries(protectedMutations)) {
       const source = readFileSync(resolve(process.cwd(), file), "utf8");
@@ -113,7 +111,8 @@ describe("proteções de API auth", () => {
         count += 1;
       }
     }
-    expect(count).toBe(20);
+    // 17: a importação de campo por /api/imports/campaigns (POST) foi unificada no Diário.
+    expect(count).toBe(17);
   });
 
   it("exige aprovação nas três dimensões sem enviar identificador claro", async () => {

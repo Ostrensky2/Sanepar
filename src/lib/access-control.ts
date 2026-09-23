@@ -11,7 +11,6 @@ export type PrivilegeKey =
   | "nav.results"
   | "nav.data"
   | "nav.documents"
-  | "nav.requests"
   | "nav.settings"
   | "nav.help"
   | "dashboard.view"
@@ -48,7 +47,6 @@ const generalViewPrivileges: PrivilegeKey[] = [
   "nav.campaigns",
   "nav.results",
   "nav.documents",
-  "nav.requests",
   "nav.help",
   "dashboard.view",
   "campaigns.view",
@@ -62,7 +60,6 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "nav.results",
     "nav.data",
     "nav.documents",
-    "nav.requests",
     "nav.settings",
     "nav.help",
     "dashboard.view",
@@ -87,7 +84,6 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "nav.results",
     "nav.data",
     "nav.documents",
-    "nav.requests",
     "nav.settings",
     "nav.help",
     "dashboard.view",
@@ -102,7 +98,6 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "nav.results",
     "nav.data",
     "nav.documents",
-    "nav.requests",
     "nav.settings",
     "nav.help",
     "dashboard.view",
@@ -117,7 +112,6 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "nav.results",
     "nav.data",
     "nav.documents",
-    "nav.requests",
     "nav.help",
     "dashboard.view",
     "campaigns.view",
@@ -132,7 +126,6 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "nav.results",
     "nav.data",
     "nav.documents",
-    "nav.requests",
     "nav.settings",
     "nav.help",
     "dashboard.view",
@@ -149,22 +142,21 @@ export const categoryDescriptions: Record<UserCategory, string> = {
   Admin:
     "Controle total do app, incluindo usuários, backups, importações e exclusões.",
   Sanepar:
-    "Coordenação institucional Sanepar com leitura operacional, Entrada de dados sem edição e cadastro restrito de usuários Sanepar.",
+    "Coordenação institucional Sanepar com leitura operacional, Central de dados sem edição e cadastro restrito de usuários Sanepar.",
   Tecpar:
-    "Coordenação institucional Tecpar com leitura operacional, Entrada de dados sem edição e cadastro restrito de usuários Tecpar.",
+    "Coordenação institucional Tecpar com leitura operacional, Central de dados sem edição e cadastro restrito de usuários Tecpar.",
   UFPR:
     "Equipe UFPR com curadoria técnica, importação de dados e gestão documental.",
   ATGC:
-    "Equipe ATGC com operação da Entrada de dados, gestão documental e cadastro restrito de usuários ATGC.",
+    "Equipe ATGC com operação da Central de dados, gestão documental e cadastro restrito de usuários ATGC.",
 };
 
 export const privilegeLabels: Record<PrivilegeKey, string> = {
   "nav.home": "Módulo: Início",
-  "nav.campaigns": "Módulo: Campanhas",
-  "nav.results": "Módulo: Resultados",
-  "nav.data": "Módulo: Entrada de dados",
+  "nav.campaigns": "Módulo: Campanhas (aba Campo)",
+  "nav.results": "Módulo: Resultados, Ciência e método e Atividades",
+  "nav.data": "Módulo: Central de dados",
   "nav.documents": "Módulo: Documentos",
-  "nav.requests": "Módulo: Solicitações",
   "nav.settings": "Módulo: Configurações",
   "nav.help": "Módulo: Ajuda",
   "dashboard.view": "Visualizar Início",
@@ -286,7 +278,6 @@ function expandLegacyPrivileges(privileges: PrivilegeKey[]) {
   const expanded = new Set(privileges);
 
   expanded.add("nav.help");
-  expanded.add("nav.requests");
   expanded.add("nav.home");
   expanded.add("nav.campaigns");
   expanded.add("nav.results");

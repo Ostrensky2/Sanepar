@@ -3,6 +3,9 @@
 import { Calendar, Minimize2, Minus, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { normalizeCampaignKey } from "@/lib/campaign-points";
+import { drawResultMarker } from "@/modules/results/components/result-visual";
+import { formatResultIndex } from "@/modules/results/format-index";
+export { continuousResultColor } from "@/modules/results/components/result-visual";
 import {
   laboratoryRiskColor,
   laboratoryRiskLabel,
@@ -41,6 +44,12 @@ export type CampaignHydroMapPoint = {
   }>;
   riskLevel?: LaboratoryRiskLevel;
   score?: number | null;
+  resultValue?: number | null;
+  resultLower?: number;
+  resultUpper?: number;
+  resultCompleteness?: "complete" | "partial_2" | "partial_1" | "unavailable";
+  resultMetricLabel?: string;
+  resultIncluded?: readonly [boolean, boolean, boolean];
 };
 
 export type PriorityMunicipality = {
@@ -145,6 +154,10 @@ export type CampaignMapLayerVisibility = {
 
 const tileSize = 256;
 const absoluteMinZoom = 3;
+export function nextDoubleClickPoint(current: string | null, clicked: string): string | null {
+  return current === clicked ? null : clicked;
+}
+
 const maxZoom = 19;
 const defaultFitPadding = 36;
 const paranaFitPadding = 28;
@@ -210,6 +223,7 @@ export function CampaignHydroMap({
   showPointTooltip = false,
   effectivePointColor,
   zoomOnSelect = true,
+  focusRequest,
   clipBaseTilesToBasins: shouldClipBaseTilesToBasins = true,
   focusedDayKey = null,
   isPreparation = false,
@@ -220,10 +234,11 @@ export function CampaignHydroMap({
   onSelectPoint?: (point: CampaignHydroMapPoint) => void;
   caption?: string;
   showBaseTiles?: boolean;
-  markerMode?: "campaign" | "risk" | "pointAction";
+  markerMode?: "campaign" | "risk" | "pointAction" | "resultIndex";
   showPointTooltip?: boolean;
   effectivePointColor?: string;
   zoomOnSelect?: boolean;
+  focusRequest?: { pointId: string; revision: number };
   clipBaseTilesToBasins?: boolean;
   focusedDayKey?: string | null;
   isPreparation?: boolean;
@@ -232,6 +247,7 @@ export function CampaignHydroMap({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{ x: number; y: number; center: Coordinate } | null>(null);
   const fittedPointsKeyRef = useRef<string | null>(null);
+  const doubleClickPointRef = useRef<string | null>(null);
   const fitFrameRef = useRef<number | null>(null);
   const fitRevisionRef = useRef(0);
   const userControlledViewRef = useRef(false);
@@ -487,6 +503,7 @@ export function CampaignHydroMap({
       defaultView.zoom,
       defaultView.center.lat.toFixed(5),
       defaultView.center.lon.toFixed(5),
+      ...points.map((point) => point.id),
       ...coordinates.map((coordinate) => `${coordinate.lat.toFixed(5)},${coordinate.lon.toFixed(5)}`),
     ].join("|");
 
@@ -495,6 +512,7 @@ export function CampaignHydroMap({
     }
 
     fittedPointsKeyRef.current = fitKey;
+    doubleClickPointRef.current = null;
     userControlledViewRef.current = false;
 
     if (fitFrameRef.current !== null) {
@@ -534,6 +552,7 @@ export function CampaignHydroMap({
   }
 
   const resetToDefaultView = useCallback(() => {
+    doubleClickPointRef.current = null;
     userControlledViewRef.current = true;
     cancelPendingFitFrame();
     setCenter(defaultView.center);
@@ -581,7 +600,7 @@ export function CampaignHydroMap({
   }, [constrainedCenter, mapZoom, minimumView.center, minimumZoom, size]);
 
   useEffect(() => {
-    if (!zoomOnSelect || !selectedPointId || !size.width || !size.height) return;
+    if (markerMode === "resultIndex" || !zoomOnSelect || !selectedPointId || !size.width || !size.height) return;
     const selected = points.find((point) => point.id === selectedPointId);
     const coordinate = selected ? tooltipCoordinate(selected, layers) : null;
 
@@ -594,7 +613,24 @@ export function CampaignHydroMap({
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [layers, points, selectedPointId, size, zoomOnSelect]);
+  }, [layers, points, selectedPointId, size, zoomOnSelect, markerMode]);
+
+  useEffect(() => {
+    if (!focusRequest) return;
+    const point = points.find((item) => item.id === focusRequest.pointId);
+    const coordinate = point ? tooltipCoordinate(point, layers) : null;
+    if (!coordinate || !size.width || !size.height) return;
+    doubleClickPointRef.current = point!.id;
+    userControlledViewRef.current = true;
+    cancelPendingFitFrame();
+    const frame = window.requestAnimationFrame(() => {
+      setCenter(clampCenterToParanaView(coordinate, maxZoom, size));
+      setZoom(maxZoom);
+    });
+    return () => window.cancelAnimationFrame(frame);
+    // Only an explicit focus request changes this view, never a selection or filter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRequest]);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -716,7 +752,7 @@ export function CampaignHydroMap({
         if (selected) {
           onSelectPoint?.(selected.point);
 
-          if (zoomOnSelect) {
+          if (zoomOnSelect && markerMode !== "resultIndex") {
             userControlledViewRef.current = true;
             cancelPendingFitFrame();
             if (selected.point.id === selectedPointId && mapZoom >= maxZoom - zoomEpsilon) {
@@ -726,6 +762,28 @@ export function CampaignHydroMap({
               setZoom(maxZoom);
             }
           }
+        }
+      }}
+      onDoubleClick={(event) => {
+        if (markerMode !== "resultIndex") return;
+        event.preventDefault();
+        event.stopPropagation();
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const selected = findNearestMarker(
+          points, event.clientX - bounds.left, event.clientY - bounds.top,
+          constrainedCenter, mapZoom, size, layers,
+        );
+        if (!selected) return;
+        onSelectPoint?.(selected.point);
+        const target = nextDoubleClickPoint(doubleClickPointRef.current, selected.point.id);
+        if (target === null) {
+          resetToDefaultView();
+        } else {
+          doubleClickPointRef.current = target;
+          userControlledViewRef.current = true;
+          cancelPendingFitFrame();
+          setCenter(clampCenterToParanaView(selected.coordinate, maxZoom, size));
+          setZoom(maxZoom);
         }
       }}
       style={{ cursor: hoveredPoint ? "pointer" : undefined }}
@@ -771,12 +829,12 @@ export function CampaignHydroMap({
             <span className="flex h-2.5 w-2.5 items-center justify-center rounded-full bg-amber-500/20">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
             </span>
-            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-800 flex items-center gap-1">
+            <span className="text-xs font-black text-amber-800 flex items-center gap-1">
               <Calendar className="h-3 w-3" />
               Campanha Prevista
             </span>
           </div>
-          <p className="text-[11px] font-semibold leading-relaxed text-amber-700 normal-case tracking-normal">
+          <p className="text-xs font-semibold leading-relaxed text-amber-700 normal-case tracking-normal">
             A campanha está em fase de preparação. Estas são as rotas e o cronograma planejado.
           </p>
         </div>
@@ -855,7 +913,7 @@ function PointTooltip({
       className="pointer-events-none absolute z-30 min-w-44 rounded-xl border border-white/70 bg-white/95 px-3 py-2 text-xs shadow-[0_18px_42px_-24px_rgba(0,66,98,0.48)] backdrop-blur"
       style={{ left, top }}
     >
-      <p className="text-caption font-black uppercase tracking-[0.18em] text-slate-400">
+      <p className="text-caption font-black text-slate-400">
         {point.campaign || "Campanha"}
       </p>
       <p className="mt-0.5 font-black text-[var(--brand-navy-strong)]">{point.code}</p>
@@ -863,7 +921,7 @@ function PointTooltip({
         <p className="mt-0.5 text-label font-semibold leading-4 text-slate-600">{point.point}</p>
       ) : null}
       {point.day || point.date || point.collectionOrder != null ? (
-        <p className="mt-1.5 inline-flex flex-wrap items-center gap-1 rounded bg-[var(--surface-soft)] px-1.5 py-0.5 text-caption font-black uppercase tracking-[0.08em] text-[var(--brand-navy-strong)]">
+        <p className="mt-1.5 inline-flex flex-wrap items-center gap-1 rounded bg-[var(--surface-soft)] px-1.5 py-0.5 text-caption font-black text-[var(--brand-navy-strong)]">
           {point.day ? formatCollectionDayLabel(point.day) : null}
           {point.date ? `${point.day ? " · " : ""}${formatCollectionDate(point.date)}` : null}
           {point.collectionOrder != null ? ` · Coleta ${point.collectionOrder}` : null}
@@ -884,7 +942,21 @@ function PointTooltip({
           <>
             <dt className="font-bold text-slate-400">Score integrado</dt>
             <dd className="font-black text-[var(--brand-navy-strong)]">
-              {point.score.toFixed(3).replace(".", ",")}
+              {formatResultIndex(point.score)}
+            </dd>
+          </>
+        ) : null}
+        {point.resultCompleteness ? (
+          <>
+            <dt className="font-bold text-slate-400">Completude</dt>
+            <dd className="font-bold text-slate-700">
+              {resultCompletenessLabel(point.resultCompleteness)}
+            </dd>
+            <dt className="font-bold text-slate-400">{point.resultMetricLabel || "Índice"}</dt>
+            <dd className="font-black text-[var(--brand-navy-strong)]">
+              {typeof point.resultValue === "number"
+                ? formatResultIndex(point.resultValue)
+                : `${formatResultBound(point.resultLower)}–${formatResultBound(point.resultUpper)}`}
             </dd>
           </>
         ) : null}
@@ -902,6 +974,21 @@ function formatCollectionDayLabel(day: string) {
   }
 
   return trimmed.toLowerCase().startsWith("dia") ? trimmed : `Dia ${trimmed}`;
+}
+
+function resultCompletenessLabel(
+  value: NonNullable<CampaignHydroMapPoint["resultCompleteness"]>,
+) {
+  return {
+    complete: "Completo (3/3)",
+    partial_2: "Parcial (2/3)",
+    partial_1: "Parcial (1/3)",
+    unavailable: "Indisponível (0/3)",
+  }[value];
+}
+
+function formatResultBound(value: number | undefined) {
+  return formatResultIndex(value, "—");
 }
 
 // Data de coleta em DD/MM/AAAA, aceitando ISO "AAAA-MM-DD" ou já em BR.
@@ -1219,7 +1306,7 @@ function drawMapOverlay(
   size: { width: number; height: number },
   layers: CampaignMapLayerVisibility,
   selectedPointId?: string,
-  markerMode: "campaign" | "risk" | "pointAction" = "campaign",
+  markerMode: "campaign" | "risk" | "pointAction" | "resultIndex" = "campaign",
   effectivePointColor?: string,
   shouldClipBaseTilesToBasins = false,
   pointDayColors: Map<string, string> | null = null,
@@ -1370,7 +1457,7 @@ function drawPoints(
   size: { width: number; height: number },
   layers: CampaignMapLayerVisibility,
   selectedPointId?: string,
-  markerMode: "campaign" | "risk" | "pointAction" = "campaign",
+  markerMode: "campaign" | "risk" | "pointAction" | "resultIndex" = "campaign",
   effectivePointColor?: string,
   pointDayColors: Map<string, string> | null = null,
   focusedDayKey: string | null = null,
@@ -1444,6 +1531,11 @@ function drawPoints(
 
     if (point.effective && layers.effective) {
       const effective = lonLatToScreen(point.effective.lon, point.effective.lat, center, zoom, size);
+      if (markerMode === "resultIndex") {
+        drawResultIndexMarker(context, effective.x, effective.y, point, point.id === selectedPointId);
+        context.globalAlpha = 1;
+        continue;
+      }
       drawMarkerAt(
         context,
         effective.x,
@@ -2027,6 +2119,21 @@ function drawMarkerAt(
 
 function riskColor(riskLevel: NonNullable<CampaignHydroMapPoint["riskLevel"]>) {
   return laboratoryRiskColor(riskLevel);
+}
+
+function drawResultIndexMarker(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  point: CampaignHydroMapPoint,
+  selected: boolean,
+) {
+  drawResultMarker(context, x, y, {
+    value: point.resultValue ?? null,
+    lower: point.resultLower ?? 0,
+    upper: point.resultUpper ?? 1,
+    included: point.resultIncluded ?? [false, false, false],
+  }, selected);
 }
 
 function haversineDistanceMeters(from: Coordinate, to: Coordinate) {

@@ -150,7 +150,7 @@ export function HomeRiskEvolution({ points }: { points: LaboratoryRiskPoint[] })
                       type="button"
                       role="option"
                       aria-selected={index === activeSuggestion}
-                      className="min-h-11 w-full rounded-md px-3 text-left text-sm text-[var(--ink)] hover:bg-[var(--surface-soft)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)] aria-selected:bg-[var(--surface-soft)]"
+                      className="min-h-11 w-full rounded-lg px-3 text-left text-sm text-[var(--ink)] hover:bg-[var(--surface-soft)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)] aria-selected:bg-[var(--surface-soft)]"
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => applyPoint(option)}
                     >

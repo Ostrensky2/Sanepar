@@ -26,6 +26,7 @@ export function AuthGate({ children }: AuthGateProps) {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [ready, setReady] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,6 +38,7 @@ export function AuthGate({ children }: AuthGateProps) {
         return;
       }
       setSession(payload.session ?? null);
+      setUnavailable(Boolean(payload.unavailable));
       if (payload.session) persistAccessCategory(payload.session.role);
       setReady(true);
     }
@@ -79,6 +81,23 @@ export function AuthGate({ children }: AuthGateProps) {
     return <main className="grid min-h-screen place-items-center" aria-busy="true"><span className="sr-only">Verificando sessão</span></main>;
   }
   if (session) return <>{children}</>;
+  if (unavailable) {
+    return (
+      <main className="grid min-h-[100dvh] place-items-center p-4">
+        <section role="alert" className="w-full max-w-md radius-panel border border-[var(--line-strong)] bg-white p-6 text-center">
+          <h1 className="heading-font type-section-title text-[var(--brand-navy-strong)]">Conexão instável</h1>
+          <p className="type-metadata mt-2 text-[var(--ink-soft)]">Não foi possível verificar sua sessão agora. Seus dados estão preservados.</p>
+          <button
+            type="button"
+            className="mt-4 inline-flex min-h-11 items-center justify-center radius-card bg-[var(--brand-navy-strong)] px-5 text-sm font-bold text-white hover:bg-[var(--brand-navy)]"
+            onClick={() => window.dispatchEvent(new Event(AUTH_SESSION_UPDATED_EVENT))}
+          >
+            Tentar novamente
+          </button>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="flex min-h-[100dvh] items-start justify-center pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[max(1rem,env(safe-area-inset-top))] sm:items-center sm:py-8">

@@ -155,7 +155,7 @@ export function HomeRiskMapSection({
       <div className="glass-panel radius-panel border border-[var(--line-ghost)] p-4">
         <div className="flex flex-col gap-[var(--space-3)] xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <p className="text-caption font-bold uppercase tracking-[0.22em] text-[var(--brand-teal)]">
+            <p className="text-caption font-bold text-[var(--brand-teal)]">
               Mapa de risco eDNA
             </p>
             <h2 className="heading-font type-section-title mt-1 text-[var(--brand-navy-strong)]">
@@ -164,7 +164,7 @@ export function HomeRiskMapSection({
           </div>
           <div className="flex flex-col gap-[var(--space-2)] sm:flex-row sm:items-center">
             <label className="flex min-w-56 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-[var(--brand-navy-strong)]">
-              <span className="text-caption uppercase tracking-[0.16em] text-slate-400">
+              <span className="text-caption text-slate-400">
                 Campanha
               </span>
               <select
@@ -186,7 +186,7 @@ export function HomeRiskMapSection({
               </select>
             </label>
             <label className="flex min-w-56 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-[var(--brand-navy-strong)]">
-              <span className="text-caption uppercase tracking-[0.16em] text-slate-400">
+              <span className="text-caption text-slate-400">
                 Classificação
               </span>
               <select
@@ -242,7 +242,7 @@ export function HomeRiskMapSection({
       </div>
 
       <div className="relative grid items-stretch gap-[var(--layout-gutter)] overflow-visible lg:grid-cols-[minmax(0,1.86fr)_minmax(0,0.8fr)]">
-        <div className={`relative overflow-hidden radius-panel border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)] ${mapHeightClass}`}>
+        <div className={`relative overflow-hidden radius-panel border border-[var(--line-ghost)] bg-[image:var(--map-surface)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)] ${mapHeightClass}`}>
           {filteredPoints.length ? (
             <CampaignHydroMap
               points={filteredPoints}
@@ -294,10 +294,10 @@ export function HomeRiskMapSection({
                 />
                 <div className="flex flex-col gap-2.5 p-3">
                   <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1">
-                    <p className="text-caption font-bold uppercase tracking-[0.22em] text-slate-400">
+                    <p className="text-caption font-bold text-slate-400">
                       Ponto em destaque
                     </p>
-                    <p className="text-center text-caption font-bold uppercase tracking-[0.16em] text-slate-400">
+                    <p className="text-center text-caption font-bold text-slate-400">
                       Escore
                     </p>
                     <h3 className="heading-font min-w-0 text-xl font-black text-[var(--brand-navy-strong)]">
@@ -508,7 +508,7 @@ function RiskContributionLegend({
 
 function EmptyMapState() {
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] p-6 text-center">
+    <div className="absolute inset-0 flex items-center justify-center bg-[image:var(--map-surface)] p-6 text-center">
       <div className="max-w-sm">
         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-[var(--brand-teal)] shadow">
           <AlertTriangle className="h-6 w-6" />
@@ -604,7 +604,7 @@ function RiskPointPhoto({
         }
         src={activeSrc}
       />
-      <span className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-1 text-caption font-bold uppercase tracking-[0.14em] text-white">
+      <span className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-1 text-caption font-bold text-white">
         ampliar
       </span>
     </button>
@@ -682,7 +682,7 @@ export function RiskPhotoModal({
       <div className="relative h-full w-full overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div>
-            <p className="text-caption font-bold uppercase tracking-[0.18em] text-slate-400">
+            <p className="text-caption font-bold text-slate-400">
               Foto representativa
             </p>
             <h3 id="risk-photo-title" className="heading-font text-lg font-black text-[var(--brand-navy-strong)]">
@@ -729,14 +729,14 @@ function RiskRows({
 }) {
   return (
     <div className="rounded-lg border border-[var(--line-ghost)] bg-white p-2">
-      <p className="mb-2 px-1 text-caption font-bold uppercase tracking-[0.16em] text-slate-400">
+      <p className="mb-2 px-1 text-caption font-bold text-slate-400">
         Elementos de risco
       </p>
       <div className="grid gap-2">
         {rows.map((row) => (
           <article
             key={row.label}
-            className="overflow-hidden rounded-md border border-slate-100 bg-[var(--surface-soft)]"
+            className="overflow-hidden rounded-lg border border-slate-100 bg-[var(--surface-soft)]"
           >
             <div className="grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-2 px-3 py-2">
               <span className="text-xs font-black leading-normal text-slate-600">
@@ -766,7 +766,7 @@ function MarkerMiniCharts({
 
   return (
     <div className="rounded-lg border border-[var(--line-ghost)] bg-white p-2">
-      <p className="mb-2 px-1 text-caption font-bold uppercase tracking-[0.16em] text-slate-400">
+      <p className="mb-2 px-1 text-caption font-bold text-slate-400">
         Marcadores observados
       </p>
       <div className="grid gap-2">
@@ -775,7 +775,7 @@ function MarkerMiniCharts({
           const width = item.value ? Math.max((item.value / categoryMax) * 100, 8) : 0;
 
           return (
-            <article key={item.label} className="rounded-md bg-[var(--surface-soft)] px-3 py-2">
+            <article key={item.label} className="rounded-lg bg-[var(--surface-soft)] px-3 py-2">
               <div className="mb-1 flex items-center justify-between gap-3">
                 <span className="text-xs font-black text-slate-600">{item.label}</span>
                 <span className="text-caption font-black text-[var(--brand-navy-strong)]">

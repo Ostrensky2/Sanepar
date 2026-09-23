@@ -1,15 +1,13 @@
-import { BarChart3, Download, ExternalLink, FileSpreadsheet, FlaskConical, ImageIcon, Info, X } from "lucide-react";
+import { Download, FileSpreadsheet, FlaskConical, ImageIcon, Info, X } from "lucide-react";
 import Link from "next/link";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
+import { LegacyPublishedResults } from "@/modules/results/components/legacy-published-results";
 import {
   buildPriorityMunicipalities,
   CampaignHydroMap,
   type CampaignHydroMapPoint,
 } from "@/components/campaign-hydro-map";
-import {
-  MetabarcodingStagesIndicator,
-  type MetabarcodingStage,
-} from "@/components/metabarcoding-stages";
+import type { MetabarcodingStage } from "@/components/metabarcoding-stages";
 import { DashboardSkeleton, ErrorBoundary } from "@/components/operational-feedback";
 import { RiskPhotoModal } from "@/components/home-risk-map-section";
 import { type CampaignView } from "@/lib/campaign-management";
@@ -20,6 +18,9 @@ import {
 } from "@/lib/laboratory-risk";
 import type { ResultsPublication } from "@/lib/imports/results-contract";
 import { getPhotoPreview } from "@/lib/photo-preview";
+import { CampaignResultsDashboard } from "@/modules/results/components/campaign-results-dashboard";
+import type { ResultsCampaign } from "@/modules/results";
+import type { ResultsPublicationV2 } from "@/lib/results-v2-persistence";
 
 type CampaignResultsPanelsProps = {
   children?: ReactNode;
@@ -28,6 +29,10 @@ type CampaignResultsPanelsProps = {
   showUnavailableNotice?: boolean;
   campaign?: CampaignView;
   publication?: ResultsPublication;
+  resultsV2?: ResultsCampaign[];
+  resultsV2Publication?: Pick<ResultsPublicationV2, "publicationId" | "source">;
+  resultsV2Photos?: Record<string, string>;
+  resultsV2PayloadUnavailable?: boolean;
   stages?: MetabarcodingStage[];
   stageTitle?: string;
   points?: CampaignHydroMapPoint[];
@@ -45,6 +50,10 @@ export function CampaignResultsPanels({
   showUnavailableNotice,
   campaign,
   publication,
+  resultsV2,
+  resultsV2Publication,
+  resultsV2Photos,
+  resultsV2PayloadUnavailable,
   stages,
   stageTitle,
   points,
@@ -66,9 +75,16 @@ export function CampaignResultsPanels({
     return <DashboardSkeleton rows={4} />;
   }
 
+  const hasV2Results = Boolean(resultsV2?.length);
+
   return (
     <ErrorBoundary title="Falha nos resultados da campanha">
-      {resultsUnavailable ? (
+      {resultsV2PayloadUnavailable ? (
+        <EmptyCampaignPanel
+          title="Publicação localizada, conteúdo indisponível"
+          description="A publicação desta campanha existe, mas os pontos auditados não estão disponíveis para consulta. Nenhum resultado anterior foi usado como substituto."
+        />
+      ) : resultsUnavailable && !hasV2Results ? (
         <>
           <UnavailableResultsNotice
             campaignName={campaign.title}
@@ -79,16 +95,27 @@ export function CampaignResultsPanels({
         </>
       ) : (
         <>
-          <ResultsDashboardSection
-            campaign={campaign}
-            publication={publication}
-            canDownload={Boolean(canDownload)}
-            isDownloading={Boolean(isDownloading)}
-            downloadMessage={downloadMessage}
-            onDownload={onDownload}
-          />
-          <MetabarcodingStagesIndicator stages={stages} title={stageTitle} />
-          <AnalyticResultsMap points={points} />
+           {hasV2Results ? (
+             <div className="space-y-4">
+               <CampaignResultsDashboard
+                 key={`${resultsV2?.[0]?.campaignCode}:${resultsV2Publication?.publicationId}:${resultsV2Publication?.source.sha256}`}
+                 campaign={resultsV2![0]}
+                 publication={resultsV2Publication}
+                 campaignLabel={campaign.title}
+                 fieldPhotos={resultsV2Photos}
+               />
+             </div>
+          ) : (
+            <ResultsDashboardSection
+              campaign={campaign}
+              publication={publication}
+              canDownload={Boolean(canDownload)}
+              isDownloading={Boolean(isDownloading)}
+              downloadMessage={downloadMessage}
+              onDownload={onDownload}
+            />
+          )}
+          {!hasV2Results ? <AnalyticResultsMap points={points} /> : null}
         </>
       )}
     </ErrorBoundary>
@@ -114,7 +141,7 @@ function AnalyticResultsMap({ points }: { points: CampaignHydroMapPoint[] }) {
     <section aria-labelledby="risk-map-title" className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(280px,34%)]">
       <div className="min-w-0">
         <h2 id="risk-map-title" className="sr-only">Mapa único de risco molecular</h2>
-        <div className="relative h-[500px] overflow-hidden radius-panel border border-[var(--line-ghost)] bg-[linear-gradient(180deg,#eef5f8,#e6eef3)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)] max-sm:h-[420px]">
+        <div className="relative h-[500px] overflow-hidden radius-panel border border-[var(--line-ghost)] bg-[image:var(--map-surface)] shadow-[0_30px_80px_-48px_rgba(0,66,98,0.22)] max-sm:h-[420px]">
           <CampaignHydroMap
             points={points}
             selectedPointId={selectedPoint.id}
@@ -225,7 +252,7 @@ export function SelectedResultPoint({ point }: { point: CampaignHydroMapPoint })
                 onError={() => setFailedUrl(photoUrl)}
                 src={photoUrl}
               />
-              <span className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-1 text-caption font-bold uppercase tracking-[0.14em] text-white">
+              <span className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-1 text-caption font-bold text-white">
                 ampliar
               </span>
             </button>
@@ -280,13 +307,13 @@ function ResultsUnavailablePanel({ campaign }: { campaign: CampaignView }) {
         Ainda não temos resultados publicados para {campaign.title}
       </h3>
       <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
-        A campanha pode ser acompanhada nas telas de campo e diário de campo. Esta área será liberada após uma publicação válida na Entrada de dados.
+        A campanha pode ser acompanhada nas telas de campo e diário de campo. Esta área será liberada após uma publicação válida na Central de dados.
       </p>
       <Link
         href="/dados/resultados"
         className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-sm font-bold text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)]"
       >
-        Ir para Entrada de dados
+        Ir para Central de dados
       </Link>
     </section>
   );
@@ -336,11 +363,11 @@ function UnavailableResultsNotice({
           Ainda não temos resultados da {campaignName}
         </h3>
         <p className="mt-3 text-sm leading-6 text-slate-500">
-          Esta campanha ainda não possui uma publicação válida. Assim que o modelo canônico for publicado na Entrada de dados, a visualização ficará disponível.
+          Esta campanha ainda não possui uma publicação válida. Assim que o modelo canônico for publicado na Central de dados, a visualização ficará disponível.
         </p>
         <div className="mt-5 flex justify-end">
           <button
-            className="inline-flex items-center justify-center rounded-xl bg-[var(--brand-navy-strong)] px-4 py-3 text-xs font-bold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[var(--brand-blue)]"
+            className="inline-flex items-center justify-center rounded-xl bg-[var(--brand-navy-strong)] px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-[var(--brand-blue)]"
             type="button"
             onClick={onClose}
           >
@@ -352,14 +379,7 @@ function UnavailableResultsNotice({
   );
 }
 
-function ResultsDashboardSection({
-  campaign,
-  publication,
-  canDownload,
-  isDownloading,
-  downloadMessage,
-  onDownload,
-}: {
+function ResultsDashboardSection({ campaign, publication, canDownload, isDownloading, downloadMessage, onDownload }: {
   campaign: CampaignView;
   publication?: ResultsPublication;
   canDownload: boolean;
@@ -367,136 +387,11 @@ function ResultsDashboardSection({
   downloadMessage?: string;
   onDownload?: () => void;
 }) {
-  const dashboardUrl = publication ? buildResultsDashboardUrl(publication) : "";
-  const hasDashboard = Boolean(dashboardUrl);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const observerCleanupRef = useRef<(() => void) | null>(null);
-  const [iframeHeight, setIframeHeight] = useState(640);
-
-  useEffect(() => () => observerCleanupRef.current?.(), []);
-
-  function syncIframeHeight() {
-    observerCleanupRef.current?.();
-    const frame = iframeRef.current;
-    const document = frame?.contentDocument;
-    if (!frame || !document) return;
-
-    let animationFrame = 0;
-    let releaseFrame = 0;
-    let measuring = false;
-    const sync = () => {
-      if (measuring) return;
-      cancelAnimationFrame(animationFrame);
-      animationFrame = requestAnimationFrame(() => {
-        measuring = true;
-        frame.style.height = "0px";
-        const nextHeight = Math.max(
-          document.body.scrollHeight,
-          document.body.offsetHeight,
-          document.documentElement.scrollHeight,
-          document.documentElement.offsetHeight,
-        );
-        frame.style.height = `${nextHeight}px`;
-        setIframeHeight((current) => (current === nextHeight ? current : nextHeight));
-        releaseFrame = requestAnimationFrame(() => {
-          measuring = false;
-        });
-      });
-    };
-    const observer = new ResizeObserver(sync);
-    observer.observe(document.body);
-    frame.contentWindow?.addEventListener("resize", sync);
-    observerCleanupRef.current = () => {
-      cancelAnimationFrame(animationFrame);
-      cancelAnimationFrame(releaseFrame);
-      observer.disconnect();
-      frame.contentWindow?.removeEventListener("resize", sync);
-    };
-    sync();
-  }
-
-  return (
-    <section className="scroll-mt-20 overflow-hidden radius-panel border border-[var(--line-ghost)] bg-white">
-      <div className="flex flex-col gap-3 border-b border-[var(--line-ghost)] bg-[var(--surface-soft)]/55 p-5 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-teal-soft)] text-[var(--brand-teal)]">
-            <BarChart3 className="h-4.5 w-4.5" />
-          </span>
-          <div>
-            <p className="type-eyebrow text-[var(--brand-teal)]">
-              Resultados Monitoramento
-            </p>
-            <h2 className="heading-font type-section-title mt-1 text-[var(--brand-navy-strong)]">
-              Dashboard de resultados
-            </h2>
-            <p className="type-metadata mt-1 font-semibold text-[var(--ink-soft)]">{campaign.title}</p>
-          </div>
-        </div>
-
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
-          {hasDashboard ? (
-            <a
-              href={dashboardUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="type-button inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-[var(--brand-navy-strong)] transition hover:bg-[var(--brand-blue-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)] sm:w-auto"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Dashboard
-            </a>
-          ) : null}
-          <button
-            type="button"
-            onClick={onDownload}
-            disabled={!canDownload || isDownloading || !onDownload}
-            className="type-button inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-navy-strong)] px-4 py-3 text-white transition hover:bg-[var(--brand-blue)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-          >
-            <Download className="h-4 w-4" />
-            {isDownloading ? "Gerando planilha..." : "Resultados"}
-          </button>
-          {downloadMessage ? (
-            <p aria-live="polite" className="text-xs font-semibold text-[var(--ink-soft)] sm:basis-full sm:text-right">
-              {downloadMessage}
-            </p>
-          ) : null}
-        </div>
-      </div>
-
-      <div>
-        {hasDashboard ? (
-          <iframe
-            ref={iframeRef}
-            src={dashboardUrl}
-            title={`Dashboard de resultados - ${campaign.title}`}
-            className="block w-full border-0 bg-white"
-            style={{ height: iframeHeight }}
-            loading="lazy"
-            onLoad={syncIframeHeight}
-          />
-        ) : (
-          <div className="flex min-h-[520px] flex-col items-center justify-center bg-[var(--surface-soft)] p-8 text-center">
-            <div className="mb-4 rounded-2xl bg-[var(--brand-teal-soft)] p-4 text-[var(--brand-teal)]">
-              <BarChart3 className="h-8 w-8" />
-            </div>
-            <p className="heading-font text-2xl font-extrabold text-[var(--brand-navy-strong)]">
-              Dashboard aguardando resultados
-            </p>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--ink-soft)]">
-              O espaço desta campanha seguirá o mesmo padrão quando o dashboard de resultados for publicado.
-            </p>
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function buildResultsDashboardUrl(publication: ResultsPublication) {
-  const query = new URLSearchParams({
-    campaignId: publication.campaignId,
-    campaignNumber: String(publication.campaignNumber),
-  });
-  return `/dashboards/Painel_eDNA_Campanha1_Sanepar.html?${query}`;
+  return <section className="min-w-0 space-y-3">
+    {publication ? <LegacyPublishedResults publication={publication} /> : <EmptyCampaignPanel title="Resultados indisponíveis" description={`Nenhuma publicação disponível para ${campaign.title}.`} />}
+    <button type="button" onClick={onDownload} disabled={!canDownload || isDownloading || !onDownload} className="type-button inline-flex min-h-11 items-center gap-2 rounded border border-[var(--line-strong)] px-4 disabled:opacity-50"><Download className="h-4 w-4" />{isDownloading ? "Gerando planilha..." : "Resultados"}</button>
+    {downloadMessage && <p role="status" className="type-metadata">{downloadMessage}</p>}
+  </section>;
 }
 
 function EmptyCampaignPanel({

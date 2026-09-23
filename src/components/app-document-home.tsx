@@ -12,7 +12,7 @@ export function AppDocumentMetric() {
 
   return (
     <article className="glass-panel radius-panel border-b-2 border-[var(--brand-blue)] p-4">
-      <p className="mb-2 text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
+      <p className="mb-2 text-caption font-bold text-slate-500">
         Documentos anexados
       </p>
       <div className="flex items-baseline gap-2">
@@ -37,7 +37,7 @@ export function AppDocumentHighlights() {
   if (!latestDocuments.length) {
     return (
       <section className="glass-panel radius-panel border p-4">
-        <p className="text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
+        <p className="text-caption font-bold text-slate-500">
           Documentos
         </p>
         <h3 className="mt-2 text-sm font-bold text-[var(--brand-navy-strong)]">
@@ -54,14 +54,14 @@ export function AppDocumentHighlights() {
     <section className="glass-panel radius-panel border p-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-caption font-bold uppercase tracking-[0.22em] text-slate-500">
+          <p className="text-caption font-bold text-slate-500">
             Documentos
           </p>
           <h3 className="mt-2 text-sm font-bold text-[var(--brand-navy-strong)]">
             Últimos 10 arquivos adicionados ou alterados
           </h3>
         </div>
-        <span className="rounded-full bg-[var(--brand-blue-soft)] px-3 py-1 text-caption font-black uppercase tracking-[0.14em] text-[var(--brand-navy)]">
+        <span className="rounded-full bg-[var(--brand-blue-soft)] px-3 py-1 text-caption font-black text-[var(--brand-navy)]">
           {latestDocuments.length} registros
         </span>
       </div>
@@ -78,7 +78,7 @@ export function AppDocumentHighlights() {
                 {document.type} / {document.campaign} / {document.point}
               </p>
             </div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--brand-teal)]">
+            <p className="text-xs font-semibold text-[var(--brand-teal)]">
               {formatDocumentDate(document)}
             </p>
           </article>

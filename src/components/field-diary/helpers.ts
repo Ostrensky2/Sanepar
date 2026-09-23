@@ -1,4 +1,3 @@
-import bundledCampaignMapPoints from "@/data/campaign-map-points.json";
 import type { FieldDiaryEntry, FieldDiaryPayload } from "@/lib/field-diary";
 import {
   campaignCollectionStartDates,
@@ -142,10 +141,10 @@ export function validateEntry(entry: FieldDiaryPayload) {
   return "";
 }
 
-function buildFieldDiaryPointOptions() {
+export function buildFieldDiaryPointOptions(points: Array<{waterBody?: string; code?: string; municipality?: string}>) {
   const byKey = new Map<string, FieldDiaryPointOption>();
 
-  for (const point of bundledCampaignMapPoints) {
+  for (const point of points) {
     const locationName = String(point.waterBody ?? "").trim();
     const sia = String(point.code ?? "").trim();
     const municipality = String(point.municipality ?? "").trim();
@@ -177,9 +176,7 @@ function buildFieldDiaryPointOptions() {
   );
 }
 
-export const fieldDiaryPointOptions: FieldDiaryPointOption[] = buildFieldDiaryPointOptions();
-
-export function findFieldDiaryPointOption(entry: FieldDiaryPayload) {
+export function findFieldDiaryPointOption(entry: FieldDiaryPayload, fieldDiaryPointOptions: FieldDiaryPointOption[]) {
   const entrySia = normalizeFieldDiaryPointKey(entry.sia);
   const entryLocation = normalizeFieldDiaryPointKey(entry.locationName);
   const entryMunicipality = normalizeFieldDiaryPointKey(entry.municipality);

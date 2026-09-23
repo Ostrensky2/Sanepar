@@ -150,7 +150,7 @@ function DiagnosticCard({ item }: { item: DiagnosticItem }) {
     <article className="rounded-xl border border-[var(--line-ghost)] bg-white/84 p-4 shadow-[0_14px_42px_-38px_rgba(0,66,98,0.42)]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-caption font-black uppercase tracking-[0.14em] text-[var(--ink-soft)]">
+          <p className="text-caption font-black text-[var(--ink-soft)]">
             {item.label}
           </p>
           <p className="mt-1 text-xl font-black text-[var(--brand-navy-strong)]">{item.value}</p>

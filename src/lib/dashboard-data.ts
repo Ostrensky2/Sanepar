@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import bundledCampaignMapPoints from "@/data/campaign-map-points.json";
+import { readPrivateCampaignPoints } from "@/lib/private-campaign-points";
 import {
   readCampaignWorkbookFromPath,
   type CampaignMapPoint,
@@ -26,6 +26,7 @@ import {
 
 const CAMPAIGN_SYNTHESIS_WORKBOOK_PATH =
   "D:/Dropbox/Sanepar_única/Campo/Campanhas/Campanhas_ Planilha sintese.xlsx";
+const bundledCampaignMapPoints = readPrivateCampaignPoints();
 const CAMPAIGN_1_DASHBOARD_PATH = path.join(
   process.cwd(),
   "public/dashboards/Painel_eDNA_Campanha1_Sanepar.html",

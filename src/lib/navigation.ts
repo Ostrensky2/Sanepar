@@ -1,15 +1,18 @@
 import type { ComponentType, SVGProps } from "react";
 import {
   AlertTriangle,
+  BookOpen,
+  Calculator,
   CarFront,
   DatabaseZap,
+  FileSpreadsheet,
   FileText,
   CircleHelp,
-  FileSpreadsheet,
   FlaskConical,
   House,
+  LayoutDashboard,
   LineChart,
-  MessageSquareText,
+  ListChecks,
   NotebookPen,
   PencilLine,
   Settings2,
@@ -19,6 +22,10 @@ import type { PrivilegeKey } from "@/lib/access-control";
 
 type NavigationIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
+/**
+ * Seção interna de um destino do menu. Não aparece no menu lateral: vira aba
+ * (SectionTabs) dentro da página e entra na busca e no breadcrumb.
+ */
 export type NavigationChild = {
   href: string;
   label: string;
@@ -34,105 +41,101 @@ export type NavigationItem = {
   summary: string;
   headerTitle: string;
   icon: NavigationIcon;
-  group: "regular" | "results" | "data" | "support" | "admin";
+  group: "consult" | "data" | "support";
   privilege?: PrivilegeKey;
   children?: NavigationChild[];
+};
+
+export const navigationGroupLabels: Record<NavigationItem["group"], string> = {
+  consult: "Consultar",
+  data: "Abastecer",
+  support: "Apoio",
 };
 
 export const navigationItems: NavigationItem[] = [
   {
     href: "/",
     label: "Início",
-    summary: "painel operacional",
+    summary: "painel de monitoramento",
     headerTitle: "Painel de Monitoramento",
     icon: House,
-    group: "regular",
+    group: "consult",
     privilege: "nav.home",
   },
   {
     href: "/campanhas/campo",
-    label: "Campanhas",
-    summary: "sazonais e extraordinárias",
-    headerTitle: "Campanhas Sazonais",
+    label: "Campanhas e resultados",
+    summary: "campo, percurso e resultados por campanha",
+    headerTitle: "Campanhas e resultados",
     icon: CarFront,
-    group: "regular",
+    group: "consult",
     privilege: "nav.campaigns",
-  },
-  {
-    href: "/campanhas/resultados",
-    label: "Resultados",
-    summary: "análises e ações",
-    headerTitle: "Resultados",
-    icon: LineChart,
-    group: "results",
-    privilege: "nav.results",
     children: [
       {
-        href: "/campanhas/resultados",
-        label: "Monitoramento",
-        summary: "análises laboratoriais",
-        headerTitle: "Monitoramento",
-        icon: FlaskConical,
+        href: "/campanhas/campo",
+        label: "Campo",
+        summary: "percurso, pontos e diário da campanha",
+        headerTitle: "Campo",
+        icon: CarFront,
       },
       {
-        href: "/acoes-pontuais",
-        label: "Ações Pontuais",
-        summary: "demandas Sanepar",
-        headerTitle: "Ações Pontuais Sanepar",
-        icon: Target,
+        href: "/campanhas/resultados",
+        label: "Resultados",
+        summary: "índices e análises laboratoriais (monitoramento)",
+        headerTitle: "Resultados",
+        icon: FlaskConical,
+        privilege: "nav.results",
       },
     ],
   },
   {
-    href: "/dados/status",
-    label: "Entrada de dados",
-    summary: "importação e curadoria",
-    headerTitle: "Entrada de Dados",
-    icon: DatabaseZap,
-    group: "data",
-    privilege: "nav.data",
+    href: "/resultados/impactos",
+    label: "Ciência e método",
+    summary: "impactos potenciais e como o índice é calculado",
+    headerTitle: "Ciência e método",
+    icon: BookOpen,
+    group: "consult",
+    privilege: "nav.results",
     children: [
       {
-        href: "/dados/status",
-        label: "Status de campanha",
-        summary: "andamento e etapas do projeto",
-        headerTitle: "Entrada de Dados - Status de Campanha",
-        icon: LineChart,
+        href: "/resultados/impactos",
+        label: "Impactos potenciais",
+        summary: "associações, ocorrências e referências",
+        headerTitle: "Impactos potenciais",
+        icon: BookOpen,
       },
       {
-        href: "/dados/campo",
-        label: "Planilhas de campo",
-        summary: "importação de planilhas de campo",
-        headerTitle: "Entrada de Dados - Planilhas de Campo",
-        icon: NotebookPen,
+        href: "/resultados/calculos",
+        label: "Como o índice é calculado",
+        summary: "passo a passo do cálculo e valores por ponto",
+        headerTitle: "Como o índice é calculado",
+        icon: Calculator,
       },
+    ],
+  },
+  {
+    href: "/acoes-pontuais",
+    label: "Atividades complementares",
+    summary: "demandas pontuais da Sanepar",
+    headerTitle: "Atividades complementares",
+    icon: Target,
+    group: "consult",
+    privilege: "nav.results",
+    children: [
       {
-        href: "/dados/diario-de-campo",
-        label: "Diário de campo",
-        summary: "ocorrências e registros diários",
-        headerTitle: "Entrada de Dados - Diário de Campo",
-        icon: NotebookPen,
-      },
-      {
-        href: "/dados/pendencias",
-        label: "Pendências",
-        summary: "conflitos de importação",
-        headerTitle: "Entrada de Dados - Pendências",
-        icon: AlertTriangle,
-      },
-      {
-        href: "/dados/resultados",
-        label: "Planilhas de resultados",
-        summary: "importação de planilhas laboratoriais",
-        headerTitle: "Entrada de Dados - Planilhas de Resultados",
-        icon: FileSpreadsheet,
+        href: "/acoes-pontuais",
+        label: "Consultar",
+        summary: "atividades registradas",
+        headerTitle: "Atividades complementares",
+        icon: Target,
       },
       {
         href: "/dados/acoes-pontuais",
-        label: "Registrar ações pontuais",
-        summary: "entrada estruturada de ações pontuais",
-        headerTitle: "Entrada de Dados - Registrar Ações Pontuais",
+        label: "Registrar",
+        summary: "nova atividade complementar",
+        headerTitle: "Registrar atividade complementar",
         icon: PencilLine,
+        privilege: "nav.data",
       },
     ],
   },
@@ -140,48 +143,99 @@ export const navigationItems: NavigationItem[] = [
     href: "/documentos",
     label: "Documentos",
     summary: "repositório oficial",
-    headerTitle: "Repositório Oficial de Documentos",
+    headerTitle: "Documentos",
     icon: FileText,
-    group: "support",
+    group: "consult",
     privilege: "nav.documents",
   },
   {
-    href: "/solicitacoes",
-    label: "Solicitações",
-    summary: "demandas e retornos",
-    headerTitle: "Solicitações Sanepar",
-    icon: MessageSquareText,
-    group: "support",
-    privilege: "nav.requests",
+    href: "/dados",
+    label: "Central de dados",
+    summary: "status, importações e pendências",
+    headerTitle: "Central de dados",
+    icon: DatabaseZap,
+    group: "data",
+    privilege: "nav.data",
+    children: [
+      {
+        href: "/dados",
+        label: "Visão geral",
+        summary: "o que falta em cada campanha",
+        headerTitle: "Central de dados",
+        icon: LayoutDashboard,
+      },
+      {
+        href: "/dados/status",
+        label: "Fase e etapas",
+        summary: "fase, datas e etapas de cada campanha",
+        headerTitle: "Fase e etapas da campanha",
+        icon: ListChecks,
+      },
+      {
+        href: "/dados/diario-de-campo",
+        label: "Diário de campo",
+        summary: "registros diários e importação da planilha de campo",
+        headerTitle: "Diário de campo",
+        icon: NotebookPen,
+      },
+      {
+        href: "/dados/resultados",
+        label: "Planilhas de resultados",
+        summary: "publicação dos resultados laboratoriais",
+        headerTitle: "Planilhas de resultados",
+        icon: FileSpreadsheet,
+      },
+      {
+        href: "/dados/pendencias",
+        label: "Pendências",
+        summary: "conflitos de importação a decidir",
+        headerTitle: "Pendências de importação",
+        icon: AlertTriangle,
+      },
+    ],
   },
   {
     href: "/governanca",
     label: "Configurações",
-    summary: "controle do app",
-    headerTitle: "Configurações do Sistema",
+    summary: "usuários, backups e diagnóstico",
+    headerTitle: "Configurações",
     icon: Settings2,
-    group: "admin",
+    group: "support",
     privilege: "nav.settings",
   },
   {
     href: "/ajuda",
     label: "Ajuda",
-    summary: "central de suporte",
+    summary: "como usar cada tela",
     headerTitle: "Ajuda",
     icon: CircleHelp,
-    group: "admin",
+    group: "support",
     privilege: "nav.help",
   },
 ];
 
+/** Ícone genérico usado quando uma página auxiliar não tem entrada no menu. */
+export const fallbackNavigationIcon: NavigationIcon = LineChart;
+
 const routePrivilegeOverrides: Record<string, PrivilegeKey[]> = {
-  "/campanhas": ["nav.campaigns"],
-  "/dados": ["nav.data"],
-  "/diario-de-campo": ["nav.campaigns"],
-  "/acoes-pontuais": ["nav.results"],
-  "/acoes-pontuais/ver": ["nav.results"],
-  "/acoes-pontuais/registrar": ["nav.data"],
+  // Registrar atividade é tarefa de quem abastece; não exige também a consulta de resultados.
+  "/dados/acoes-pontuais": ["nav.data"],
+  // A aba Resultados mantém o privilégio próprio de consulta de resultados.
+  "/campanhas/resultados": ["nav.results"],
 };
+
+export function findNavigationItem(pathname: string) {
+  return navigationItems.find(
+    (navigationItem) =>
+      navigationItem.href === pathname ||
+      navigationItem.children?.some((child) => child.href === pathname),
+  );
+}
+
+/** Destino do menu que deve aparecer ativo para a rota (inclui as seções internas). */
+export function isNavigationItemActive(item: NavigationItem, pathname: string) {
+  return pathname === item.href || Boolean(item.children?.some((child) => child.href === pathname));
+}
 
 export function getNavigationAccessForPath(pathname: string) {
   const override = routePrivilegeOverrides[pathname];
@@ -194,11 +248,7 @@ export function getNavigationAccessForPath(pathname: string) {
     };
   }
 
-  const item = navigationItems.find(
-    (navigationItem) =>
-      navigationItem.href === pathname ||
-      navigationItem.children?.some((child) => child.href === pathname),
-  );
+  const item = findNavigationItem(pathname);
 
   if (!item) {
     return null;
@@ -213,20 +263,21 @@ export function getNavigationAccessForPath(pathname: string) {
   };
 }
 
+/**
+ * Trilha de navegação. A página atual é o último item; a barra superior mostra
+ * só os ancestrais, porque o título da página já aparece no H1.
+ */
 export function getBreadcrumbsForPath(pathname: string) {
   const normalizedPath = pathname === "" ? "/" : pathname;
-  const item = navigationItems.find(
-    (navigationItem) =>
-      navigationItem.href === normalizedPath ||
-      navigationItem.children?.some((child) => child.href === normalizedPath),
-  );
+  const item = findNavigationItem(normalizedPath);
 
   if (item) {
     const child = item.children?.find((navigationChild) => navigationChild.href === normalizedPath);
+    const childIsLanding = child?.href === item.href;
     return [
       { href: "/", label: "Início" },
       ...(item.href === "/" ? [] : [{ href: item.href, label: item.label }]),
-      ...(child ? [{ href: child.href, label: child.label }] : []),
+      ...(child && !childIsLanding ? [{ href: child.href, label: child.label }] : []),
     ];
   }
 
@@ -249,15 +300,17 @@ export function getSearchableNavigationItems() {
     {
       href: item.href,
       label: item.label,
-      group: item.headerTitle,
+      group: navigationGroupLabels[item.group],
       keywords: `${item.label} ${item.summary} ${item.headerTitle}`,
     },
-    ...(item.children ?? []).map((child) => ({
-      href: child.href,
-      label: child.label,
-      group: item.label,
-      keywords: `${child.label} ${child.summary} ${child.headerTitle} ${item.label}`,
-    })),
+    ...(item.children ?? [])
+      .filter((child) => child.href !== item.href)
+      .map((child) => ({
+        href: child.href,
+        label: child.headerTitle,
+        group: item.label,
+        keywords: `${child.label} ${child.summary} ${child.headerTitle} ${item.label}`,
+      })),
   ]);
 }
 

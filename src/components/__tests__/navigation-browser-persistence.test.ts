@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readLocalRecordItems } from "@/components/command-palette";
-import { readSidebarBadges } from "@/components/sidebar-nav";
 import { FIELD_DIARY_STORAGE_KEY } from "@/lib/field-diary";
 
 const legacyDiary = JSON.stringify([
@@ -21,7 +20,6 @@ describe("browser-only diary persistence in navigation", () => {
   it("ignores legacy diary records outside localhost", () => {
     const getItem = installWindow("app.sanepar.example");
 
-    expect(readSidebarBadges()["/dados/diario-de-campo"]).toBe(0);
     expect(readLocalRecordItems()).not.toContainEqual(
       expect.objectContaining({ href: "/dados/diario-de-campo" }),
     );
@@ -31,7 +29,6 @@ describe("browser-only diary persistence in navigation", () => {
   it("keeps diary records available on localhost", () => {
     installWindow("localhost");
 
-    expect(readSidebarBadges()["/dados/diario-de-campo"]).toBe(1);
     expect(readLocalRecordItems()).toContainEqual(
       expect.objectContaining({ href: "/dados/diario-de-campo", label: "Registro legado" }),
     );

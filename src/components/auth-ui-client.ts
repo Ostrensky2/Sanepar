@@ -28,15 +28,24 @@ type SessionPayload = {
   purpose?: "invite" | "recovery" | "authenticated" | null;
   canSetPassword?: boolean;
   mustChangePassword?: boolean;
+  /** Servidor indisponível (5xx ou rede): a sessão não pôde ser verificada. Não concede acesso. */
+  unavailable?: boolean;
 };
 
 export async function readAuthSession(): Promise<SessionPayload> {
-  try {
-    const response = await fetch("/api/auth-users/session", { cache: "no-store" });
-    if (!response.ok) return { session: null, canSetPassword: false };
-    return (await response.json()) as SessionPayload;
-  } catch {
-    return { session: null, canSetPassword: false };
+  // Falhas momentâneas do servidor (5xx/rede) são repetidas antes de concluir que não há sessão,
+  // para uma instabilidade não parecer um logout.
+  const retryDelays = [400, 1200];
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const response = await fetch("/api/auth-users/session", { cache: "no-store" });
+      if (response.ok) return (await response.json()) as SessionPayload;
+      if (response.status < 500) return { session: null, canSetPassword: false };
+    } catch {
+      // Erro de rede: tenta de novo abaixo.
+    }
+    if (attempt >= retryDelays.length) return { session: null, canSetPassword: false, unavailable: true };
+    await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
   }
 }
 

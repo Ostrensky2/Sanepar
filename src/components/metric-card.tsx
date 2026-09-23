@@ -43,7 +43,7 @@ export function MetricCard({
       />
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="type-label uppercase tracking-[0.1em] text-[var(--ink-soft)]">{label}</p>
+          <p className="type-label text-[var(--ink-soft)]">{label}</p>
           <p className="heading-font type-kpi mt-2 tracking-tight text-[var(--brand-navy-strong)]">
             {value}
           </p>
