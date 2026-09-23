@@ -126,10 +126,13 @@ export async function loadCampaign1DashboardMapPoints(): Promise<DashboardRiskMa
 }
 
 export async function loadDashboardData(): Promise<DashboardData> {
-  const campaignImport = await loadCampaignImport();
+  // Consultas independentes: em paralelo, a página inicial espera só a mais lenta.
+  const [campaignImport, publishedRiskPoints, diaryMediaCandidates] = await Promise.all([
+    loadCampaignImport(),
+    getLatestPublishedLaboratoryRiskPoints(),
+    getFieldDiaryCampaignMediaCandidates(),
+  ]);
   const campaignPoints = overlayBundledCampaignMedia(campaignImport.points);
-  const publishedRiskPoints = await getLatestPublishedLaboratoryRiskPoints();
-  const diaryMediaCandidates = await getFieldDiaryCampaignMediaCandidates();
   const photoSources = [
     ...campaignPoints,
     ...diaryMediaCandidates.map((candidate) => ({
