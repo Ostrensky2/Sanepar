@@ -19,7 +19,7 @@ import {
 import { getPhotoPreview } from "@/lib/photo-preview";
 
 const riskLayers: CampaignMapLayerVisibility = {
-  roadMap: true,
+  roadMap: false,
   basins: true,
   dailyRoutes: false,
   dayTransitions: false,
