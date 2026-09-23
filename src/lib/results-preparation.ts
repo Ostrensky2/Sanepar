@@ -6,6 +6,7 @@ import { canonicalSheetName, RESULTS_SHEETS } from "@/modules/results/sheet-name
 import type { ResultsWorkbookExportModel } from "@/modules/results/types";
 import { PREPARATION_ROLES, type PreparationInput, type PreparationManifest, type PreparationPreview, type PreparationRole } from "./results-preparation-contract";
 import { ResultsStoreError } from "./results-publication-store";
+import { resolveResultsUploadFiles } from "./results-upload-staging";
 import type { ResearchModel } from "./results-research";
 
 const ROLE_SHEETS:Record<Exclude<PreparationRole,"full_workbook">,string>={molecular:"Metadados",catalog:"Riscos_bibliografia",evidence:"Evidencias_risco",criteria:"Criterios_scores",indices:"Indices_pontos",components:"Calculo_conjuntos",method:"Metodo_calculo"};
@@ -96,7 +97,7 @@ export async function readResultsPreparation(client:SupabaseClient,packageKey:st
 }
 export async function prepareResultsForm(form:FormData,client:SupabaseClient|null) {
   const input=parsePreparationInput(JSON.parse(String(form.get("preparation")??"null")));
-  const files=form.getAll("files");
+  const {files}=await resolveResultsUploadFiles(form,client,"files");
   if(files.some(f=>!(f instanceof File)))throw new Error("Arquivos de preparação inválidos.");
   const dependencies:PreparationStored[]=[];
   // Pinned dependencies are resolved read-only. An absent RPC is a hard error, never a published fallback.

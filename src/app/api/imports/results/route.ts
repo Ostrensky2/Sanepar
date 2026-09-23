@@ -16,6 +16,7 @@ import {
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 import { ResultsStoreError, currentResultsPublication, isLegacyResultsCampaign, publishResultsSnapshot, readResultsSnapshot, resultsInventory, selectExpectedHeads } from "@/lib/results-publication-store";
 import { readResultsPreparation, saveResultsPreparation } from "@/lib/results-preparation";
+import { ResultsUploadError, removeStagedResultsUploads, resolveResultsUploadFiles } from "@/lib/results-upload-staging";
 
 export const runtime = "nodejs";
 
@@ -105,7 +106,8 @@ export async function POST(request: Request) {
       const client=createOptionalSupabaseClient();if(!client)return noStoreJson({error:"Preparação privada indisponível."},503);
       return noStoreJson(await saveResultsPreparation(client,formData));
     }
-    const file = formData.get("file");
+    const supabase = createOptionalSupabaseClient();
+    const { files: [file], stagedPaths } = await resolveResultsUploadFiles(formData, supabase, "file");
     const selectedCampaignValue = formData.get("selectedCampaign");
     const selectedCampaign = resolveCanonicalCampaign(selectedCampaignValue);
 
@@ -165,12 +167,12 @@ export async function POST(request: Request) {
     const candidate = buildResultsPublicationV2(parsed, requestedCodes);
     candidate.publicationId = requestId;
     const expectedHeads = selectExpectedHeads(JSON.parse(String(formData.get("expectedHeads") ?? "null")),candidate.scope.campaignCodes);
-    const supabase = createOptionalSupabaseClient();
     if (!supabase) {
       return NextResponse.json({ error: "Persistência de resultados indisponível." }, { status: 503 });
     }
     const publication = candidate;
     const persisted = await publishResultsSnapshot(supabase,publication,bytes,model,parsed,expectedHeads,requestId);
+    await removeStagedResultsUploads(supabase, stagedPaths);
 
     return NextResponse.json({
       fileName: publication.source.fileName,
@@ -193,6 +195,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (error instanceof ResultsStoreError) return NextResponse.json({error:error.message,code:error.code},{status:error.status});
+    if (error instanceof ResultsUploadError) return NextResponse.json({error:error.message},{status:error.status});
     const message =
       error instanceof Error
         ? error.message

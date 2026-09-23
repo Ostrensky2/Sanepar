@@ -26,6 +26,8 @@ import {
   formatResultsImportError,
   readResultsApiPayload,
 } from "@/lib/imports/results-client";
+import { appendResultsWorkbooks, stageResultsWorkbook } from "@/lib/imports/results-upload-client";
+import type { StagedResultsUpload } from "@/lib/imports/results-upload-contract";
 import type { ResultsWorkbookPreviewResponse } from "@/lib/imports/results";
 import type { ResultsInventoryResponse } from "@/lib/results-publication-contract";
 import { planCampaignPublicationScope, RESULTS_CONTRACT_VERSION } from "@/modules/results";
@@ -86,6 +88,11 @@ type LaboratoryResultsPayload = {
   };
 };
 
+/** Identifica o arquivo selecionado para reaproveitar o envio feito na prévia. */
+function workbookKey(file: File) {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
 export function SpreadsheetRepository() {
   const [hasLoaded, setHasLoaded] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -101,6 +108,7 @@ export function SpreadsheetRepository() {
   const [inventoryError, setInventoryError] = useState<string | null>(null);
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const resultsPreviewAbortRef = useRef<AbortController | null>(null);
+  const stagedUploadRef = useRef<{ key: string; staged: StagedResultsUpload | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [activeCategory, setActiveCategory] = useState<UserCategory>("Admin");
   useEffect(() => () => resultsPreviewAbortRef.current?.abort(), []);
@@ -187,6 +195,7 @@ export function SpreadsheetRepository() {
     setResultsPreview(null);
     setSelectedResultCampaigns([]);
     resultsRequestRef.current = null;
+    stagedUploadRef.current = null;
     setError(null);
     if (!file) return;
 
@@ -196,8 +205,11 @@ export function SpreadsheetRepository() {
     setIsPreviewingResults(true);
 
     try {
+      const staged = await stageResultsWorkbook(file, controller.signal);
+      if (resultsPreviewAbortRef.current !== controller) return;
+      stagedUploadRef.current = { key: workbookKey(file), staged };
       const previewData = new FormData();
-      previewData.append("file", file);
+      appendResultsWorkbooks(previewData, "file", [file], [staged]);
       const response = await fetch("/api/imports/results/preview", {
         method: "POST",
         body: previewData,
@@ -287,8 +299,11 @@ export function SpreadsheetRepository() {
     window.addEventListener(OPERATION_CANCEL_EVENT, cancelHandler);
 
     try {
+      const staged = stagedUploadRef.current?.key === workbookKey(file)
+        ? stagedUploadRef.current.staged
+        : await stageResultsWorkbook(file, controller.signal);
       const resultsData = new FormData();
-      resultsData.append("file", file);
+      appendResultsWorkbooks(resultsData, "file", [file], [staged]);
       for (const code of selectedResultCampaigns) resultsData.append("selectedCampaigns", code);
       resultsData.append("expectedHeads", JSON.stringify(resultsPreview.expectedHeads));
       resultsData.append("sourceSha256", resultsPreview.sourceSha256 ?? "");
@@ -319,6 +334,7 @@ export function SpreadsheetRepository() {
       }
 
       const rowCount = payload.campaigns.reduce((sum, item) => sum + item.counts.total, 0);
+      stagedUploadRef.current = null;
       setSelectedFileName(null);
       setResultsPreview(null);
       setSelectedResultCampaigns([]);

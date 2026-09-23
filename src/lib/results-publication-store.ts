@@ -4,13 +4,20 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveCanonicalCampaign } from "@/lib/campaign-identity";
 import { isResultsPublicationV2, type ResultsPublicationV2, type ResultsPublicationV2Row } from "./results-v2-persistence";
 import type { ResultsInventoryItem, ResultsInventoryResponse, ResultsExpectedHeads } from "./results-publication-contract";
-import { isResultsPublication, type ResultsPublication } from "./imports/results-contract";
+import { RESULTS_SCHEMA_VERSION, isResultsPublication, type ResultsPublication } from "./imports/results-contract";
+import { RESULTS_CONTRACT_VERSION } from "@/modules/results";
 import type { ResultsWorkbookExportModel, ResultsWorkbookImport } from "@/modules/results/types";
 
 export class ResultsStoreError extends Error {
   constructor(public code: string, public status: number, message: string) { super(message); }
 }
-type Snapshot = { heads: ResultsExpectedHeads; publications: ResultsPublicationV2Row[]; sourceHashes: string[] };
+/** Light metadata the inventory RPC returns for every row; `points` is only sent for current heads. */
+type PublicationSummary = {
+  kind?: string | null; length?: number | null; schemaVersion?: string | null; contractVersion?: string | null;
+  campaignNumber?: unknown; campaignId?: string | null; fileName?: string | null; importedAt?: string | null; hasLegacyRows?: boolean | null;
+};
+type SnapshotRow = ResultsPublicationV2Row & { summary?: PublicationSummary | null };
+type Snapshot = { heads: ResultsExpectedHeads; publications: SnapshotRow[]; sourceHashes: string[] };
 function databaseError(error: {code?: string;message?:string}): never {
   if (error.message?.includes("IDEMPOTENCY_KEY_REUSED")) throw new ResultsStoreError("idempotency_conflict",409,"A chave desta tentativa já foi usada para outro conteúdo. Gere uma nova prévia.");
   if (error.code === "23505") throw new ResultsStoreError("source_conflict",409,"Fonte ou publicação já existente com conteúdo diferente.");
@@ -43,7 +50,7 @@ export function resultsInventory(snapshot: Snapshot): ResultsInventoryResponse {
   }
   const historicalPublications: NonNullable<ResultsInventoryResponse["historicalPublications"]> = snapshot.publications
     .filter(row=>!Object.values(snapshot.heads).includes(row.id))
-    .map(row=>({publicationId:row.id,createdAt:row.created_at,format:Array.isArray(row.points)?"legacy-array":isResultsPublication(row.points)?"legacy-v1":isResultsPublicationV2(row.points)?"v2":"unrecognized",campaignCode:null,recordCount:Array.isArray(row.points)?row.points.length:null,sourceAvailability:"unavailable_in_history"}));
+    .map(row=>({publicationId:row.id,createdAt:row.created_at,format:historicalFormat(row),campaignCode:null,recordCount:historicalRecordCount(row),sourceAvailability:"unavailable_in_history"}));
   return {campaigns,totalCampaigns:9,publishedCount:campaigns.length,expectedHeads:Object.fromEntries(Array.from({length:9},(_,i)=>[`C${i+1}`,snapshot.heads[`C${i+1}`]??null])),historicalPublications};
 }
 export function isLegacyResultsCampaign(value: unknown, code: string): value is ResultsPublication {
@@ -51,11 +58,29 @@ export function isLegacyResultsCampaign(value: unknown, code: string): value is 
   const canonical=resolveCanonicalCampaign(value.campaignNumber);
   return canonical?.id===value.campaignId && typeof value.fileName==="string" && Number.isFinite(Date.parse(value.importedAt));
 }
+/** Same rule as isLegacyResultsCampaign, evaluated on the light summary of a non-current row. */
+function isLegacySummaryCampaign(summary: PublicationSummary | null | undefined, code: string) {
+  if(!summary || summary.schemaVersion!==RESULTS_SCHEMA_VERSION || !summary.hasLegacyRows || !Number.isInteger(summary.campaignNumber) || code!==`C${summary.campaignNumber}`) return false;
+  const canonical=resolveCanonicalCampaign(summary.campaignNumber as number);
+  return canonical?.id===summary.campaignId && typeof summary.fileName==="string" && Number.isFinite(Date.parse(summary.importedAt ?? ""));
+}
+function historicalFormat(row: SnapshotRow) {
+  if(row.points!=null) return Array.isArray(row.points)?"legacy-array":isResultsPublication(row.points)?"legacy-v1":isResultsPublicationV2(row.points)?"v2":"unrecognized";
+  const summary=row.summary;
+  if(summary?.kind==="array") return "legacy-array";
+  if(summary?.schemaVersion===RESULTS_SCHEMA_VERSION && summary.hasLegacyRows) return "legacy-v1";
+  if(summary?.contractVersion===RESULTS_CONTRACT_VERSION) return "v2";
+  return "unrecognized";
+}
+function historicalRecordCount(row: SnapshotRow) {
+  if(row.points!=null) return Array.isArray(row.points)?row.points.length:null;
+  return row.summary?.kind==="array" && Number.isInteger(row.summary.length) ? row.summary.length as number : null;
+}
 /** Only database heads choose current publications; history never becomes an implicit fallback. */
 export function currentResultsPublication(snapshot: Snapshot, code: string): ResultsPublicationV2Row | null {
   const id=snapshot.heads[code];
   if(!id) {
-    if(snapshot.publications.some(row=>isLegacyResultsCampaign(row.points,code))) throw new ResultsStoreError("legacy_head_unavailable",409,"Publicação legada preservada; a vigência ainda não está disponível.");
+    if(snapshot.publications.some(row=>row.points==null?isLegacySummaryCampaign(row.summary,code):isLegacyResultsCampaign(row.points,code))) throw new ResultsStoreError("legacy_head_unavailable",409,"Publicação legada preservada; a vigência ainda não está disponível.");
     return null;
   }
   const rows=snapshot.publications.filter(row=>row.id===id);

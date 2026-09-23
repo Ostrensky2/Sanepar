@@ -49,6 +49,20 @@ it("rejects unanchored, duplicated and wrong-campaign heads instead of false emp
  expect(()=>currentResultsPublication({heads:{C2:id},publications:[row],sourceHashes:[]},"C2")).toThrow(/campanha/);
  expect(()=>currentResultsPublication({heads:{C1:id},publications:[row,row],sourceHashes:[]},"C1")).toThrow();
 });
+it("light inventory rows (points only for heads) keep history and legacy guards from the summary",()=>{
+ const legacy=legacyPublication(1);
+ const legacySummary={kind:"object",schemaVersion:legacy.schemaVersion,campaignNumber:1,campaignId:legacy.campaignId,fileName:legacy.fileName,importedAt:legacy.importedAt,hasLegacyRows:true};
+ const history=[{id:"old-legacy",points:null,summary:legacySummary,created_at:"2026-08-21"},{id:"old-array",points:null,summary:{kind:"array",length:69},created_at:"2026-06-09"}];
+ const inventory=resultsInventory({heads:{C1:id},publications:[{id,points:legacy,created_at:"2026-09-23"},...history],sourceHashes:[]});
+ expect(inventory.campaigns.map(c=>c.campaignCode)).toEqual(["C1"]);
+ expect(inventory.historicalPublications).toEqual([
+  {publicationId:"old-legacy",createdAt:"2026-08-21",format:"legacy-v1",campaignCode:null,recordCount:null,sourceAvailability:"unavailable_in_history"},
+  {publicationId:"old-array",createdAt:"2026-06-09",format:"legacy-array",campaignCode:null,recordCount:69,sourceAvailability:"unavailable_in_history"},
+ ]);
+ // Uma campanha legada sem head continua bloqueada, mesmo só com o resumo.
+ expect(()=>currentResultsPublication({heads:{},publications:history,sourceHashes:[]},"C1")).toThrow(/vigência/);
+ expect(currentResultsPublication({heads:{},publications:history,sourceHashes:[]},"C2")).toBeNull();
+});
 it("reports missing legacy source specifically only after verifying the database head",async()=>{
  const rpc=vi.fn().mockResolvedValue({data:{availability:"missing_source_artifact",sourceSha256:null}});
  const queryWithoutHash=new URLSearchParams({campaignCode:"C1",publicationId:id});

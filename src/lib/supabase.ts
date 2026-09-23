@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
-import { isResultsPublication, type ResultsPublication } from "@/lib/imports/results-contract";
+import {
+  RESULTS_SCHEMA_VERSION,
+  isResultsViewModel,
+  type ResultsPublication,
+} from "@/lib/imports/results-contract";
 import {
   laboratoryRiskLabel,
   normalizeLaboratoryRiskLevel,
@@ -44,6 +48,21 @@ type LabRiskResultRow = {
   points: unknown;
   created_at: string;
 };
+
+type LabRiskResultSummaryRow = {
+  created_at: string;
+  schemaVersion: string | null;
+  campaignId: string | null;
+  campaignNumber: unknown;
+  campaignTitle: string | null;
+  importedAt: string | null;
+  viewModel: unknown;
+};
+
+type LightResultsPublication = Pick<
+  ResultsPublication,
+  "campaignId" | "campaignNumber" | "campaignTitle" | "importedAt" | "viewModel"
+>;
 
 type JsonSnapshotRow = {
   points: unknown;
@@ -152,16 +171,20 @@ export async function getLatestPublishedLaboratoryRiskPoints() {
     return null;
   }
 
+  // Só os campos usados no painel: o JSON integral das publicações passa de 19 MB
+  // (linhas moleculares), o que tornava a página inicial lenta e instável.
   const { data, error } = await supabase
     .from("lab_risk_results")
-    .select("points, created_at")
+    .select(
+      "created_at, schemaVersion:points->>schemaVersion, campaignId:points->>campaignId, campaignNumber:points->campaignNumber, campaignTitle:points->>campaignTitle, importedAt:points->>importedAt, viewModel:points->viewModel",
+    )
     .order("created_at", { ascending: false })
-    .returns<LabRiskResultRow[]>();
+    .returns<LabRiskResultSummaryRow[]>();
 
   if (!error && data) {
     const publications = data
-      .filter((row): row is LabRiskResultRow & { points: ResultsPublication } =>
-        isResultsPublication(row.points))
+      .map((row) => ({ created_at: row.created_at, points: toLightResultsPublication(row) }))
+      .filter((row): row is { created_at: string; points: LightResultsPublication } => row.points !== null)
       .sort(compareResultsPublications);
     const latestCampaigns = new Set<number>();
     const publishedRiskPoints: LaboratoryRiskPoint[] = [];
@@ -183,7 +206,15 @@ export async function getLatestPublishedLaboratoryRiskPoints() {
       return publishedRiskPoints.map(sanitizeCampaignMedia);
     }
 
-    const legacy = data.find((row) => isLaboratoryRiskPointArray(row.points));
+    // Snapshots antigos em array não têm schemaVersion/contractVersion.
+    const { data: arrays } = await supabase
+      .from("lab_risk_results")
+      .select("points, created_at")
+      .is("points->>schemaVersion", null)
+      .is("points->>contractVersion", null)
+      .order("created_at", { ascending: false })
+      .returns<LabRiskResultRow[]>();
+    const legacy = arrays?.find((row) => isLaboratoryRiskPointArray(row.points));
 
     if (legacy && isLaboratoryRiskPointArray(legacy.points)) {
       return legacy.points.map(sanitizeCampaignMedia);
@@ -254,9 +285,27 @@ export async function getFieldDiaryCampaignMediaCandidates(): Promise<
   return [...candidates.values()];
 }
 
+function toLightResultsPublication(row: LabRiskResultSummaryRow): LightResultsPublication | null {
+  if (row.schemaVersion !== RESULTS_SCHEMA_VERSION ||
+    typeof row.campaignId !== "string" ||
+    !Number.isInteger(row.campaignNumber) ||
+    typeof row.importedAt !== "string" ||
+    !isResultsViewModel(row.viewModel)) {
+    return null;
+  }
+
+  return {
+    campaignId: row.campaignId,
+    campaignNumber: row.campaignNumber as number,
+    campaignTitle: row.campaignTitle ?? "",
+    importedAt: row.importedAt,
+    viewModel: row.viewModel,
+  };
+}
+
 function compareResultsPublications(
-  left: LabRiskResultRow & { points: ResultsPublication },
-  right: LabRiskResultRow & { points: ResultsPublication },
+  left: { created_at: string; points: LightResultsPublication },
+  right: { created_at: string; points: LightResultsPublication },
 ) {
   return right.points.campaignNumber - left.points.campaignNumber ||
     Date.parse(right.points.importedAt) - Date.parse(left.points.importedAt) ||
@@ -264,7 +313,7 @@ function compareResultsPublications(
     right.points.campaignId.localeCompare(left.points.campaignId);
 }
 
-function publicationToLaboratoryRiskPoints(publication: ResultsPublication) {
+function publicationToLaboratoryRiskPoints(publication: LightResultsPublication) {
   if (!publication.viewModel.points.length || publication.viewModel.points.some((point) =>
     point.score === null || point.classe === null)) {
     return null;

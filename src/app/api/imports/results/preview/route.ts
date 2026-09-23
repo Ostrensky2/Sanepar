@@ -13,6 +13,7 @@ import { createOptionalSupabaseClient } from "@/lib/supabase";
 import { RESULTS_CONTRACT_VERSION, type CampaignPublicationIdentity } from "@/modules/results";
 import { currentResultsPublication, isLegacyResultsCampaign, readResultsSnapshot, resultsInventory, ResultsStoreError } from "@/lib/results-publication-store";
 import { prepareResultsForm } from "@/lib/results-preparation";
+import { ResultsUploadError, resolveResultsUploadFiles } from "@/lib/results-upload-staging";
 
 export const runtime = "nodejs";
 
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
       const {preview}=await prepareResultsForm(formData,createOptionalSupabaseClient());
       return noStoreJson(preview);
     }
-    const file = formData.get("file");
+    const { files: [file] } = await resolveResultsUploadFiles(formData, createOptionalSupabaseClient(), "file");
     if (!(file instanceof File) || !file.name || file.size === 0) {
       return noStoreJson({ error: "Selecione uma planilha de Resultados válida." }, 400);
     }
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
     } satisfies ResultsWorkbookPreviewResponse);
   } catch (error) {
     if (error instanceof ResultsStoreError) return noStoreJson({error:error.message,code:error.code},error.status);
+    if (error instanceof ResultsUploadError) return noStoreJson({error:error.message},error.status);
     return noStoreJson({
       error: error instanceof Error ? error.message : "Não foi possível gerar a prévia da planilha de Resultados.",
     }, 422);

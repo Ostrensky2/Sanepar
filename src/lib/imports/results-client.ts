@@ -24,6 +24,10 @@ export async function readResultsApiPayload<T>(
       ? payload as T | { error: string }
       : { error: fallbackError };
   } catch {
+    // A Vercel recusa corpos acima de 4,5 MB antes de chegar ao app, com texto puro.
+    if (response.status === 413) {
+      return { error: "A planilha é grande demais para o envio direto ao servidor (limite de 4,5 MB). Recarregue a página e tente novamente." };
+    }
     return {
       error: response.ok
         ? "O servidor devolveu uma resposta inválida após processar a planilha. Tente novamente."

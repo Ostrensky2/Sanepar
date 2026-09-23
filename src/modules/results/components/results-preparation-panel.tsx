@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { defaultCampaigns } from "@/lib/campaign-management";
+import { appendResultsWorkbooks, stageResultsWorkbook } from "@/lib/imports/results-upload-client";
 import { PREPARATION_ROLES, type PreparationInput, type PreparationPreview, type PreparationRole } from "@/lib/results-preparation-contract";
 import { scientificControl } from "./scientific-query-controls";
 import { ResultsInterpretationHelp } from "./results-interpretation-help";
@@ -26,8 +27,10 @@ export function ResultsPreparationPanel({ canImport }: { canImport: boolean }) {
     setPending(true); setPreview(null); setError("");
     const timer = setTimeout(() => request.abort(), 60000);
     try {
+      const workbooks = files.map((item) => item.file);
+      const staged = await Promise.all(workbooks.map((file) => stageResultsWorkbook(file, request.signal)));
       const form = new FormData(); form.set("mode", "preparation"); form.set("preparation", JSON.stringify(input));
-      files.forEach((item) => form.append("files", item.file));
+      appendResultsWorkbooks(form, "files", workbooks, staged);
       const response = await fetch("/api/imports/results/preview", { method: "POST", body: form, signal: request.signal });
       const value = await response.json();
       if (!response.ok) throw new Error(typeof value.error === "string" ? value.error : "A preparação não pôde ser validada.");

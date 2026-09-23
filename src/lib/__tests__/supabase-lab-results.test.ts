@@ -14,11 +14,13 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("@supabase/supabase-js", () => ({
   createClient: () => ({
+    // Emula o PostgREST: a consulta principal só projeta campos do JSON;
+    // a de fallback filtra linhas sem schemaVersion/contractVersion (arrays).
     from: (table: string) => table === "lab_risk_results"
       ? {
-          select: () => ({
-            order: () => ({ returns: mocks.labRows }),
-          }),
+          select: (columns: string) => columns.includes("viewModel:points->viewModel")
+            ? { order: () => ({ returns: async () => projectRows(await mocks.labRows()) }) }
+            : { is: () => ({ is: () => ({ order: () => ({ returns: async () => arrayRows(await mocks.labRows()) }) }) }) },
         }
       : {
           select: () => ({
@@ -82,6 +84,36 @@ describe("getLatestPublishedLaboratoryRiskPoints", () => {
     ]);
   });
 });
+
+type MockRows = { data: Array<{ points: unknown; created_at: string }> | null; error: unknown };
+
+function field(points: unknown, key: string) {
+  return points && typeof points === "object" && !Array.isArray(points)
+    ? (points as Record<string, unknown>)[key] ?? null
+    : null;
+}
+
+function projectRows(result: MockRows) {
+  return {
+    ...result,
+    data: result.data?.map((row) => ({
+      created_at: row.created_at,
+      schemaVersion: field(row.points, "schemaVersion"),
+      campaignId: field(row.points, "campaignId"),
+      campaignNumber: field(row.points, "campaignNumber"),
+      campaignTitle: field(row.points, "campaignTitle"),
+      importedAt: field(row.points, "importedAt"),
+      viewModel: field(row.points, "viewModel"),
+    })) ?? null,
+  };
+}
+
+function arrayRows(result: MockRows) {
+  return {
+    ...result,
+    data: result.data?.filter((row) => field(row.points, "schemaVersion") === null && field(row.points, "contractVersion") === null) ?? null,
+  };
+}
 
 function publication(campaignNumber: number, importedAt: string): ResultsPublication {
   const emptyHeat = { taxa: [], rows: [] };
