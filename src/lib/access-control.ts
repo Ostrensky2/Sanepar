@@ -177,6 +177,11 @@ export const privilegeLabels: Record<PrivilegeKey, string> = {
 };
 
 export function hasPrivilege(category: UserCategory, privilege: PrivilegeKey) {
+  // Administrador tem acesso total, independente da matriz salva.
+  if (category === "Admin") {
+    return true;
+  }
+
   return getPrivilegeMatrix()[category].includes(privilege);
 }
 

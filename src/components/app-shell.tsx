@@ -73,11 +73,14 @@ export function AppShell({ children }: AppShellProps) {
     auxiliaryPageMeta[pathname] ??
     navigationItems[0];
   const navigationAccess = getNavigationAccessForPath(pathname);
+  // A categoria da sessão autenticada prevalece sobre o valor salvo no navegador.
+  const effectiveCategory = session?.role ?? activeCategory;
   const hasRouteAccess =
     !navigationAccess ||
-    !activeCategory ||
+    !effectiveCategory ||
+    effectiveCategory === "Admin" ||
     navigationAccess.requiredPrivileges.every((privilege) =>
-      privilegeMatrix[activeCategory].includes(privilege),
+      privilegeMatrix[effectiveCategory].includes(privilege),
     );
 
   useEffect(() => {

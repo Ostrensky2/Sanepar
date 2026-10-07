@@ -405,8 +405,7 @@ export function useAccessManagement() {
   return {
     users,
     session,
-    activeCategory,
-    setActiveCategory,
+    sessionCategory,
     privilegeMatrix,
     newUser,
     setNewUser,
@@ -467,8 +466,7 @@ export function AccessManagementPanel({
   const {
     users,
     session,
-    activeCategory,
-    setActiveCategory,
+    sessionCategory,
     privilegeMatrix,
     newUser,
     setNewUser,
@@ -495,7 +493,6 @@ export function AccessManagementPanel({
     addUser,
     togglePrivilege,
     applyRecommendedMatrix,
-    router,
   } = useAccessManagementContext();
   const showSection = (section: AccessManagementSection) => sections.includes(section);
 
@@ -509,22 +506,9 @@ export function AccessManagementPanel({
           <p className="text-label font-black text-[var(--ink-soft)]">
             Categoria da sessão
           </p>
-          <select
-            value={visibleCategories.includes(activeCategory) ? activeCategory : visibleCategories[0] ?? "ATGC"}
-            onChange={(event) => {
-              const role = event.target.value as UserCategory;
-              setActiveCategory(role);
-              persistAccessCategory(role);
-              router.refresh();
-            }}
-            className="mt-2 h-10 w-full rounded-xl border border-[var(--line-strong)] bg-white px-3 text-sm font-bold text-[var(--brand-navy-strong)]"
-          >
-            {visibleCategories.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
+          <p className="mt-2 flex h-10 w-full items-center rounded-xl border border-[var(--line-strong)] bg-white px-3 text-sm font-bold text-[var(--brand-navy-strong)]">
+            {sessionCategory}
+          </p>
         </div>
       </div>
       ) : null}
