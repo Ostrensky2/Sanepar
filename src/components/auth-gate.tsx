@@ -12,7 +12,7 @@ import {
   signInWithPassword,
   type AuthUiSession,
 } from "@/components/auth-ui-client";
-import { persistAccessCategory } from "@/lib/access-control";
+import { persistAccessCategory, syncPrivilegeMatrixFromServer } from "@/lib/access-control";
 
 type AuthGateProps = { children: ReactNode };
 
@@ -39,7 +39,10 @@ export function AuthGate({ children }: AuthGateProps) {
       }
       setSession(payload.session ?? null);
       setUnavailable(Boolean(payload.unavailable));
-      if (payload.session) persistAccessCategory(payload.session.role);
+      if (payload.session) {
+        persistAccessCategory(payload.session.role);
+        void syncPrivilegeMatrixFromServer();
+      }
       setReady(true);
     }
     void syncSession();
@@ -71,6 +74,7 @@ export function AuthGate({ children }: AuthGateProps) {
       }
       setSession(result.session);
       persistAccessCategory(result.session.role);
+      void syncPrivilegeMatrixFromServer();
       window.dispatchEvent(new Event(AUTH_SESSION_UPDATED_EVENT));
     } finally {
       setPending(false);

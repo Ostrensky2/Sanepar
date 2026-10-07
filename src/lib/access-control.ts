@@ -217,6 +217,38 @@ export function savePrivilegeMatrix(matrix: Record<UserCategory, PrivilegeKey[]>
   window.dispatchEvent(new Event("yvae:access-privileges-updated"));
 }
 
+/** Lê a matriz gravada no servidor (app_role_permissions) e atualiza a cópia do navegador. */
+export async function syncPrivilegeMatrixFromServer() {
+  try {
+    const response = await fetch("/api/role-permissions", { cache: "no-store" });
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { matrix?: Record<UserCategory, PrivilegeKey[]> };
+    if (!payload.matrix) return null;
+    savePrivilegeMatrix(payload.matrix);
+    return getPrivilegeMatrix();
+  } catch {
+    return null;
+  }
+}
+
+/** Grava a matriz no servidor; só o Admin consegue. Retorna a matriz confirmada ou null. */
+export async function savePrivilegeMatrixToServer(matrix: Record<UserCategory, PrivilegeKey[]>) {
+  try {
+    const response = await fetch("/api/role-permissions", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ matrix }),
+    });
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { matrix?: Record<UserCategory, PrivilegeKey[]> };
+    if (!payload.matrix) return null;
+    savePrivilegeMatrix(payload.matrix);
+    return getPrivilegeMatrix();
+  } catch {
+    return null;
+  }
+}
+
 export function resetPrivilegeMatrix() {
   window.localStorage.removeItem(ACCESS_PRIVILEGE_MATRIX_STORAGE_KEY);
   writeCookie(ACCESS_PRIVILEGE_MATRIX_COOKIE_NAME, encodeURIComponent(JSON.stringify(categoryPrivileges)));
@@ -271,12 +303,10 @@ export function normalizePrivilegesForCategory(
     return categoryPrivileges.Admin;
   }
 
-  const result = sanitizePrivileges([
+  return sanitizePrivileges([
     ...generalViewPrivileges,
     ...(privileges ?? categoryPrivileges[category]),
   ]);
-
-  return result.filter((p) => p !== "data.delete");
 }
 
 function expandLegacyPrivileges(privileges: PrivilegeKey[]) {

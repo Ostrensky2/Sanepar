@@ -28,8 +28,7 @@ import {
   normalizeUserCategory,
   persistAccessCategory,
   privilegeLabels,
-  resetPrivilegeMatrix,
-  savePrivilegeMatrix,
+  savePrivilegeMatrixToServer,
   userCategories,
   type PrivilegeKey,
   type UserCategory,
@@ -179,7 +178,8 @@ export function useAccessManagement() {
   const canAddUsers =
     canManageUsers &&
     (canManageAdminAuthority || selfManagedUserCategories.includes(sessionCategory));
-  const canManagePermissions = hasPrivilege(sessionCategory, "permissions.manage");
+  // Só o Admin altera a matriz; a API /api/role-permissions aplica a mesma regra.
+  const canManagePermissions = canManageAdminAuthority;
   const isSaving = savingAction !== null;
 
   async function runAdminCommand(
@@ -385,10 +385,33 @@ export function useAccessManagement() {
       : [...currentPrivileges, privilege];
     const nextMatrix = { ...privilegeMatrix, [category]: nextPrivileges };
 
+    void persistMatrix(nextMatrix, `Matriz de ${category} atualizada.`);
+  }
+
+  async function persistMatrix(nextMatrix: Record<UserCategory, PrivilegeKey[]>, message: string) {
+    const previousMatrix = privilegeMatrix;
     setPrivilegeMatrix(nextMatrix);
-    savePrivilegeMatrix(nextMatrix);
-    router.refresh();
-    setAuditTrail((current) => [`Matriz de ${category} atualizada.`, ...current].slice(0, 5));
+    setSavingAction("permissions");
+    setNotice(null);
+
+    try {
+      const saved = await savePrivilegeMatrixToServer(nextMatrix);
+
+      if (!saved) {
+        const errorMessage = "Não foi possível salvar a matriz de permissões. Nada foi alterado.";
+        setPrivilegeMatrix(previousMatrix);
+        setNotice({ kind: "error", text: errorMessage });
+        setAuditTrail((current) => [errorMessage, ...current].slice(0, 5));
+        return;
+      }
+
+      setPrivilegeMatrix(saved);
+      setNotice({ kind: "success", text: message });
+      setAuditTrail((current) => [message, ...current].slice(0, 5));
+      router.refresh();
+    } finally {
+      setSavingAction(null);
+    }
   }
 
   function applyRecommendedMatrix() {
@@ -396,10 +419,7 @@ export function useAccessManagement() {
       return;
     }
 
-    resetPrivilegeMatrix();
-    setPrivilegeMatrix(categoryPrivileges);
-    router.refresh();
-    setAuditTrail((current) => ["Matriz recomendada restaurada.", ...current].slice(0, 5));
+    void persistMatrix(categoryPrivileges, "Matriz recomendada restaurada.");
   }
 
   return {
@@ -564,8 +584,8 @@ export function AccessManagementPanel({
                       <p className="mt-1 text-xs text-[var(--ink-soft)]">{privilege}</p>
                     </td>
                     {visibleCategories.map((category) => {
-                      const enabled = (category as string) === "Admin" ? true : (privilege === "data.delete" ? false : privilegeMatrix[category as keyof typeof privilegeMatrix].includes(privilege));
-                      const locked = (category as string) === "Admin" || !canManagePermissions || (privilege === "data.delete" && (category as string) !== "Admin");
+                      const enabled = category === "Admin" || privilegeMatrix[category].includes(privilege);
+                      const locked = category === "Admin" || !canManagePermissions || isSaving;
 
                       return (
                         <td key={`${category}-${privilege}`} className="px-3 py-3 text-center">
@@ -579,7 +599,7 @@ export function AccessManagementPanel({
                               locked && "opacity-70",
                             )}
                             aria-label={`${enabled ? "Remover" : "Adicionar"} ${privilegeLabels[privilege]} para ${category}`}
-                            title={locked ? "Bloqueado para este perfil" : "Alternar permissão"}
+                            title={category === "Admin" ? "Admin tem acesso total" : locked ? "Somente o Admin altera" : "Alternar permissão"}
                           >
                             <span
                               className={cn(
