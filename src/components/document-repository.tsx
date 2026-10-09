@@ -25,6 +25,7 @@ import {
   type StoredDocument,
 } from "@/lib/app-documents";
 import { recordActivity } from "@/lib/activity-log";
+import { uploadDocumentDirect } from "@/lib/document-upload-client";
 import { getStoredSession } from "@/lib/auth-users";
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 import { EmptyState } from "@/components/empty-state";
@@ -770,22 +771,7 @@ async function uploadDocumentToCloud(formState: InsertLinkFormState) {
     throw new Error("Arquivo não informado.");
   }
 
-  const formData = new FormData();
-  formData.set("file", formState.file);
-  formData.set("title", formState.title);
-  formData.set("campaign", formState.campaign);
-  formData.set("point", formState.point);
-  formData.set("type", formState.type);
-
-  const response = await fetch("/api/documents/upload", {
-    method: "POST",
-    body: formData,
-  });
-  const payload = (await response.json()) as { document?: unknown; error?: string };
-
-  if (!response.ok) {
-    throw new Error(payload.error ?? "A nuvem não confirmou o envio do arquivo.");
-  }
+  const payload = await uploadDocumentDirect({ ...formState, file: formState.file });
 
   const normalized = normalizeStoredDocuments([payload.document]);
   const document = normalized[0];
@@ -1057,4 +1043,3 @@ function normalize(value: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 }
-
