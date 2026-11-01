@@ -25,6 +25,10 @@ const COMPARED_FIELDS: Array<keyof FieldDiaryEntry> = [
   "zooplanktonId",
   "latitude",
   "longitude",
+  // Só entra na comparação quando a planilha traz a coluna "Situação do ponto"
+  // (sem ela o campo fica vazio e o valor do app é mantido).
+  "executionStatus",
+  "relocationReason",
   "municipality",
   "activities",
   "waterVisualConditions",

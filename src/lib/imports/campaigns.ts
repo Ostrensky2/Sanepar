@@ -1,5 +1,11 @@
 import { Buffer } from "node:buffer";
 import ExcelJS from "exceljs";
+import { parseCoordinate as parseCoordinateText } from "@/lib/coordinates";
+import {
+  parsePointExecutionStatus,
+  validateRelocation,
+  type PointExecutionStatus,
+} from "@/lib/point-execution-status";
 
 type WorkbookBinary = Parameters<ExcelJS.Workbook["xlsx"]["load"]>[0];
 
@@ -51,6 +57,9 @@ export type CampaignMapPoint = {
   }>;
   photoWarnings?: string[];
   collectionOrder?: number | null;
+  // Situação do ponto (coluna opcional "Situação do ponto"); "relocated" só com motivo.
+  executionStatus?: PointExecutionStatus;
+  relocationReason?: string;
 };
 
 export type CampaignWorkbookImport = {
@@ -60,6 +69,8 @@ export type CampaignWorkbookImport = {
   originalPointCount: number;
   effectivePointCount: number;
   missingFields: string[];
+  // Problemas por linha (coordenada recusada, situação sem motivo), em português.
+  rowIssues: string[];
 };
 
 const REQUIRED_FIELD_ALIASES = {
@@ -106,6 +117,13 @@ const REQUIRED_FIELD_ALIASES = {
     "link de fotos",
     "fotos",
   ],
+} satisfies Record<string, string[]>;
+
+// Colunas opcionais: só são lidas quando o cabeçalho existe (planilhas antigas não
+// têm essas colunas e não devem ter outra coluna lida no lugar).
+const OPTIONAL_FIELD_ALIASES = {
+  executionStatus: ["situacao do ponto", "situação do ponto", "situacao", "situação"],
+  relocationReason: ["motivo da realocacao", "motivo da realocação", "motivo realocacao"],
 } satisfies Record<string, string[]>;
 
 const FALLBACK_COLUMNS = {
@@ -188,10 +206,21 @@ function parseCampaignWorksheet(
   fileName: string,
 ): CampaignWorkbookImport {
   const columns = buildColumnMap(worksheet);
+  const optionalColumns = buildColumnMap(worksheet, OPTIONAL_FIELD_ALIASES);
+  // Colunas opcionais encontradas nunca servem de "posição padrão" para outro campo
+  // (ex.: Situação na coluna 28 não pode ser lida como link do Drive).
+  const reservedColumns = new Set(
+    Object.values(optionalColumns).filter((column): column is number => column !== null),
+  );
+  const readMappedCell = (row: ExcelJS.Row, column: number | null, fallbackColumn: number) =>
+    column === null && reservedColumns.has(fallbackColumn)
+      ? ""
+      : readMappedCellAt(row, column, fallbackColumn);
   const missingFields = Object.entries(columns)
     .filter(([, column]) => column === null)
     .map(([field]) => field);
   const points: CampaignMapPoint[] = [];
+  const rowIssues: string[] = [];
   const orderCounters = new Map<string, number>();
 
   for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber += 1) {
@@ -202,18 +231,23 @@ function parseCampaignWorksheet(
       continue;
     }
 
+    const rowLabel = `Linha ${rowNumber} (SIA-${code.padStart(4, "0")})`;
     const original = coordinateFromCells(
       row.getCell(columns.originalLat ?? FALLBACK_COLUMNS.originalLat).value,
       row.getCell(columns.originalLon ?? FALLBACK_COLUMNS.originalLon).value,
+      { rowLabel, pairLabel: "original", issues: rowIssues },
     );
     const effective = coordinateFromCells(
       row.getCell(columns.effectiveLat ?? FALLBACK_COLUMNS.effectiveLat).value,
       row.getCell(columns.effectiveLon ?? FALLBACK_COLUMNS.effectiveLon).value,
+      { rowLabel, pairLabel: "efetiva", issues: rowIssues },
     );
 
     if (!original && !effective) {
       continue;
     }
+
+    const situation = readExecutionStatus(row, optionalColumns, rowLabel, rowIssues);
 
     const campaign = readMappedCell(row, columns.campaign, FALLBACK_COLUMNS.campaign);
     const day = readMappedCell(row, columns.day, FALLBACK_COLUMNS.day);
@@ -283,6 +317,7 @@ function parseCampaignWorksheet(
       driveUrl,
       dropboxUrl,
       photoUrl,
+      ...situation,
     });
   }
 
@@ -293,7 +328,45 @@ function parseCampaignWorksheet(
     originalPointCount: points.filter((point) => point.original).length,
     effectivePointCount: points.filter((point) => point.effective).length,
     missingFields,
+    rowIssues,
   };
+}
+
+function readExecutionStatus(
+  row: ExcelJS.Row,
+  columns: Record<keyof typeof OPTIONAL_FIELD_ALIASES, number | null>,
+  rowLabel: string,
+  issues: string[],
+): Pick<CampaignMapPoint, "executionStatus" | "relocationReason"> {
+  if (columns.executionStatus === null) {
+    return {};
+  }
+
+  const rawStatus = normalizeCell(row.getCell(columns.executionStatus).value);
+  const reason =
+    columns.relocationReason === null ? "" : normalizeCell(row.getCell(columns.relocationReason).value);
+
+  if (!rawStatus) {
+    return {};
+  }
+
+  const status = parsePointExecutionStatus(rawStatus);
+
+  if (!status) {
+    issues.push(
+      `${rowLabel}: situação “${rawStatus}” não reconhecida (use Planejado, Realizado, Não realizado, Realocado ou Bloqueado). A situação não foi importada.`,
+    );
+    return {};
+  }
+
+  const relocationError = validateRelocation(status, reason);
+
+  if (relocationError) {
+    issues.push(`${rowLabel}: ${relocationError} A situação “Realocado” não foi importada.`);
+    return {};
+  }
+
+  return status === "relocated" ? { executionStatus: status, relocationReason: reason } : { executionStatus: status };
 }
 
 function splitList(value: string) {
@@ -303,7 +376,10 @@ function splitList(value: string) {
     .filter(Boolean);
 }
 
-function buildColumnMap(worksheet: ExcelJS.Worksheet) {
+function buildColumnMap<Aliases extends Record<string, string[]> = typeof REQUIRED_FIELD_ALIASES>(
+  worksheet: ExcelJS.Worksheet,
+  aliasesByField: Aliases = REQUIRED_FIELD_ALIASES as unknown as Aliases,
+) {
   const headers = new Map<string, number>();
   const values = worksheet.getRow(1).values;
   const cells = Array.isArray(values) ? values.slice(1) : [];
@@ -317,7 +393,7 @@ function buildColumnMap(worksheet: ExcelJS.Worksheet) {
   });
 
   return Object.fromEntries(
-    Object.entries(REQUIRED_FIELD_ALIASES).map(([field, aliases]) => {
+    Object.entries(aliasesByField).map(([field, aliases]) => {
       const column =
         aliases
           .map((alias) => headers.get(normalizeHeader(alias)))
@@ -325,10 +401,10 @@ function buildColumnMap(worksheet: ExcelJS.Worksheet) {
 
       return [field, column];
     }),
-  ) as Record<keyof typeof REQUIRED_FIELD_ALIASES, number | null>;
+  ) as Record<keyof Aliases, number | null>;
 }
 
-function readMappedCell(
+function readMappedCellAt(
   row: ExcelJS.Row,
   column: number | null,
   fallbackColumn: number,
@@ -408,28 +484,68 @@ function formatDateCell(value: ExcelJS.CellValue | undefined) {
   }).format(date);
 }
 
+type CoordinateIssueContext = {
+  rowLabel: string;
+  pairLabel: "original" | "efetiva";
+  issues: string[];
+};
+
 function coordinateFromCells(
   latitudeCell: ExcelJS.CellValue | undefined,
   longitudeCell: ExcelJS.CellValue | undefined,
+  context?: CoordinateIssueContext,
 ) {
-  const lat = parseCoordinate(latitudeCell, "lat");
-  const lon = parseCoordinate(longitudeCell, "lon");
+  const latText = normalizeCell(latitudeCell);
+  const lonText = normalizeCell(longitudeCell);
+  const lat = parseCoordinate(latText, "lat");
+  const lon = parseCoordinate(lonText, "lon");
 
-  if (lat === null || lon === null) {
+  if (context) {
+    const problems: string[] = [];
+
+    if (lat.problem) problems.push(`latitude ${context.pairLabel} “${latText}” ${lat.problem}`);
+    if (lon.problem) problems.push(`longitude ${context.pairLabel} “${lonText}” ${lon.problem}`);
+    if (!problems.length && Boolean(latText) !== Boolean(lonText)) {
+      problems.push(
+        `${latText ? "longitude" : "latitude"} ${context.pairLabel} em branco; latitude e longitude precisam vir em par`,
+      );
+    }
+
+    if (problems.length) {
+      context.issues.push(
+        `${context.rowLabel}: ${problems.join("; ")}. A coordenada ${context.pairLabel} não foi importada.`,
+      );
+    }
+  }
+
+  if (lat.value === null || lon.value === null) {
     return null;
   }
 
-  return { lat, lon };
+  return { lat: lat.value, lon: lon.value };
 }
 
-function parseCoordinate(value: ExcelJS.CellValue | undefined, kind: "lat" | "lon") {
-  const normalized = normalizeCell(value).replace(",", ".");
-  let coordinate = Number(normalized);
+function parseCoordinate(text: string, kind: "lat" | "lon"): { value: number | null; problem?: string } {
+  const parsed = parseCoordinateText(text, kind === "lat" ? "latitude" : "longitude");
 
-  if (!Number.isFinite(coordinate)) {
-    return null;
+  if (parsed.status === "empty") {
+    return { value: null };
   }
 
+  if (parsed.status === "invalid") {
+    return {
+      value: null,
+      problem: parsed.reason === "out_of_range"
+        ? kind === "lat"
+          ? "está fora da faixa permitida (entre -90 e 90)"
+          : "está fora da faixa permitida (entre -180 e 180)"
+        : "não é um número válido",
+    };
+  }
+
+  let coordinate = parsed.value;
+
+  // Planilhas do Paraná às vezes chegam sem o sinal negativo.
   if (kind === "lat" && coordinate > 0 && coordinate >= 20 && coordinate <= 30) {
     coordinate *= -1;
   }
@@ -443,5 +559,7 @@ function parseCoordinate(value: ExcelJS.CellValue | undefined, kind: "lat" | "lo
       ? coordinate >= paranaBounds.minLat && coordinate <= paranaBounds.maxLat
       : coordinate >= paranaBounds.minLon && coordinate <= paranaBounds.maxLon;
 
-  return isInsideParana ? coordinate : null;
+  return isInsideParana
+    ? { value: coordinate }
+    : { value: null, problem: "fica fora do Paraná" };
 }

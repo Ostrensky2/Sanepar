@@ -76,8 +76,10 @@ describe("campaignPointToFieldDiaryPayload", () => {
       collectionTime: "08:30",
       samplesReplicasEdna: "C1770R1",
       zooplanktonId: "7244271",
-      activities: ["Coleta realizada", "Vistoria visual"],
-      waterVisualConditions: ["Espuma", "Resíduos"],
+      // Termos antigos traduzidos para o vocabulário comum com o IAGen; com ID de
+      // zooplâncton, a coleta genérica vira eDNA + zooplâncton.
+      activities: ["Coleta de eDNA", "Coleta de zooplâncton", "Reconhecimento do ponto"],
+      waterVisualConditions: ["Presença de espuma", "Resíduos"],
       hasOccurrence: true,
       requiresFollowUp: "Avaliar posteriormente",
       status: "Enviado",
@@ -147,7 +149,7 @@ describe("campaignPointToFieldDiaryPayload", () => {
       expect(payload).toMatchObject({
         latitude: "-25.481",
         longitude: "-49.191",
-        activities: ["Coleta realizada"],
+        activities: ["Coleta de eDNA"],
       });
     });
 

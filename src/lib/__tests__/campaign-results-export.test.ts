@@ -68,7 +68,7 @@ const diaryEntry = {
   occurrenceDescription: "Espuma registrada",
   requiresFollowUp: "Sim",
   followUpNotes: "Reavaliar na próxima campanha",
-  pointAccessibility: "Difícil",
+  pointAccessibility: "Acesso difícil",
   dailySummary: "Coleta concluída",
   status: "Revisado",
   createdAt: "2026-02-22T12:00:00.000Z",
@@ -97,7 +97,7 @@ describe("campaign results workbook", () => {
     expect(sheet?.getRow(2).getCell("I").value).toBe(-53.07515);
     expect(sheet?.getRow(2).getCell("K").value).toBe(0.75);
     expect(sheet?.getRow(2).getCell("L").value).toBe("Alto");
-    expect(sheet?.getRow(2).getCell("V").value).toBe("Difícil");
+    expect(sheet?.getRow(2).getCell("V").value).toBe("Acesso difícil");
     expect(sheet?.getRow(2).getCell("Y").value).toBe("Sim");
     expect(sheet?.getRow(2).getCell("AA").value).toBe("Espuma registrada");
     expect(sheet?.getRow(2).getCell("AB").value).toBe("Sim");

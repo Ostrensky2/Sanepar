@@ -28,16 +28,27 @@ const campaigns = [
   "9ª Campanha - Verão 2028",
 ];
 
-const accessibilityOptions = ["Fácil", "Moderado", "Difícil", "Inacessível"];
+// Listas abaixo espelham src/lib/field-diary-vocabulary.ts (vocabulário comum com o
+// IAGen). Termos antigos continuam aceitos e são traduzidos na importação.
+const accessibilityOptions = [
+  "Acesso normal",
+  "Acesso moderado",
+  "Acesso difícil",
+  "Acesso bloqueado",
+  "Acesso somente por embarcação",
+];
 // Deve espelhar waterVisualConditionOptions em src/lib/field-diary.ts.
 // Campo de multisseleção no Diário: vários valores separados por ";" na planilha.
 const waterVisualConditionOptions = [
-  "Aparentemente normal",
-  "Alteração de cor",
-  "Turbidez visual elevada",
-  "Espuma",
-  "Material flutuante",
+  "Água clara",
+  "Água turva",
+  "Presença de sedimento",
+  "Presença de espuma",
+  "Presença de macrófitas",
+  "Presença de óleo ou película",
   "Odor perceptível",
+  "Alteração de cor",
+  "Material flutuante",
   "Presença aparente de floração",
   "Resíduos",
   "Peixes ou organismos mortos",
@@ -47,16 +58,18 @@ const waterVisualConditionOptions = [
 // Deve espelhar EXATAMENTE weatherConditionOptions em src/lib/field-diary.ts.
 // Valores fora dessa lista são descartados na importação (field-spreadsheet-to-diary.ts).
 const weatherOptions = [
-  "Sol",
-  "Sol entre nuvens",
-  "Nublado Pós Chuva",
-  "Chuvoso",
+  "Céu limpo",
+  "Parcialmente nublado",
+  "Nublado",
+  "Chuva fraca",
   "Chuva forte",
+  "Vento forte",
   "Tempestade",
-  "Garoando",
-  "Nublado / Neblina",
+  "Neblina",
   "Não informado",
 ];
+// Espelha pointExecutionStatusLabels em src/lib/point-execution-status.ts.
+const executionStatusOptions = ["Planejado", "Realizado", "Não realizado", "Realocado", "Bloqueado"];
 const statusOptions = ["Rascunho", "Enviado", "Revisado"];
 const yesNoOptions = ["Não", "Sim"];
 const followUpOptions = ["Não", "Sim", "Avaliar posteriormente"];
@@ -92,6 +105,8 @@ const columns = [
   { header: "Pendência / Encaminhamento", key: "followUpNotes", width: 34 },
   { header: "Resumo do dia", key: "dailySummary", width: 42 },
   { header: "Status", key: "status", width: 18 },
+  { header: "Situação do ponto", key: "executionStatus", width: 18 },
+  { header: "Motivo da realocação", key: "relocationReason", width: 36 },
 ];
 
 ws.columns = columns;
@@ -122,15 +137,15 @@ const exampleRows = [
     originalLon: "-49.1897",
     effectiveLat: "-25.481933",
     effectiveLon: "-49.192517",
-    accessibility: "Fácil",
-    waterAspect: "Turbidez visual elevada",
-    weatherConditions: "Nublado Pós Chuva",
+    accessibility: "Acesso normal",
+    waterAspect: "Água turva",
+    weatherConditions: "Nublado",
     problems: "",
     samples: "C1770R1 / C1770R2 / C1770R3 / C1770R4 / C1770R5 / C1770B",
     zooplacktonId: "7244271",
     collectionTime: "08:30",
     createdByName: "Equipe de campo",
-    activities: "Coleta realizada; Vistoria visual",
+    activities: "Coleta de eDNA; Coleta de zooplâncton; Reconhecimento do ponto",
     hasOccurrence: "Não",
     occurrenceType: "",
     occurrenceDescription: "",
@@ -138,6 +153,8 @@ const exampleRows = [
     followUpNotes: "",
     dailySummary: "Coleta concluída sem ocorrência.",
     status: "Enviado",
+    executionStatus: "Realizado",
+    relocationReason: "",
   },
   {
     campaign: "1",
@@ -151,22 +168,24 @@ const exampleRows = [
     originalLon: "-49.1762",
     effectiveLat: "-25.4852",
     effectiveLon: "-49.176417",
-    accessibility: "Moderado",
-    waterAspect: "Espuma; Resíduos",
-    weatherConditions: "Sol entre nuvens",
+    accessibility: "Acesso moderado",
+    waterAspect: "Presença de espuma; Resíduos",
+    weatherConditions: "Parcialmente nublado",
     problems: "",
     samples: "C1771R1 / C1771R2 / C1771R3 / C1771R4 / C1771R5 / C1771B",
     zooplacktonId: "1312811",
     collectionTime: "10:15",
     createdByName: "Equipe de campo",
-    activities: "Coleta realizada; Medição em campo",
+    activities: "Coleta de eDNA; Coleta de zooplâncton; Medição de parâmetros",
     hasOccurrence: "Sim",
-    occurrenceType: "Condição climática adversa",
+    occurrenceType: "Condição climática",
     occurrenceDescription: "Chuva recente alterou a turbidez visual.",
     requiresFollowUp: "Avaliar posteriormente",
     followUpNotes: "Reavaliar acesso no próximo ciclo.",
     dailySummary: "Coleta concluída com observação de condição climática.",
     status: "Rascunho",
+    executionStatus: "Realocado",
+    relocationReason: "Margem alagada; coleta feita 150 m a montante do ponto previsto.",
   },
 ];
 
@@ -217,6 +236,7 @@ const refColumns = [
   { header: "Status", values: statusOptions, width: 18 },
   { header: "Sim/Não", values: yesNoOptions, width: 14 },
   { header: "Acompanhamento", values: followUpOptions, width: 26 },
+  { header: "Situação do ponto", values: executionStatusOptions, width: 20 },
 ];
 
 refColumns.forEach((col, index) => {
@@ -249,11 +269,12 @@ for (let r = 0; r < maxRefRows; r++) {
 
 const validations = [
   ["A", "$A$2:$A$10"],
-  ["L", "$B$2:$B$5"],
+  ["L", "$B$2:$B$6"],
   ["N", "$D$2:$D$10"],
   ["U", "$F$2:$F$3"],
   ["X", "$G$2:$G$4"],
   ["AA", "$E$2:$E$4"],
+  ["AB", "$H$2:$H$6"],
 ];
 
 for (const [column, formula] of validations) {
@@ -290,7 +311,8 @@ const instructions = [
   ["  • Latitude efetiva e Longitude Efetiva — coordenadas decimais dentro do Paraná."],
   [""],
   ["COORDENADAS"],
-  ["  • Use coordenadas decimais, preferencialmente negativas. Exemplo: -25.481933 / -49.192517."],
+  ["  • Use coordenadas decimais, preferencialmente negativas. Exemplo: -25.481933 / -49.192517. Vírgula ou ponto como separador."],
+  ["  • Latitude e longitude vêm sempre em par. Valor que não é número, fora da faixa ou fora do Paraná não é importado e aparece no aviso da importação, com a linha."],
   ["  • Caso haja latitude/longitude original e efetiva, o mapa usará a coordenada efetiva."],
   ["  • Se houver apenas coordenada original válida, ela será usada como referência."],
   [""],
@@ -302,6 +324,10 @@ const instructions = [
   ["  • Não inclua links de serviços externos nesta planilha."],
   ["  • Amostras e Réplicas e ID Zooplacton podem ser preenchidos manualmente ou via fórmula."],
   ["  • Condições visuais da água aceitam vários valores separados por ponto-e-vírgula (;), usando a lista da aba Valores válidos."],
+  [""],
+  ["SITUAÇÃO DO PONTO (OPCIONAL)"],
+  ["  • Situação do ponto — Planejado, Realizado, Não realizado, Realocado ou Bloqueado (aba Valores válidos, coluna H). Em branco, o app deduz pela coleta registrada."],
+  ["  • Motivo da realocação — obrigatório quando a situação for Realocado. Sem motivo, a situação não é importada e a linha aparece no aviso."],
 ];
 
 instructions.forEach(([text, bold], index) => {

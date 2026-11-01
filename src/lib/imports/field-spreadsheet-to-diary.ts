@@ -1,10 +1,15 @@
 import {
   fieldDiaryStatusOptions,
   followUpOptions,
-  pointAccessibilityOptions,
-  weatherConditionOptions,
   type FieldDiaryPayload,
 } from "@/lib/field-diary";
+import {
+  LEGACY_GENERIC_COLLECTION,
+  canonicalOccurrenceType,
+  canonicalPointAccessibility,
+  canonicalVocabularyList,
+  canonicalWeatherCondition,
+} from "@/lib/field-diary-vocabulary";
 import { resolveCanonicalCampaign } from "@/lib/campaign-identity";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 
@@ -34,11 +39,21 @@ export function campaignPointToFieldDiaryPayload(point: CampaignMapPoint): Field
     zooplanktonId: point.zooplanktonId || "",
     latitude: coordinates ? String(coordinates.lat) : null,
     longitude: coordinates ? String(coordinates.lon) : null,
+    executionStatus: point.executionStatus,
+    relocationReason: point.executionStatus === "relocated" ? point.relocationReason ?? "" : "",
     municipality: point.municipality || "Paraná",
-    activities: point.activities?.length ? point.activities : ["Coleta realizada"],
-    waterVisualConditions: splitWaterVisualConditions(point.waterAspect),
+    // Termos antigos da planilha são traduzidos para o vocabulário comum com o IAGen.
+    activities: canonicalVocabularyList(
+      "activities",
+      point.activities?.length ? point.activities : [LEGACY_GENERIC_COLLECTION],
+      { zooplanktonId: point.zooplanktonId },
+    ),
+    waterVisualConditions: canonicalVocabularyList(
+      "waterVisualConditions",
+      splitWaterVisualConditions(point.waterAspect),
+    ),
     hasOccurrence: Boolean(point.hasOccurrence),
-    occurrenceType: point.hasOccurrence ? point.occurrenceType || null : null,
+    occurrenceType: point.hasOccurrence ? canonicalOccurrenceType(point.occurrenceType) || null : null,
     occurrenceDescription: point.hasOccurrence ? point.occurrenceDescription || null : null,
     requiresFollowUp: normalizeFollowUp(point.requiresFollowUp ?? ""),
     followUpNotes: point.followUpNotes || null,
@@ -117,9 +132,9 @@ function normalizeStatus(value: string): FieldDiaryPayload["status"] {
 }
 
 function normalizeWeatherCondition(value: string): FieldDiaryPayload["weatherConditions"] {
-  return weatherConditionOptions.find((option) => option === value) ?? "";
+  return canonicalWeatherCondition(value);
 }
 
 function normalizePointAccessibility(value: string): FieldDiaryPayload["pointAccessibility"] {
-  return pointAccessibilityOptions.find((option) => option === value) ?? "";
+  return canonicalPointAccessibility(value);
 }

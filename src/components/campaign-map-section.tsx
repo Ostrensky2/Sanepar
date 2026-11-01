@@ -20,6 +20,7 @@ import {
 } from "@/components/campaign-hydro-map";
 import { campaignPointMatchesSelectedCampaign } from "@/lib/campaign-points";
 import { getPhotoPreview } from "@/lib/photo-preview";
+import { pointExecutionStatusLabels, pointExecutionStatuses } from "@/lib/point-execution-status";
 import type { CampaignOperationalStatus } from "@/lib/campaign-management";
 
 export function CampaignMapSection({
@@ -95,6 +96,17 @@ export function CampaignMapSection({
     () =>
       activePoints.find((point) => point.id === selectedPointId),
     [activePoints, selectedPointId],
+  );
+
+  const executionStatusCounts = useMemo(
+    () =>
+      pointExecutionStatuses
+        .map((status) => ({
+          status,
+          count: activePoints.filter((point) => point.executionStatus === status).length,
+        }))
+        .filter(({ count }) => count > 0),
+    [activePoints],
   );
 
   const layerOptions: Array<{
@@ -227,6 +239,23 @@ export function CampaignMapSection({
               {isPreparation ? "Pontos previstos" : "Coordenada de apoio"}
             </span>
           </div>
+          {executionStatusCounts.length ? (
+            <div
+              className="flex flex-col gap-1 border-t border-[var(--line-ghost)] px-3 py-2 text-slate-500"
+              aria-label="Situação dos pontos"
+            >
+              <span className="text-caption font-black text-slate-500">Situação dos pontos</span>
+              {executionStatusCounts.map(({ status, count }) => (
+                <span key={status} className="flex items-center justify-between gap-2 text-caption font-bold">
+                  <span>{pointExecutionStatusLabels[status]}</span>
+                  <span className="tabular-nums text-[var(--brand-navy-strong)]">{count}</span>
+                </span>
+              ))}
+              <p className="text-xs font-medium normal-case leading-3 tracking-normal text-slate-400">
+                Veja a situação de cada ponto ao passar o mouse ou no card do ponto.
+              </p>
+            </div>
+          ) : null}
         </div>
 
 
@@ -315,7 +344,14 @@ export function CampaignMapSection({
               <InfoTile label={isPreparation ? "Data prevista" : "Data"} value={selectedPoint?.date} />
               <InfoTile label="Município" value={selectedPoint?.municipality} />
               <InfoTile label="Acessibilidade" value={selectedPoint?.accessibility} />
+              <InfoTile
+                label="Situação"
+                value={selectedPoint?.executionStatus ? pointExecutionStatusLabels[selectedPoint.executionStatus] : undefined}
+              />
             </div>
+            {selectedPoint?.executionStatus === "relocated" ? (
+              <InfoBlock label="Motivo da realocação" value={selectedPoint.relocationReason} />
+            ) : null}
 
             <InfoBlock label="Manancial" value={selectedPoint?.waterBody} />
             <InfoBlock label="Aspecto da água" value={selectedPoint?.waterAspect} />

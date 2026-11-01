@@ -1,4 +1,5 @@
 import type { FieldDiaryEntry, FieldDiaryPayload } from "@/lib/field-diary";
+import { fieldDiaryRuleErrors } from "@/lib/field-diary-validation";
 import {
   campaignCollectionStartDates,
   operationalStageDescriptions,
@@ -138,7 +139,7 @@ export function validateEntry(entry: FieldDiaryPayload) {
     (entry.photos ?? []).length > 0;
 
   if (!hasOperationalData) return "Informe ao menos um dado operacional do registro.";
-  return "";
+  return fieldDiaryRuleErrors(entry)[0] ?? "";
 }
 
 export function buildFieldDiaryPointOptions(points: Array<{waterBody?: string; code?: string; municipality?: string}>) {

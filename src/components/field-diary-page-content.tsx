@@ -476,6 +476,8 @@ export function FieldDiaryPageContent({
       zooplanktonId: entry.zooplanktonId,
       latitude: entry.latitude,
       longitude: entry.longitude,
+      executionStatus: entry.executionStatus,
+      relocationReason: entry.relocationReason ?? "",
       municipality: entry.municipality,
       activities: entry.activities,
       waterVisualConditions: entry.waterVisualConditions,
@@ -511,7 +513,10 @@ export function FieldDiaryPageContent({
 
     const result = await saveFieldDiaryEntry(scopedPayload);
     if (result.persistence === "none") {
-      setMessage("A nuvem não confirmou a gravação. O registro não foi publicado para outros usuários.");
+      setMessage(
+        ("error" in result && result.error) ||
+          "A nuvem não confirmou a gravação. O registro não foi publicado para outros usuários.",
+      );
       return;
     }
 

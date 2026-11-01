@@ -99,7 +99,7 @@
 
 **[FATO IMPLEMENTADO]** `field_diary_change_log` guarda id, entry, campanha, campo, valor anterior/novo, origem, autor e timestamp, com índices por entry e campanha ([migration](../../supabase/migrations/20260708120000_field_diary_change_log.sql#L5-L21)). POST/PUT e importação escrevem diffs; a consulta de histórico os expõe.
 
-**[FATO IMPLEMENTADO]** A migration de corte Auth força RLS, revoga privilégios de `anon`, concede tabela a `authenticated` e cria policies: `data.view` para leitura, `data.import` para insert/update e `data.delete` para delete; o log é somente leitura com `data.view` ([RLS diary](../../supabase/migrations/20260815091000_supabase_auth_rls_cutover.sql#L90-L106), [grants/policies](../../supabase/migrations/20260815091000_supabase_auth_rls_cutover.sql#L135-L255)).
+**[FATO IMPLEMENTADO]** A migration de corte Auth força RLS, revoga privilégios de `anon`, concede tabela a `authenticated` e cria policies: `data.view` para leitura, `data.import` para insert/update e `data.delete` para delete; o log é somente leitura com `data.view` ([RLS diary](../../supabase/pending/20260815091000_supabase_auth_rls_cutover.sql#L90-L106), [grants/policies](../../supabase/pending/20260815091000_supabase_auth_rls_cutover.sql#L135-L255)).
 
 **[LACUNA]** Não há migration de criação inicial de `field_diary_entries` na cadeia `supabase/migrations`; a criação aparece no snippet de bootstrap. Além disso, a migration do log declara `entry_id uuid`, enquanto o bootstrap o declara `text` ([migration](../../supabase/migrations/20260708120000_field_diary_change_log.sql#L5-L15), [bootstrap](../../supabase/snippets/setup-yvae-production-complete.sql#L131-L140)). O estado efetivo depende da sequência de provisionamento; o repositório não contém uma migration corretiva explícita dessa divergência.
 
@@ -113,7 +113,7 @@
 
 **[FATO IMPLEMENTADO]** Remover no formulário retira apenas a associação do payload ([handlers](../../src/components/field-diary/form.tsx#L107-L132)). **[LACUNA]** Não há chamada para remover o objeto do Storage nessa ação; portanto, a limpeza física não é garantida pelo módulo.
 
-**[FATO IMPLEMENTADO]** Policies atuais permitem leitura de `photos` a perfil ativo com `campaigns.view`, insert/update com `data.import` e delete com `data.delete` ([storage RLS](../../supabase/migrations/20260815091000_supabase_auth_rls_cutover.sql#L322-L381)).
+**[FATO IMPLEMENTADO]** Policies atuais permitem leitura de `photos` a perfil ativo com `campaigns.view`, insert/update com `data.import` e delete com `data.delete` ([storage RLS](../../supabase/pending/20260815091000_supabase_auth_rls_cutover.sql#L322-L381)).
 
 ## 8. Fluxo ponta a ponta
 

@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/api-auth";
 import { fieldDiaryEntryKey, type FieldDiaryEntry } from "@/lib/field-diary";
+import {
+  canonicalOccurrenceType,
+  canonicalPointAccessibility,
+  canonicalVocabularyList,
+  canonicalWeatherCondition,
+} from "@/lib/field-diary-vocabulary";
+import { fieldDiaryRuleErrors, fieldDiaryRuleFields } from "@/lib/field-diary-validation";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 
 export const runtime = "nodejs";
@@ -78,7 +85,7 @@ export async function PATCH(request: Request) {
   if (payload.resolution === "planilha") {
     const applyResult = await applySheetValuesToDiary(supabase, ids);
     if (!applyResult.ok) {
-      return NextResponse.json({ error: applyResult.error }, { status: 500 });
+      return NextResponse.json({ error: applyResult.error }, { status: applyResult.status ?? 500 });
     }
   }
 
@@ -105,7 +112,7 @@ export async function PATCH(request: Request) {
 async function applySheetValuesToDiary(
   supabase: NonNullable<ReturnType<typeof createOptionalSupabaseClient>>,
   ids: string[],
-) {
+): Promise<{ ok: true } | { ok: false; error: string; status?: number }> {
   const { data: conflictRows, error: conflictError } = await supabase
     .from("import_conflicts")
     .select("*")
@@ -161,6 +168,16 @@ async function applySheetValuesToDiary(
       }
     }
 
+    const ruleCheck = sheetPatchRules(row, patch);
+
+    if (!ruleCheck.ok) {
+      return {
+        ok: false as const,
+        status: 400,
+        error: `${row.location_name || row.sia || "Registro"} em ${row.entry_date}: ${ruleCheck.error}`,
+      };
+    }
+
     const { error } = await supabase
       .from("field_diary_entries")
       .update(patch)
@@ -187,8 +204,10 @@ type FieldDiaryRow = {
   sia?: string | null;
   samples_replicas_edna?: string | null;
   zooplankton_id?: string | null;
-  latitude?: string | null;
-  longitude?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  execution_status?: string | null;
+  relocation_reason?: string | null;
   municipality: string;
   activities?: string[];
   water_visual_conditions?: string[];
@@ -219,6 +238,8 @@ const FIELD_TO_COLUMN: Record<string, string> = {
   zooplanktonId: "zooplankton_id",
   latitude: "latitude",
   longitude: "longitude",
+  executionStatus: "execution_status",
+  relocationReason: "relocation_reason",
   municipality: "municipality",
   activities: "activities",
   waterVisualConditions: "water_visual_conditions",
@@ -248,8 +269,7 @@ function fieldDiaryRowToEntry(row: FieldDiaryRow): FieldDiaryEntry {
     sia: row.sia ?? "",
     samplesReplicasEdna: row.samples_replicas_edna ?? "",
     zooplanktonId: row.zooplankton_id ?? "",
-    latitude: row.latitude ?? "",
-    longitude: row.longitude ?? "",
+    ...fieldDiaryRuleFields(row),
     municipality: row.municipality,
     activities: row.activities ?? [],
     waterVisualConditions: row.water_visual_conditions ?? [],
@@ -268,4 +288,53 @@ function fieldDiaryRowToEntry(row: FieldDiaryRow): FieldDiaryEntry {
     updatedAt: row.updated_at ?? new Date().toISOString(),
     photos: Array.isArray(row.photos) ? row.photos as FieldDiaryEntry["photos"] : [],
   };
+}
+
+/**
+ * Valor da planilha guardado na pendência pode ser texto antigo: coordenada com
+ * vírgula, termo do vocabulário anterior ou "realocado" sem motivo. Converte para o
+ * formato do banco e recusa, com mensagem em português, o que o banco não aceitaria.
+ */
+function sheetPatchRules(row: FieldDiaryRow, patch: Record<string, unknown>) {
+  const merged = {
+    latitude: "latitude" in patch ? patch.latitude : row.latitude,
+    longitude: "longitude" in patch ? patch.longitude : row.longitude,
+    executionStatus: "execution_status" in patch ? patch.execution_status : row.execution_status,
+    relocationReason: "relocation_reason" in patch ? patch.relocation_reason : row.relocation_reason,
+  };
+  const [error] = fieldDiaryRuleErrors(merged);
+
+  if (error) {
+    return { ok: false as const, error };
+  }
+
+  if ("latitude" in patch || "longitude" in patch) {
+    const fields = fieldDiaryRuleFields(merged);
+    patch.latitude = fields.latitude === "" ? null : Number(fields.latitude);
+    patch.longitude = fields.longitude === "" ? null : Number(fields.longitude);
+  }
+
+  if ("activities" in patch) {
+    patch.activities = canonicalVocabularyList("activities", patch.activities, {
+      zooplanktonId: row.zooplankton_id,
+    });
+  }
+
+  if ("water_visual_conditions" in patch) {
+    patch.water_visual_conditions = canonicalVocabularyList("waterVisualConditions", patch.water_visual_conditions);
+  }
+
+  if ("weather_conditions" in patch) {
+    patch.weather_conditions = canonicalWeatherCondition(patch.weather_conditions) || null;
+  }
+
+  if ("point_accessibility" in patch) {
+    patch.point_accessibility = canonicalPointAccessibility(patch.point_accessibility) || null;
+  }
+
+  if ("occurrence_type" in patch) {
+    patch.occurrence_type = canonicalOccurrenceType(patch.occurrence_type) || null;
+  }
+
+  return { ok: true as const };
 }

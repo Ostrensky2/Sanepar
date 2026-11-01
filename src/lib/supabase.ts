@@ -22,13 +22,14 @@ const isVercelRuntime = sanitizeEnvValue(process.env.VERCEL) === "1";
 const isDbDisabled = !isVercelRuntime && sanitizeEnvValue(process.env.NEXT_PUBLIC_DISABLE_DB) === "true";
 
 const supabaseUrl = isDbDisabled ? "" : sanitizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_URL);
+// Só a chave secreta do servidor. A chave publicável (anon) não dá mais acesso a
+// nenhuma tabela (migration 20261101110000_close_anon_access); sem a secreta, o
+// app fica em "modo local" em vez de tentar ler o banco como visitante.
 const supabaseServerKey = isDbDisabled
   ? ""
   : sanitizeEnvValue(
       process.env.SUPABASE_SECRET_KEY ??
-        process.env.SUPABASE_SERVICE_ROLE_KEY ??
-        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
     );
 
 type CampaignImportRow = {

@@ -1,70 +1,55 @@
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 import { campaignIdentityKey } from "@/lib/campaign-identity";
+import { coordinateToText } from "@/lib/coordinates";
+import {
+  canonicalOccurrenceType,
+  canonicalPointAccessibility,
+  canonicalVocabularyList,
+  canonicalWeatherCondition,
+  type PointAccessibility,
+  type WeatherCondition,
+} from "@/lib/field-diary-vocabulary";
+import {
+  inferPointExecutionStatus,
+  parsePointExecutionStatus,
+  type PointExecutionStatus,
+} from "@/lib/point-execution-status";
+
+/** Situação gravada no registro ou, sem ela, a inferida pelos dados de campo. */
+export function effectiveExecutionStatus(
+  entry: Pick<
+    FieldDiaryEntry,
+    | "executionStatus"
+    | "activities"
+    | "occurrenceType"
+    | "hasOccurrence"
+    | "pointAccessibility"
+    | "collectionTime"
+    | "samplesReplicasEdna"
+    | "zooplanktonId"
+  >,
+): PointExecutionStatus {
+  return parsePointExecutionStatus(entry.executionStatus) ?? inferPointExecutionStatus(entry);
+}
+
+export {
+  activityOptions,
+  occurrenceTypeOptions,
+  pointAccessibilityOptions,
+  waterVisualConditionOptions,
+  weatherConditionOptions,
+  type PointAccessibility,
+  type WeatherCondition,
+} from "@/lib/field-diary-vocabulary";
+export type { PointExecutionStatus } from "@/lib/point-execution-status";
 
 export const FIELD_DIARY_STORAGE_KEY = "yvae:field-diary-entries";
 export const FIELD_DIARY_UPDATED_EVENT = "yvae:field-diary-updated";
 
-export const activityOptions = [
-  "Coleta realizada",
-  "Deslocamento entre pontos",
-  "Vistoria visual",
-  "Medição em campo",
-  "Contato com equipe local",
-  "Coleta não realizada",
-  "Outra atividade",
-];
-
-export const waterVisualConditionOptions = [
-  "Aparentemente normal",
-  "Alteração de cor",
-  "Turbidez visual elevada",
-  "Espuma",
-  "Material flutuante",
-  "Odor perceptível",
-  "Presença aparente de floração",
-  "Resíduos",
-  "Peixes ou organismos mortos",
-  "Nível de água visualmente baixo",
-  "Outra condição",
-];
-
-export const occurrenceTypeOptions = [
-  "Problema de acesso ao ponto",
-  "Ponto inacessível",
-  "Coleta parcial",
-  "Coleta não realizada",
-  "Atraso operacional",
-  "Problema com equipamento",
-  "Condição climática adversa",
-  "Alteração ambiental observada",
-  "Demanda recebida em campo",
-  "Outro",
-];
-
 export const followUpOptions = ["Não", "Sim", "Avaliar posteriormente"] as const;
 export const fieldDiaryStatusOptions = ["Rascunho", "Enviado", "Revisado"] as const;
-export const weatherConditionOptions = [
-  "Sol",
-  "Sol entre nuvens",
-  "Nublado Pós Chuva",
-  "Chuvoso",
-  "Chuva forte",
-  "Tempestade",
-  "Garoando",
-  "Nublado / Neblina",
-  "Não informado",
-] as const;
-export const pointAccessibilityOptions = [
-  "Fácil",
-  "Moderado",
-  "Difícil",
-  "Inacessível",
-] as const;
-
 export type FieldDiaryStatus = (typeof fieldDiaryStatusOptions)[number];
 export type FieldDiaryFollowUp = (typeof followUpOptions)[number];
-export type WeatherCondition = (typeof weatherConditionOptions)[number];
-export type PointAccessibility = (typeof pointAccessibilityOptions)[number];
 
 export type FieldDiaryEntry = {
   id: string;
@@ -79,8 +64,12 @@ export type FieldDiaryEntry = {
   sia?: string | null;
   samplesReplicasEdna?: string | null;
   zooplanktonId?: string | null;
+  // Texto no formulário; no banco é numeric(9,6) conferido (ver lib/coordinates).
   latitude?: string | null;
   longitude?: string | null;
+  // Situação do ponto (mesmos códigos do IAGen). "relocated" exige motivo.
+  executionStatus?: PointExecutionStatus;
+  relocationReason?: string | null;
   municipality: string;
   activities: string[];
   waterVisualConditions: string[];
@@ -164,6 +153,8 @@ export function createEmptyFieldDiaryPayload(): FieldDiaryPayload {
     zooplanktonId: "",
     latitude: "",
     longitude: "",
+    executionStatus: undefined,
+    relocationReason: "",
     municipality: "",
     activities: [],
     waterVisualConditions: [],
@@ -274,6 +265,19 @@ export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
     });
 
     if (!response.ok) {
+      // Recusa de validação (coordenada, motivo da realocação, duplicidade): o
+      // registro não pode ficar salvo só no navegador; a mensagem volta ao formulário.
+      if (response.status === 400 || response.status === 409 || response.status === 422) {
+        const rejection = (await response.json().catch(() => ({}))) as { error?: unknown };
+        return {
+          entry,
+          persistence: "none" as const,
+          error: typeof rejection.error === "string" && rejection.error
+            ? rejection.error
+            : "O registro foi recusado. Confira os dados e tente de novo.",
+        };
+      }
+
       if (canUseBrowserOnlyPersistence()) {
         const nextEntries = mergeLocalFieldDiaryEntry(localEntries, entry);
         cacheFieldDiaryEntries(nextEntries);
@@ -329,6 +333,12 @@ export function normalizeFieldDiaryEntry(value: unknown): FieldDiaryEntry | null
   }
 
   const entryDate = normalizeEntryDate(candidate.entryDate);
+  const activities = canonicalVocabularyList("activities", candidate.activities, {
+    zooplanktonId: candidate.zooplanktonId,
+  });
+  // Sem situação explícita fica indefinida: a situação é inferida só na gravação
+  // e na exibição, para uma planilha sem a coluna não contradizer o app.
+  const executionStatus = parsePointExecutionStatus(candidate.executionStatus) ?? undefined;
 
   return {
     id: String(candidate.id),
@@ -343,13 +353,17 @@ export function normalizeFieldDiaryEntry(value: unknown): FieldDiaryEntry | null
     sia: candidate.sia ? String(candidate.sia) : "",
     samplesReplicasEdna: candidate.samplesReplicasEdna ? String(candidate.samplesReplicasEdna) : "",
     zooplanktonId: candidate.zooplanktonId ? String(candidate.zooplanktonId) : "",
-    latitude: candidate.latitude ? String(candidate.latitude) : "",
-    longitude: candidate.longitude ? String(candidate.longitude) : "",
+    latitude: coordinateToText(candidate.latitude),
+    longitude: coordinateToText(candidate.longitude),
+    executionStatus,
+    relocationReason: executionStatus === "relocated" && candidate.relocationReason
+      ? String(candidate.relocationReason).trim()
+      : "",
     municipality,
-    activities: toStringArray(candidate.activities),
-    waterVisualConditions: toStringArray(candidate.waterVisualConditions),
+    activities,
+    waterVisualConditions: canonicalVocabularyList("waterVisualConditions", candidate.waterVisualConditions),
     hasOccurrence: Boolean(candidate.hasOccurrence),
-    occurrenceType: candidate.occurrenceType ? String(candidate.occurrenceType) : "",
+    occurrenceType: candidate.occurrenceType ? canonicalOccurrenceType(candidate.occurrenceType) : "",
     occurrenceDescription: candidate.occurrenceDescription ? String(candidate.occurrenceDescription) : "",
     requiresFollowUp: normalizeFollowUp(candidate.requiresFollowUp),
     followUpNotes: candidate.followUpNotes ? String(candidate.followUpNotes) : "",
@@ -524,11 +538,11 @@ function normalizeStatus(value: unknown): FieldDiaryStatus {
 }
 
 function normalizeWeatherCondition(value: unknown): WeatherCondition | "" {
-  return weatherConditionOptions.find((option) => option === value) ?? "";
+  return canonicalWeatherCondition(value);
 }
 
 function normalizePointAccessibility(value: unknown): PointAccessibility | "" {
-  return pointAccessibilityOptions.find((option) => option === value) ?? "";
+  return canonicalPointAccessibility(value);
 }
 
 function normalizeEntryDate(value: unknown) {

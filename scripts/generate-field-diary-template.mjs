@@ -5,23 +5,32 @@ import { dirname, join } from "path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// Deve espelhar src/lib/field-diary-vocabulary.ts (vocabulário comum com o IAGen).
+// Termos antigos continuam aceitos na importação: são traduzidos pela tabela de
+// equivalência (LEGACY_VOCABULARY_EQUIVALENCE).
 const activityOptions = [
-  "Coleta realizada",
+  "Coleta de eDNA",
+  "Coleta de zooplâncton",
+  "Pesca experimental",
+  "Medição de parâmetros",
+  "Registro fotográfico",
+  "Reconhecimento do ponto",
   "Deslocamento entre pontos",
-  "Vistoria visual",
-  "Medição em campo",
   "Contato com equipe local",
   "Coleta não realizada",
   "Outra atividade",
 ];
 
 const waterVisualConditionOptions = [
-  "Aparentemente normal",
-  "Alteração de cor",
-  "Turbidez visual elevada",
-  "Espuma",
-  "Material flutuante",
+  "Água clara",
+  "Água turva",
+  "Presença de sedimento",
+  "Presença de espuma",
+  "Presença de macrófitas",
+  "Presença de óleo ou película",
   "Odor perceptível",
+  "Alteração de cor",
+  "Material flutuante",
   "Presença aparente de floração",
   "Resíduos",
   "Peixes ou organismos mortos",
@@ -30,17 +39,21 @@ const waterVisualConditionOptions = [
 ];
 
 const occurrenceTypeOptions = [
-  "Problema de acesso ao ponto",
+  "Condição climática",
+  "Falha de equipamento",
+  "Acesso impedido",
+  "Segurança",
+  "Alteração ambiental observada",
   "Ponto inacessível",
   "Coleta parcial",
   "Coleta não realizada",
   "Atraso operacional",
-  "Problema com equipamento",
-  "Condição climática adversa",
-  "Alteração ambiental observada",
   "Demanda recebida em campo",
-  "Outro",
+  "Outra",
 ];
+
+// Deve espelhar pointExecutionStatusLabels em src/lib/point-execution-status.ts.
+const executionStatusOptions = ["Planejado", "Realizado", "Não realizado", "Realocado", "Bloqueado"];
 
 const wb = new ExcelJS.Workbook();
 wb.creator = "Yva'e Monitoramento";
@@ -74,6 +87,8 @@ const columns = [
   { header: "Pendência / Encaminhamento", key: "followUpNotes", width: 36 },
   { header: "Resumo do dia *", key: "dailySummary", width: 52 },
   { header: "Status", key: "status", width: 14 },
+  { header: "Situação do ponto", key: "executionStatus", width: 18 },
+  { header: "Motivo da realocação", key: "relocationReason", width: 40 },
 ];
 
 ws.columns = columns;
@@ -98,11 +113,11 @@ ws.addRow({
   createdByName: "Antonio Ostrensky",
   locationName: "Reservatório Rio Verde",
   sia: "RV-001",
-  latitude: "-25.4284",
-  longitude: "-49.2733",
+  latitude: "-25.428400",
+  longitude: "-49.273300",
   municipality: "Curitiba",
-  activities: "Coleta realizada;Vistoria visual",
-  waterVisualConditions: "Aparentemente normal",
+  activities: "Coleta de eDNA;Reconhecimento do ponto",
+  waterVisualConditions: "Água clara",
   hasOccurrence: "Não",
   occurrenceType: "",
   occurrenceDescription: "",
@@ -110,6 +125,8 @@ ws.addRow({
   followUpNotes: "",
   dailySummary: "Coleta realizada sem intercorrências. Água com aparência normal.",
   status: "Rascunho",
+  executionStatus: "Realizado",
+  relocationReason: "",
 });
 
 const exampleRow = ws.getRow(2);
@@ -150,6 +167,7 @@ const refColumns = [
   { header: "Tipos de ocorrência", width: 32 },
   { header: "Acompanhamento", width: 26 },
   { header: "Status", width: 18 },
+  { header: "Situação do ponto", width: 20 },
 ];
 
 refColumns.forEach((col, i) => {
@@ -184,7 +202,8 @@ const maxLen = Math.max(
   waterVisualConditionOptions.length,
   occurrenceTypeOptions.length,
   followUpValues.length,
-  statusValues.length
+  statusValues.length,
+  executionStatusOptions.length
 );
 
 for (let r = 0; r < maxLen; r++) {
@@ -195,6 +214,7 @@ for (let r = 0; r < maxLen; r++) {
   row.getCell(4).value = occurrenceTypeOptions[r] ?? "";
   row.getCell(5).value = followUpValues[r] ?? "";
   row.getCell(6).value = statusValues[r] ?? "";
+  row.getCell(7).value = executionStatusOptions[r] ?? "";
   row.height = 18;
   row.eachCell({ includeEmpty: false }, (cell) => {
     cell.font = { name: "Arial", size: 9 };
@@ -227,13 +247,15 @@ const instructions = [
   [""],
   ["CAMPOS OPCIONAIS"],
   ["  • SIA — código ou referência interna"],
-  ["  • Latitude / Longitude — coordenadas decimais (ex: -25.4284 / -49.2733)"],
+  ["  • Latitude / Longitude — graus decimais, vírgula ou ponto (ex: -25.428400 / -49.273300). Sempre as duas juntas; latitude entre -90 e 90, longitude entre -180 e 180. Valor fora disso não é importado e aparece no aviso da importação."],
   ["  • Houve ocorrência? — Sim ou Não (padrão: Não)"],
   ["  • Tipo de ocorrência — obrigatório apenas se 'Houve ocorrência?' = Sim; use aba Valores válidos, coluna D"],
   ["  • Descrição da ocorrência — texto livre"],
   ["  • Exige acompanhamento? — use aba Valores válidos, coluna E (padrão: Não)"],
   ["  • Pendência / Encaminhamento — texto livre"],
   ["  • Status — use aba Valores válidos, coluna F (padrão: Rascunho)"],
+  ["  • Situação do ponto — use aba Valores válidos, coluna G. Em branco, o app deduz pela coleta registrada"],
+  ["  • Motivo da realocação — obrigatório quando a situação for Realocado; sem motivo, a situação não é importada"],
   [""],
   ["DICAS"],
   ["  • A linha 2 da aba Registros é um exemplo — pode ser apagada antes de importar"],

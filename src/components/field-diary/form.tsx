@@ -23,9 +23,18 @@ import {
   pointAccessibilityOptions,
   weatherConditionOptions,
   waterVisualConditionOptions,
+  effectiveExecutionStatus,
   type FieldDiaryPayload,
   type FieldDiaryPhoto,
 } from "@/lib/field-diary";
+import { validateCoordinatePair } from "@/lib/coordinates";
+import {
+  RELOCATION_REASON_MAX_LENGTH,
+  pointExecutionStatusLabels,
+  pointExecutionStatuses,
+  validateRelocation,
+  type PointExecutionStatus,
+} from "@/lib/point-execution-status";
 
 export function FieldDiaryForm({
   entry,
@@ -61,6 +70,10 @@ export function FieldDiaryForm({
   function update(next: Partial<FieldDiaryPayload>) {
     onChange({ ...entry, ...next });
   }
+  const executionStatus = effectiveExecutionStatus(entry);
+  const coordinateCheck = validateCoordinatePair(entry.latitude, entry.longitude);
+  const coordinateError = coordinateCheck.ok ? "" : coordinateCheck.error;
+  const relocationError = validateRelocation(executionStatus, entry.relocationReason);
   const selectedPointOption = findFieldDiaryPointOption(entry, fieldDiaryPointOptions);
   const selectedPointOptionId = selectedPointOption?.id ?? "";
   const locationSelectValue = selectedPointOptionId || (entry.locationName ? "__current" : "");
@@ -333,7 +346,10 @@ export function FieldDiaryForm({
               value={entry.latitude ?? ""}
               onChange={(event) => update({ latitude: event.target.value })}
               className={inputClassName}
-              placeholder="Ex: -25.4284"
+              placeholder="Ex: -25.428400"
+              inputMode="decimal"
+              aria-invalid={Boolean(coordinateError)}
+              aria-describedby={coordinateError ? "field-diary-coordinate-error" : undefined}
               maxLength={20}
             />
           </Field>
@@ -342,10 +358,59 @@ export function FieldDiaryForm({
               value={entry.longitude ?? ""}
               onChange={(event) => update({ longitude: event.target.value })}
               className={inputClassName}
-              placeholder="Ex: -49.2733"
+              placeholder="Ex: -49.273300"
+              inputMode="decimal"
+              aria-invalid={Boolean(coordinateError)}
+              aria-describedby={coordinateError ? "field-diary-coordinate-error" : undefined}
               maxLength={20}
             />
           </Field>
+          {coordinateError ? (
+            <p
+              id="field-diary-coordinate-error"
+              role="alert"
+              className="text-sm font-semibold text-[var(--brand-danger)] md:col-span-2"
+            >
+              {coordinateError}
+            </p>
+          ) : null}
+          <Field label="Situação do ponto">
+            <select
+              value={executionStatus}
+              onChange={(event) => {
+                const next = event.target.value as PointExecutionStatus;
+                update({
+                  executionStatus: next,
+                  relocationReason: next === "relocated" ? entry.relocationReason ?? "" : "",
+                });
+              }}
+              className={inputClassName}
+            >
+              {pointExecutionStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {pointExecutionStatusLabels[status]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {executionStatus === "relocated" ? (
+            <Field label="Motivo da realocação" required>
+              <textarea
+                value={entry.relocationReason ?? ""}
+                onChange={(event) => update({ relocationReason: event.target.value })}
+                className={textareaClassName}
+                placeholder="Por que a coleta foi feita fora do ponto previsto"
+                aria-invalid={Boolean(relocationError)}
+                maxLength={RELOCATION_REASON_MAX_LENGTH}
+                required
+              />
+              {relocationError ? (
+                <span role="alert" className="mt-1 block text-sm font-semibold text-[var(--brand-danger)]">
+                  {relocationError}
+                </span>
+              ) : null}
+            </Field>
+          ) : null}
           <Field label="Status">
             <select
               value={entry.status}

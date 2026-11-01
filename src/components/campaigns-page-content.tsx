@@ -41,6 +41,7 @@ import {
   readFieldDiaryEntries,
   readFieldDiaryEntriesFromStorage,
   saveFieldDiaryEntry,
+  effectiveExecutionStatus,
   type FieldDiaryEntry,
   type FieldDiaryPayload,
 } from "@/lib/field-diary";
@@ -599,7 +600,10 @@ export function CampaignsPageContent({
     const result = await saveFieldDiaryEntry(payload);
 
     if (result.persistence === "none") {
-      setMapEditMessage("A nuvem não confirmou a gravação. O registro não foi publicado para outros usuários.");
+      setMapEditMessage(
+        ("error" in result && result.error) ||
+          "A nuvem não confirmou a gravação. O registro não foi publicado para outros usuários.",
+      );
       return;
     }
 
@@ -1003,6 +1007,8 @@ function mergeDiaryMapPointWithImportedFieldPoint(
     dropboxUrl: diaryPoint.dropboxUrl || importedPoint.dropboxUrl,
     photoUrl: photos[0]?.url || diaryPoint.photoUrl || importedPoint.photoUrl,
     photos,
+    executionStatus: diaryPoint.executionStatus ?? importedPoint.executionStatus,
+    relocationReason: diaryPoint.relocationReason || importedPoint.relocationReason,
   };
 }
 
@@ -1135,6 +1141,8 @@ function diaryEntryToMapPoint(
     dropboxUrl: referencePoint?.dropboxUrl || "",
     photoUrl: firstPhotoUrl,
     photos,
+    executionStatus: effectiveExecutionStatus(entry),
+    relocationReason: entry.relocationReason || undefined,
   };
 }
 
@@ -1163,6 +1171,8 @@ function fieldDiaryEntryToPayload(
     zooplanktonId: entry.zooplanktonId,
     latitude: entry.latitude,
     longitude: entry.longitude,
+    executionStatus: entry.executionStatus,
+    relocationReason: entry.relocationReason ?? "",
     municipality: entry.municipality,
     activities: entry.activities,
     waterVisualConditions: entry.waterVisualConditions,

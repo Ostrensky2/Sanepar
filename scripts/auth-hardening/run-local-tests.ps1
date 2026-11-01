@@ -28,7 +28,8 @@ try {
     "supabase\migrations\20260815090000_supabase_auth_foundation.sql",
     "supabase\tests\auth_hardening_foundation.sql",
     "supabase\tests\auth_hardening_seed.sql",
-    "supabase\migrations\20260815091000_supabase_auth_rls_cutover.sql",
+    "supabase\pending\20260815091000_supabase_auth_rls_cutover.sql",
+    "supabase\migrations\20261101110000_close_anon_access.sql",
     "supabase\tests\auth_hardening_rls.sql"
   )
 
@@ -36,6 +37,12 @@ try {
     & $psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -p $port -U postgres -d postgres -f (Join-Path $repoRoot $relativePath)
     if ($LASTEXITCODE -ne 0) { throw "SQL test stage failed; details are in psql output." }
   }
+
+  # Registro de campo (2.0.2): banco próprio, simulando o estado antigo aberto para anon.
+  & $psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -p $port -U postgres -d postgres -c "create database field_record_hardening"
+  if ($LASTEXITCODE -ne 0) { throw "Could not create the field record test database." }
+  & $psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -p $port -U postgres -d field_record_hardening -f (Join-Path $repoRoot "supabase\tests\field_record_hardening.sql")
+  if ($LASTEXITCODE -ne 0) { throw "Field record SQL test failed; details are in psql output." }
 } finally {
   if ($started) {
     & $pgCtl -D $dataDir stop -m fast | Out-Null

@@ -7,6 +7,12 @@ import {
   normalizeGovernanceStatus,
   type FieldDiaryEntry,
 } from "@/lib/field-diary";
+import {
+  FieldDiaryValidationError,
+  fieldDiaryRuleColumns,
+  fieldDiaryRuleErrors,
+  fieldDiaryRuleFields,
+} from "@/lib/field-diary-validation";
 import { classifyFieldDiaryImport, diffFieldDiaryEntries } from "@/lib/imports/conflict-detection";
 
 export const runtime = "nodejs";
@@ -24,8 +30,10 @@ type FieldDiaryRow = {
   sia: string | null;
   samples_replicas_edna: string | null;
   zooplankton_id: string | null;
-  latitude?: string | null;
-  longitude?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  execution_status?: string | null;
+  relocation_reason?: string | null;
   municipality: string;
   activities: string[];
   water_visual_conditions: string[];
@@ -106,6 +114,9 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
   }
 
   const payload = (await request.json()) as { entry?: unknown };
+  const rawExecutionStatus = payload.entry && typeof payload.entry === "object" && "executionStatus" in payload.entry
+    ? payload.entry.executionStatus
+    : undefined;
   const normalized = normalizeFieldDiaryEntry(payload.entry);
 
   if (!normalized) {
@@ -113,6 +124,16 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
       { error: "O registro do Diário de campo é inválido." },
       { status: 400 },
     );
+  }
+
+  // Mesmas regras que o banco confere: coordenada numérica em par e dentro da
+  // faixa; ponto "realocado" só com motivo. Recusa com mensagem em português.
+  // A situação original precisa ser conferida: a normalização descarta termos
+  // desconhecidos, que não podem virar uma situação inferida na gravação.
+  const ruleErrors = fieldDiaryRuleErrors({ ...normalized, executionStatus: rawExecutionStatus });
+
+  if (ruleErrors.length) {
+    return NextResponse.json({ error: ruleErrors.join(" ") }, { status: 400 });
   }
 
   // Edição manual no app promove o registro a "corrigido": passa a ter prioridade
@@ -132,7 +153,16 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
     }
   }
 
-  const rowToSave = mode === "insert" ? await prepareInsertRow(supabase, entry) : toRow(entry);
+  let rowToSave: Awaited<ReturnType<typeof prepareInsertRow>>;
+
+  try {
+    rowToSave = mode === "insert" ? await prepareInsertRow(supabase, entry) : toRow(entry);
+  } catch (error) {
+    if (error instanceof FieldDiaryValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    throw error;
+  }
 
   if ("error" in rowToSave) {
     return NextResponse.json({ error: rowToSave.error }, { status: rowToSave.status });
@@ -227,8 +257,7 @@ function fromRow(row: FieldDiaryRow): FieldDiaryEntry {
     sia: row.sia,
     samplesReplicasEdna: row.samples_replicas_edna ?? "",
     zooplanktonId: row.zooplankton_id ?? "",
-    latitude: row.latitude,
-    longitude: row.longitude,
+    ...fieldDiaryRuleFields(row),
     municipality: row.municipality,
     activities: row.activities,
     waterVisualConditions: row.water_visual_conditions,
@@ -266,8 +295,7 @@ function toRow(entry: FieldDiaryEntry) {
     sia: entry.sia || null,
     samples_replicas_edna: entry.samplesReplicasEdna || null,
     zooplankton_id: entry.zooplanktonId || null,
-    latitude: entry.latitude || null,
-    longitude: entry.longitude || null,
+    ...fieldDiaryRuleColumns(entry),
     municipality: entry.municipality,
     activities: entry.activities,
     water_visual_conditions: entry.waterVisualConditions,

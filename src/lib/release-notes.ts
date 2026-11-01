@@ -82,7 +82,19 @@ export const MAJOR_RELEASES: MajorRelease[] = [
       "O índice da versão 2 não é comparável ao score de risco do painel da versão 1: a fórmula, a escala e os conjuntos mudaram.",
       "Links antigos continuam funcionando e levam à tela nova correspondente.",
     ],
-    updates: [],
+    updates: [
+      {
+        version: "2.0.2",
+        date: "01/11/2026",
+        items: [
+          "Banco de dados fechado para quem não entrou no app: tabelas, fotos e documentos só são lidos e gravados por membros com a categoria de acesso certa.",
+          "Latitude e longitude agora são números conferidos: aceitam vírgula ou ponto, precisam vir em par e dentro da faixa (latitude de -90 a 90, longitude de -180 a 180). O formulário, a importação e o banco avisam em português quando algo não confere.",
+          "Nova “Situação do ponto” no Diário de campo: Planejado, Realizado, Não realizado, Realocado ou Bloqueado. Ponto realocado exige o motivo. A situação aparece no formulário, no detalhe do registro, no mapa e na legenda.",
+          "Listas do Diário (atividades, condições da água, clima, acesso e ocorrências) alinhadas ao vocabulário padrão. Termos antigos foram trocados pelos novos nos registros e passam a ser trocados também na importação; cada troca ficou no histórico do registro.",
+          "Modelos de planilha atualizados com as novas listas e as colunas “Situação do ponto” e “Motivo da realocação”.",
+        ],
+      },
+    ],
   },
   {
     major: 1,

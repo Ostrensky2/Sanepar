@@ -11,6 +11,7 @@ import {
   laboratoryRiskLabel,
   type LaboratoryRiskLevel,
 } from "@/lib/laboratory-risk";
+import { pointExecutionStatusLabels, type PointExecutionStatus } from "@/lib/point-execution-status";
 
 type Coordinate = {
   lat: number;
@@ -50,6 +51,10 @@ export type CampaignHydroMapPoint = {
   resultCompleteness?: "complete" | "partial_2" | "partial_1" | "unavailable";
   resultMetricLabel?: string;
   resultIncluded?: readonly [boolean, boolean, boolean];
+  // Situação do ponto (registro de campo). O ponto continua preto no mapa de
+  // percurso (REGRAS 13); a situação aparece no tooltip, no card e na legenda.
+  executionStatus?: PointExecutionStatus;
+  relocationReason?: string;
 };
 
 export type PriorityMunicipality = {
@@ -932,6 +937,12 @@ function PointTooltip({
         <dd className="font-medium text-slate-600">{point.municipality || "—"}</dd>
         <dt className="font-bold text-slate-400">Rio</dt>
         <dd className="max-w-40 font-medium text-slate-600">{point.waterBody || "—"}</dd>
+        {point.executionStatus ? (
+          <>
+            <dt className="font-bold text-slate-400">Situação</dt>
+            <dd className="font-bold text-slate-700">{pointExecutionStatusLabels[point.executionStatus]}</dd>
+          </>
+        ) : null}
         {point.riskLevel ? (
           <>
             <dt className="font-bold text-slate-400">Prioridade</dt>

@@ -8,7 +8,10 @@ import {
   type FieldDiaryEntry,
   type FieldDiaryPayload,
 } from "@/lib/field-diary";
+import { validateCoordinatePair } from "@/lib/coordinates";
+import { fieldDiaryRuleColumns, fieldDiaryRuleErrors, fieldDiaryRuleFields } from "@/lib/field-diary-validation";
 import { classifyFieldDiaryImport, diffFieldDiaryEntries } from "@/lib/imports/conflict-detection";
+import { parsePointExecutionStatus, validateRelocation } from "@/lib/point-execution-status";
 import { parseCampaignWorkbook } from "@/lib/imports/campaigns";
 import { MAX_IMPORT_FILE_BYTES } from "@/lib/imports/excel";
 import { campaignPointToFieldDiaryPayload } from "@/lib/imports/field-spreadsheet-to-diary";
@@ -38,6 +41,9 @@ const COL = {
   followUpNotes: 16,
   dailySummary: 17,
   status: 18,
+  // Opcionais (modelo a partir da versão 2.0.2): vazias em planilhas antigas.
+  executionStatus: 19,
+  relocationReason: 20,
 } as const;
 
 type FieldDiaryImportRow = {
@@ -69,8 +75,10 @@ type FieldDiaryImportRow = {
   created_by_name?: string | null;
   created_at: string;
   updated_at: string;
-  latitude?: string | null;
-  longitude?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  execution_status?: string | null;
+  relocation_reason?: string | null;
   photos?: unknown;
   governance_status?: string | null;
   collection_order?: number | null;
@@ -185,6 +193,7 @@ export async function POST(request: Request) {
       if (campaignImport.missingFields.length) {
         errors.push(`Campos esperados ausentes na planilha: ${campaignImport.missingFields.join(", ")}`);
       }
+      errors.push(...campaignImport.rowIssues);
     } catch (err) {
       return NextResponse.json({ error: err instanceof Error ? err.message : "Erro ao processar planilha de campo." }, { status: 400 });
     }
@@ -218,6 +227,29 @@ export async function POST(request: Request) {
       ) as FieldDiaryPayload["requiresFollowUp"];
 
       const campaignName = cellText(row, COL.campaignName);
+      const rowLabel = `Linha ${rowNumber}${cellText(row, COL.sia) ? ` (${cellText(row, COL.sia)})` : ""}`;
+
+      // Coordenada recusada não entra no banco; o resto da linha é importado.
+      const coordinates = validateCoordinatePair(cellText(row, COL.latitude), cellText(row, COL.longitude));
+      if (!coordinates.ok) {
+        errors.push(`${rowLabel}: ${coordinates.error} A coordenada não foi importada.`);
+      }
+
+      // Situação do ponto: "Realocado" só com motivo; sem motivo, a situação é recusada.
+      const rawExecutionStatus = cellText(row, COL.executionStatus);
+      const relocationReason = cellText(row, COL.relocationReason);
+      let executionStatus = parsePointExecutionStatus(rawExecutionStatus) ?? undefined;
+      if (rawExecutionStatus && !executionStatus) {
+        errors.push(
+          `${rowLabel}: situação “${rawExecutionStatus}” não reconhecida (use Planejado, Realizado, Não realizado, Realocado ou Bloqueado). A situação não foi importada.`,
+        );
+      }
+      const relocationError = validateRelocation(executionStatus, relocationReason);
+      if (relocationError) {
+        errors.push(`${rowLabel}: ${relocationError} A situação “Realocado” não foi importada.`);
+        executionStatus = undefined;
+      }
+
       const orderKey = `${campaignName}|${campaignDay}`;
       const collectionOrder = (orderCounters.get(orderKey) ?? 0) + 1;
       orderCounters.set(orderKey, collectionOrder);
@@ -236,8 +268,10 @@ export async function POST(request: Request) {
         sia: cellText(row, COL.sia) || null,
         samplesReplicasEdna: "",
         zooplanktonId: "",
-        latitude: cellText(row, COL.latitude) || null,
-        longitude: cellText(row, COL.longitude) || null,
+        latitude: coordinates.ok && coordinates.latitude !== null ? String(coordinates.latitude) : null,
+        longitude: coordinates.ok && coordinates.longitude !== null ? String(coordinates.longitude) : null,
+        executionStatus,
+        relocationReason: executionStatus === "relocated" ? relocationReason : "",
         municipality: cellText(row, COL.municipality),
         activities,
         waterVisualConditions,
@@ -260,7 +294,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A planilha não contém registros para importar." }, { status: 400 });
   }
 
-  const incomingPlan = dedupeIncomingEntries(payloads.map(createEntry));
+  const incomingPlan = dedupeIncomingEntries(payloads.map(createEntry).filter((entry) => {
+    // Última conferência antes do banco (as linhas já foram tratadas acima).
+    const [ruleError] = fieldDiaryRuleErrors(entry);
+    if (ruleError) {
+      errors.push(`${entry.locationName || entry.sia || "Registro"} em ${entry.entryDate}: ${ruleError} O registro não foi importado.`);
+      return false;
+    }
+    return true;
+  }));
   const entries = incomingPlan.entries;
   errors.push(...incomingPlan.warnings);
   const supabase = createOptionalSupabaseClient();
@@ -574,8 +616,7 @@ function toRow(entry: FieldDiaryEntry): FieldDiaryImportRow {
     sia: entry.sia || null,
     samples_replicas_edna: entry.samplesReplicasEdna || null,
     zooplankton_id: entry.zooplanktonId || null,
-    latitude: entry.latitude || null,
-    longitude: entry.longitude || null,
+    ...fieldDiaryRuleColumns(entry),
     municipality: entry.municipality,
     activities: entry.activities,
     water_visual_conditions: entry.waterVisualConditions,
@@ -613,8 +654,7 @@ function fromRow(row: FieldDiaryImportRow): FieldDiaryEntry {
     sia: row.sia ?? "",
     samplesReplicasEdna: row.samples_replicas_edna ?? "",
     zooplanktonId: row.zooplankton_id ?? "",
-    latitude: row.latitude ?? "",
-    longitude: row.longitude ?? "",
+    ...fieldDiaryRuleFields(row),
     municipality: row.municipality,
     activities: row.activities,
     waterVisualConditions: row.water_visual_conditions,
@@ -697,8 +737,10 @@ function mergeRows(existing: FieldDiaryImportRow, incoming: FieldDiaryImportRow)
     sia: incoming.sia || existing.sia,
     samples_replicas_edna: incoming.samples_replicas_edna || existing.samples_replicas_edna,
     zooplankton_id: incoming.zooplankton_id || existing.zooplankton_id,
-    latitude: incoming.latitude || existing.latitude,
-    longitude: incoming.longitude || existing.longitude,
+    latitude: incoming.latitude ?? existing.latitude,
+    longitude: incoming.longitude ?? existing.longitude,
+    execution_status: incoming.execution_status || existing.execution_status,
+    relocation_reason: incoming.relocation_reason || existing.relocation_reason,
     municipality: incoming.municipality || existing.municipality,
     activities: incoming.activities?.length ? incoming.activities : existing.activities,
     water_visual_conditions: incoming.water_visual_conditions?.length

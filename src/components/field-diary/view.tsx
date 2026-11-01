@@ -4,7 +4,8 @@ import { Pencil } from "lucide-react";
 import { useEffect, useState } from "react";
 import { formatDate } from "@/components/field-diary/helpers";
 import { DetailBlock, Dialog, Info } from "@/components/field-diary/ui";
-import type { FieldDiaryEntry } from "@/lib/field-diary";
+import { effectiveExecutionStatus, type FieldDiaryEntry } from "@/lib/field-diary";
+import { pointExecutionStatusLabels } from "@/lib/point-execution-status";
 
 const governanceLabels: Record<string, string> = {
   importado: "Preliminar (importado)",
@@ -48,6 +49,7 @@ export function FieldDiaryView({
           <Info label="ID Zooplâncton" value={entry.zooplanktonId || "Não informado"} />
           <Info label="Latitude" value={entry.latitude || "Não informado"} />
           <Info label="Longitude" value={entry.longitude || "Não informado"} />
+          <Info label="Situação do ponto" value={pointExecutionStatusLabels[effectiveExecutionStatus(entry)]} />
           <Info label="Município" value={entry.municipality} />
           <Info label="Condições climáticas" value={entry.weatherConditions || "Não informado"} />
           <Info label="Acessibilidade" value={entry.pointAccessibility || "Não informado"} />
@@ -67,6 +69,9 @@ export function FieldDiaryView({
           />
         </div>
 
+        {effectiveExecutionStatus(entry) === "relocated" ? (
+          <DetailBlock label="Motivo da realocação" value={entry.relocationReason || "Não informado"} />
+        ) : null}
         <DetailBlock label="Atividades realizadas" value={entry.activities.join(", ") || "Não informado"} />
         <DetailBlock label="Condições visuais da água" value={entry.waterVisualConditions.join(", ") || "Não informado"} />
         {entry.hasOccurrence ? (
