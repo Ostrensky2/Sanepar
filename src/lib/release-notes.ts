@@ -84,6 +84,15 @@ export const MAJOR_RELEASES: MajorRelease[] = [
     ],
     updates: [
       {
+        version: "2.0.3",
+        date: "04/11/2026",
+        items: [
+          "Diário de campo: quando a nuvem recusa um registro, o formulário passa a dizer o motivo (sessão expirada, perfil sem permissão, sem conexão ou recusa do banco) e o que fazer, e os dados preenchidos continuam no formulário.",
+          "O botão “Salvar registro” espera a foto terminar de subir e não grava duas vezes com toques repetidos. O erro do envio da foto não some mais quando aparece outro aviso.",
+          "O servidor registra no log o motivo de cada gravação recusada pelo banco, para o suporte achar a causa.",
+        ],
+      },
+      {
         version: "2.0.2",
         date: "01/11/2026",
         items: [

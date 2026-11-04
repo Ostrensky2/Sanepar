@@ -90,11 +90,29 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  return writeEntry(request, "insert");
+  return writeEntrySafely(request, "insert");
 }
 
 export async function PUT(request: Request) {
-  return writeEntry(request, "upsert");
+  return writeEntrySafely(request, "upsert");
+}
+
+async function writeEntrySafely(request: Request, mode: "insert" | "upsert") {
+  try {
+    return await writeEntry(request, mode);
+  } catch (error) {
+    if (error instanceof FieldDiaryValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    console.error("[field-diary] falha inesperada ao gravar", {
+      mode,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      { error: "Não foi possível salvar o registro do Diário de campo por uma falha no servidor." },
+      { status: 500 },
+    );
+  }
 }
 
 async function writeEntry(request: Request, mode: "insert" | "upsert") {
@@ -176,8 +194,17 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
   const { data, error } = result;
 
   if (error) {
+    // Fica no log da Vercel: sem isto não há como saber depois por que o banco recusou.
+    console.error("[field-diary] gravação recusada pelo banco", {
+      mode,
+      entryId: entry.id,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
     return NextResponse.json(
-      { error: "Não foi possível salvar o registro do Diário de campo." },
+      { error: describeDatabaseError(error) },
       { status: 500 },
     );
   }
@@ -207,6 +234,21 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
     entry: savedEntry,
     persistence: "cloud",
   });
+}
+
+function describeDatabaseError(error: { code?: string; message?: string }) {
+  const base = "Não foi possível salvar o registro do Diário de campo.";
+  switch (error.code) {
+    case "23514":
+      return `${base} O banco recusou um dos valores (coordenada, situação do ponto ou motivo da realocação).`;
+    case "23505":
+      return `${base} Já existe um registro igual para este ponto e data.`;
+    case "22P02":
+    case "22003":
+      return `${base} Um dos campos tem formato inválido.`;
+    default:
+      return base;
+  }
 }
 
 async function prepareInsertRow(

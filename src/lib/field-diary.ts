@@ -265,16 +265,16 @@ export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
     });
 
     if (!response.ok) {
+      const rejection = (await response.json().catch(() => ({}))) as { error?: unknown };
+      const serverMessage = typeof rejection.error === "string" ? rejection.error.trim() : "";
+
       // Recusa de validação (coordenada, motivo da realocação, duplicidade): o
       // registro não pode ficar salvo só no navegador; a mensagem volta ao formulário.
       if (response.status === 400 || response.status === 409 || response.status === 422) {
-        const rejection = (await response.json().catch(() => ({}))) as { error?: unknown };
         return {
           entry,
           persistence: "none" as const,
-          error: typeof rejection.error === "string" && rejection.error
-            ? rejection.error
-            : "O registro foi recusado. Confira os dados e tente de novo.",
+          error: serverMessage || "O registro foi recusado. Confira os dados e tente de novo.",
         };
       }
 
@@ -284,7 +284,11 @@ export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
         return { entry, persistence: "browser" as const };
       }
 
-      return { entry, persistence: "none" as const };
+      return {
+        entry,
+        persistence: "none" as const,
+        error: fieldDiarySaveFailureMessage(response.status, serverMessage),
+      };
     }
 
     const result = (await response.json()) as { entry?: unknown };
@@ -303,8 +307,34 @@ export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
       return { entry, persistence: "browser" as const };
     }
 
-    return { entry, persistence: "none" as const };
+    return { entry, persistence: "none" as const, error: FIELD_DIARY_OFFLINE_MESSAGE };
   }
+}
+
+const FIELD_DIARY_KEEP_DATA = "Os dados preenchidos continuam no formulário.";
+const FIELD_DIARY_OFFLINE_MESSAGE =
+  `Sem conexão com o servidor: o registro não foi salvo. Confira a internet e toque em “Salvar registro” de novo. ${FIELD_DIARY_KEEP_DATA}`;
+
+/**
+ * Mensagem para quando a nuvem recusa a gravação por um motivo que não é de
+ * preenchimento. Antes o app trocava o motivo real por uma frase genérica, e
+ * quem estava em campo não sabia o que fazer.
+ */
+export function fieldDiarySaveFailureMessage(status: number, serverMessage = "") {
+  if (status === 401) {
+    return `Sua sessão expirou: o registro não foi salvo. Entre de novo no sistema (de preferência em outra aba, para não perder o formulário) e salve outra vez. ${FIELD_DIARY_KEEP_DATA}`;
+  }
+
+  if (status === 403) {
+    return `${serverMessage || "Seu perfil não tem permissão para gravar registros de campo."} O registro não foi salvo. Peça ao administrador para conferir a permissão “Importar planilhas” da sua categoria. ${FIELD_DIARY_KEEP_DATA}`;
+  }
+
+  if (status === 413) {
+    return `O registro ficou grande demais para o envio. Remova uma foto e tente de novo. ${FIELD_DIARY_KEEP_DATA}`;
+  }
+
+  const reason = serverMessage || "A nuvem não confirmou a gravação.";
+  return `${reason} O registro não foi publicado para outros usuários (erro ${status}). Tente de novo em instantes. ${FIELD_DIARY_KEEP_DATA}`;
 }
 
 function mergeLocalFieldDiaryEntry(

@@ -48,9 +48,10 @@ export function FieldDiaryForm({
   message: string;
   campaignScope?: FieldDiaryCampaignScope;
   onChange: (entry: FieldDiaryPayload) => void;
-  onSave: (entry: FieldDiaryPayload) => void;
+  onSave: (entry: FieldDiaryPayload) => void | Promise<void>;
   onClose: () => void;
 }) {
+  const [isSaving, setIsSaving] = useState(false);
   const [uploadingPhotoIds, setUploadingPhotoIds] = useState<string[]>([]);
   const [uploadMessage, setUploadMessage] = useState("");
   const [fieldDiaryPointOptions, setPointOptions] = useState<FieldDiaryPointOption[]>([]);
@@ -205,9 +206,21 @@ export function FieldDiaryForm({
     <Dialog title={entry.id ? "Editar registro" : "Novo registro"} onClose={onClose}>
       <form
         className="space-y-5"
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
-          onSave(entry);
+          if (isSaving) {
+            return;
+          }
+          if (uploadingPhotoIds.length) {
+            setUploadMessage("Aguarde o envio da foto terminar antes de salvar o registro.");
+            return;
+          }
+          setIsSaving(true);
+          try {
+            await onSave(entry);
+          } finally {
+            setIsSaving(false);
+          }
         }}
       >
         <div className="grid gap-4 md:grid-cols-2">
@@ -613,8 +626,11 @@ export function FieldDiaryForm({
         </fieldset>
 
         {pointOptionsMessage ? <p role="status" className="text-sm">{pointOptionsMessage}</p> : null}
-        {message || uploadMessage ? (
-          <p className="text-sm font-semibold text-[var(--brand-danger)]">{message || uploadMessage}</p>
+        {uploadMessage ? (
+          <p role="alert" className="text-sm font-semibold text-[var(--brand-danger)]">{uploadMessage}</p>
+        ) : null}
+        {message && message !== uploadMessage ? (
+          <p role="alert" className="text-sm font-semibold text-[var(--brand-danger)]">{message}</p>
         ) : null}
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
@@ -627,9 +643,10 @@ export function FieldDiaryForm({
           </button>
           <button
             type="submit"
-            className="rounded-xl bg-[var(--brand-navy-strong)] px-4 py-3 text-sm font-bold text-white transition hover:bg-[var(--brand-navy)]"
+            disabled={isSaving || uploadingPhotoIds.length > 0}
+            className="rounded-xl bg-[var(--brand-navy-strong)] px-4 py-3 text-sm font-bold text-white transition hover:bg-[var(--brand-navy)] disabled:cursor-wait disabled:opacity-70"
           >
-            Salvar registro
+            {isSaving ? "Salvando…" : uploadingPhotoIds.length ? "Enviando foto…" : "Salvar registro"}
           </button>
         </div>
       </form>
