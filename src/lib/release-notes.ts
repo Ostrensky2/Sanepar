@@ -84,6 +84,15 @@ export const MAJOR_RELEASES: MajorRelease[] = [
     ],
     updates: [
       {
+        version: "2.0.4",
+        date: "04/11/2026",
+        items: [
+          "Diário de campo: o botão “+ Novo registro” voltou a gravar na nuvem. Ele misturava o clique do botão nos dados do registro e o envio falhava com “Sem conexão com o servidor”, embora a internet estivesse normal. O “+ Registrar ponto” já funcionava.",
+          "O app passa a enviar só os campos do registro, e um campo estranho não impede mais a gravação.",
+          "Quando a foto termina de subir, o formulário não apaga mais o que foi digitado enquanto ela subia.",
+        ],
+      },
+      {
         version: "2.0.3",
         date: "04/11/2026",
         items: [

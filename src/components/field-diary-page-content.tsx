@@ -421,7 +421,11 @@ export function FieldDiaryPageContent({
   }).length;
   const shouldShowCompleteList = hasActiveDiaryCampaign && viewMode === "list";
 
-  function openNewForm(defaults: Partial<FieldDiaryPayload> = {}) {
+  function openNewForm(rawDefaults: Partial<FieldDiaryPayload> = {}) {
+    // Proteção: um clique passado direto como argumento (onClick={openNewForm})
+    // trazia o evento do React para dentro do registro, com referências
+    // circulares que impediam o envio para a nuvem.
+    const defaults = isPlainDefaults(rawDefaults) ? rawDefaults : {};
     if (!isCampaignScoped && !selectedDiaryCampaign && !defaults.campaignName && !defaults.campaignId) {
       setMessage("Escolha a campanha antes de criar um registro no Diário de campo.");
       return;
@@ -593,7 +597,7 @@ export function FieldDiaryPageContent({
                   pending={isConsolidating}
                 />
               ) : null}
-              <NewEntryButton onClick={openNewForm} label="Novo registro" />
+              <NewEntryButton onClick={() => openNewForm()} label="Novo registro" />
             </div>
           }
         >
@@ -612,7 +616,7 @@ export function FieldDiaryPageContent({
                   pending={isConsolidating}
                 />
               ) : null}
-              <NewEntryButton onClick={openNewForm} label="Novo registro" />
+              <NewEntryButton onClick={() => openNewForm()} label="Novo registro" />
             </div>
           )}
         </div>
@@ -1179,4 +1183,10 @@ function diarySummaryParts(summary: { total: number; recorded: number; occurrenc
   if (summary.incomplete) parts.push({ text: count(summary.incomplete, "incompleto", "incompletos") });
   parts.push(summary.occurrence ? { text: count(summary.occurrence, "com ocorrência", "com ocorrência"), tone: "alert" } : { text: "nenhuma ocorrência relatada" });
   return parts;
+}
+
+function isPlainDefaults(value: unknown): value is Partial<FieldDiaryPayload> {
+  if (!value || typeof value !== "object") return false;
+  const prototype = Object.getPrototypeOf(value);
+  return (prototype === Object.prototype || prototype === null) && !("nativeEvent" in value);
 }

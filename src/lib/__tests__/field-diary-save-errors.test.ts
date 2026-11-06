@@ -56,3 +56,22 @@ describe("mensagens quando a nuvem recusa o registro de campo", () => {
     expect(fieldDiarySaveFailureMessage(413)).toMatch(/grande demais/);
   });
 });
+
+describe("registro com campos estranhos (ex.: clique do botão Novo registro)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("envia só os campos do registro, mesmo com objeto circular misturado", async () => {
+    const circular: Record<string, unknown> = { tag: "BUTTON" };
+    circular.self = circular;
+    const fetchMock = respond(500, { error: "falha simulada" });
+    vi.stubGlobal("fetch", fetchMock);
+    const entry = { ...payload(), nativeEvent: circular, target: circular } as ReturnType<typeof payload>;
+    const result = await saveFieldDiaryEntry(entry);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const sent = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(sent.entry.sia).toBe("SIA-1");
+    expect(sent.entry.nativeEvent).toBeUndefined();
+    expect(sent.entry.target).toBeUndefined();
+    expect("error" in result && result.error).not.toMatch(/Sem conexão/);
+  });
+});

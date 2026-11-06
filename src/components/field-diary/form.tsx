@@ -1,7 +1,7 @@
 "use client";
 
 import { Camera, Plus, Trash2, Upload } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   campaignOptions,
   inputClassName,
@@ -68,8 +68,15 @@ export function FieldDiaryForm({
     return () => controller.abort();
   }, []);
 
+  // Sempre a versão mais recente do formulário: o envio da foto termina depois de
+  // alguns segundos e não pode apagar o que foi digitado nesse meio tempo.
+  const latestEntryRef = useRef(entry);
+  latestEntryRef.current = entry;
+
   function update(next: Partial<FieldDiaryPayload>) {
-    onChange({ ...entry, ...next });
+    const merged = { ...latestEntryRef.current, ...next };
+    latestEntryRef.current = merged;
+    onChange(merged);
   }
   const executionStatus = effectiveExecutionStatus(entry);
   const coordinateCheck = validateCoordinatePair(entry.latitude, entry.longitude);
@@ -134,7 +141,7 @@ export function FieldDiaryForm({
   function addPhoto() {
     update({
       photos: [
-        ...(entry.photos ?? []),
+        ...(latestEntryRef.current.photos ?? []),
         {
           id: crypto.randomUUID(),
           url: "",
@@ -146,7 +153,7 @@ export function FieldDiaryForm({
 
   function updatePhoto(photoId: string, patch: Partial<FieldDiaryPhoto>) {
     update({
-      photos: (entry.photos ?? []).map((photo) =>
+      photos: (latestEntryRef.current.photos ?? []).map((photo) =>
         photo.id === photoId ? { ...photo, ...patch } : photo,
       ),
     });
@@ -154,7 +161,7 @@ export function FieldDiaryForm({
 
   function removePhoto(photoId: string) {
     update({
-      photos: (entry.photos ?? []).filter((photo) => photo.id !== photoId),
+      photos: (latestEntryRef.current.photos ?? []).filter((photo) => photo.id !== photoId),
     });
   }
 

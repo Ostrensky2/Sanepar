@@ -255,13 +255,25 @@ export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
     createdAt: localEntries.find((item) => item.id === payload.id)?.createdAt ?? now,
     updatedAt: now,
   };
+  let body: string;
+  try {
+    body = JSON.stringify({ entry: pickFieldDiaryEntryFields(entry) });
+  } catch (error) {
+    console.error("[field-diary] registro não pôde ser preparado para envio", error);
+    return {
+      entry,
+      persistence: "none" as const,
+      error: `O app não conseguiu preparar o registro para envio (erro interno). Feche o formulário, abra de novo e tente outra vez. ${FIELD_DIARY_KEEP_DATA}`,
+    };
+  }
+
   try {
     const response = await fetch("/api/field-diary", {
       method: entry.id === payload.id ? "PUT" : "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ entry }),
+      body,
     });
 
     if (!response.ok) {
@@ -309,6 +321,25 @@ export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
 
     return { entry, persistence: "none" as const, error: FIELD_DIARY_OFFLINE_MESSAGE };
   }
+}
+
+/** Só os campos do registro vão para a nuvem; qualquer outro valor que tenha
+ * entrado no formulário por engano (como um evento de clique) fica de fora. */
+const FIELD_DIARY_ENTRY_FIELDS = [
+  "id", "campaignId", "campaignName", "campaignDay", "entryDate", "fieldTeamName", "fieldTeamMembers",
+  "collectionTime", "locationName", "sia", "samplesReplicasEdna", "zooplanktonId", "latitude", "longitude",
+  "executionStatus", "relocationReason", "municipality", "activities", "waterVisualConditions", "hasOccurrence",
+  "occurrenceType", "occurrenceDescription", "requiresFollowUp", "followUpNotes", "weatherConditions",
+  "pointAccessibility", "dailySummary", "status", "createdBy", "createdByName", "createdAt", "updatedAt", "photos",
+  "governanceStatus", "collectionOrder", "missingInImport",
+] as const satisfies ReadonlyArray<keyof FieldDiaryEntry>;
+
+export function pickFieldDiaryEntryFields(entry: FieldDiaryEntry) {
+  const picked: Partial<Record<keyof FieldDiaryEntry, unknown>> = {};
+  for (const field of FIELD_DIARY_ENTRY_FIELDS) {
+    if (entry[field] !== undefined) picked[field] = entry[field];
+  }
+  return picked;
 }
 
 const FIELD_DIARY_KEEP_DATA = "Os dados preenchidos continuam no formulário.";
