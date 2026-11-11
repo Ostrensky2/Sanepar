@@ -321,6 +321,34 @@ export function resolveCollectionDefaults(
   return { defaults: buildProjectCollectionDefaults(), sourceCampaignId: null };
 }
 
+/**
+ * Padrões de coleta para o registro de campo. Com sinal fraco a consulta à nuvem
+ * pode falhar; aí vale a última versão que este aparelho leu, em vez do padrão do
+ * projeto. São só valores propostos, que a pessoa confere antes de salvar.
+ */
+export async function readCollectionDefaultsForField(
+  campaignId: string,
+  campaigns: CampaignView[] = defaultCampaigns,
+): Promise<ResolvedCollectionDefaults> {
+  try {
+    const payload = await fetchCampaignManagementPayload();
+
+    if (payload.ok && payload.persistence === "cloud" && payload.management) {
+      const management = normalizeCampaignManagementById(campaigns, payload.management);
+      cacheCampaignManagement(management, { notify: false });
+      return resolveCollectionDefaults(management, campaignId, campaigns);
+    }
+  } catch {
+    // Sem resposta da nuvem: usa o que o aparelho guardou.
+  }
+
+  try {
+    return resolveCollectionDefaults(loadCampaignManagement(campaigns), campaignId, campaigns);
+  } catch {
+    return resolveCollectionDefaults({}, campaignId, campaigns);
+  }
+}
+
 export function buildDefaultCampaignManagementById(campaigns: CampaignView[]) {
   return Object.fromEntries(
     campaigns.map((campaign) => [campaign.id, buildDefaultCampaignManagement(campaign)]),

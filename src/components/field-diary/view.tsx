@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 import { formatDate } from "@/components/field-diary/helpers";
 import { DetailBlock, Dialog, Info } from "@/components/field-diary/ui";
 import { describeCoordinateSource, formatCollectionStart } from "@/lib/collection-capture";
+import { describeSampleCounts, describeSampleDetails, type FieldSample } from "@/lib/field-samples";
+import { fetchEntrySamples } from "@/lib/field-samples-client";
+import { getSampleType } from "@/lib/field-standard";
 import { effectiveExecutionStatus, type FieldDiaryEntry } from "@/lib/field-diary";
 import { pointExecutionStatusLabels } from "@/lib/point-execution-status";
 
@@ -89,6 +92,8 @@ export function FieldDiaryView({
         <DetailBlock label="Pendência ou encaminhamento" value={entry.followUpNotes || "Sem pendência registrada"} />
         <DetailBlock label="Resumo do dia" value={entry.dailySummary} />
 
+        <SamplesSection entryId={entry.id} />
+
         {photos.length ? (
           <div className="rounded-2xl border border-[var(--line-ghost)] bg-white p-4">
             <p className="text-caption font-bold text-slate-400">Imagens da coleta</p>
@@ -137,6 +142,71 @@ export function FieldDiaryView({
         </div>
       </div>
     </Dialog>
+  );
+}
+
+/** Amostras do ponto gravadas neste registro, com o código de cada etiqueta. */
+function SamplesSection({ entryId }: { entryId: string }) {
+  const [samples, setSamples] = useState<FieldSample[]>([]);
+  const [state, setState] = useState<"loading" | "ready" | "unavailable" | "error">("loading");
+
+  useEffect(() => {
+    let active = true;
+
+    void fetchEntrySamples(entryId).then((result) => {
+      if (!active) {
+        return;
+      }
+
+      if (!result.ok) {
+        setState("error");
+        return;
+      }
+
+      setSamples(result.samples);
+      setState(result.available ? "ready" : "unavailable");
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [entryId]);
+
+  // Banco ainda sem a tabela de amostras: o registro aparece como sempre apareceu.
+  if (state === "unavailable") {
+    return null;
+  }
+
+  return (
+    <div className="rounded-2xl border border-[var(--line-ghost)] bg-white p-4">
+      <p className="text-caption font-bold text-slate-400">Amostras do ponto</p>
+      {state === "loading" ? (
+        <p className="mt-2 text-xs text-[var(--ink-soft)]">Carregando…</p>
+      ) : state === "error" ? (
+        <p className="mt-2 text-xs text-[var(--ink-soft)]">Não foi possível carregar as amostras.</p>
+      ) : samples.length === 0 ? (
+        <p className="mt-2 text-sm text-slate-700">Nenhuma amostra registrada neste ponto.</p>
+      ) : (
+        <>
+          <p className="mt-2 text-sm text-slate-700">{describeSampleCounts(samples)}.</p>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            {samples.map((sample) => (
+              <li key={sample.id} className="rounded-xl bg-[var(--surface-soft)] px-3 py-2">
+                <p className="text-xs font-bold text-slate-500">
+                  {getSampleType(sample.sampleType).label} {sample.sequence}
+                </p>
+                <p className="break-all font-mono text-sm font-black text-[var(--brand-navy-strong)]">
+                  {sample.code}
+                </p>
+                <p className="mt-1 text-xs text-slate-700">
+                  {describeSampleDetails(sample) || "Sem detalhes informados."}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
   );
 }
 

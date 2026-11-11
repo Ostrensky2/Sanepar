@@ -68,6 +68,12 @@ import {
 import { campaignIdentityMatches } from "@/lib/campaign-identity";
 import { readSelectedCampaignId, writeSelectedCampaignId } from "@/lib/selected-campaign";
 import { getStoredSession } from "@/lib/auth-users";
+import {
+  samplesNotSavedMessage,
+  saveSamplesOfSavedEntry,
+  type FieldRecordSaveOutcome,
+  type SamplesChange,
+} from "@/lib/field-samples-client";
 import { readLastFieldTeam, rememberLastFieldTeam } from "@/lib/last-field-team";
 import { countLabel } from "@/lib/number-format";
 
@@ -465,9 +471,8 @@ export function FieldDiaryPageContent({
     });
   }
 
-  function openEditForm(entry: FieldDiaryEntry) {
-    setMessage("");
-    setFormEntry({
+  function entryToFormPayload(entry: FieldDiaryEntry): FieldDiaryPayload {
+    return {
       id: entry.id,
       campaignId: entry.campaignId || activeCampaignId,
       campaignName: entry.campaignName || activeCampaignName,
@@ -502,10 +507,18 @@ export function FieldDiaryPageContent({
       createdBy: entry.createdBy,
       createdByName: entry.createdByName,
       photos: entry.photos ?? [],
-    });
+    };
   }
 
-  async function handleSave(payload: FieldDiaryPayload) {
+  function openEditForm(entry: FieldDiaryEntry) {
+    setMessage("");
+    setFormEntry(entryToFormPayload(entry));
+  }
+
+  async function handleSave(
+    payload: FieldDiaryPayload,
+    samplesChange?: SamplesChange,
+  ): Promise<FieldRecordSaveOutcome> {
     const scopedPayload = campaignScope
       ? {
           ...payload,
@@ -517,7 +530,7 @@ export function FieldDiaryPageContent({
 
     if (error) {
       setMessage(error);
-      return;
+      return { savedEntryId: "", samples: null };
     }
 
     const result = await saveFieldDiaryEntry(scopedPayload);
@@ -526,7 +539,7 @@ export function FieldDiaryPageContent({
         ("error" in result && result.error) ||
           "A nuvem não confirmou a gravação. O registro não foi publicado para outros usuários.",
       );
-      return;
+      return { savedEntryId: "", samples: null };
     }
 
     setEntries((current) =>
@@ -536,12 +549,26 @@ export function FieldDiaryPageContent({
       ].sort((a, b) => b.entryDate.localeCompare(a.entryDate) || b.updatedAt.localeCompare(a.updatedAt)),
     );
     rememberLastFieldTeam(result.entry.createdByName);
+
+    // As amostras são gravadas depois do registro, com o id que a nuvem confirmou.
+    const samplesResult =
+      result.persistence === "cloud" ? await saveSamplesOfSavedEntry(result.entry.id, samplesChange) : null;
+
+    if (samplesResult && !samplesResult.ok) {
+      // O registro já está gravado: o formulário passa a editar esse registro, para a
+      // nova tentativa não criar outro.
+      setFormEntry(entryToFormPayload(result.entry));
+      setMessage(samplesNotSavedMessage(samplesResult));
+      return { savedEntryId: result.entry.id, samples: samplesResult };
+    }
+
     setFormEntry(null);
     setMessage(
       result.persistence === "cloud"
         ? "Registro salvo no Diário de campo."
         : "Registro salvo localmente. A nuvem será usada quando estiver disponível.",
     );
+    return { savedEntryId: result.entry.id, samples: samplesResult };
   }
 
   function selectDiaryCampaign(campaignId: string) {

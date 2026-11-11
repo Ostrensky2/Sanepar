@@ -52,8 +52,14 @@ O código tem 19 caracteres com um SIA de 4 dígitos. Ele não leva o laboratór
 destino nem a profundidade: os dois são dados da amostra e vão em colunas próprias.
 Amostras do mesmo ponto em profundidades diferentes se distinguem pela sequência.
 
-O código é gerado pelo aplicativo de campo, nunca digitado, e não muda depois que a
-amostra foi exportada.
+O código é gerado pelo aplicativo de campo, nunca digitado. Enquanto a amostra não
+foi exportada, ele acompanha a data e o ponto do registro: se alguém corrige o SIA
+ou a data, o código muda junto e o aplicativo mostra qual era o código gravado,
+para a etiqueta ser refeita. Depois da exportação o código não muda mais.
+
+Quem dá o código é o servidor, a partir da data e do ponto do registro que ficou
+gravado. Um código nunca se repete no banco. Se outro registro do mesmo ponto e dia
+já usou o número, o aplicativo avisa e oferece o próximo número livre (`AG4`, `AG5`).
 
 ## 4. Dados da amostra
 
@@ -64,6 +70,35 @@ posição na caixa.
 Tipos de conservação: `FILTRO_CONGELADO`, `FILTRO_EM_ALCOOL_COM_REFRIGERACAO`,
 `FILTRO_EM_ALCOOL_SEM_REFRIGERACAO`, `AMOSTRA_BRUTA_RESFRIADA`,
 `AMOSTRA_BRUTA_CONGELADA`, `OUTRO`.
+
+### Amostras no registro de campo
+
+As amostras ficam no bloco **"Amostras do ponto"** do registro de campo (em código:
+`src/lib/field-samples.ts`, tabela `field_diary_samples`).
+
+- O aplicativo propõe as amostras do padrão da campanha quando a pessoa toca em
+  "Iniciar coleta" num registro que ainda não tem amostra, ou pelo botão "Usar o
+  padrão da campanha". Abrir o formulário não cria amostra nenhuma.
+- "+ Amostra" acrescenta uma amostra do tipo escolhido, copiando os dados da última
+  do mesmo tipo. O tipo de uma amostra não muda depois de criada: para trocar,
+  remove-se a amostra e cria-se outra.
+- Profundidade só existe nos tipos que têm profundidade (água e plâncton), em
+  metros, com 0 para superfície. Volume ou massa segue a unidade do tipo.
+- As amostras são gravadas depois do registro, com o registro que a nuvem
+  confirmou. Se o registro foi salvo e as amostras não, o formulário fica aberto e
+  avisa.
+- Um registro aceita até 60 amostras. Um registro com amostras não pode ser
+  apagado do banco sem antes tirar as amostras.
+- Cada mudança na lista de amostras de um registro entra no histórico de
+  alterações, no campo "Amostras".
+- O aparelho lembra o último acondicionamento usado em cada tipo, para a próxima
+  amostra já vir preenchida.
+
+Os dois campos de texto antigos continuam no registro e são preenchidos sozinhos:
+"Amostras e Réplicas (eDNA)" recebe o número de amostras de água ("3 réplicas") e
+"ID Zooplâncton" recebe os códigos das amostras de plâncton. O aplicativo só
+escreve neles quando estão vazios ou quando o texto que está lá foi escrito por
+ele. O que a pessoa digitou não é trocado.
 
 ## 5. Parâmetros medidos em campo
 

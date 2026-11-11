@@ -10,6 +10,8 @@ import {
   type FieldDiaryPointOption,
 } from "@/components/field-diary/constants";
 import { CollectionStartPanel, type CaptureFeedback } from "@/components/field-diary/collection-start";
+import { SamplesPanel } from "@/components/field-diary/samples-panel";
+import { useEntrySamples } from "@/components/field-diary/use-entry-samples";
 import {
   findFieldDiaryPointOption,
   normalizeFieldDiaryPointKey,
@@ -25,6 +27,7 @@ import {
   plannedPatchForPointChange,
 } from "@/lib/collection-capture";
 import { readDeviceGps } from "@/lib/device-gps";
+import type { FieldRecordSaveOutcome, SamplesChange } from "@/lib/field-samples-client";
 import {
   fetchPlannedCoordinate,
   plannedCoordinateKey,
@@ -64,7 +67,14 @@ export function FieldDiaryForm({
   message: string;
   campaignScope?: FieldDiaryCampaignScope;
   onChange: (entry: FieldDiaryPayload) => void;
-  onSave: (entry: FieldDiaryPayload) => void | Promise<void>;
+  /**
+   * Salva o registro e, em seguida, as amostras dele (`samples` ausente = as
+   * amostras não mudaram). Devolve o que a nuvem respondeu sobre as amostras.
+   */
+  onSave: (
+    entry: FieldDiaryPayload,
+    samples?: SamplesChange,
+  ) => void | FieldRecordSaveOutcome | Promise<void | FieldRecordSaveOutcome>;
   onClose: () => void;
 }) {
   const [isSaving, setIsSaving] = useState(false);
@@ -99,10 +109,37 @@ export function FieldDiaryForm({
   const latestEntryRef = useRef(entry);
   latestEntryRef.current = entry;
 
+  // Amostras do ponto. O id é o de quando o formulário abriu: se o registro for
+  // salvo e as amostras não, elas continuam aqui para a nova tentativa.
+  const [initialEntryId] = useState(entry.id ?? "");
+  const entrySamples = useEntrySamples({ initialEntryId, campaignId: entry.campaignId ?? "" });
+
   function update(next: Partial<FieldDiaryPayload>) {
-    const merged = { ...latestEntryRef.current, ...next };
+    let merged = { ...latestEntryRef.current, ...next };
+
+    // O código das amostras leva a data e o ponto: os campos de texto antigos que o
+    // app preencheu acompanham.
+    if ("entryDate" in next || "sia" in next) {
+      merged = { ...merged, ...entrySamples.legacyPatch(merged) };
+    }
+
     latestEntryRef.current = merged;
     onChange(merged);
+  }
+
+  /** Depois de qualquer mudança nas amostras: atualiza os campos de texto antigos. */
+  function afterSamplesChange() {
+    const patch = entrySamples.legacyPatch(latestEntryRef.current);
+
+    if (Object.keys(patch).length) {
+      update(patch);
+    }
+  }
+
+  function showSamplesPanel() {
+    requestAnimationFrame(() =>
+      document.getElementById("field-diary-samples")?.scrollIntoView({ block: "center", behavior: "smooth" }),
+    );
   }
   const executionStatus = effectiveExecutionStatus(entry);
   const coordinateCheck = validateCoordinatePair(entry.latitude, entry.longitude);
@@ -221,8 +258,19 @@ export function FieldDiaryForm({
     // A hora é a do toque, não a de quando o GPS responde.
     const time = buildTimeCapture({ now: new Date(), currentEntryDate: latestEntryRef.current.entryDate });
     update(time.patch);
+
+    // Coleta iniciada num registro ainda sem amostras: entram as que a campanha propõe.
+    const proposed = entrySamples.proposeForCollectionStart();
+    const startNotices = proposed
+      ? [...time.notices, `Amostras propostas pelo padrão da campanha: ${proposed}. Confira em “Amostras do ponto”.`]
+      : time.notices;
+
+    if (proposed) {
+      afterSamplesChange();
+    }
+
     setCaptureFeedback({
-      notices: [...time.notices, "Lendo o GPS do celular…"],
+      notices: [...startNotices, "Lendo o GPS do celular…"],
       farFromPlanned: null,
       needsCoordinateCheck: false,
     });
@@ -230,7 +278,7 @@ export function FieldDiaryForm({
     const position = await capturePosition();
 
     if (position) {
-      setCaptureFeedback({ ...position, notices: [...time.notices, ...position.notices] });
+      setCaptureFeedback({ ...position, notices: [...startNotices, ...position.notices] });
     }
   }
 
@@ -362,11 +410,21 @@ export function FieldDiaryForm({
             setUploadMessage("Aguarde o envio da foto terminar antes de salvar o registro.");
             return;
           }
+          const samplesToSave = entrySamples.prepareSave(latestEntryRef.current);
+          if (!samplesToSave.ok) {
+            showSamplesPanel();
+            return;
+          }
           setIsSaving(true);
           try {
-            await onSave(entry);
+            const outcome = await onSave(latestEntryRef.current, samplesToSave.change);
+            if (isMountedRef.current && entrySamples.applySaveResult(outcome?.samples)) {
+              showSamplesPanel();
+            }
           } finally {
-            setIsSaving(false);
+            if (isMountedRef.current) {
+              setIsSaving(false);
+            }
           }
         }}
       >
@@ -496,6 +554,49 @@ export function FieldDiaryForm({
               placeholder="Nome da equipe"
             />
           </Field>
+          <div className="md:col-span-2">
+            <SamplesPanel
+              status={entrySamples.status}
+              samples={entrySamples.samples}
+              context={{
+                projectCode: entrySamples.projectCode,
+                date: entry.entryDate,
+                point: entry.sia ?? "",
+              }}
+              defaultsDescription={entrySamples.defaultsDescription}
+              removedCount={entrySamples.removedCount}
+              conflicts={entrySamples.conflicts}
+              message={entrySamples.message}
+              expandedIds={entrySamples.expandedIds}
+              onToggle={entrySamples.toggle}
+              onAdd={(sampleType) => {
+                entrySamples.add(sampleType);
+                afterSamplesChange();
+              }}
+              onChange={(id, patch) => {
+                entrySamples.change(id, patch);
+                afterSamplesChange();
+              }}
+              onRemove={(id) => {
+                entrySamples.remove(id);
+                afterSamplesChange();
+              }}
+              onUndoRemove={() => {
+                entrySamples.undoRemove();
+                afterSamplesChange();
+              }}
+              onUseDefaults={() => {
+                entrySamples.fillFromCampaignDefaults();
+                afterSamplesChange();
+              }}
+              onUseSuggestions={() => {
+                entrySamples.acceptSuggestedNumbers();
+                afterSamplesChange();
+              }}
+              onKeepSaved={() => entrySamples.reload(latestEntryRef.current.id ?? "")}
+              onRetry={() => entrySamples.reload(latestEntryRef.current.id ?? "")}
+            />
+          </div>
           <Field label="Amostras e Réplicas (eDNA)">
             <input
               value={entry.samplesReplicasEdna ?? ""}

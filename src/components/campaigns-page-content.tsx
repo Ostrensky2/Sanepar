@@ -45,6 +45,12 @@ import {
   type FieldDiaryEntry,
   type FieldDiaryPayload,
 } from "@/lib/field-diary";
+import {
+  samplesNotSavedMessage,
+  saveSamplesOfSavedEntry,
+  type FieldRecordSaveOutcome,
+  type SamplesChange,
+} from "@/lib/field-samples-client";
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 import {
   campaignPointMatchesSelectedCampaign,
@@ -589,12 +595,15 @@ export function CampaignsPageContent({
     setMapEditEntry(fieldDiaryEntryToPayload(entry, selectedCampaign.id, selectedCampaign.title));
   }
 
-  async function handleMapEditSave(payload: FieldDiaryPayload) {
+  async function handleMapEditSave(
+    payload: FieldDiaryPayload,
+    samplesChange?: SamplesChange,
+  ): Promise<FieldRecordSaveOutcome> {
     const error = validateEntry(payload);
 
     if (error) {
       setMapEditMessage(error);
-      return;
+      return { savedEntryId: "", samples: null };
     }
 
     const result = await saveFieldDiaryEntry(payload);
@@ -604,7 +613,7 @@ export function CampaignsPageContent({
         ("error" in result && result.error) ||
           "A nuvem não confirmou a gravação. O registro não foi publicado para outros usuários.",
       );
-      return;
+      return { savedEntryId: "", samples: null };
     }
 
     setDiaryEntries((current) =>
@@ -613,12 +622,24 @@ export function CampaignsPageContent({
         ...current.filter((entry) => entry.id !== result.entry.id),
       ].sort((a, b) => b.entryDate.localeCompare(a.entryDate) || b.updatedAt.localeCompare(a.updatedAt)),
     );
+
+    // As amostras são gravadas depois do registro, com o id que a nuvem confirmou.
+    const samplesResult =
+      result.persistence === "cloud" ? await saveSamplesOfSavedEntry(result.entry.id, samplesChange) : null;
+
+    if (samplesResult && !samplesResult.ok) {
+      setMapEditEntry(fieldDiaryEntryToPayload(result.entry, selectedCampaign.id, selectedCampaign.title));
+      setMapEditMessage(samplesNotSavedMessage(samplesResult));
+      return { savedEntryId: result.entry.id, samples: samplesResult };
+    }
+
     setMapEditEntry(null);
     setMapEditMessage(
       result.persistence === "cloud"
         ? "Fotos atualizadas no Diário de campo."
         : "Fotos atualizadas localmente. A nuvem será usada quando estiver disponível.",
     );
+    return { savedEntryId: result.entry.id, samples: samplesResult };
   }
 
   return (

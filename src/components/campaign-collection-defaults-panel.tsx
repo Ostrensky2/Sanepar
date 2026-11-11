@@ -65,8 +65,8 @@ export function CampaignCollectionDefaultsPanel({
             Padrões de coleta
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-[var(--ink-soft)]">
-            O que está aqui vai preencher as amostras do registro de campo, que chegam na próxima versão.
-            Vale para esta campanha e para as seguintes, até alguém mudar.
+            O que está aqui já vem preenchido nas amostras do registro de campo. Vale para esta campanha e
+            para as seguintes, até alguém mudar.
           </p>
         </div>
         <div className="flex flex-col items-start gap-2 lg:items-end">
