@@ -103,23 +103,72 @@ ele. O que a pessoa digitou não é trocado.
 
 ## 5. Parâmetros medidos em campo
 
-Um parâmetro é sempre um dado com nome, valor numérico e unidade, ligado à amostra.
-Nunca vai como texto em observações. O catálogo começa com os oito abaixo, e o
-aplicativo permite criar outros.
+Um parâmetro é sempre um dado com nome, valor numérico e unidade. Nunca vai como
+texto em observações. O catálogo começa com os oito abaixo, e o aplicativo permite
+criar outros.
 
-| Parâmetro | Unidade | Faixa plausível |
-| --- | --- | --- |
-| Temperatura do ar | °C | -20 a 60 |
-| Temperatura da água | °C | -2 a 40 |
-| pH | | 0 a 14 |
-| Condutividade | µS/cm | 0 a 100000 |
-| Salinidade | ups | 0 a 50 |
-| Oxigênio dissolvido | mg/L | 0 a 20 |
-| Transparência (Secchi) | m | 0 a 50 |
-| Turbidez | NTU | 0 a 4000 |
+| Parâmetro | Identificador | Unidade | Faixa esperada | Tem profundidade |
+| --- | --- | --- | --- | --- |
+| Temperatura do ar | `air_temperature` | °C | -20 a 60 | Não |
+| Temperatura da água | `water_temperature` | °C | -2 a 40 | Sim |
+| pH | `ph` | | 0 a 14 | Sim |
+| Condutividade | `conductivity` | µS/cm | 0 a 100000 | Sim |
+| Salinidade | `salinity` | ups | 0 a 50 | Sim |
+| Oxigênio dissolvido | `dissolved_oxygen` | mg/L | 0 a 20 | Sim |
+| Transparência (Secchi) | `secchi_transparency` | m | 0 a 50 | Não |
+| Turbidez | `turbidity` | NTU | 0 a 4000 | Sim |
 
-Fora da faixa o aplicativo avisa, mas não impede o registro. Cada medição guarda
-também a profundidade, a hora e o equipamento.
+Fora da faixa o aplicativo avisa, mas não impede o registro. Cada medição guarda o
+valor, a unidade do parâmetro na hora da medição, a profundidade (quando o parâmetro
+tem), a hora e o equipamento ou método.
+
+### Catálogo de parâmetros
+
+O catálogo vale para toda a equipe (em código: `src/lib/field-parameters.ts`, tabela
+`field_parameters`).
+
+- Cada parâmetro tem identificador, nome, unidade, faixa esperada, os tipos de
+  amostra em que é medido e se é medido numa profundidade.
+- "+ Parâmetro" cria um parâmetro novo, no registro de campo ou em "Padrões de
+  coleta". O identificador sai do nome, sem acento e em minúsculas (`clorofila_a`),
+  e nunca muda depois.
+- Dois parâmetros não podem ter o mesmo nome, sem contar acento e maiúscula. Quem
+  tenta criar um que já existe recebe o que está no catálogo.
+- Os oito do padrão não mudam de nome, unidade ou faixa. Os criados pela equipe
+  podem ser alterados em "Padrões de coleta".
+- Parâmetro nenhum é apagado. O que a equipe não usa é desativado: sai da lista de
+  quem mede, e as medições já gravadas continuam com o nome e a unidade.
+- O catálogo aceita até 200 parâmetros.
+
+### Parâmetros no registro de campo
+
+As medições ficam no bloco **"Parâmetros medidos"** do registro de campo (tabela
+`field_parameter_readings`).
+
+- A medição pertence ao registro do ponto, e não a uma amostra. Na planilha de
+  exportação ela acompanha cada amostra do ponto em que se aplica: o parâmetro vale
+  para o tipo da amostra e, quando os dois têm profundidade, a profundidade é a
+  mesma. Medição sem profundidade (temperatura do ar, Secchi) acompanha todas.
+- Um registro tem no máximo uma medição de cada parâmetro em cada profundidade. Para
+  medir o mesmo parâmetro em dois níveis, acrescenta-se outra medição com outra
+  profundidade.
+- Os parâmetros marcados na campanha aparecem prontos para preencher quando a pessoa
+  toca em "Iniciar coleta" num registro que ainda não tem medição, ou pelo botão
+  "Usar os parâmetros da campanha". Linha sem valor não é gravada.
+- O valor é digitado só como número, com vírgula ou ponto. A unidade vem do
+  catálogo e é gravada pelo servidor.
+- A profundidade proposta é a do padrão da campanha para água (0 = superfície). No
+  dia da coleta, a hora é anotada quando o valor é digitado. O aparelho lembra o
+  último equipamento usado em cada parâmetro.
+- As medições são gravadas depois do registro, com o registro que a nuvem confirmou.
+  Se o registro foi salvo e as medições não, o formulário fica aberto e avisa.
+- Se outro aparelho já gravou a mesma medição no mesmo registro, nada é trocado sem
+  a pessoa escolher entre ficar com a gravada ou gravar a dela por cima.
+- Um registro aceita até 100 medições. Um registro com medições não pode ser apagado
+  do banco sem antes tirar as medições, e a exclusão dos dados de uma campanha
+  confere isso primeiro, como faz com as amostras.
+- Cada mudança nas medições de um registro entra no histórico de alterações, no
+  campo "Parâmetros".
 
 ## 6. Padrões de coleta
 
@@ -131,6 +180,9 @@ passam para as campanhas seguintes enquanto ninguém mudar.
   `AGUA_CLORADA`, `AGUA_ULTRAPURA`).
 - De cada tipo de amostra: quantas amostras o aplicativo propõe por ponto,
   conservação, acondicionamento, volume ou massa, profundidade e especificação.
+- Parâmetros medidos em todo ponto: a lista dos parâmetros do catálogo que o
+  registro de campo já traz prontos para preencher (até 30). O padrão do projeto
+  começa sem nenhum marcado.
 
 ## 7. O que o celular registra sozinho
 

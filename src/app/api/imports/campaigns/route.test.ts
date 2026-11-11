@@ -38,6 +38,7 @@ beforeEach(() => {
   ]);
   fakeSupabase.seed("campaign_imports", [{ id: 1, campaign_key: CAMPAIGN.toLowerCase() }]);
   fakeSupabase.seed("field_diary_samples", []);
+  fakeSupabase.seed("field_parameter_readings", []);
 });
 
 describe("DELETE /api/imports/campaigns", () => {
@@ -71,8 +72,38 @@ describe("DELETE /api/imports/campaigns", () => {
     expect(fakeSupabase.operations().filter((operation) => operation.endsWith(":delete"))).toEqual([]);
   });
 
-  it("não se importa com amostra de outra campanha", async () => {
+  it("não apaga nada quando a campanha tem medição de parâmetro", async () => {
+    fakeSupabase.seed("field_parameter_readings", [
+      { id: "r1", entry_id: "e1" },
+      { id: "r2", entry_id: "e2" },
+    ]);
+
+    const response = await remove();
+    const payload = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(409);
+    expect(payload.error).toContain("tem 2 medições de parâmetros nos registros de campo");
+    expect(payload.error).toContain("Retire as medições dos registros");
+    expect(fakeSupabase.rows("field_diary_entries")).toHaveLength(3);
+    expect(fakeSupabase.rows("field_diary_change_log")).toHaveLength(2);
+    expect(fakeSupabase.operations().filter((operation) => operation.endsWith(":delete"))).toEqual([]);
+  });
+
+  it("diz as duas coisas quando a campanha tem amostra e medição", async () => {
+    fakeSupabase.seed("field_diary_samples", [{ id: "s1", entry_id: "e2" }]);
+    fakeSupabase.seed("field_parameter_readings", [{ id: "r1", entry_id: "e1" }]);
+
+    const response = await remove();
+    const payload = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(409);
+    expect(payload.error).toContain("tem 1 amostra registrada e 1 medição de parâmetro nos registros de campo");
+    expect(payload.error).toContain("Retire as amostras e as medições dos registros");
+  });
+
+  it("não se importa com amostra ou medição de outra campanha", async () => {
     fakeSupabase.seed("field_diary_samples", [{ id: "s1", entry_id: "e3" }]);
+    fakeSupabase.seed("field_parameter_readings", [{ id: "r1", entry_id: "e3" }]);
 
     const response = await remove();
 
@@ -80,8 +111,9 @@ describe("DELETE /api/imports/campaigns", () => {
     expect(fakeSupabase.rows("field_diary_entries").map((row) => row.id)).toEqual(["e3"]);
   });
 
-  it("segue como antes quando o banco ainda não tem a tabela de amostras", async () => {
+  it("segue como antes quando o banco ainda não tem as tabelas de amostras e de medições", async () => {
     fakeSupabase.setMissing("field_diary_samples");
+    fakeSupabase.setMissing("field_parameter_readings");
 
     const response = await remove();
 
@@ -91,6 +123,16 @@ describe("DELETE /api/imports/campaigns", () => {
 
   it("não apaga nada quando não consegue conferir as amostras", async () => {
     fakeSupabase.failOn("field_diary_samples", "select", { code: "57014", message: "timeout" });
+
+    const response = await remove();
+
+    expect(response.status).toBe(500);
+    expect(fakeSupabase.rows("field_diary_entries")).toHaveLength(3);
+    expect(fakeSupabase.rows("field_diary_change_log")).toHaveLength(2);
+  });
+
+  it("não apaga nada quando não consegue conferir as medições", async () => {
+    fakeSupabase.failOn("field_parameter_readings", "select", { code: "57014", message: "timeout" });
 
     const response = await remove();
 

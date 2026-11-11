@@ -46,11 +46,12 @@ import {
   type FieldDiaryPayload,
 } from "@/lib/field-diary";
 import {
-  samplesNotSavedMessage,
-  saveSamplesOfSavedEntry,
+  RECORD_NOT_SAVED,
+  collectedNotSavedMessage,
+  saveCollectedOfSavedEntry,
+  type CollectedChange,
   type FieldRecordSaveOutcome,
-  type SamplesChange,
-} from "@/lib/field-samples-client";
+} from "@/lib/field-collection-client";
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 import {
   campaignPointMatchesSelectedCampaign,
@@ -597,13 +598,13 @@ export function CampaignsPageContent({
 
   async function handleMapEditSave(
     payload: FieldDiaryPayload,
-    samplesChange?: SamplesChange,
+    collected?: CollectedChange,
   ): Promise<FieldRecordSaveOutcome> {
     const error = validateEntry(payload);
 
     if (error) {
       setMapEditMessage(error);
-      return { savedEntryId: "", samples: null };
+      return RECORD_NOT_SAVED;
     }
 
     const result = await saveFieldDiaryEntry(payload);
@@ -613,7 +614,7 @@ export function CampaignsPageContent({
         ("error" in result && result.error) ||
           "A nuvem não confirmou a gravação. O registro não foi publicado para outros usuários.",
       );
-      return { savedEntryId: "", samples: null };
+      return RECORD_NOT_SAVED;
     }
 
     setDiaryEntries((current) =>
@@ -623,14 +624,18 @@ export function CampaignsPageContent({
       ].sort((a, b) => b.entryDate.localeCompare(a.entryDate) || b.updatedAt.localeCompare(a.updatedAt)),
     );
 
-    // As amostras são gravadas depois do registro, com o id que a nuvem confirmou.
-    const samplesResult =
-      result.persistence === "cloud" ? await saveSamplesOfSavedEntry(result.entry.id, samplesChange) : null;
+    // As amostras e os parâmetros são gravados depois do registro, com o id que a
+    // nuvem confirmou.
+    const outcome: FieldRecordSaveOutcome =
+      result.persistence === "cloud"
+        ? await saveCollectedOfSavedEntry(result.entry.id, collected)
+        : { ...RECORD_NOT_SAVED, savedEntryId: result.entry.id };
+    const notSaved = collectedNotSavedMessage(outcome);
 
-    if (samplesResult && !samplesResult.ok) {
+    if (notSaved) {
       setMapEditEntry(fieldDiaryEntryToPayload(result.entry, selectedCampaign.id, selectedCampaign.title));
-      setMapEditMessage(samplesNotSavedMessage(samplesResult));
-      return { savedEntryId: result.entry.id, samples: samplesResult };
+      setMapEditMessage(notSaved);
+      return outcome;
     }
 
     setMapEditEntry(null);
@@ -639,7 +644,7 @@ export function CampaignsPageContent({
         ? "Fotos atualizadas no Diário de campo."
         : "Fotos atualizadas localmente. A nuvem será usada quando estiver disponível.",
     );
-    return { savedEntryId: result.entry.id, samples: samplesResult };
+    return outcome;
   }
 
   return (

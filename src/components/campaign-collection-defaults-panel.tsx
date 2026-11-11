@@ -1,6 +1,7 @@
 "use client";
 
 import { RotateCcw } from "lucide-react";
+import { CampaignFieldParametersPanel } from "@/components/campaign-field-parameters-panel";
 import {
   COLLECTION_TEXT_MAX_LENGTH,
   MAX_DEFAULT_REPLICAS,
@@ -279,6 +280,11 @@ export function CampaignCollectionDefaultsPanel({
           </p>
         </div>
       </div>
+
+      <CampaignFieldParametersPanel
+        selectedIds={defaults.fieldParameterIds}
+        onChange={(fieldParameterIds) => onChange({ ...defaults, fieldParameterIds })}
+      />
     </section>
   );
 }

@@ -10,7 +10,10 @@ import {
   type FieldDiaryPointOption,
 } from "@/components/field-diary/constants";
 import { CollectionStartPanel, type CaptureFeedback } from "@/components/field-diary/collection-start";
+import { ParametersPanel, readingValueInputId } from "@/components/field-diary/parameters-panel";
 import { SamplesPanel } from "@/components/field-diary/samples-panel";
+import { useCollectionDefaults } from "@/components/field-diary/use-collection-defaults";
+import { useEntryReadings } from "@/components/field-diary/use-entry-readings";
 import { useEntrySamples } from "@/components/field-diary/use-entry-samples";
 import {
   findFieldDiaryPointOption,
@@ -24,10 +27,11 @@ import {
   collectionRestartWarning,
   describeCoordinateSource,
   formatCollectionStart,
+  localIsoDate,
   plannedPatchForPointChange,
 } from "@/lib/collection-capture";
 import { readDeviceGps } from "@/lib/device-gps";
-import type { FieldRecordSaveOutcome, SamplesChange } from "@/lib/field-samples-client";
+import type { CollectedChange, FieldRecordSaveOutcome } from "@/lib/field-collection-client";
 import {
   fetchPlannedCoordinate,
   plannedCoordinateKey,
@@ -68,12 +72,12 @@ export function FieldDiaryForm({
   campaignScope?: FieldDiaryCampaignScope;
   onChange: (entry: FieldDiaryPayload) => void;
   /**
-   * Salva o registro e, em seguida, as amostras dele (`samples` ausente = as
-   * amostras não mudaram). Devolve o que a nuvem respondeu sobre as amostras.
+   * Salva o registro e, em seguida, as amostras e os parâmetros medidos dele (o que
+   * vier ausente em `collected` não mudou). Devolve o que a nuvem respondeu sobre eles.
    */
   onSave: (
     entry: FieldDiaryPayload,
-    samples?: SamplesChange,
+    collected?: CollectedChange,
   ) => void | FieldRecordSaveOutcome | Promise<void | FieldRecordSaveOutcome>;
   onClose: () => void;
 }) {
@@ -109,10 +113,12 @@ export function FieldDiaryForm({
   const latestEntryRef = useRef(entry);
   latestEntryRef.current = entry;
 
-  // Amostras do ponto. O id é o de quando o formulário abriu: se o registro for
-  // salvo e as amostras não, elas continuam aqui para a nova tentativa.
+  // Amostras do ponto e parâmetros medidos. O id é o de quando o formulário abriu:
+  // se o registro for salvo e eles não, continuam aqui para a nova tentativa.
   const [initialEntryId] = useState(entry.id ?? "");
-  const entrySamples = useEntrySamples({ initialEntryId, campaignId: entry.campaignId ?? "" });
+  const collectionDefaults = useCollectionDefaults(entry.campaignId ?? "");
+  const entrySamples = useEntrySamples({ initialEntryId, collectionDefaults });
+  const entryReadings = useEntryReadings({ initialEntryId, collectionDefaults });
 
   function update(next: Partial<FieldDiaryPayload>) {
     let merged = { ...latestEntryRef.current, ...next };
@@ -140,6 +146,19 @@ export function FieldDiaryForm({
     requestAnimationFrame(() =>
       document.getElementById("field-diary-samples")?.scrollIntoView({ block: "center", behavior: "smooth" }),
     );
+  }
+
+  function showParametersPanel() {
+    requestAnimationFrame(() =>
+      document.getElementById("field-diary-parameters")?.scrollIntoView({ block: "center", behavior: "smooth" }),
+    );
+  }
+
+  /** Leva o cursor para o valor da medição que acabou de entrar. */
+  function focusReading(readingId: string) {
+    if (readingId) {
+      requestAnimationFrame(() => document.getElementById(readingValueInputId(readingId))?.focus());
+    }
   }
   const executionStatus = effectiveExecutionStatus(entry);
   const coordinateCheck = validateCoordinatePair(entry.latitude, entry.longitude);
@@ -263,10 +282,22 @@ export function FieldDiaryForm({
     const proposed = entrySamples.proposeForCollectionStart();
     const startNotices = proposed
       ? [...time.notices, `Amostras propostas pelo padrão da campanha: ${proposed}. Confira em “Amostras do ponto”.`]
-      : time.notices;
+      : [...time.notices];
 
     if (proposed) {
       afterSamplesChange();
+    }
+
+    // O mesmo para os parâmetros que a campanha mede em todo ponto: as linhas abrem
+    // em branco e a pessoa só digita os valores.
+    const proposedParameters = entryReadings.proposeForCollectionStart();
+
+    if (proposedParameters) {
+      startNotices.push(
+        proposedParameters === 1
+          ? "1 parâmetro da campanha pronto para preencher em “Parâmetros medidos”."
+          : `${proposedParameters} parâmetros da campanha prontos para preencher em “Parâmetros medidos”.`,
+      );
     }
 
     setCaptureFeedback({
@@ -415,11 +446,26 @@ export function FieldDiaryForm({
             showSamplesPanel();
             return;
           }
+          const readingsToSave = entryReadings.prepareSave();
+          if (!readingsToSave.ok) {
+            showParametersPanel();
+            return;
+          }
           setIsSaving(true);
           try {
-            const outcome = await onSave(latestEntryRef.current, samplesToSave.change);
-            if (isMountedRef.current && entrySamples.applySaveResult(outcome?.samples)) {
-              showSamplesPanel();
+            const outcome = await onSave(latestEntryRef.current, {
+              samples: samplesToSave.change,
+              readings: readingsToSave.change,
+            });
+            if (isMountedRef.current) {
+              const samplesNeedAttention = entrySamples.applySaveResult(outcome?.samples);
+              const readingsNeedAttention = entryReadings.applySaveResult(outcome?.readings);
+
+              if (samplesNeedAttention) {
+                showSamplesPanel();
+              } else if (readingsNeedAttention) {
+                showParametersPanel();
+              }
             }
           } finally {
             if (isMountedRef.current) {
@@ -554,7 +600,7 @@ export function FieldDiaryForm({
               placeholder="Nome da equipe"
             />
           </Field>
-          <div className="md:col-span-2">
+          <div className="min-w-0 md:col-span-2">
             <SamplesPanel
               status={entrySamples.status}
               samples={entrySamples.samples}
@@ -595,6 +641,45 @@ export function FieldDiaryForm({
               }}
               onKeepSaved={() => entrySamples.reload(latestEntryRef.current.id ?? "")}
               onRetry={() => entrySamples.reload(latestEntryRef.current.id ?? "")}
+            />
+          </div>
+          {/* min-w-0: a lista de parâmetros tem nomes compridos e não pode alargar o formulário no celular. */}
+          <div className="min-w-0 md:col-span-2">
+            <ParametersPanel
+              status={entryReadings.status}
+              catalog={entryReadings.catalog}
+              readings={entryReadings.readings}
+              removedCount={entryReadings.removedCount}
+              message={entryReadings.message}
+              hasConflict={entryReadings.hasConflict}
+              expandedIds={entryReadings.expandedIds}
+              defaultParameterCount={entryReadings.defaultParameterCount}
+              onToggle={entryReadings.toggle}
+              onAdd={(parameterId) => focusReading(entryReadings.add(parameterId))}
+              onChange={(id, patch) =>
+                // A hora da medição só é anotada sozinha no dia da coleta.
+                entryReadings.change(id, patch, {
+                  stampTime: latestEntryRef.current.entryDate === localIsoDate(new Date()),
+                })
+              }
+              onRemove={entryReadings.remove}
+              onUndoRemove={entryReadings.undoRemove}
+              onUseDefaults={() => {
+                entryReadings.fillFromCampaignDefaults();
+              }}
+              onCreateParameter={async (input) => {
+                const created = await entryReadings.createParameter(input);
+
+                if (!created.ok) {
+                  return created.error;
+                }
+
+                focusReading(created.readingId);
+                return "";
+              }}
+              onKeepSaved={() => entryReadings.reload(latestEntryRef.current.id ?? "")}
+              onOverwriteSaved={entryReadings.overwriteSaved}
+              onRetry={() => entryReadings.reload(latestEntryRef.current.id ?? "")}
             />
           </div>
           <Field label="Amostras e Réplicas (eDNA)">

@@ -5,6 +5,15 @@ import { useEffect, useState } from "react";
 import { formatDate } from "@/components/field-diary/helpers";
 import { DetailBlock, Dialog, Info } from "@/components/field-diary/ui";
 import { describeCoordinateSource, formatCollectionStart } from "@/lib/collection-capture";
+import {
+  describeReadingDetails,
+  findParameter,
+  formatReadingValue,
+  rangeWarning,
+  type FieldParameter,
+  type FieldReading,
+} from "@/lib/field-parameters";
+import { fetchEntryReadings } from "@/lib/field-parameters-client";
 import { describeSampleCounts, describeSampleDetails, type FieldSample } from "@/lib/field-samples";
 import { fetchEntrySamples } from "@/lib/field-samples-client";
 import { getSampleType } from "@/lib/field-standard";
@@ -93,6 +102,7 @@ export function FieldDiaryView({
         <DetailBlock label="Resumo do dia" value={entry.dailySummary} />
 
         <SamplesSection entryId={entry.id} />
+        <ReadingsSection entryId={entry.id} />
 
         {photos.length ? (
           <div className="rounded-2xl border border-[var(--line-ghost)] bg-white p-4">
@@ -205,6 +215,76 @@ function SamplesSection({ entryId }: { entryId: string }) {
             ))}
           </ul>
         </>
+      )}
+    </div>
+  );
+}
+
+/** Parâmetros medidos neste registro: valor, unidade e onde, quando e com que aparelho. */
+function ReadingsSection({ entryId }: { entryId: string }) {
+  const [readings, setReadings] = useState<FieldReading[]>([]);
+  const [catalog, setCatalog] = useState<FieldParameter[]>([]);
+  const [state, setState] = useState<"loading" | "ready" | "unavailable" | "error">("loading");
+
+  useEffect(() => {
+    let active = true;
+
+    void fetchEntryReadings(entryId).then((result) => {
+      if (!active) {
+        return;
+      }
+
+      if (!result.ok) {
+        setState("error");
+        return;
+      }
+
+      setReadings(result.readings);
+      setCatalog(result.parameters);
+      setState(result.available ? "ready" : "unavailable");
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [entryId]);
+
+  // Banco ainda sem as tabelas de parâmetros: o registro aparece como sempre apareceu.
+  if (state === "unavailable") {
+    return null;
+  }
+
+  return (
+    <div className="rounded-2xl border border-[var(--line-ghost)] bg-white p-4">
+      <p className="text-caption font-bold text-slate-400">Parâmetros medidos</p>
+      {state === "loading" ? (
+        <p className="mt-2 text-xs text-[var(--ink-soft)]">Carregando…</p>
+      ) : state === "error" ? (
+        <p className="mt-2 text-xs text-[var(--ink-soft)]">Não foi possível carregar as medições.</p>
+      ) : readings.length === 0 ? (
+        <p className="mt-2 text-sm text-slate-700">Nenhum parâmetro medido neste ponto.</p>
+      ) : (
+        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+          {readings.map((reading) => {
+            const parameter = findParameter(catalog, reading.parameterId);
+            const outOfRange = parameter ? Boolean(rangeWarning(parameter, reading.value)) : false;
+
+            return (
+              <li key={reading.id} className="rounded-xl bg-[var(--surface-soft)] px-3 py-2">
+                <p className="text-xs font-bold text-slate-500">{parameter?.label ?? reading.parameterId}</p>
+                <p className="text-sm font-black text-[var(--brand-navy-strong)]">
+                  {formatReadingValue(reading.value, reading.unit)}
+                </p>
+                {describeReadingDetails(reading) ? (
+                  <p className="mt-1 text-xs text-slate-700">{describeReadingDetails(reading)}</p>
+                ) : null}
+                {outOfRange ? (
+                  <p className="mt-1 text-xs font-semibold text-amber-700">Fora da faixa esperada.</p>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

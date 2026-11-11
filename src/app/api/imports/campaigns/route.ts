@@ -29,27 +29,21 @@ export async function DELETE(request: Request) {
     const supabase = createOptionalSupabaseClient();
 
     if (supabase) {
-      // Antes de apagar qualquer coisa: registro com amostra não é apagado (a amostra
-      // tem etiqueta escrita). Sem esta conferência, o histórico sairia e os registros
-      // ficariam, porque o banco recusa apagar registro com amostra.
+      // Antes de apagar qualquer coisa: registro com amostra ou medição não é apagado
+      // (a amostra tem etiqueta escrita e a medição não dá para refazer). Sem esta
+      // conferência, o histórico sairia e os registros ficariam, porque o banco
+      // recusa apagar registro com amostra ou medição.
       const collected = await countCollectedData(supabase, campaignName);
 
       if (collected === null) {
         return NextResponse.json(
-          { error: "Não foi possível conferir as amostras da campanha. Nada foi apagado." },
+          { error: "Não foi possível conferir as amostras e as medições da campanha. Nada foi apagado." },
           { status: 500 },
         );
       }
 
-      if (collected > 0) {
-        return NextResponse.json(
-          {
-            error:
-              `A campanha "${campaignName}" tem ${collected === 1 ? "1 amostra registrada" : `${collected} amostras registradas`} ` +
-              "nos registros de campo. Nada foi apagado. Retire as amostras dos registros antes de excluir a campanha.",
-          },
-          { status: 409 },
-        );
+      if (collected.samples > 0 || collected.readings > 0) {
+        return NextResponse.json({ error: collectedDataMessage(campaignName, collected) }, { status: 409 });
       }
 
       // 1. Apagar histórico de alterações do Diário de campo
@@ -101,15 +95,17 @@ export async function DELETE(request: Request) {
 type SupabaseClient = NonNullable<ReturnType<typeof createOptionalSupabaseClient>>;
 
 // Tabelas ligadas ao registro de campo que impedem a exclusão dele.
-const COLLECTED_TABLES = ["field_diary_samples"] as const;
+const COLLECTED_TABLES = { samples: "field_diary_samples", readings: "field_parameter_readings" } as const;
 const PAGE_SIZE = 1000;
 const ID_BATCH_SIZE = 100;
 
+type CollectedCount = Record<keyof typeof COLLECTED_TABLES, number>;
+
 /**
- * Quantas amostras existem nos registros de campo da campanha. null = não deu para
- * conferir. Tabela que ainda não existe no banco conta como vazia.
+ * Quantas amostras e medições existem nos registros de campo da campanha. null = não
+ * deu para conferir. Tabela que ainda não existe no banco conta como vazia.
  */
-async function countCollectedData(supabase: SupabaseClient, campaignName: string): Promise<number | null> {
+async function countCollectedData(supabase: SupabaseClient, campaignName: string): Promise<CollectedCount | null> {
   const entryIds: string[] = [];
 
   for (let from = 0; ; from += PAGE_SIZE) {
@@ -132,12 +128,12 @@ async function countCollectedData(supabase: SupabaseClient, campaignName: string
     }
   }
 
-  let total = 0;
+  const count: CollectedCount = { samples: 0, readings: 0 };
 
-  for (const table of COLLECTED_TABLES) {
+  for (const kind of Object.keys(COLLECTED_TABLES) as Array<keyof typeof COLLECTED_TABLES>) {
     for (let start = 0; start < entryIds.length; start += ID_BATCH_SIZE) {
       const { data, error } = await supabase
-        .from(table)
+        .from(COLLECTED_TABLES[kind])
         .select("id")
         .in("entry_id", entryIds.slice(start, start + ID_BATCH_SIZE))
         .returns<Array<{ id: string }>>();
@@ -150,10 +146,30 @@ async function countCollectedData(supabase: SupabaseClient, campaignName: string
         return null;
       }
 
-      total += (data ?? []).length;
+      count[kind] += (data ?? []).length;
     }
   }
 
-  return total;
+  return count;
 }
 
+/** "A campanha "X" tem 2 amostras registradas e 1 medição de parâmetro nos registros de campo. …" */
+function collectedDataMessage(campaignName: string, count: CollectedCount) {
+  const found: string[] = [];
+  const toRemove: string[] = [];
+
+  if (count.samples > 0) {
+    found.push(count.samples === 1 ? "1 amostra registrada" : `${count.samples} amostras registradas`);
+    toRemove.push("as amostras");
+  }
+
+  if (count.readings > 0) {
+    found.push(count.readings === 1 ? "1 medição de parâmetro" : `${count.readings} medições de parâmetros`);
+    toRemove.push("as medições");
+  }
+
+  return (
+    `A campanha "${campaignName}" tem ${found.join(" e ")} nos registros de campo. Nada foi apagado. ` +
+    `Retire ${toRemove.join(" e ")} dos registros antes de excluir a campanha.`
+  );
+}

@@ -239,19 +239,26 @@ export type FieldParameterDefinition = {
   max: number | null;
   /** Tipos de amostra em que o parâmetro costuma ser medido. */
   appliesTo: SampleTypeId[];
+  /** false = não é medido numa profundidade (ex.: temperatura do ar, disco de Secchi). */
+  usesDepth: boolean;
   /** Coluna fixa que o Biolog já importa, quando existe. */
   biologColumn: string | null;
 };
 
+/** Identificador de um parâmetro no catálogo: minúsculas, números e sublinhado. */
+export const FIELD_PARAMETER_ID_PATTERN = /^[a-z][a-z0-9_]{1,39}$/;
+export const FIELD_PARAMETER_LABEL_MAX_LENGTH = 60;
+export const FIELD_PARAMETER_UNIT_MAX_LENGTH = 20;
+
 export const baseFieldParameters: FieldParameterDefinition[] = [
-  { id: "air_temperature", label: "Temperatura do ar", unit: "°C", min: -20, max: 60, appliesTo: sampleTypeIds, biologColumn: "Temp Ar (°C)" },
-  { id: "water_temperature", label: "Temperatura da água", unit: "°C", min: -2, max: 40, appliesTo: ["water", "plankton"], biologColumn: "Temp Água (°C)" },
-  { id: "ph", label: "pH", unit: "", min: 0, max: 14, appliesTo: ["water", "plankton", "soil"], biologColumn: "pH" },
-  { id: "conductivity", label: "Condutividade", unit: "µS/cm", min: 0, max: 100000, appliesTo: ["water", "plankton"], biologColumn: null },
-  { id: "salinity", label: "Salinidade", unit: "ups", min: 0, max: 50, appliesTo: ["water", "plankton"], biologColumn: "Salinidade (ups)" },
-  { id: "dissolved_oxygen", label: "Oxigênio dissolvido", unit: "mg/L", min: 0, max: 20, appliesTo: ["water", "plankton"], biologColumn: "Oxigênio Dissolvido" },
-  { id: "secchi_transparency", label: "Transparência (Secchi)", unit: "m", min: 0, max: 50, appliesTo: ["water", "plankton"], biologColumn: "Transparência" },
-  { id: "turbidity", label: "Turbidez", unit: "NTU", min: 0, max: 4000, appliesTo: ["water", "plankton"], biologColumn: "Turbidez" },
+  { id: "air_temperature", label: "Temperatura do ar", unit: "°C", min: -20, max: 60, appliesTo: sampleTypeIds, usesDepth: false, biologColumn: "Temp Ar (°C)" },
+  { id: "water_temperature", label: "Temperatura da água", unit: "°C", min: -2, max: 40, appliesTo: ["water", "plankton"], usesDepth: true, biologColumn: "Temp Água (°C)" },
+  { id: "ph", label: "pH", unit: "", min: 0, max: 14, appliesTo: ["water", "plankton", "soil"], usesDepth: true, biologColumn: "pH" },
+  { id: "conductivity", label: "Condutividade", unit: "µS/cm", min: 0, max: 100000, appliesTo: ["water", "plankton"], usesDepth: true, biologColumn: null },
+  { id: "salinity", label: "Salinidade", unit: "ups", min: 0, max: 50, appliesTo: ["water", "plankton"], usesDepth: true, biologColumn: "Salinidade (ups)" },
+  { id: "dissolved_oxygen", label: "Oxigênio dissolvido", unit: "mg/L", min: 0, max: 20, appliesTo: ["water", "plankton"], usesDepth: true, biologColumn: "Oxigênio Dissolvido" },
+  { id: "secchi_transparency", label: "Transparência (Secchi)", unit: "m", min: 0, max: 50, appliesTo: ["water", "plankton"], usesDepth: false, biologColumn: "Transparência" },
+  { id: "turbidity", label: "Turbidez", unit: "NTU", min: 0, max: 4000, appliesTo: ["water", "plankton"], usesDepth: true, biologColumn: "Turbidez" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -293,6 +300,8 @@ export type ConservationType = (typeof conservationTypes)[number]["value"];
 
 export const MAX_DEFAULT_REPLICAS = 20;
 export const COLLECTION_TEXT_MAX_LENGTH = 120;
+/** Quantos parâmetros o padrão da campanha pode propor em cada ponto. */
+export const MAX_DEFAULT_FIELD_PARAMETERS = 30;
 
 export type SampleTypeDefaults = {
   /** Quantas amostras deste tipo o app propõe em cada ponto (0 = não propõe). */
@@ -316,6 +325,11 @@ export type CollectionDefaults = {
   objective: SampleObjective;
   waterMatrix: WaterMatrix;
   sampleTypes: Record<SampleTypeId, SampleTypeDefaults>;
+  /**
+   * Parâmetros medidos em todo ponto (identificadores do catálogo), na ordem em que
+   * aparecem no registro. O app abre uma linha para cada um ao iniciar a coleta.
+   */
+  fieldParameterIds: string[];
 };
 
 export function buildProjectCollectionDefaults(): CollectionDefaults {
@@ -354,6 +368,7 @@ export function buildProjectCollectionDefaults(): CollectionDefaults {
         specification: "",
       },
     },
+    fieldParameterIds: [],
   };
 }
 
@@ -380,7 +395,28 @@ export function normalizeCollectionDefaults(value: unknown): CollectionDefaults 
     sampleTypes: Object.fromEntries(
       sampleTypeIds.map((id) => [id, normalizeSampleTypeDefaults(savedTypes[id], fallback.sampleTypes[id])]),
     ) as Record<SampleTypeId, SampleTypeDefaults>,
+    fieldParameterIds:
+      "fieldParameterIds" in value
+        ? normalizeFieldParameterIds(value.fieldParameterIds)
+        : [...fallback.fieldParameterIds],
   };
+}
+
+/** Lista de identificadores de parâmetro sem repetição, sem lixo e com tamanho limitado. */
+export function normalizeFieldParameterIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const ids: string[] = [];
+
+  for (const item of value) {
+    if (typeof item === "string" && FIELD_PARAMETER_ID_PATTERN.test(item) && !ids.includes(item)) {
+      ids.push(item);
+    }
+  }
+
+  return ids.slice(0, MAX_DEFAULT_FIELD_PARAMETERS);
 }
 
 function normalizeSampleTypeDefaults(value: unknown, fallback: SampleTypeDefaults): SampleTypeDefaults {

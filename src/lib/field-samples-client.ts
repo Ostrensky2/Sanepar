@@ -32,13 +32,6 @@ export type SamplesSaveResult =
       samples: FieldSample[] | null;
     };
 
-/** Resultado de salvar o registro e, em seguida, as amostras dele. */
-export type FieldRecordSaveOutcome = {
-  /** Identificador do registro gravado; vazio quando o registro não foi salvo. */
-  savedEntryId: string;
-  samples: SamplesSaveResult | null;
-};
-
 export async function fetchEntrySamples(entryId: string, signal?: AbortSignal): Promise<EntrySamplesRead> {
   try {
     const response = await fetch(`/api/field-diary/samples?entryId=${encodeURIComponent(entryId)}`, {

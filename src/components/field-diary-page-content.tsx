@@ -69,11 +69,12 @@ import { campaignIdentityMatches } from "@/lib/campaign-identity";
 import { readSelectedCampaignId, writeSelectedCampaignId } from "@/lib/selected-campaign";
 import { getStoredSession } from "@/lib/auth-users";
 import {
-  samplesNotSavedMessage,
-  saveSamplesOfSavedEntry,
+  RECORD_NOT_SAVED,
+  collectedNotSavedMessage,
+  saveCollectedOfSavedEntry,
+  type CollectedChange,
   type FieldRecordSaveOutcome,
-  type SamplesChange,
-} from "@/lib/field-samples-client";
+} from "@/lib/field-collection-client";
 import { readLastFieldTeam, rememberLastFieldTeam } from "@/lib/last-field-team";
 import { countLabel } from "@/lib/number-format";
 
@@ -517,7 +518,7 @@ export function FieldDiaryPageContent({
 
   async function handleSave(
     payload: FieldDiaryPayload,
-    samplesChange?: SamplesChange,
+    collected?: CollectedChange,
   ): Promise<FieldRecordSaveOutcome> {
     const scopedPayload = campaignScope
       ? {
@@ -530,7 +531,7 @@ export function FieldDiaryPageContent({
 
     if (error) {
       setMessage(error);
-      return { savedEntryId: "", samples: null };
+      return RECORD_NOT_SAVED;
     }
 
     const result = await saveFieldDiaryEntry(scopedPayload);
@@ -539,7 +540,7 @@ export function FieldDiaryPageContent({
         ("error" in result && result.error) ||
           "A nuvem não confirmou a gravação. O registro não foi publicado para outros usuários.",
       );
-      return { savedEntryId: "", samples: null };
+      return RECORD_NOT_SAVED;
     }
 
     setEntries((current) =>
@@ -550,16 +551,20 @@ export function FieldDiaryPageContent({
     );
     rememberLastFieldTeam(result.entry.createdByName);
 
-    // As amostras são gravadas depois do registro, com o id que a nuvem confirmou.
-    const samplesResult =
-      result.persistence === "cloud" ? await saveSamplesOfSavedEntry(result.entry.id, samplesChange) : null;
+    // As amostras e os parâmetros são gravados depois do registro, com o id que a
+    // nuvem confirmou.
+    const outcome: FieldRecordSaveOutcome =
+      result.persistence === "cloud"
+        ? await saveCollectedOfSavedEntry(result.entry.id, collected)
+        : { ...RECORD_NOT_SAVED, savedEntryId: result.entry.id };
+    const notSaved = collectedNotSavedMessage(outcome);
 
-    if (samplesResult && !samplesResult.ok) {
+    if (notSaved) {
       // O registro já está gravado: o formulário passa a editar esse registro, para a
       // nova tentativa não criar outro.
       setFormEntry(entryToFormPayload(result.entry));
-      setMessage(samplesNotSavedMessage(samplesResult));
-      return { savedEntryId: result.entry.id, samples: samplesResult };
+      setMessage(notSaved);
+      return outcome;
     }
 
     setFormEntry(null);
@@ -568,7 +573,7 @@ export function FieldDiaryPageContent({
         ? "Registro salvo no Diário de campo."
         : "Registro salvo localmente. A nuvem será usada quando estiver disponível.",
     );
-    return { savedEntryId: result.entry.id, samples: samplesResult };
+    return outcome;
   }
 
   function selectDiaryCampaign(campaignId: string) {

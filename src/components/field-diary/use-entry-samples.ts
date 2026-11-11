@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SamplesPanelStatus } from "@/components/field-diary/samples-panel";
-import { readCollectionDefaultsForField } from "@/lib/campaign-management";
+import type { CollectionDefaultsHandle } from "@/components/field-diary/use-collection-defaults";
 import {
   addSampleDraft,
   applySuggestedSequences,
@@ -28,7 +28,7 @@ import {
   type SamplesChange,
   type SamplesSaveResult,
 } from "@/lib/field-samples-client";
-import { buildProjectCollectionDefaults, type CollectionDefaults, type SampleTypeId } from "@/lib/field-standard";
+import type { SampleTypeId } from "@/lib/field-standard";
 import { readLastSamplePackaging } from "@/lib/last-sample-packaging";
 
 /** O que o código das amostras usa do registro que está no formulário. */
@@ -50,21 +50,27 @@ const EMPTY_LEGACY: LegacySampleFields = { samplesReplicasEdna: "", zooplanktonI
  * pessoa muda e monta o que vai para a nuvem na hora de salvar. Não mexe no
  * registro: quem aplica no registro o que as amostras pedem é o formulário.
  */
-export function useEntrySamples({ initialEntryId, campaignId }: { initialEntryId: string; campaignId: string }) {
+export function useEntrySamples({
+  initialEntryId,
+  collectionDefaults,
+}: {
+  initialEntryId: string;
+  /** Padrões de coleta da campanha do registro (ver useCollectionDefaults). */
+  collectionDefaults: CollectionDefaultsHandle;
+}) {
+  const { defaults, defaultsRef } = collectionDefaults;
   const [status, setStatus] = useState<SamplesPanelStatus>("loading");
   const [samples, setSamples] = useState<SampleDraft[]>([]);
   const [removed, setRemoved] = useState<SampleDraft[]>([]);
   const [conflicts, setConflicts] = useState<SampleCodeConflict[]>([]);
   const [message, setMessage] = useState("");
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
-  const [defaults, setDefaults] = useState<CollectionDefaults>(buildProjectCollectionDefaults);
 
   // Cópias sempre atuais, para os toques que acontecem antes da próxima renderização.
   const statusRef = useRef<SamplesPanelStatus>("loading");
   const samplesRef = useRef<SampleDraft[]>([]);
   const removedRef = useRef<SampleDraft[]>([]);
   const conflictsRef = useRef<SampleCodeConflict[]>([]);
-  const defaultsRef = useRef<CollectionDefaults>(defaults);
   // O que o app escreveu por último nos dois campos de texto antigos do registro.
   const legacyAutoRef = useRef<LegacySampleFields>(EMPTY_LEGACY);
   const dirtyRef = useRef(false);
@@ -138,21 +144,6 @@ export function useEntrySamples({ initialEntryId, campaignId }: { initialEntryId
       tokenRef.current += 1;
     };
   }, [initialEntryId, applyLoaded]);
-
-  useEffect(() => {
-    let active = true;
-
-    void readCollectionDefaultsForField(campaignId).then((resolved) => {
-      if (active) {
-        defaultsRef.current = resolved.defaults;
-        setDefaults(resolved.defaults);
-      }
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [campaignId]);
 
   function factoryOptions() {
     return {
