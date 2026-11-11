@@ -137,7 +137,8 @@ function describeFailure(status: number, serverMessage: string) {
   return serverMessage || `A nuvem não confirmou a gravação das amostras (erro ${status}).`;
 }
 
-function readSamples(value: unknown): FieldSample[] {
+/** Amostras como a nuvem devolve, já conferidas. O que não é amostra fica de fora. */
+export function readSamples(value: unknown): FieldSample[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -168,6 +169,7 @@ function readSamples(value: unknown): FieldSample[] {
       conservation,
       packaging: typeof raw.packaging === "string" ? raw.packaging : "",
       boxPosition: typeof raw.boxPosition === "string" ? raw.boxPosition : "",
+      exportedAt: typeof raw.exportedAt === "string" && raw.exportedAt ? raw.exportedAt : null,
     });
   }
 

@@ -57,6 +57,12 @@ foi exportada, ele acompanha a data e o ponto do registro: se alguém corrige o 
 ou a data, o código muda junto e o aplicativo mostra qual era o código gravado,
 para a etiqueta ser refeita. Depois da exportação o código não muda mais.
 
+"Exportação" é gerar a planilha para o Biolog (seção 8). Nesse momento a amostra
+recebe a marca de exportada, e o código, o tipo e o número dela ficam os que saíram
+na planilha, mesmo que a data ou o ponto do registro sejam corrigidos depois. Os
+outros dados da amostra (profundidade, volume, conservação, acondicionamento,
+posição) continuam podendo ser corrigidos.
+
 Quem dá o código é o servidor, a partir da data e do ponto do registro que ficou
 gravado. Um código nunca se repete no banco. Se outro registro do mesmo ponto e dia
 já usou o número, o aplicativo avisa e oferece o próximo número livre (`AG4`, `AG5`).
@@ -221,7 +227,8 @@ próximo registro já vir preenchido.
 
 ## 8. Planilha de exportação
 
-Arquivo `.xlsx` com duas abas de dados.
+Arquivo `.xlsx` com duas abas de dados e uma de consulta (`Catálogo de parâmetros`).
+A aba `Amostras` é sempre a primeira: é a que o Biolog lê.
 
 **Aba `Amostras`**, uma linha por amostra:
 
@@ -252,6 +259,65 @@ Regras do formato:
   sozinho. Não usar barra (`/`) em cabeçalho.
 - `Origem da Amostra` é calculada: para água, a matriz da campanha; para os outros
   tipos, o próprio tipo.
+
+### Como o Yva'e gera a planilha
+
+Em **Campanhas > Exportar > Planilha para o Biolog (.xlsx)**, para a campanha que
+está na tela. Antes de gerar, o aplicativo mostra o que vai e o que falta.
+
+O que entra:
+
+- Só registros de campo que têm amostra. Os outros ficam de fora e são contados.
+- Todas as amostras da campanha, sempre, inclusive as que já saíram numa planilha
+  anterior: o Biolog ignora a amostra que já importou (mesmo código, projeto,
+  campanha, ponto e data), então mandar de novo não duplica nada.
+- As linhas saem por campanha, data, hora e ponto; dentro do ponto, por tipo de
+  amostra e número.
+
+Como cada coluna é preenchida:
+
+- `Lab Destino`, `Empresa`, `Projeto (Short Name)` e `Objetivo`: padrões de coleta
+  da campanha (seção 6).
+- `Coletores`: as pessoas da equipe do registro, separadas por ponto e vírgula; sem
+  elas, o nome da equipe.
+- `Ponto de Coleta`: o ponto como está no código (`0136`).
+- `Volume Filtrado (mL)`: só para quantidade em mL. Massa e litros (solo, tecido,
+  ar) vão no começo da `Especificação` (`50 g; Margem`).
+- `Profundidade (m)`: só nos tipos que têm profundidade. `0` é superfície.
+- Colunas fixas de parâmetro (`Temp Ar (°C)`, `pH`…): a medição que vale para a
+  amostra. Havendo mais de uma, fica a mais rasa.
+- `Observações`: município, local, situação do ponto, motivo da realocação, origem
+  da coordenada, ocorrência e o identificador do registro no Yva'e.
+- Aba `Parâmetros`: uma linha para cada medição de cada amostra a que ela se aplica
+  (mesmo tipo e mesma profundidade; medição sem profundidade vale para todas).
+- Aba `Catálogo de parâmetros`: os parâmetros ativos e os desativados que têm
+  medição na planilha, com unidade, faixa esperada e a coluna fixa de cada um.
+
+O que o aplicativo aponta antes de gerar (a planilha sai do mesmo jeito; quem decide
+se manda é a pessoa):
+
+| Pendência | O Biolog recusa? |
+| --- | --- |
+| Registro sem hora da coleta | Sim |
+| Registro sem latitude e longitude | Sim |
+| Registro sem ponto de coleta (SIA) | Sim |
+| Coordenada que é a planejada do ponto, e não a medida no local | Não |
+| Código gravado que não confere mais com a data e o ponto do registro | Não |
+| Código já exportado que ficou o mesmo depois de o registro ser corrigido | Não |
+| Medição que não vale para nenhuma amostra do registro (outra profundidade) | Não |
+
+Depois que o arquivo sai, as amostras ficam marcadas como exportadas (coluna
+`exported_at`, migration `20261111150000_field_diary_samples_exported.sql`) e o
+histórico de cada registro ganha a linha "Exportação para o Biolog" com os códigos
+e quem exportou. A marca guarda a data da primeira exportação. Enquanto o banco não
+tiver essa coluna, a planilha é gerada igual e os códigos continuam acompanhando o
+registro.
+
+Uma amostra exportada ainda pode ser retirada do registro (a retirada fica no
+histórico). O formulário avisa que ela precisa ser retirada também no Biolog, porque
+o número dela volta a ficar livre no Yva'e.
+
+O arquivo se chama `yvae-biolog-{campanha}-{AAAA-MM-DD}.xlsx`.
 
 ### Situação no Biolog em 11/11/2026
 

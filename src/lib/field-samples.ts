@@ -44,6 +44,11 @@ export type FieldSample = {
   conservation: ConservationType;
   packaging: string;
   boxPosition: string;
+  /**
+   * Quando a amostra saiu na planilha do Biolog. Daí em diante o código, o tipo e o
+   * número dela não mudam mais. Vazio = ainda não exportada.
+   */
+  exportedAt?: string | null;
 };
 
 /** Amostra como está no formulário: os números ainda são o texto digitado. */
@@ -59,6 +64,11 @@ export type SampleDraft = {
   boxPosition: string;
   /** Código já gravado na nuvem; vazio enquanto a amostra é nova. */
   savedCode: string;
+  /**
+   * Quando a amostra saiu na planilha do Biolog; vazio = ainda não saiu. Depois de
+   * exportada, o código dela é o gravado e não acompanha mais a data e o ponto.
+   */
+  exportedAt?: string;
 };
 
 /** O que o código da etiqueta leva do registro de campo. */
@@ -71,7 +81,7 @@ export type SampleCodeContext = {
 };
 
 /** Amostra pronta para gravar (o que o aparelho envia para a nuvem). */
-export type SampleInput = Omit<FieldSample, "entryId" | "projectCode">;
+export type SampleInput = Omit<FieldSample, "entryId" | "projectCode" | "exportedAt">;
 
 /** Um código que já pertence a outra amostra, com o próximo número livre. */
 export type SampleCodeConflict = {
@@ -98,12 +108,17 @@ type DraftFactoryOptions = {
 
 /**
  * Código da amostra para a data e o ponto do registro. Enquanto faltar o ponto ou
- * a data, devolve o motivo em vez do código.
+ * a data, devolve o motivo em vez do código. Amostra que já saiu na planilha do
+ * Biolog fica com o código gravado.
  */
 export function sampleCodeOf(
-  sample: Pick<SampleDraft, "sampleType" | "sequence">,
+  sample: Pick<SampleDraft, "sampleType" | "sequence"> & Partial<Pick<SampleDraft, "savedCode" | "exportedAt">>,
   context: SampleCodeContext,
 ): { code: string; error: string } {
+  if (sample.exportedAt && sample.savedCode) {
+    return { code: sample.savedCode, error: "" };
+  }
+
   try {
     return {
       code: buildSampleCode({
@@ -121,6 +136,29 @@ export function sampleCodeOf(
     }
     throw error;
   }
+}
+
+/**
+ * O que impede gerar código para as amostras do registro (falta o ponto ou a data),
+ * ou vazio. As já exportadas não contam: o código delas não depende mais disso.
+ */
+export function sampleCodeProblem(drafts: SampleDraft[], context: SampleCodeContext) {
+  const open = drafts.find((draft) => !draft.exportedAt);
+
+  return open ? sampleCodeOf(open, context).error : "";
+}
+
+/** "11/11/2026": o dia em que a amostra saiu na planilha do Biolog, no relógio do aparelho. */
+export function exportedDateLabel(exportedAt: string | null | undefined) {
+  const moment = exportedAt ? new Date(exportedAt) : null;
+
+  if (!moment || Number.isNaN(moment.getTime())) {
+    return "";
+  }
+
+  return [moment.getDate(), moment.getMonth() + 1, moment.getFullYear()]
+    .map((part) => String(part).padStart(2, "0"))
+    .join("/");
 }
 
 /** Próximo número livre do tipo dentro do registro (1, 2, 3…). */
@@ -163,7 +201,7 @@ export function addSampleDraft(
   const sequence = nextDraftSequence(drafts, sampleType);
   const sibling = [...drafts].reverse().find((draft) => draft.sampleType === sampleType);
   const draft: SampleDraft = sibling
-    ? { ...sibling, id: options.newId(), sequence, boxPosition: "", savedCode: "" }
+    ? { ...sibling, id: options.newId(), sequence, boxPosition: "", savedCode: "", exportedAt: "" }
     : draftFromDefaults(sampleType, sequence, options);
 
   return [...drafts, draft];
@@ -248,7 +286,7 @@ export function validateSampleDrafts(drafts: SampleDraft[], context: SampleCodeC
     errors.push(`Um registro de campo aceita até ${MAX_SAMPLES_PER_ENTRY} amostras.`);
   }
 
-  const codeProblem = sampleCodeOf(drafts[0], context).error;
+  const codeProblem = sampleCodeProblem(drafts, context);
 
   if (codeProblem) {
     errors.push(`${codeProblem} Sem isso as amostras não têm código de etiqueta.`);
@@ -315,6 +353,7 @@ export function samplesToDrafts(samples: FieldSample[]): SampleDraft[] {
     packaging: sample.packaging,
     boxPosition: sample.boxPosition,
     savedCode: sample.code,
+    exportedAt: sample.exportedAt ?? "",
   }));
 }
 
@@ -391,7 +430,8 @@ export function applySuggestedSequences(drafts: SampleDraft[], conflicts: Sample
   return drafts.map((draft) => {
     const suggested = suggestions.get(draft.id);
 
-    return suggested ? { ...draft, sequence: suggested } : draft;
+    // Amostra exportada não troca de número.
+    return suggested && !draft.exportedAt ? { ...draft, sequence: suggested } : draft;
   });
 }
 

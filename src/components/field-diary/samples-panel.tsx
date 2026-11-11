@@ -9,7 +9,9 @@ import {
   SAMPLE_POSITION_MAX_LENGTH,
   describeSampleCounts,
   describeSampleDraft,
+  exportedDateLabel,
   sampleCodeOf,
+  sampleCodeProblem,
   sampleShortLabel,
   type SampleCodeConflict,
   type SampleCodeContext,
@@ -77,7 +79,7 @@ export function SamplesPanel({
   onRetry: () => void;
 }) {
   const [typeToAdd, setTypeToAdd] = useState<SampleTypeId>("water");
-  const codeProblem = samples.length ? sampleCodeOf(samples[0], context).error : "";
+  const codeProblem = sampleCodeProblem(samples, context);
   const conflictIds = new Set(conflicts.map((conflict) => conflict.sampleId));
   const canAdd = samples.length < MAX_SAMPLES_PER_ENTRY;
 
@@ -239,6 +241,7 @@ function SampleCard({
   const { code } = sampleCodeOf(sample, context);
   const details = describeSampleDraft(sample);
   const codeChanged = Boolean(sample.savedCode && code && sample.savedCode !== code);
+  const exportedOn = exportedDateLabel(sample.exportedAt);
   const detailsId = `sample-details-${sample.id}`;
 
   return (
@@ -288,6 +291,13 @@ function SampleCard({
             O código gravado era {sample.savedCode}. Mudou junto com a data, o ponto ou o número da amostra: se a
             etiqueta já foi escrita, corrija a etiqueta.
           </span>
+        </p>
+      ) : null}
+
+      {sample.exportedAt ? (
+        <p className="mt-2 text-sm text-[var(--ink-soft)]">
+          Já saiu na planilha do Biolog{exportedOn ? ` em ${exportedOn}` : ""}. O código não muda mais; se retirar a
+          amostra aqui, retire também no Biolog.
         </p>
       ) : null}
 

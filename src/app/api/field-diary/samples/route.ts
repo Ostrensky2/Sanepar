@@ -10,39 +10,21 @@ import {
   type SampleInput,
 } from "@/lib/field-samples";
 import {
-  FieldStandardError,
-  buildSampleCode,
-  conservationTypes,
-  isSampleTypeId,
-  nextSampleSequence,
-  parseSampleCode,
-} from "@/lib/field-standard";
+  SAMPLES_TABLE as TABLE,
+  isMissingSamplesTable,
+  samplesFromRows as fromRows,
+  type SampleRow,
+} from "@/lib/field-samples-server";
+import { FieldStandardError, buildSampleCode, isSampleTypeId, nextSampleSequence } from "@/lib/field-standard";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 
-const TABLE = "field_diary_samples";
 const MAX_ID_LENGTH = 200;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const NO_STORE = { "Cache-Control": "no-store" };
 const UNAVAILABLE_MESSAGE =
   "O banco ainda não recebeu a atualização das amostras do ponto. O registro de campo foi salvo; as amostras não.";
-
-type SampleRow = {
-  id: string;
-  entry_id: string;
-  sample_code: string;
-  project_code: string;
-  sample_type: string;
-  sequence: number;
-  depth_m: number | string | null;
-  quantity: number | string | null;
-  quantity_unit: string;
-  specification: string | null;
-  conservation: string;
-  packaging: string | null;
-  box_position: string | null;
-};
 
 type EntryRow = {
   id: string;
@@ -50,8 +32,6 @@ type EntryRow = {
   entry_date: string;
   sia: string | null;
 };
-
-type DatabaseError = { code?: string; message?: string };
 
 /**
  * Amostras de um registro de campo.
@@ -63,7 +43,8 @@ type DatabaseError = { code?: string; message?: string };
  * PUT              grava as amostras do registro. O código de cada etiqueta é
  *                  calculado aqui, pela data e pelo ponto que estão no registro
  *                  gravado, e nunca repetido: se já existir, devolve 409 com o
- *                  próximo número livre.
+ *                  próximo número livre. Amostra que já saiu na planilha do
+ *                  Biolog fica com o código, o tipo e o número que tinha.
  */
 export async function GET(request: Request) {
   const auth = await requireApiSession(request);
@@ -161,18 +142,35 @@ async function writeSamples(request: Request) {
     );
   }
 
-  // O código vale o que está no registro GRAVADO (data e ponto), não o que o
-  // aparelho mandou: é ele que vai para a etiqueta e para a planilha.
+  const existing = await supabase.from(TABLE).select("*").eq("entry_id", entryId).returns<SampleRow[]>();
+
+  if (existing.error) {
+    return isMissingSamplesTable(existing.error)
+      ? NextResponse.json({ error: UNAVAILABLE_MESSAGE, available: false }, { status: 503 })
+      : NextResponse.json({ error: "Não foi possível consultar as amostras deste registro." }, { status: 500 });
+  }
+
+  // Amostra que já saiu na planilha do Biolog: o código, o tipo e o número ficam os
+  // que foram exportados, mesmo que a data ou o ponto do registro tenham mudado.
+  const exportedById = new Map(
+    (existing.data ?? []).filter((row) => row.exported_at && isSampleTypeId(row.sample_type)).map((row) => [row.id, row]),
+  );
+
+  // Para as outras, o código vale o que está no registro GRAVADO (data e ponto), não
+  // o que o aparelho mandou: é ele que vai para a etiqueta e para a planilha.
   const entryDate = String(entry.entry_date ?? "").slice(0, 10);
   const codeTarget = { projectCode, date: entryDate, point: entry.sia ?? "" };
   const samples: SampleInput[] = [];
 
   try {
     for (const input of inputs) {
-      samples.push({
-        ...input,
-        code: buildSampleCode({ ...codeTarget, sampleType: input.sampleType, sequence: input.sequence }),
-      });
+      const exported = exportedById.get(input.id);
+
+      samples.push(
+        exported && isSampleTypeId(exported.sample_type)
+          ? { ...input, sampleType: exported.sample_type, sequence: Number(exported.sequence), code: exported.sample_code }
+          : { ...input, code: buildSampleCode({ ...codeTarget, sampleType: input.sampleType, sequence: input.sequence }) },
+      );
     }
   } catch (error) {
     if (error instanceof FieldStandardError) {
@@ -181,7 +179,11 @@ async function writeSamples(request: Request) {
     throw error;
   }
 
-  const shownDifferent = samples.find((sample, index) => inputs[index].code && inputs[index].code !== sample.code);
+  // A etiqueta de uma amostra exportada já foi escrita com o código que ficou; só as
+  // outras precisam conferir com o que o aparelho mostrou.
+  const shownDifferent = samples.find(
+    (sample, index) => !exportedById.has(sample.id) && inputs[index].code && inputs[index].code !== sample.code,
+  );
 
   if (shownDifferent) {
     return NextResponse.json(
@@ -198,14 +200,6 @@ async function writeSamples(request: Request) {
 
   if (new Set(codes).size !== codes.length || new Set(samples.map((sample) => sample.id)).size !== samples.length) {
     return NextResponse.json({ error: "Há amostras repetidas no envio. Remova a repetida." }, { status: 400 });
-  }
-
-  const existing = await supabase.from(TABLE).select("*").eq("entry_id", entryId).returns<SampleRow[]>();
-
-  if (existing.error) {
-    return isMissingSamplesTable(existing.error)
-      ? NextResponse.json({ error: UNAVAILABLE_MESSAGE, available: false }, { status: 503 })
-      : NextResponse.json({ error: "Não foi possível consultar as amostras deste registro." }, { status: 500 });
   }
 
   const existingRows = existing.data ?? [];
@@ -259,7 +253,7 @@ async function writeSamples(request: Request) {
     const saved = await supabase
       .from(TABLE)
       .upsert(
-        samples.map((sample) => toRow(sample, entryId, projectCode, now)),
+        samples.map((sample) => toRow(sample, entryId, exportedById.get(sample.id)?.project_code ?? projectCode, now)),
         { onConflict: "id" },
       );
 
@@ -416,50 +410,4 @@ function toRow(sample: SampleInput, entryId: string, projectCode: string, update
     box_position: sample.boxPosition || null,
     updated_at: updatedAt,
   };
-}
-
-function fromRows(rows: SampleRow[]): FieldSample[] {
-  const samples: FieldSample[] = [];
-
-  for (const row of rows) {
-    const conservation = conservationTypes.find((item) => item.value === row.conservation)?.value;
-
-    // Linha fora do padrão (não deveria existir: o banco confere): fica de fora
-    // em vez de derrubar a tela.
-    if (!isSampleTypeId(row.sample_type) || !conservation || !parseSampleCode(row.sample_code)) {
-      continue;
-    }
-
-    samples.push({
-      id: row.id,
-      entryId: row.entry_id,
-      code: row.sample_code,
-      projectCode: row.project_code,
-      sampleType: row.sample_type,
-      sequence: Number(row.sequence),
-      depthM: toNumber(row.depth_m),
-      quantity: toNumber(row.quantity),
-      quantityUnit: row.quantity_unit,
-      specification: row.specification ?? "",
-      conservation,
-      packaging: row.packaging ?? "",
-      boxPosition: row.box_position ?? "",
-    });
-  }
-
-  return sortSamples(samples);
-}
-
-function toNumber(value: number | string | null) {
-  if (value === null || value === "") {
-    return null;
-  }
-
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function isMissingSamplesTable(error: DatabaseError) {
-  // PGRST205: tabela fora do cache de esquema do PostgREST; 42P01: tabela inexistente.
-  return error.code === "PGRST205" || error.code === "42P01";
 }

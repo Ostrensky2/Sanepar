@@ -8,14 +8,14 @@ import {
   normalizeReadingInput,
   sortReadings,
   type FieldParameter,
-  type FieldReading,
   type ReadingInput,
 } from "@/lib/field-parameters";
 import {
   READINGS_TABLE,
   isMissingTable,
   readParameterCatalog,
-  toNumber,
+  readingsFromRows as fromRows,
+  type ReadingRow,
 } from "@/lib/field-parameters-server";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 
@@ -26,17 +26,6 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 const NO_STORE = { "Cache-Control": "no-store" };
 const UNAVAILABLE_MESSAGE =
   "O banco ainda não recebeu a atualização dos parâmetros de campo. O registro de campo foi salvo; as medições não.";
-
-type ReadingRow = {
-  id: string;
-  entry_id: string;
-  parameter_id: string;
-  value: number | string;
-  unit: string | null;
-  depth_m: number | string | null;
-  measured_time: string | null;
-  equipment: string | null;
-};
 
 type EntryRow = { id: string; campaign_name: string | null };
 
@@ -370,31 +359,4 @@ function describeTarget(reading: Pick<ReadingInput, "parameterId" | "depthM">, c
   }
 
   return reading.depthM === 0 ? `${label} na superfície` : `${label} a ${describeReadingDepth(reading.depthM)}`;
-}
-
-function fromRows(rows: ReadingRow[]): FieldReading[] {
-  const readings: FieldReading[] = [];
-
-  for (const row of rows) {
-    const value = toNumber(row.value);
-
-    // Linha fora do padrão (não deveria existir: o banco confere): fica de fora
-    // em vez de derrubar a tela.
-    if (value === null || !row.id || !row.parameter_id) {
-      continue;
-    }
-
-    readings.push({
-      id: row.id,
-      entryId: row.entry_id,
-      parameterId: row.parameter_id,
-      value,
-      unit: row.unit ?? "",
-      depthM: toNumber(row.depth_m),
-      measuredTime: row.measured_time ?? "",
-      equipment: row.equipment ?? "",
-    });
-  }
-
-  return readings;
 }

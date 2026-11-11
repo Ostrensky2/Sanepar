@@ -8,6 +8,7 @@ import {
   describeSampleCounts,
   describeSampleDetails,
   describeSampleDraft,
+  exportedDateLabel,
   legacyFieldsFromCodes,
   legacyFieldsFromSamples,
   legacyFieldsPatch,
@@ -15,6 +16,7 @@ import {
   normalizeSampleInput,
   parseSampleNumber,
   sampleCodeOf,
+  sampleCodeProblem,
   sampleDraftsToInputs,
   samplesToDrafts,
   validateSampleDrafts,
@@ -213,6 +215,81 @@ describe("conferência antes de gravar", () => {
     expect(drafts.map((item) => item.id)).toEqual(["w1", "w2", "p"]);
     expect(drafts[1]).toMatchObject({ depthM: "0,5", quantity: "1000", savedCode: "YVA-071126-0136-AG2" });
     expect(drafts[2]).toMatchObject({ depthM: "", savedCode: "YVA-071126-0136-PL1" });
+  });
+});
+
+describe("amostra que já saiu na planilha do Biolog", () => {
+  const exported = draft({ savedCode: "YVA-071126-0136-AG1", exportedAt: "2026-11-09T15:00:00.000Z" });
+
+  it("fica com o código gravado, mesmo com outra data ou outro ponto no registro", () => {
+    expect(sampleCodeOf(exported, { ...context, date: "2026-11-08", point: "0140" })).toEqual({
+      code: "YVA-071126-0136-AG1",
+      error: "",
+    });
+    // A que ainda não foi exportada segue a data e o ponto do registro.
+    expect(sampleCodeOf(draft({ savedCode: "YVA-071126-0136-AG1" }), { ...context, date: "2026-11-08" }).code).toBe(
+      "YVA-081126-0136-AG1",
+    );
+  });
+
+  it("vai para a nuvem com o código gravado", () => {
+    const inputs = sampleDraftsToInputs([exported, draft({ id: "b", sequence: 2 })], { ...context, date: "2026-11-08" });
+
+    expect(inputs.map((input) => input.code)).toEqual(["YVA-071126-0136-AG1", "YVA-081126-0136-AG2"]);
+    expect(inputs[0]).not.toHaveProperty("exportedAt");
+  });
+
+  it("registro que ficou sem ponto só reclama se houver amostra ainda não exportada", () => {
+    const noPoint = { ...context, point: "" };
+
+    expect(sampleCodeProblem([exported], noPoint)).toBe("");
+    expect(validateSampleDrafts([exported], noPoint)).toEqual([]);
+    expect(sampleCodeProblem([exported, draft({ id: "b", sequence: 2 })], noPoint)).toContain("Informe o ponto de coleta");
+    expect(sampleCodeProblem([], noPoint)).toBe("");
+  });
+
+  it("a marca vem da amostra gravada, e a amostra nova copiada dela nasce sem a marca", () => {
+    const saved: FieldSample = {
+      id: "s1",
+      entryId: "e1",
+      code: "YVA-071126-0136-AG1",
+      projectCode: "YVA",
+      sampleType: "water",
+      sequence: 1,
+      depthM: 0,
+      quantity: 1000,
+      quantityUnit: "mL",
+      specification: "",
+      conservation: "FILTRO_CONGELADO",
+      packaging: "",
+      boxPosition: "A1",
+      exportedAt: "2026-11-09T15:00:00.000Z",
+    };
+    const drafts = samplesToDrafts([saved, { ...saved, id: "s2", code: "YVA-071126-0136-PL1", sampleType: "plankton", exportedAt: null }]);
+    const withNew = addSampleDraft(drafts, "water", options());
+
+    expect(drafts.map((item) => item.exportedAt)).toEqual(["2026-11-09T15:00:00.000Z", ""]);
+    expect(withNew.at(-1)).toMatchObject({ sampleType: "water", sequence: 2, savedCode: "", exportedAt: "" });
+    expect(sampleCodeOf(withNew.at(-1)!, context).code).toBe("YVA-071126-0136-AG2");
+  });
+
+  it("não troca de número quando a nuvem propõe o próximo livre", () => {
+    const result = applySuggestedSequences(
+      [exported, draft({ id: "b", sequence: 2 })],
+      [
+        { sampleId: exported.id, code: "x", suggestedSequence: 7, suggestedCode: "y", sameEntry: false },
+        { sampleId: "b", code: "x", suggestedSequence: 8, suggestedCode: "y", sameEntry: false },
+      ],
+    );
+
+    expect(result.map((item) => item.sequence)).toEqual([1, 8]);
+  });
+
+  it("diz o dia da exportação, e nada quando não há data que valha", () => {
+    expect(exportedDateLabel(new Date(2026, 10, 9, 12, 0).toISOString())).toBe("09/11/2026");
+    expect(exportedDateLabel("")).toBe("");
+    expect(exportedDateLabel(null)).toBe("");
+    expect(exportedDateLabel("ontem")).toBe("");
   });
 });
 

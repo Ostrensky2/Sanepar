@@ -229,7 +229,7 @@ function describeFailure(status: number, serverMessage: string, doing: string, p
   return serverMessage || `A nuvem não confirmou (erro ${status}) ao ${doing}.`;
 }
 
-function readParameters(value: unknown): FieldParameter[] {
+export function readParameters(value: unknown): FieldParameter[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -247,7 +247,7 @@ function readParameters(value: unknown): FieldParameter[] {
   return parameters;
 }
 
-function readReadings(value: unknown): FieldReading[] {
+export function readReadings(value: unknown): FieldReading[] {
   if (!Array.isArray(value)) {
     return [];
   }

@@ -1,6 +1,6 @@
 /**
  * Banco em memória para testar rotas que usam o cliente do Supabase. Só o que as
- * rotas usam: select, insert, upsert, update, delete e os filtros eq, in, like.
+ * rotas usam: select, insert, upsert, update, delete e os filtros eq, in, is, like.
  *
  * Uso num teste:
  *
@@ -131,7 +131,9 @@ function buildQuery(table: string) {
     const next = rows.map((row) => ({ ...row }));
 
     for (const incoming of payload) {
-      const index = next.findIndex((row) => row[conflictColumn] === incoming[conflictColumn]);
+      // Linha sem a chave (o banco é que dá o id) nunca bate com outra.
+      const key = incoming[conflictColumn];
+      const index = key === undefined || key === null ? -1 : next.findIndex((row) => row[conflictColumn] === key);
 
       if (index >= 0 && operation === "insert") {
         return { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } };
@@ -157,6 +159,11 @@ function buildQuery(table: string) {
     },
     in: (column: string, values: unknown[]) => {
       filters.push((row) => values.includes(row[column]));
+      return query;
+    },
+    /** `.is("coluna", null)`: coluna vazia (ou que a linha nem tem). */
+    is: (column: string, value: null | boolean) => {
+      filters.push((row) => (row[column] ?? null) === value);
       return query;
     },
     like: (column: string, pattern: string) => {

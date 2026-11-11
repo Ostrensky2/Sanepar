@@ -199,6 +199,15 @@ describe("GET /api/field-diary/samples", () => {
     expect(payload.samples[2].quantity).toBeNull();
   });
 
+  it("diz quais amostras já saíram na planilha do Biolog", async () => {
+    db.samples = [savedRow(1, { exported_at: "2026-11-09T10:00:00.000Z" }), savedRow(2, { exported_at: null }), savedRow(3)];
+
+    const response = await GET(new Request(`https://example.test/api/field-diary/samples?entryId=${ENTRY}`));
+    const payload = await response.json();
+
+    expect(payload.samples.map((item: Row) => item.exportedAt)).toEqual(["2026-11-09T10:00:00.000Z", null, null]);
+  });
+
   it("sem registro, só responde que o banco aceita amostras", async () => {
     db.samples = [savedRow(1)];
 
@@ -422,6 +431,78 @@ describe("PUT /api/field-diary/samples", () => {
 
     expect(response.status).toBe(400);
     expect(db.samples).toEqual([]);
+  });
+
+  it("amostra já exportada fica com o código, mesmo com a data do registro corrigida", async () => {
+    db.samples = [savedRow(1, { exported_at: "2026-11-09T10:00:00.000Z" }), savedRow(2)];
+    db.entries[0].entry_date = "2026-11-08";
+
+    // O aparelho mostra o código antigo na exportada e o novo na outra.
+    const response = await put(
+      body({
+        samples: [
+          sample(1, { code: "YVA-071126-0136-AG1", packaging: "Caixa térmica" }),
+          sample(2, { code: "YVA-081126-0136-AG2" }),
+        ],
+      }),
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(codes()).toEqual(["YVA-071126-0136-AG1", "YVA-081126-0136-AG2"]);
+    expect(db.samples[0]).toMatchObject({
+      sample_code: "YVA-071126-0136-AG1",
+      packaging: "Caixa térmica",
+      exported_at: "2026-11-09T10:00:00.000Z",
+    });
+    expect(payload.samples.map((item: Row) => [item.code, item.exportedAt])).toEqual([
+      ["YVA-071126-0136-AG1", "2026-11-09T10:00:00.000Z"],
+      ["YVA-081126-0136-AG2", null],
+    ]);
+  });
+
+  it("amostra já exportada não troca de tipo nem de número, nem acusa código diferente no aparelho", async () => {
+    db.samples = [savedRow(1, { exported_at: "2026-11-09T10:00:00.000Z" })];
+    db.entries[0].sia = "SIA-0140";
+
+    // Aparelho com versão antiga: recalculou o código pelo ponto novo e trocou o tipo.
+    const response = await put(
+      body({ samples: [sample(1, { code: "YVA-071126-0140-PL3", sampleType: "plankton", sequence: 3 })] }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(db.samples).toHaveLength(1);
+    expect(db.samples[0]).toMatchObject({
+      sample_code: "YVA-071126-0136-AG1",
+      sample_type: "water",
+      sequence: 1,
+      project_code: "YVA",
+    });
+  });
+
+  it("amostra exportada segue gravando num registro que ficou sem SIA", async () => {
+    db.samples = [savedRow(1, { exported_at: "2026-11-09T10:00:00.000Z" })];
+    db.entries[0].sia = "";
+
+    const response = await put(body({ samples: [sample(1, { boxPosition: "B2" })] }));
+
+    expect(response.status).toBe(200);
+    expect(db.samples[0]).toMatchObject({ sample_code: "YVA-071126-0136-AG1", box_position: "B2" });
+  });
+
+  it("amostra exportada pode ser retirada do registro, e a retirada fica no histórico", async () => {
+    db.samples = [savedRow(1, { exported_at: "2026-11-09T10:00:00.000Z" }), savedRow(2)];
+
+    const response = await put(body({ samples: [sample(2)], removedIds: [id(1)] }));
+
+    expect(response.status).toBe(200);
+    expect(codes()).toEqual(["YVA-071126-0136-AG2"]);
+    expect(db.changeLog).toHaveLength(1);
+    expect(db.changeLog[0]).toMatchObject({
+      field_name: "Amostras",
+      old_value: "YVA-071126-0136-AG1, YVA-071126-0136-AG2",
+      new_value: "YVA-071126-0136-AG2",
+    });
   });
 
   it("registro que não existe: 404", async () => {

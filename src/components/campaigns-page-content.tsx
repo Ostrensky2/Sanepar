@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { readSelectedCampaignId, writeSelectedCampaignId } from "@/lib/selected-campaign";
+import { BiologExportDialog } from "@/components/biolog-export-dialog";
 import { CampaignMapSection } from "@/components/campaign-map-section";
 import { CampaignResultsPanels } from "@/components/campaign-results-panels";
 import { FieldDiaryForm } from "@/components/field-diary/form";
@@ -67,6 +68,7 @@ import {
   defaultCampaigns,
   getCurrentCampaignStage,
   readCampaignManagement,
+  resolveCollectionDefaults,
   type CampaignManagementById,
   type CampaignView,
 } from "@/lib/campaign-management";
@@ -156,6 +158,7 @@ export function CampaignsPageContent({
   const [hasLoadedPublishedResults, setHasLoadedPublishedResults] = useState(view !== "resultados");
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
+  const [isBiologExportOpen, setIsBiologExportOpen] = useState(false);
   const [dismissedUnavailableResultsNoticeCampaignId, setDismissedUnavailableResultsNoticeCampaignId] =
     useState<string | null>(null);
   const [resultsInventory, setResultsInventory] = useState<ResultsInventoryItem[] | null>(null);
@@ -348,6 +351,11 @@ export function CampaignsPageContent({
           diaryEntryMatchesSelectedCampaign(e, selectedCampaign.id, selectedCampaign.title),
       ),
     [diaryEntries, selectedCampaign.id, selectedCampaign.title],
+  );
+  // Padrões de coleta da campanha (laboratório, objetivo, matriz): vão na planilha do Biolog.
+  const selectedCollectionDefaults = useMemo(
+    () => resolveCollectionDefaults(campaignManagement, selectedCampaign.id, campaigns).defaults,
+    [campaignManagement, campaigns, selectedCampaign.id],
   );
   const v2Campaign = useMemo<ResultsCampaign | null>(() => {
     if (!isPublishedV2Response(publishedResults) || !publishedResults.campaign.points) return null;
@@ -694,6 +702,10 @@ export function CampaignsPageContent({
                 canExportAll={exportableCampaignIds.size > 0}
                 onExportSelected={() => void exportFieldDiaryWorkbook([selectedCampaign.id])}
                 onExportAll={() => void exportFieldDiaryWorkbook(["all"])}
+                onExportBiolog={() => {
+                  setExportMessage("");
+                  setIsBiologExportOpen(true);
+                }}
               />
             ) : null}
           </div>
@@ -822,6 +834,15 @@ export function CampaignsPageContent({
             setMapEditEntry(null);
             setMapEditMessage("");
           }}
+        />
+      ) : null}
+
+      {isBiologExportOpen ? (
+        <BiologExportDialog
+          campaignLabel={selectedCampaign.title}
+          entries={selectedDiaryEntries}
+          defaults={selectedCollectionDefaults}
+          onClose={() => setIsBiologExportOpen(false)}
         />
       ) : null}
     </div>
@@ -1257,6 +1278,7 @@ function CampaignExportMenu({
   canExportAll,
   onExportSelected,
   onExportAll,
+  onExportBiolog,
 }: {
   disabled: boolean;
   isExporting: boolean;
@@ -1264,6 +1286,7 @@ function CampaignExportMenu({
   canExportAll: boolean;
   onExportSelected: () => void;
   onExportAll: () => void;
+  onExportBiolog: () => void;
 }) {
   const itemClass =
     "flex min-h-11 w-full items-center rounded-lg px-3 text-left text-sm font-semibold text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)] disabled:cursor-not-allowed disabled:opacity-45";
@@ -1299,6 +1322,17 @@ function CampaignExportMenu({
           }}
         >
           Diário de todas as campanhas (.xlsx)
+        </button>
+        <button
+          type="button"
+          className={itemClass}
+          disabled={!canExportSelected}
+          onClick={(event) => {
+            event.currentTarget.closest("details")?.removeAttribute("open");
+            onExportBiolog();
+          }}
+        >
+          Planilha para o Biolog (.xlsx)
         </button>
       </div>
     </details>

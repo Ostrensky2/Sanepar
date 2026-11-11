@@ -1,6 +1,12 @@
 import "server-only";
 
-import { baseParameterCatalog, sortCatalog, type FieldParameter, type FieldParameterInput } from "@/lib/field-parameters";
+import {
+  baseParameterCatalog,
+  sortCatalog,
+  type FieldParameter,
+  type FieldParameterInput,
+  type FieldReading,
+} from "@/lib/field-parameters";
 import { isSampleTypeId } from "@/lib/field-standard";
 import type { createOptionalSupabaseClient } from "@/lib/supabase";
 
@@ -99,4 +105,42 @@ export function toNumber(value: number | string | null | undefined) {
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+export type ReadingRow = {
+  id: string;
+  entry_id: string;
+  parameter_id: string;
+  value: number | string;
+  unit: string | null;
+  depth_m: number | string | null;
+  measured_time: string | null;
+  equipment: string | null;
+};
+
+export function readingsFromRows(rows: ReadingRow[]): FieldReading[] {
+  const readings: FieldReading[] = [];
+
+  for (const row of rows) {
+    const value = toNumber(row.value);
+
+    // Linha fora do padrão (não deveria existir: o banco confere): fica de fora
+    // em vez de derrubar a tela.
+    if (value === null || !row.id || !row.parameter_id) {
+      continue;
+    }
+
+    readings.push({
+      id: row.id,
+      entryId: row.entry_id,
+      parameterId: row.parameter_id,
+      value,
+      unit: row.unit ?? "",
+      depthM: toNumber(row.depth_m),
+      measuredTime: row.measured_time ?? "",
+      equipment: row.equipment ?? "",
+    });
+  }
+
+  return readings;
 }

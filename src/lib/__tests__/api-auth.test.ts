@@ -28,6 +28,7 @@ const protectedMutations = {
   "src/app/api/field-diary/import/route.ts": ["POST"],
   "src/app/api/field-diary/parameters/route.ts": ["POST", "PATCH"],
   "src/app/api/field-diary/readings/route.ts": ["PUT"],
+  "src/app/api/field-diary/biolog-export/route.ts": ["POST"],
   "src/app/api/field-diary/samples/route.ts": ["PUT"],
   "src/app/api/imports/campaigns/route.ts": ["DELETE"],
   "src/app/api/imports/preview/route.ts": ["POST"],
@@ -104,7 +105,7 @@ describe("proteções de API auth", () => {
     await expect(requireApiSession(new Request("https://app.invalid/api", { method, headers: { origin: "https://app.invalid" } }))).resolves.toMatchObject({ ok: true });
   });
 
-  it("comprova o inventário mutante 21/21 no guard central de sessão", () => {
+  it("comprova o inventário mutante 22/22 no guard central de sessão", () => {
     let count = 0;
     for (const [file, methods] of Object.entries(protectedMutations)) {
       const source = readFileSync(resolve(process.cwd(), file), "utf8");
@@ -115,9 +116,9 @@ describe("proteções de API auth", () => {
       }
     }
     // A importação de campo por /api/imports/campaigns (POST) foi unificada no Diário;
-    // as amostras do ponto (PUT), o catálogo de parâmetros (POST, PATCH) e as medições
-    // (PUT) entraram depois.
-    expect(count).toBe(21);
+    // as amostras do ponto (PUT), o catálogo de parâmetros (POST, PATCH), as medições
+    // (PUT) e a marca de exportação para o Biolog (POST) entraram depois.
+    expect(count).toBe(22);
   });
 
   it("exige aprovação nas três dimensões sem enviar identificador claro", async () => {

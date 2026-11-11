@@ -14,7 +14,7 @@ import {
   type FieldReading,
 } from "@/lib/field-parameters";
 import { fetchEntryReadings } from "@/lib/field-parameters-client";
-import { describeSampleCounts, describeSampleDetails, type FieldSample } from "@/lib/field-samples";
+import { describeSampleCounts, describeSampleDetails, exportedDateLabel, type FieldSample } from "@/lib/field-samples";
 import { fetchEntrySamples } from "@/lib/field-samples-client";
 import { getSampleType } from "@/lib/field-standard";
 import { effectiveExecutionStatus, type FieldDiaryEntry } from "@/lib/field-diary";
@@ -211,6 +211,11 @@ function SamplesSection({ entryId }: { entryId: string }) {
                 <p className="mt-1 text-xs text-slate-700">
                   {describeSampleDetails(sample) || "Sem detalhes informados."}
                 </p>
+                {sample.exportedAt ? (
+                  <p className="mt-1 text-xs text-[var(--ink-soft)]">
+                    Na planilha do Biolog desde {exportedDateLabel(sample.exportedAt) || "uma exportação anterior"}.
+                  </p>
+                ) : null}
               </li>
             ))}
           </ul>
