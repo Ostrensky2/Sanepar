@@ -84,6 +84,18 @@ export const MAJOR_RELEASES: MajorRelease[] = [
     ],
     updates: [
       {
+        version: "2.0.6",
+        date: "11/11/2026",
+        items: [
+          "Diário de campo: novo bloco “Amostras do ponto”. Cada amostra (água, solo, ar, tecido ou plâncton) ganha o código da etiqueta, como YVA-071126-0136-AG1, montado pela data e pelo ponto. Em “Iniciar coleta” ou em “Usar o padrão da campanha”, as amostras já vêm dos padrões de coleta da campanha.",
+          "Cada amostra tem profundidade (0 é a superfície), volume ou massa, conservação, acondicionamento e posição na caixa. O acondicionamento usado por último em cada tipo de amostra já vem preenchido no aparelho.",
+          "Novo bloco “Parâmetros medidos”: pH, condutividade, temperatura e os demais parâmetros de campo entram como números, com unidade, profundidade, hora e equipamento, e o app avisa quando um valor sai da faixa esperada. “+ Parâmetro” cria um parâmetro que ainda não está na lista, e ele fica disponível para toda a equipe.",
+          "Padrões de coleta: agora também marcam os parâmetros medidos em todo ponto da campanha.",
+          "Campanhas › Exportar: nova “Planilha para o Biolog (.xlsx)”, com as abas Amostras, Parâmetros e Catálogo de parâmetros. Antes de gerar, ela mostra o que o Biolog recusaria (registro sem hora, sem coordenada ou sem ponto) e o que vale conferir.",
+          "Depois que uma amostra sai na planilha do Biolog, o código dela não muda mais, mesmo que a data ou o ponto do registro sejam corrigidos.",
+        ],
+      },
+      {
         version: "2.0.5",
         date: "11/11/2026",
         items: [
