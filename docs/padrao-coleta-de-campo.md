@@ -88,7 +88,8 @@ As amostras ficam no bloco **"Amostras do ponto"** do registro de campo (em cód
   confirmou. Se o registro foi salvo e as amostras não, o formulário fica aberto e
   avisa.
 - Um registro aceita até 60 amostras. Um registro com amostras não pode ser
-  apagado do banco sem antes tirar as amostras.
+  apagado do banco sem antes tirar as amostras. A exclusão dos dados de uma
+  campanha confere isso primeiro e, havendo amostra, não apaga nada.
 - Cada mudança na lista de amostras de um registro entra no histórico de
   alterações, no campo "Amostras".
 - O aparelho lembra o último acondicionamento usado em cada tipo, para a próxima

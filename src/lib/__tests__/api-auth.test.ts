@@ -26,6 +26,7 @@ const protectedMutations = {
   "src/app/api/field-diary/route.ts": ["POST", "PUT"],
   "src/app/api/field-diary/consolidate/route.ts": ["POST"],
   "src/app/api/field-diary/import/route.ts": ["POST"],
+  "src/app/api/field-diary/samples/route.ts": ["PUT"],
   "src/app/api/imports/campaigns/route.ts": ["DELETE"],
   "src/app/api/imports/preview/route.ts": ["POST"],
   "src/app/api/imports/results/route.ts": ["POST", "DELETE"],
@@ -111,8 +112,9 @@ describe("proteções de API auth", () => {
         count += 1;
       }
     }
-    // 17: a importação de campo por /api/imports/campaigns (POST) foi unificada no Diário.
-    expect(count).toBe(17);
+    // A importação de campo por /api/imports/campaigns (POST) foi unificada no Diário;
+    // as amostras do ponto (PUT) entraram depois.
+    expect(count).toBe(18);
   });
 
   it("exige aprovação nas três dimensões sem enviar identificador claro", async () => {
