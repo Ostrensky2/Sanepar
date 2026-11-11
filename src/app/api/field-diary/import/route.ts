@@ -8,6 +8,7 @@ import {
   type FieldDiaryEntry,
   type FieldDiaryPayload,
 } from "@/lib/field-diary";
+import { captureRowColumns, normalizeGpsAccuracy, parseCoordinateSource } from "@/lib/collection-capture";
 import { validateCoordinatePair } from "@/lib/coordinates";
 import { fieldDiaryRuleColumns, fieldDiaryRuleErrors, fieldDiaryRuleFields } from "@/lib/field-diary-validation";
 import { classifyFieldDiaryImport, diffFieldDiaryEntries } from "@/lib/imports/conflict-detection";
@@ -77,6 +78,9 @@ type FieldDiaryImportRow = {
   updated_at: string;
   latitude?: number | string | null;
   longitude?: number | string | null;
+  coordinate_source?: string | null;
+  gps_accuracy_m?: number | string | null;
+  collection_started_at?: string | null;
   execution_status?: string | null;
   relocation_reason?: string | null;
   photos?: unknown;
@@ -449,11 +453,25 @@ function buildUpdatedRow(
 ): FieldDiaryImportRow {
   return {
     ...toRow({ ...base, id: existingRow.id }),
+    ...captureColumnsAfterImport(existingRow, base),
     collection_order: entry.collectionOrder ?? existingRow.collection_order ?? null,
     governance_status: normalizeGovernanceStatus(existingRow.governance_status),
     missing_in_import: false,
     created_at: existingRow.created_at,
   };
+}
+
+/**
+ * Captura automática (origem da coordenada, precisão do GPS, início da coleta) de um
+ * registro que a planilha atualiza. A planilha não traz esses dados, então valem os
+ * do aplicativo, que já vêm em `base`; se a planilha trocou a coordenada, a origem
+ * chega aqui vazia (ver classifyFieldDiaryImport). As colunas precisam ir em toda
+ * linha atualizada: o lote inteiro é gravado com a mesma lista de colunas, e a linha
+ * que não trouxesse a coluna perderia o valor.
+ */
+function captureColumnsAfterImport(existingRow: FieldDiaryImportRow, base: FieldDiaryEntry) {
+  // Banco ainda sem as colunas (migration não aplicada): não manda nada.
+  return "coordinate_source" in existingRow ? captureRowColumns(base) : {};
 }
 
 async function prepareRowsForUpsert(entries: FieldDiaryEntry[], force = false) {
@@ -655,6 +673,9 @@ function fromRow(row: FieldDiaryImportRow): FieldDiaryEntry {
     samplesReplicasEdna: row.samples_replicas_edna ?? "",
     zooplanktonId: row.zooplankton_id ?? "",
     ...fieldDiaryRuleFields(row),
+    coordinateSource: parseCoordinateSource(row.coordinate_source),
+    gpsAccuracyM: normalizeGpsAccuracy(row.gps_accuracy_m),
+    collectionStartedAt: row.collection_started_at ?? null,
     municipality: row.municipality,
     activities: row.activities,
     waterVisualConditions: row.water_visual_conditions,
@@ -719,6 +740,27 @@ function dedupeIncomingEntries(entries: FieldDiaryEntry[]) {
   };
 }
 
+/** Em linhas duplicadas do mesmo ponto e dia, a captura acompanha a linha dona da coordenada. */
+function captureColumnsOfCoordinateOwner(
+  existing: FieldDiaryImportRow,
+  incoming: FieldDiaryImportRow,
+): Pick<FieldDiaryImportRow, "coordinate_source" | "gps_accuracy_m" | "collection_started_at"> {
+  if (!("coordinate_source" in existing) && !("coordinate_source" in incoming)) {
+    return {};
+  }
+
+  const hasCoordinate = (value: number | string | null | undefined) =>
+    value !== null && value !== undefined && value !== "";
+  const owner = hasCoordinate(incoming.latitude) && hasCoordinate(incoming.longitude) ? incoming : existing;
+  const mixed = hasCoordinate(incoming.latitude) !== hasCoordinate(incoming.longitude);
+
+  return {
+    coordinate_source: mixed ? null : owner.coordinate_source ?? null,
+    gps_accuracy_m: mixed ? null : owner.gps_accuracy_m ?? null,
+    collection_started_at: incoming.collection_started_at ?? existing.collection_started_at ?? null,
+  };
+}
+
 function mergeRows(existing: FieldDiaryImportRow, incoming: FieldDiaryImportRow): FieldDiaryImportRow {
   return {
     ...existing,
@@ -739,6 +781,7 @@ function mergeRows(existing: FieldDiaryImportRow, incoming: FieldDiaryImportRow)
     zooplankton_id: incoming.zooplankton_id || existing.zooplankton_id,
     latitude: incoming.latitude ?? existing.latitude,
     longitude: incoming.longitude ?? existing.longitude,
+    ...captureColumnsOfCoordinateOwner(existing, incoming),
     execution_status: incoming.execution_status || existing.execution_status,
     relocation_reason: incoming.relocation_reason || existing.relocation_reason,
     municipality: incoming.municipality || existing.municipality,

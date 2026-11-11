@@ -84,6 +84,17 @@ export const MAJOR_RELEASES: MajorRelease[] = [
     ],
     updates: [
       {
+        version: "2.0.5",
+        date: "11/11/2026",
+        items: [
+          "Diário de campo: novo botão “Iniciar coleta”. Ao chegar no ponto, um toque grava a hora e a data do relógio do celular e a latitude e a longitude pelo GPS, sem digitar. “Ler o GPS de novo” atualiza só a posição.",
+          "Sem sinal de GPS, nada do que já está no registro é trocado: se não havia coordenada, entra a planejada do ponto, com aviso para conferir. Com precisão pior que 100 m o app pede conferência, e a mais de 200 m do ponto planejado avisa e oferece marcar o ponto como realocado.",
+          "Num registro que já tem hora, ou que é de outro dia, o app pergunta antes de trocar a hora e a data.",
+          "A “Equipe” do último registro feito no aparelho já vem preenchida no registro seguinte.",
+          "Central de dados › Fase e etapas: novo painel “Padrões de coleta”, com projeto, laboratório de destino, objetivo, matriz da água e, para cada tipo de amostra (água, solo, ar, tecido e plâncton), quantidade por ponto, conservação, acondicionamento, volume ou massa e profundidade. Vale para as campanhas seguintes até alguém mudar. Esses padrões vão preencher as amostras do registro de campo, que chegam na próxima versão.",
+        ],
+      },
+      {
         version: "2.0.4",
         date: "04/11/2026",
         items: [

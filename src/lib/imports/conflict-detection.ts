@@ -44,6 +44,10 @@ const COMPARED_FIELDS: Array<keyof FieldDiaryEntry> = [
   "photos",
 ];
 
+// O histórico também guarda de onde veio a coordenada (GPS, planejada ou digitada).
+// Ela fica fora da comparação com a planilha, que nunca traz essa informação.
+const HISTORY_FIELDS: Array<keyof FieldDiaryEntry> = [...COMPARED_FIELDS, "coordinateSource"];
+
 export function classifyFieldDiaryImport(
   incoming: FieldDiaryEntry,
   existing: FieldDiaryEntry | null,
@@ -104,9 +108,27 @@ export function classifyFieldDiaryImport(
     return { status: "conflict", entry: existing, conflicts };
   }
 
+  // A origem da coordenada (GPS, planejada, digitada) é do valor que estava no
+  // app. Se a planilha trocou o número, a origem deixa de ser conhecida.
+  if (
+    !sameCoordinateValue(existing.latitude, merged.latitude) ||
+    !sameCoordinateValue(existing.longitude, merged.longitude)
+  ) {
+    merged.coordinateSource = null;
+    merged.gpsAccuracyM = null;
+  }
+
   return changed
     ? { status: "additive", entry: merged, conflicts: [] }
     : { status: "identical", entry: existing, conflicts: [] };
+}
+
+function sameCoordinateValue(left: unknown, right: unknown) {
+  if (!hasValue(left) || !hasValue(right)) {
+    return hasValue(left) === hasValue(right);
+  }
+
+  return Number(left) === Number(right);
 }
 
 function hasValue(value: unknown) {
@@ -161,7 +183,7 @@ export function diffFieldDiaryEntries(
 ): FieldDiaryFieldChange[] {
   const changes: FieldDiaryFieldChange[] = [];
 
-  for (const field of COMPARED_FIELDS) {
+  for (const field of HISTORY_FIELDS) {
     if (!equivalent(oldEntry[field], newEntry[field])) {
       changes.push({
         field,

@@ -20,7 +20,9 @@ const nextConfig: NextConfig = {
       { key: "X-Content-Type-Options", value: "nosniff" },
       { key: "X-Frame-Options", value: "DENY" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-      { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+      // A localização fica liberada só para o próprio aplicativo: o botão "Iniciar coleta"
+      // do registro de campo lê o GPS do celular.
+      { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
       { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
     ] }, { source: "/dashboards/Painel_eDNA_Campanha1_Sanepar.html", headers: [
       { key: "X-Frame-Options", value: "SAMEORIGIN" },

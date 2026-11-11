@@ -4,6 +4,7 @@ import { Pencil } from "lucide-react";
 import { useEffect, useState } from "react";
 import { formatDate } from "@/components/field-diary/helpers";
 import { DetailBlock, Dialog, Info } from "@/components/field-diary/ui";
+import { describeCoordinateSource, formatCollectionStart } from "@/lib/collection-capture";
 import { effectiveExecutionStatus, type FieldDiaryEntry } from "@/lib/field-diary";
 import { pointExecutionStatusLabels } from "@/lib/point-execution-status";
 
@@ -35,6 +36,9 @@ export function FieldDiaryView({
 }) {
   const fieldTeamMembers = entry.fieldTeamMembers ?? [];
   const photos = entry.photos ?? [];
+  const coordinateSourceText =
+    entry.latitude && entry.longitude ? describeCoordinateSource(entry.coordinateSource, entry.gpsAccuracyM) : "";
+  const collectionStartText = formatCollectionStart(entry.collectionStartedAt);
 
   return (
     <Dialog title="Visualizar registro" onClose={onClose}>
@@ -49,6 +53,8 @@ export function FieldDiaryView({
           <Info label="ID Zooplâncton" value={entry.zooplanktonId || "Não informado"} />
           <Info label="Latitude" value={entry.latitude || "Não informado"} />
           <Info label="Longitude" value={entry.longitude || "Não informado"} />
+          {coordinateSourceText ? <Info label="Origem da coordenada" value={coordinateSourceText} /> : null}
+          {collectionStartText ? <Info label="Coleta iniciada em" value={collectionStartText} /> : null}
           <Info label="Situação do ponto" value={pointExecutionStatusLabels[effectiveExecutionStatus(entry)]} />
           <Info label="Município" value={entry.municipality} />
           <Info label="Condições climáticas" value={entry.weatherConditions || "Não informado"} />

@@ -68,6 +68,7 @@ import {
 import { campaignIdentityMatches } from "@/lib/campaign-identity";
 import { readSelectedCampaignId, writeSelectedCampaignId } from "@/lib/selected-campaign";
 import { getStoredSession } from "@/lib/auth-users";
+import { readLastFieldTeam, rememberLastFieldTeam } from "@/lib/last-field-team";
 import { countLabel } from "@/lib/number-format";
 
 type Filters = {
@@ -459,7 +460,8 @@ export function FieldDiaryPageContent({
       ...normalizedDefaults,
       ...scopedCampaign,
       createdBy: session?.userId ?? "",
-      createdByName: session?.name ?? "",
+      // Sem equipe digitada, vem a última usada neste aparelho.
+      createdByName: normalizedDefaults.createdByName || readLastFieldTeam() || session?.name || "",
     });
   }
 
@@ -480,6 +482,9 @@ export function FieldDiaryPageContent({
       zooplanktonId: entry.zooplanktonId,
       latitude: entry.latitude,
       longitude: entry.longitude,
+      coordinateSource: entry.coordinateSource ?? null,
+      gpsAccuracyM: entry.gpsAccuracyM ?? null,
+      collectionStartedAt: entry.collectionStartedAt ?? null,
       executionStatus: entry.executionStatus,
       relocationReason: entry.relocationReason ?? "",
       municipality: entry.municipality,
@@ -530,6 +535,7 @@ export function FieldDiaryPageContent({
         ...current.filter((entry) => entry.id !== result.entry.id),
       ].sort((a, b) => b.entryDate.localeCompare(a.entryDate) || b.updatedAt.localeCompare(a.updatedAt)),
     );
+    rememberLastFieldTeam(result.entry.createdByName);
     setFormEntry(null);
     setMessage(
       result.persistence === "cloud"

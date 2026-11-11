@@ -92,6 +92,61 @@ describe("diffFieldDiaryEntries", () => {
   });
 });
 
+describe("origem da coordenada na importação de planilha", () => {
+  const fromGps = { coordinateSource: "gps", gpsAccuracyM: 8.4 } as const;
+
+  it("mantém a origem quando a planilha traz a mesma coordenada", () => {
+    const result = classifyFieldDiaryImport(
+      entry({ latitude: "-25.480000", longitude: "-49.19", dailySummary: "Coleta concluída." }),
+      entry({ ...fromGps, governanceStatus: "importado" }),
+      "k",
+    );
+
+    expect(result.status).toBe("additive");
+    expect(result.entry.coordinateSource).toBe("gps");
+    expect(result.entry.gpsAccuracyM).toBe(8.4);
+  });
+
+  it("apaga a origem quando a planilha troca a coordenada de um registro preliminar", () => {
+    const existing = entry({ ...fromGps, governanceStatus: "importado" });
+    const result = classifyFieldDiaryImport(entry({ latitude: "-25.5" }), existing, "k");
+
+    expect(result.status).toBe("additive");
+    expect(result.entry.latitude).toBe("-25.5");
+    expect(result.entry.coordinateSource).toBeNull();
+    expect(result.entry.gpsAccuracyM).toBeNull();
+    expect(diffFieldDiaryEntries(existing, result.entry)).toEqual(
+      expect.arrayContaining([
+        { field: "latitude", oldValue: "-25.48", newValue: "-25.5" },
+        { field: "coordinateSource", oldValue: "gps", newValue: "" },
+      ]),
+    );
+  });
+
+  it("registro protegido continua com a coordenada e a origem do aplicativo", () => {
+    const existing = entry({ ...fromGps, governanceStatus: "consolidado" });
+    const result = classifyFieldDiaryImport(entry({ latitude: "-25.5" }), existing, "k");
+
+    expect(result.status).toBe("conflict");
+    expect(result.entry.coordinateSource).toBe("gps");
+
+    const forced = classifyFieldDiaryImport(entry({ latitude: "-25.5" }), existing, "k", { force: true });
+    expect(forced.entry.latitude).toBe("-25.5");
+    expect(forced.entry.coordinateSource).toBeNull();
+  });
+
+  it("planilha sem coordenada não mexe na coordenada nem na origem", () => {
+    const result = classifyFieldDiaryImport(
+      entry({ latitude: "", longitude: "", dailySummary: "Resumo." }),
+      entry({ ...fromGps, governanceStatus: "importado" }),
+      "k",
+    );
+
+    expect(result.entry.latitude).toBe("-25.48");
+    expect(result.entry.coordinateSource).toBe("gps");
+  });
+});
+
 function entry(patch: Partial<FieldDiaryEntry> = {}): FieldDiaryEntry {
   return {
     id: "id",

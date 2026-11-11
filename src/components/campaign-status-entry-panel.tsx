@@ -2,6 +2,7 @@
 
 import { Edit3, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { CampaignCollectionDefaultsPanel } from "@/components/campaign-collection-defaults-panel";
 import { readSelectedCampaignId, writeSelectedCampaignId } from "@/lib/selected-campaign";
 import type {
   MetabarcodingStage,
@@ -16,6 +17,7 @@ import {
   phaseStatusOptions,
   phaseStatusValue,
   readCampaignManagement,
+  resolveCollectionDefaults,
   suggestedCampaignPhase,
   saveCampaignManagement,
   stageStatusOptions,
@@ -126,6 +128,14 @@ export function CampaignStatusEntryPanel() {
       ),
     );
   }
+
+  const collectionDefaults = resolveCollectionDefaults(campaignManagement, selectedCampaign.id, campaigns);
+  const collectionDefaultsSource =
+    collectionDefaults.sourceCampaignId === selectedCampaign.id
+      ? "desta campanha"
+      : collectionDefaults.sourceCampaignId
+        ? `da ${campaigns.find((campaign) => campaign.id === collectionDefaults.sourceCampaignId)?.selectorLabel ?? "campanha anterior"}`
+        : "do projeto";
 
   const currentStage =
     selectedManagement.stages.find((stage) => stage.status === "inprogress");
@@ -329,6 +339,14 @@ export function CampaignStatusEntryPanel() {
           </div>
         </div>
       </section>
+
+      <CampaignCollectionDefaultsPanel
+        defaults={collectionDefaults.defaults}
+        sourceLabel={collectionDefaultsSource}
+        isOwn={collectionDefaults.sourceCampaignId === selectedCampaign.id}
+        onChange={(next) => updateField("collectionDefaults", next)}
+        onReset={() => updateField("collectionDefaults", undefined)}
+      />
     </section>
   );
 }

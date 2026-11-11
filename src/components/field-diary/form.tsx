@@ -9,12 +9,28 @@ import {
   type FieldDiaryCampaignScope,
   type FieldDiaryPointOption,
 } from "@/components/field-diary/constants";
+import { CollectionStartPanel, type CaptureFeedback } from "@/components/field-diary/collection-start";
 import {
   findFieldDiaryPointOption,
   normalizeFieldDiaryPointKey,
   uniqueSorted,
 } from "@/components/field-diary/helpers";
 import { Checklist, Dialog, Field } from "@/components/field-diary/ui";
+import {
+  buildPositionCapture,
+  buildTimeCapture,
+  collectionRestartWarning,
+  describeCoordinateSource,
+  formatCollectionStart,
+  plannedPatchForPointChange,
+} from "@/lib/collection-capture";
+import { readDeviceGps } from "@/lib/device-gps";
+import {
+  fetchPlannedCoordinate,
+  plannedCoordinateKey,
+  type PlannedCoordinate,
+  type PlannedCoordinateTarget,
+} from "@/lib/planned-coordinate";
 import {
   activityOptions,
   fieldDiaryStatusOptions,
@@ -56,6 +72,16 @@ export function FieldDiaryForm({
   const [uploadMessage, setUploadMessage] = useState("");
   const [fieldDiaryPointOptions, setPointOptions] = useState<FieldDiaryPointOption[]>([]);
   const [pointOptionsMessage, setPointOptionsMessage] = useState("Carregando pontos…");
+  const [isLocating, setIsLocating] = useState(false);
+  const [captureFeedback, setCaptureFeedback] = useState<CaptureFeedback | null>(null);
+  // A leitura do GPS leva alguns segundos: o formulário pode ter sido fechado.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
     fetch("/api/field-diary/point-options", { cache: "no-store", signal: controller.signal })
@@ -82,6 +108,8 @@ export function FieldDiaryForm({
   const coordinateCheck = validateCoordinatePair(entry.latitude, entry.longitude);
   const coordinateError = coordinateCheck.ok ? "" : coordinateCheck.error;
   const relocationError = validateRelocation(executionStatus, entry.relocationReason);
+  const coordinateSourceText =
+    entry.latitude && entry.longitude ? describeCoordinateSource(entry.coordinateSource, entry.gpsAccuracyM) : "";
   const selectedPointOption = findFieldDiaryPointOption(entry, fieldDiaryPointOptions);
   const selectedPointOptionId = selectedPointOption?.id ?? "";
   const locationSelectValue = selectedPointOptionId || (entry.locationName ? "__current" : "");
@@ -97,6 +125,52 @@ export function FieldDiaryForm({
       : fieldDiaryPointOptions;
   }, [entry.municipality, fieldDiaryPointOptions]);
 
+  // Coordenada planejada do ponto: consultada uma vez por ponto e campanha. A lista
+  // de pontos do formulário não traz coordenadas.
+  const plannedCacheRef = useRef(new Map<string, Promise<PlannedCoordinate | null>>());
+
+  function plannedFor(target: PlannedCoordinateTarget) {
+    const key = plannedCoordinateKey(target);
+    const cached = plannedCacheRef.current.get(key);
+
+    if (cached) {
+      return cached;
+    }
+
+    const pending = fetchPlannedCoordinate(target).then((planned) => {
+      // Sem resposta, a próxima captura consulta de novo.
+      if (!planned) {
+        plannedCacheRef.current.delete(key);
+      }
+      return planned;
+    });
+
+    plannedCacheRef.current.set(key, pending);
+    return pending;
+  }
+
+  // Ponto ou campanha trocados num registro cuja coordenada é a planejada: ela era
+  // do ponto anterior e sai. A do GPS e a digitada ficam, porque dizem onde a
+  // pessoa estava.
+  function changePoint(next: Partial<FieldDiaryPayload>) {
+    const cleared = plannedPatchForPointChange(latestEntryRef.current.coordinateSource, null);
+
+    update({ ...next, ...(cleared ?? {}) });
+
+    if (cleared) {
+      setCaptureFeedback({
+        notices: [
+          "A coordenada planejada era do ponto anterior e foi apagada. Toque em “Ler o GPS de novo”.",
+        ],
+        farFromPlanned: null,
+        needsCoordinateCheck: true,
+      });
+    }
+
+    // Adianta a consulta, para o "Iniciar coleta" não depender do sinal na hora.
+    void plannedFor(latestEntryRef.current);
+  }
+
   function selectPoint(optionId: string) {
     const point = fieldDiaryPointOptions.find((item) => item.id === optionId);
 
@@ -104,11 +178,80 @@ export function FieldDiaryForm({
       return;
     }
 
-    update({
+    changePoint({
       locationName: point.locationName,
       sia: point.sia,
       municipality: point.municipality,
     });
+  }
+
+  async function capturePosition() {
+    setIsLocating(true);
+    const [reading] = await Promise.all([readDeviceGps(), plannedFor(latestEntryRef.current)]);
+
+    if (!isMountedRef.current) {
+      return null;
+    }
+
+    // A pessoa pode ter trocado o ponto enquanto o GPS respondia: vale o de agora.
+    const planned = await plannedFor(latestEntryRef.current);
+
+    if (!isMountedRef.current) {
+      return null;
+    }
+
+    const current = latestEntryRef.current;
+    const position = buildPositionCapture({
+      gps: reading.gps,
+      gpsProblem: reading.problem,
+      planned,
+      hadCoordinates: Boolean(current.latitude && current.longitude),
+    });
+
+    update(position.patch);
+    setIsLocating(false);
+    return position;
+  }
+
+  async function startCollection() {
+    if (isLocating) {
+      return;
+    }
+
+    // A hora é a do toque, não a de quando o GPS responde.
+    const time = buildTimeCapture({ now: new Date(), currentEntryDate: latestEntryRef.current.entryDate });
+    update(time.patch);
+    setCaptureFeedback({
+      notices: [...time.notices, "Lendo o GPS do celular…"],
+      farFromPlanned: null,
+      needsCoordinateCheck: false,
+    });
+
+    const position = await capturePosition();
+
+    if (position) {
+      setCaptureFeedback({ ...position, notices: [...time.notices, ...position.notices] });
+    }
+  }
+
+  async function readPositionAgain() {
+    if (isLocating) {
+      return;
+    }
+
+    setCaptureFeedback({ notices: ["Lendo o GPS do celular…"], farFromPlanned: null, needsCoordinateCheck: false });
+
+    const position = await capturePosition();
+
+    if (position) {
+      setCaptureFeedback(position);
+    }
+  }
+
+  function markRelocated() {
+    update({ executionStatus: "relocated" });
+    // O campo do motivo só existe depois que a situação muda.
+    requestAnimationFrame(() => document.getElementById("field-diary-relocation-reason")?.focus());
   }
 
   function selectMunicipality(municipality: string) {
@@ -116,7 +259,7 @@ export function FieldDiaryForm({
 
     if (options.length === 1) {
       const [point] = options;
-      update({
+      changePoint({
         municipality,
         locationName: point.locationName,
         sia: point.sia,
@@ -127,15 +270,12 @@ export function FieldDiaryForm({
     const currentPointStillMatches =
       selectedPointOption && selectedPointOption.municipality === municipality;
 
-    update({
-      municipality,
-      ...(currentPointStillMatches
-        ? {}
-        : {
-            locationName: "",
-            sia: "",
-          }),
-    });
+    if (currentPointStillMatches) {
+      update({ municipality });
+      return;
+    }
+
+    changePoint({ municipality, locationName: "", sia: "" });
   }
 
   function addPhoto() {
@@ -243,7 +383,8 @@ export function FieldDiaryForm({
                 value={entry.campaignId ?? ""}
                 onChange={(event) => {
                   const campaign = campaignOptions.find((item) => item.id === event.target.value);
-                  update({ campaignId: campaign?.id ?? "", campaignName: campaign?.name ?? "" });
+                  // Cada campanha tem a própria coordenada planejada do ponto.
+                  changePoint({ campaignId: campaign?.id ?? "", campaignName: campaign?.name ?? "" });
                 }}
                 className={inputClassName}
               >
@@ -319,6 +460,18 @@ export function FieldDiaryForm({
               ))}
             </select>
           </Field>
+          <div className="md:col-span-2">
+            <CollectionStartPanel
+              isLocating={isLocating}
+              startedLabel={formatCollectionStart(entry.collectionStartedAt)}
+              getOverwriteWarning={() => collectionRestartWarning(latestEntryRef.current, new Date())}
+              feedback={captureFeedback}
+              canMarkRelocated={executionStatus !== "relocated"}
+              onStart={() => void startCollection()}
+              onReadPosition={() => void readPositionAgain()}
+              onMarkRelocated={markRelocated}
+            />
+          </div>
           <Field label="Data" required>
             <input
               type="date"
@@ -364,7 +517,9 @@ export function FieldDiaryForm({
           <Field label="Latitude">
             <input
               value={entry.latitude ?? ""}
-              onChange={(event) => update({ latitude: event.target.value })}
+              onChange={(event) =>
+                update({ latitude: event.target.value, coordinateSource: "manual", gpsAccuracyM: null })
+              }
               className={inputClassName}
               placeholder="Ex: -25.428400"
               inputMode="decimal"
@@ -376,7 +531,9 @@ export function FieldDiaryForm({
           <Field label="Longitude">
             <input
               value={entry.longitude ?? ""}
-              onChange={(event) => update({ longitude: event.target.value })}
+              onChange={(event) =>
+                update({ longitude: event.target.value, coordinateSource: "manual", gpsAccuracyM: null })
+              }
               className={inputClassName}
               placeholder="Ex: -49.273300"
               inputMode="decimal"
@@ -385,6 +542,12 @@ export function FieldDiaryForm({
               maxLength={20}
             />
           </Field>
+          {coordinateSourceText ? (
+            <p className="text-sm font-semibold text-[var(--ink-soft)] md:col-span-2">
+              Origem da coordenada: {coordinateSourceText}.
+              {entry.coordinateSource === "planned" ? " Confira se a coleta foi nesse lugar." : ""}
+            </p>
+          ) : null}
           {coordinateError ? (
             <p
               id="field-diary-coordinate-error"
@@ -416,6 +579,7 @@ export function FieldDiaryForm({
           {executionStatus === "relocated" ? (
             <Field label="Motivo da realocação" required>
               <textarea
+                id="field-diary-relocation-reason"
                 value={entry.relocationReason ?? ""}
                 onChange={(event) => update({ relocationReason: event.target.value })}
                 className={textareaClassName}

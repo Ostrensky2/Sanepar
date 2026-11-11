@@ -1,5 +1,10 @@
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 import { campaignIdentityKey } from "@/lib/campaign-identity";
+import {
+  normalizeGpsAccuracy,
+  parseCoordinateSource,
+  type CoordinateSource,
+} from "@/lib/collection-capture";
 import { coordinateToText } from "@/lib/coordinates";
 import {
   canonicalOccurrenceType,
@@ -67,6 +72,13 @@ export type FieldDiaryEntry = {
   // Texto no formulário; no banco é numeric(9,6) conferido (ver lib/coordinates).
   latitude?: string | null;
   longitude?: string | null;
+  // De onde veio a coordenada: GPS do celular, coordenada planejada do ponto ou
+  // digitada. Vazio nos registros antigos e nos importados de planilha.
+  coordinateSource?: CoordinateSource | null;
+  // Precisão informada pelo aparelho, em metros (só quando a origem é o GPS).
+  gpsAccuracyM?: number | null;
+  // Momento em que a pessoa tocou em "Iniciar coleta" (relógio do aparelho).
+  collectionStartedAt?: string | null;
   // Situação do ponto (mesmos códigos do IAGen). "relocated" exige motivo.
   executionStatus?: PointExecutionStatus;
   relocationReason?: string | null;
@@ -153,6 +165,9 @@ export function createEmptyFieldDiaryPayload(): FieldDiaryPayload {
     zooplanktonId: "",
     latitude: "",
     longitude: "",
+    coordinateSource: null,
+    gpsAccuracyM: null,
+    collectionStartedAt: null,
     executionStatus: undefined,
     relocationReason: "",
     municipality: "",
@@ -328,7 +343,7 @@ export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
 const FIELD_DIARY_ENTRY_FIELDS = [
   "id", "campaignId", "campaignName", "campaignDay", "entryDate", "fieldTeamName", "fieldTeamMembers",
   "collectionTime", "locationName", "sia", "samplesReplicasEdna", "zooplanktonId", "latitude", "longitude",
-  "executionStatus", "relocationReason", "municipality", "activities", "waterVisualConditions", "hasOccurrence",
+  "coordinateSource", "gpsAccuracyM", "collectionStartedAt", "executionStatus", "relocationReason", "municipality", "activities", "waterVisualConditions", "hasOccurrence",
   "occurrenceType", "occurrenceDescription", "requiresFollowUp", "followUpNotes", "weatherConditions",
   "pointAccessibility", "dailySummary", "status", "createdBy", "createdByName", "createdAt", "updatedAt", "photos",
   "governanceStatus", "collectionOrder", "missingInImport",
@@ -400,6 +415,10 @@ export function normalizeFieldDiaryEntry(value: unknown): FieldDiaryEntry | null
   // Sem situação explícita fica indefinida: a situação é inferida só na gravação
   // e na exibição, para uma planilha sem a coluna não contradizer o app.
   const executionStatus = parsePointExecutionStatus(candidate.executionStatus) ?? undefined;
+  const latitude = coordinateToText(candidate.latitude);
+  const longitude = coordinateToText(candidate.longitude);
+  // A origem só faz sentido com a coordenada preenchida; a precisão, só com GPS.
+  const coordinateSource = latitude && longitude ? parseCoordinateSource(candidate.coordinateSource) : null;
 
   return {
     id: String(candidate.id),
@@ -414,8 +433,11 @@ export function normalizeFieldDiaryEntry(value: unknown): FieldDiaryEntry | null
     sia: candidate.sia ? String(candidate.sia) : "",
     samplesReplicasEdna: candidate.samplesReplicasEdna ? String(candidate.samplesReplicasEdna) : "",
     zooplanktonId: candidate.zooplanktonId ? String(candidate.zooplanktonId) : "",
-    latitude: coordinateToText(candidate.latitude),
-    longitude: coordinateToText(candidate.longitude),
+    latitude,
+    longitude,
+    coordinateSource,
+    gpsAccuracyM: coordinateSource === "gps" ? normalizeGpsAccuracy(candidate.gpsAccuracyM) : null,
+    collectionStartedAt: normalizeTimestamp(candidate.collectionStartedAt),
     executionStatus,
     relocationReason: executionStatus === "relocated" && candidate.relocationReason
       ? String(candidate.relocationReason).trim()
@@ -444,6 +466,16 @@ export function normalizeFieldDiaryEntry(value: unknown): FieldDiaryEntry | null
         : Number(candidate.collectionOrder) || null,
     missingInImport: Boolean(candidate.missingInImport),
   };
+}
+
+function normalizeTimestamp(value: unknown) {
+  if (!value) {
+    return null;
+  }
+
+  const time = new Date(String(value)).getTime();
+
+  return Number.isFinite(time) ? new Date(time).toISOString() : null;
 }
 
 function toStringArray(value: unknown) {
@@ -482,6 +514,14 @@ export function fieldDiaryEntryKey(
 function mergeFieldDiaryEntries(base: FieldDiaryEntry, incoming: FieldDiaryEntry): FieldDiaryEntry {
   const preferred = scoreFieldDiaryEntry(incoming) >= scoreFieldDiaryEntry(base) ? incoming : base;
   const fallback = preferred === incoming ? base : incoming;
+  // A origem e a precisão acompanham o registro de onde a coordenada veio. Com a
+  // mesma coordenada nos dois, vale o que sabe dizer de onde ela veio.
+  const sameCoordinates =
+    (preferred.latitude ?? "") === (fallback.latitude ?? "") &&
+    (preferred.longitude ?? "") === (fallback.longitude ?? "");
+  const coordinateOwner = sameCoordinates
+    ? preferred.coordinateSource ? preferred : fallback
+    : preferred.latitude ? preferred : fallback;
 
   return {
     ...fallback,
@@ -495,6 +535,9 @@ function mergeFieldDiaryEntries(base: FieldDiaryEntry, incoming: FieldDiaryEntry
     zooplanktonId: preferred.zooplanktonId || fallback.zooplanktonId,
     latitude: preferred.latitude || fallback.latitude,
     longitude: preferred.longitude || fallback.longitude,
+    coordinateSource: coordinateOwner.coordinateSource ?? null,
+    gpsAccuracyM: coordinateOwner.gpsAccuracyM ?? null,
+    collectionStartedAt: preferred.collectionStartedAt || fallback.collectionStartedAt || null,
     municipality: preferred.municipality || fallback.municipality,
     activities: preferred.activities.length ? preferred.activities : fallback.activities,
     waterVisualConditions: preferred.waterVisualConditions.length

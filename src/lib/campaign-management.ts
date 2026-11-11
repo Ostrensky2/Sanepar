@@ -4,6 +4,11 @@ import type {
 import type { MetabarcodingStage } from "@/components/metabarcoding-stages";
 export type { MetabarcodingStage };
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
+import {
+  buildProjectCollectionDefaults,
+  normalizeCollectionDefaults,
+  type CollectionDefaults,
+} from "@/lib/field-standard";
 
 export type CampaignOperationalStatus =
   | "Não previsto"
@@ -43,6 +48,12 @@ export type CampaignManagement = {
   stageTitle: string;
   stages: MetabarcodingStage[];
   note: string;
+  /**
+   * Padrões de coleta definidos nesta campanha (laboratório, conservação, réplicas…).
+   * Ausente = a campanha herda os padrões da campanha anterior ou do projeto
+   * (ver resolveCollectionDefaults).
+   */
+  collectionDefaults?: CollectionDefaults;
 };
 
 export type CampaignManagementById = Record<string, CampaignManagement>;
@@ -267,6 +278,9 @@ function normalizeCampaignManagementById(
           ...saved,
           status,
           stages: normalizedStages,
+          collectionDefaults: saved?.collectionDefaults
+            ? normalizeCollectionDefaults(saved.collectionDefaults)
+            : undefined,
         },
       ];
     }),
@@ -275,6 +289,36 @@ function normalizeCampaignManagementById(
 
 function isRecord(value: unknown) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+export type ResolvedCollectionDefaults = {
+  defaults: CollectionDefaults;
+  /** Campanha em que os padrões foram gravados; null = padrão do projeto. */
+  sourceCampaignId: string | null;
+};
+
+/**
+ * Padrões de coleta que valem para a campanha: os dela, se foram definidos; senão os
+ * da campanha anterior mais próxima que tenha padrões; senão os do projeto. Assim o
+ * que foi definido uma vez vale para as campanhas seguintes sem ser digitado de novo.
+ */
+export function resolveCollectionDefaults(
+  managementById: Partial<CampaignManagementById>,
+  campaignId: string,
+  campaigns: Array<Pick<CampaignView, "id">> = defaultCampaigns,
+): ResolvedCollectionDefaults {
+  const index = campaigns.findIndex((campaign) => campaign.id === campaignId);
+  const candidates = index >= 0 ? campaigns.slice(0, index + 1).reverse() : [{ id: campaignId }];
+
+  for (const campaign of candidates) {
+    const saved = managementById[campaign.id]?.collectionDefaults;
+
+    if (saved) {
+      return { defaults: normalizeCollectionDefaults(saved), sourceCampaignId: campaign.id };
+    }
+  }
+
+  return { defaults: buildProjectCollectionDefaults(), sourceCampaignId: null };
 }
 
 export function buildDefaultCampaignManagementById(campaigns: CampaignView[]) {

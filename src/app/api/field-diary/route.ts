@@ -13,6 +13,7 @@ import {
   fieldDiaryRuleErrors,
   fieldDiaryRuleFields,
 } from "@/lib/field-diary-validation";
+import { captureRowColumns, normalizeGpsAccuracy, parseCoordinateSource } from "@/lib/collection-capture";
 import { classifyFieldDiaryImport, diffFieldDiaryEntries } from "@/lib/imports/conflict-detection";
 
 export const runtime = "nodejs";
@@ -32,6 +33,9 @@ type FieldDiaryRow = {
   zooplankton_id: string | null;
   latitude?: number | string | null;
   longitude?: number | string | null;
+  coordinate_source?: string | null;
+  gps_accuracy_m?: number | string | null;
+  collection_started_at?: string | null;
   execution_status?: string | null;
   relocation_reason?: string | null;
   municipality: string;
@@ -135,6 +139,11 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
   const rawExecutionStatus = payload.entry && typeof payload.entry === "object" && "executionStatus" in payload.entry
     ? payload.entry.executionStatus
     : undefined;
+  // Um navegador com a versão anterior do app não envia os campos de captura
+  // (origem da coordenada, precisão, início da coleta).
+  const clientSendsCapture = Boolean(
+    payload.entry && typeof payload.entry === "object" && "coordinateSource" in payload.entry,
+  );
   const normalized = normalizeFieldDiaryEntry(payload.entry);
 
   if (!normalized) {
@@ -186,10 +195,31 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
     return NextResponse.json({ error: rowToSave.error }, { status: rowToSave.status });
   }
 
-  const result =
-    mode === "insert"
-      ? await supabase.from("field_diary_entries").upsert(rowToSave, { onConflict: "id" }).select("*").single<FieldDiaryRow>()
-      : await supabase.from("field_diary_entries").upsert(rowToSave, { onConflict: "id" }).select("*").single<FieldDiaryRow>();
+  // Na criação, a linha já sai coerente de prepareInsertRow (nova, ou somada a um
+  // registro que já existia para o ponto e a data).
+  if (!clientSendsCapture && mode === "upsert") {
+    applyCaptureFromOlderClient(rowToSave, entry, previousEntry);
+  }
+
+  let result = await supabase
+    .from("field_diary_entries")
+    .upsert(rowToSave, { onConflict: "id" })
+    .select("*")
+    .single<FieldDiaryRow>();
+
+  // Banco ainda sem as colunas de captura (migration não aplicada): o registro de
+  // campo não pode deixar de ser gravado por isso. Grava sem elas e avisa no log.
+  if (result.error && isMissingCaptureColumn(result.error)) {
+    console.warn("[field-diary] colunas de captura ausentes no banco; registro gravado sem elas", {
+      entryId: entry.id,
+      code: result.error.code,
+    });
+    result = await supabase
+      .from("field_diary_entries")
+      .upsert(withoutCaptureColumns(rowToSave), { onConflict: "id" })
+      .select("*")
+      .single<FieldDiaryRow>();
+  }
 
   const { data, error } = result;
 
@@ -234,6 +264,54 @@ async function writeEntry(request: Request, mode: "insert" | "upsert") {
     entry: savedEntry,
     persistence: "cloud",
   });
+}
+
+const CAPTURE_COLUMNS = ["coordinate_source", "gps_accuracy_m", "collection_started_at"] as const;
+
+type RowWithCapture = { [Column in (typeof CAPTURE_COLUMNS)[number]]?: unknown };
+
+function withoutCaptureColumns<Row extends RowWithCapture>(row: Row) {
+  const captureColumns: readonly string[] = CAPTURE_COLUMNS;
+
+  return Object.fromEntries(
+    Object.entries(row).filter(([column]) => !captureColumns.includes(column)),
+  ) as Omit<Row, (typeof CAPTURE_COLUMNS)[number]>;
+}
+
+function isMissingCaptureColumn(error: { code?: string; message?: string }) {
+  // PGRST204: coluna fora do cache de esquema do PostgREST; 42703: coluna inexistente.
+  return (
+    (error.code === "PGRST204" || error.code === "42703") &&
+    CAPTURE_COLUMNS.some((column) => String(error.message ?? "").includes(column))
+  );
+}
+
+/**
+ * Gravação vinda de um navegador que ainda não conhece os campos de captura.
+ * Se a coordenada não mudou, mantém o que o banco já tem (as colunas saem do
+ * comando); se mudou, a origem deixa de ser conhecida e é apagada, para o banco
+ * nunca dizer "GPS" de uma coordenada que foi digitada.
+ */
+function applyCaptureFromOlderClient(
+  row: RowWithCapture,
+  entry: FieldDiaryEntry,
+  previousEntry: FieldDiaryEntry | null,
+) {
+  const coordinatesChanged =
+    !previousEntry ||
+    (previousEntry.latitude ?? "") !== (entry.latitude ?? "") ||
+    (previousEntry.longitude ?? "") !== (entry.longitude ?? "");
+
+  if (coordinatesChanged) {
+    row.coordinate_source = null;
+    row.gps_accuracy_m = null;
+    delete row.collection_started_at;
+    return;
+  }
+
+  for (const column of CAPTURE_COLUMNS) {
+    delete row[column];
+  }
 }
 
 function describeDatabaseError(error: { code?: string; message?: string }) {
@@ -282,7 +360,22 @@ async function prepareInsertRow(
     } as const;
   }
 
-  return toRow({ ...classification.entry, id: existing.id });
+  // A comparação com o registro existente não olha a origem da coordenada. Se a
+  // coordenada que ficou é a que acabou de chegar, a origem dela vem junto.
+  const merged = classification.entry;
+  const keptIncomingCoordinates =
+    Boolean(entry.latitude && entry.longitude) &&
+    (merged.latitude ?? "") === (entry.latitude ?? "") &&
+    (merged.longitude ?? "") === (entry.longitude ?? "");
+
+  return toRow({
+    ...merged,
+    ...(keptIncomingCoordinates && entry.coordinateSource
+      ? { coordinateSource: entry.coordinateSource, gpsAccuracyM: entry.gpsAccuracyM ?? null }
+      : {}),
+    collectionStartedAt: entry.collectionStartedAt ?? merged.collectionStartedAt ?? null,
+    id: existing.id,
+  });
 }
 
 function fromRow(row: FieldDiaryRow): FieldDiaryEntry {
@@ -300,6 +393,9 @@ function fromRow(row: FieldDiaryRow): FieldDiaryEntry {
     samplesReplicasEdna: row.samples_replicas_edna ?? "",
     zooplanktonId: row.zooplankton_id ?? "",
     ...fieldDiaryRuleFields(row),
+    coordinateSource: parseCoordinateSource(row.coordinate_source),
+    gpsAccuracyM: normalizeGpsAccuracy(row.gps_accuracy_m),
+    collectionStartedAt: row.collection_started_at ?? null,
     municipality: row.municipality,
     activities: row.activities,
     waterVisualConditions: row.water_visual_conditions,
@@ -338,6 +434,7 @@ function toRow(entry: FieldDiaryEntry) {
     samples_replicas_edna: entry.samplesReplicasEdna || null,
     zooplankton_id: entry.zooplanktonId || null,
     ...fieldDiaryRuleColumns(entry),
+    ...captureRowColumns(entry),
     municipality: entry.municipality,
     activities: entry.activities,
     water_visual_conditions: entry.waterVisualConditions,
