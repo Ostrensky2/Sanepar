@@ -32,7 +32,9 @@ import {
   updateFieldOutboxRecord,
   type FieldOutboxRecord,
 } from "@/lib/field-outbox";
+import { rememberLastEquipment } from "@/lib/field-parameters-device";
 import { forgetDevicePhoto, uploadDevicePhotos } from "@/lib/field-photo-upload";
+import { rememberLastSamplePackaging } from "@/lib/last-sample-packaging";
 
 export const FIELD_OUTBOX_SYNCED_EVENT = "yvae:registros-enviados";
 
@@ -138,6 +140,10 @@ export async function submitFieldRecord(payload: FieldDiaryPayload, collected?: 
   if (canUseBrowserOnlyPersistence()) {
     return submitOnLocalComputer(payload, collected);
   }
+
+  // A próxima amostra e a próxima medição já vêm com o que a equipe usou, com ou sem sinal.
+  if (collected?.samples) rememberLastSamplePackaging(collected.samples.samples);
+  if (collected?.readings) rememberLastEquipment(collected.readings.readings);
 
   const previous = findFieldOutboxRecord(payload.id);
   const entry = prepareFieldDiaryEntry(payload, previous?.entry.createdAt);

@@ -24,6 +24,8 @@ export type SampleRow = {
   quantity_unit: string;
   specification: string | null;
   conservation: string;
+  /** Só existe depois da migration 20261112120000 (preservante). */
+  preservative?: string | null;
   packaging: string | null;
   box_position: string | null;
   /** Só existe depois da migration 20261111150000 (marca de exportação). */
@@ -54,6 +56,7 @@ export function samplesFromRows(rows: SampleRow[]): FieldSample[] {
       quantityUnit: row.quantity_unit,
       specification: row.specification ?? "",
       conservation,
+      preservative: row.preservative ?? "",
       packaging: row.packaging ?? "",
       boxPosition: row.box_position ?? "",
       exportedAt: row.exported_at || null,

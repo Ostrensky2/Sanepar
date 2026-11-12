@@ -340,7 +340,7 @@ function describeMark(result: MarkExportedResult, sampleCount: number) {
   }
 
   if (!result.saved) {
-    return "O banco ainda não recebeu a atualização da marca de exportação, então o código das amostras continua acompanhando a data e o ponto do registro.";
+    return "O banco ainda não recebeu a atualização da marca de exportação, então o código das amostras continua acompanhando a data, a hora e o ponto do registro.";
   }
 
   if (result.marked === 0) {

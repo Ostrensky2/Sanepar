@@ -84,6 +84,18 @@ export const MAJOR_RELEASES: MajorRelease[] = [
     ],
     updates: [
       {
+        version: "2.0.7",
+        date: "12/11/2026",
+        items: [
+          "Diário de campo funciona sem sinal. Com o app aberto uma vez com internet depois da atualização, o celular guarda as telas, os pontos e a campanha. Sem sinal, salvar guarda o registro, as amostras, as medições e as fotos no aparelho, com o selo “No aparelho, aguardando sinal”, e tudo vai para a nuvem sozinho quando o sinal volta. “Enviar agora” força o envio.",
+          "Dá para instalar o Yva'e na tela inicial do celular (“Adicionar à tela inicial”) e abrir como um aplicativo.",
+          "Amostras do ponto: o número de amostras é livre. Os botões “−” e “+” ao lado de cada tipo tiram ou acrescentam uma réplica naquele ponto. O padrão do projeto passou a ser 5 de água e 1 de plâncton.",
+          "Cada amostra ganhou o campo “Preservante”, com sugestões (Longmire, álcool, sílica, RNAlater) e espaço para qualquer outro. O preservante usado por último em cada tipo já vem preenchido, e o padrão da campanha também pode trazer o preservante.",
+          "O código da etiqueta passa a levar o ponto, o dia e a hora da coleta, como YVA-0136-071126-0905-AG1. As amostras já gravadas no formato anterior ficam com o código que têm.",
+          "A planilha para o Biolog ganhou a coluna “Preservante”, e o preservante também vai na “Especificação”.",
+        ],
+      },
+      {
         version: "2.0.6",
         date: "11/11/2026",
         items: [

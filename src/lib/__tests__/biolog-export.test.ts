@@ -68,7 +68,7 @@ function sample(overrides: Partial<FieldSample> = {}): FieldSample {
   return {
     id: `sample-${nextId}`,
     entryId: "entry-1",
-    code: "YVA-071126-0136-AG1",
+    code: "YVA-0136-071126-0905-AG1",
     projectCode: "YVA",
     sampleType: "water",
     sequence: 1,
@@ -77,6 +77,7 @@ function sample(overrides: Partial<FieldSample> = {}): FieldSample {
     quantityUnit: "mL",
     specification: "eDNA",
     conservation: "FILTRO_CONGELADO",
+    preservative: "",
     packaging: "Isopor com gelo",
     boxPosition: "A1",
     ...overrides,
@@ -113,12 +114,13 @@ function build(input: Partial<BiologExportInput> & { defaults?: CollectionDefaul
 }
 
 describe("planilha para o Biolog: aba Amostras", () => {
-  it("usa os 28 cabeçalhos que o importador do Biolog reconhece, sem barra", () => {
-    expect(BIOLOG_SAMPLE_COLUMNS).toHaveLength(28);
+  it("usa os 28 cabeçalhos que o importador do Biolog reconhece, mais o Preservante, sem barra", () => {
+    expect(BIOLOG_SAMPLE_COLUMNS).toHaveLength(29);
+    expect(BIOLOG_SAMPLE_COLUMNS.at(-1)).toBe("Preservante");
     expect(BIOLOG_SAMPLE_COLUMNS.filter((header) => header.includes("/"))).toEqual([]);
     expect(BIOLOG_SAMPLE_COLUMNS).toContain("Categoria da Amostra");
     expect(BIOLOG_SAMPLE_COLUMNS).not.toContain("Tipo de Amostra");
-    expect(new Set(BIOLOG_SAMPLE_COLUMNS).size).toBe(28);
+    expect(new Set(BIOLOG_SAMPLE_COLUMNS).size).toBe(29);
   });
 
   it("monta a linha de uma amostra de água com os padrões da campanha", () => {
@@ -136,7 +138,7 @@ describe("planilha para o Biolog: aba Amostras", () => {
       "Origem da Amostra": "AGUA_DOCE",
       Objetivo: "MONITORAMENTO",
       "Tipo de Conservação": "FILTRO_CONGELADO",
-      "Código de Campo": "YVA-071126-0136-AG1",
+      "Código de Campo": "YVA-0136-071126-0905-AG1",
       "Ponto de Coleta": "0136",
       "Data da Coleta": "07/11/2026",
       "Hora da Coleta": "09:05",
@@ -155,7 +157,15 @@ describe("planilha para o Biolog: aba Amostras", () => {
       "Local Armazenamento": "Isopor com gelo",
       Posição: "A1",
       Observações: "Município: Curitiba; Local: Rio Iguaçu, ponte; Situação: Realizado; Coordenada: GPS do celular; Yva'e: entry-1",
+      Preservante: null,
     });
+  });
+
+  it("o preservante vai na coluna própria e também na Especificação", () => {
+    const [row] = build({ samples: [sample({ preservative: "Longmire" })] }).sampleRows;
+
+    expect(sampleCell(row, "Preservante")).toBe("Longmire");
+    expect(sampleCell(row, "Especificação")).toBe("eDNA; preservante: Longmire");
   });
 
   it("para os outros tipos, a origem é o próprio tipo; a matriz da campanha vale só para água", () => {
@@ -164,10 +174,10 @@ describe("planilha para o Biolog: aba Amostras", () => {
       defaults,
       samples: [
         sample(),
-        sample({ code: "YVA-071126-0136-PL1", sampleType: "plankton" }),
-        sample({ code: "YVA-071126-0136-SO1", sampleType: "soil", depthM: null, quantity: 50, quantityUnit: "g" }),
-        sample({ code: "YVA-071126-0136-TE1", sampleType: "tissue", depthM: null, quantity: null, quantityUnit: "g" }),
-        sample({ code: "YVA-071126-0136-AR1", sampleType: "air", depthM: null, quantity: 2.5, quantityUnit: "L" }),
+        sample({ code: "YVA-0136-071126-0905-PL1", sampleType: "plankton" }),
+        sample({ code: "YVA-0136-071126-0905-SO1", sampleType: "soil", depthM: null, quantity: 50, quantityUnit: "g" }),
+        sample({ code: "YVA-0136-071126-0905-TE1", sampleType: "tissue", depthM: null, quantity: null, quantityUnit: "g" }),
+        sample({ code: "YVA-0136-071126-0905-AR1", sampleType: "air", depthM: null, quantity: 2.5, quantityUnit: "L" }),
       ],
     });
 
@@ -184,9 +194,9 @@ describe("planilha para o Biolog: aba Amostras", () => {
     const { sampleRows } = build({
       samples: [
         sample({ quantity: 250.5, specification: "" }),
-        sample({ code: "YVA-071126-0136-SO1", sampleType: "soil", depthM: null, quantity: 50, quantityUnit: "g", specification: "Margem" }),
-        sample({ code: "YVA-071126-0136-AR1", sampleType: "air", depthM: null, quantity: 2.5, quantityUnit: "L", specification: "" }),
-        sample({ code: "YVA-071126-0136-TE1", sampleType: "tissue", depthM: null, quantity: null, quantityUnit: "g", specification: "Nadadeira" }),
+        sample({ code: "YVA-0136-071126-0905-SO1", sampleType: "soil", depthM: null, quantity: 50, quantityUnit: "g", specification: "Margem" }),
+        sample({ code: "YVA-0136-071126-0905-AR1", sampleType: "air", depthM: null, quantity: 2.5, quantityUnit: "L", specification: "" }),
+        sample({ code: "YVA-0136-071126-0905-TE1", sampleType: "tissue", depthM: null, quantity: null, quantityUnit: "g", specification: "Nadadeira" }),
       ],
     });
 
@@ -202,10 +212,10 @@ describe("planilha para o Biolog: aba Amostras", () => {
     const { sampleRows } = build({
       samples: [
         sample({ depthM: 0 }),
-        sample({ code: "YVA-071126-0136-AG2", sequence: 2, depthM: 2.5 }),
-        sample({ code: "YVA-071126-0136-AG3", sequence: 3, depthM: null }),
+        sample({ code: "YVA-0136-071126-0905-AG2", sequence: 2, depthM: 2.5 }),
+        sample({ code: "YVA-0136-071126-0905-AG3", sequence: 3, depthM: null }),
         // Profundidade gravada por engano numa amostra de solo não vai para a planilha.
-        sample({ code: "YVA-071126-0136-SO1", sampleType: "soil", depthM: 3, quantityUnit: "g" }),
+        sample({ code: "YVA-0136-071126-0905-SO1", sampleType: "soil", depthM: 3, quantityUnit: "g" }),
       ],
     });
 
@@ -221,22 +231,22 @@ describe("planilha para o Biolog: aba Amostras", () => {
         entry({ id: "z", campaignName: "3ª Campanha", entryDate: "2026-08-01", sia: "0001" }),
       ],
       samples: [
-        sample({ id: "c1", entryId: "c", code: "YVA-081126-0200-AG1" }),
-        sample({ id: "b1", entryId: "b", code: "YVA-071126-0140-AG1" }),
-        sample({ id: "a-pl", entryId: "a", code: "YVA-071126-0136-PL1", sampleType: "plankton" }),
-        sample({ id: "a-ag2", entryId: "a", code: "YVA-071126-0136-AG2", sequence: 2 }),
-        sample({ id: "a-ag1", entryId: "a", code: "YVA-071126-0136-AG1" }),
-        sample({ id: "z1", entryId: "z", code: "YVA-010826-0001-AG1" }),
+        sample({ id: "c1", entryId: "c", code: "YVA-0200-081126-0800-AG1" }),
+        sample({ id: "b1", entryId: "b", code: "YVA-0140-071126-1030-AG1" }),
+        sample({ id: "a-pl", entryId: "a", code: "YVA-0136-071126-0905-PL1", sampleType: "plankton" }),
+        sample({ id: "a-ag2", entryId: "a", code: "YVA-0136-071126-0905-AG2", sequence: 2 }),
+        sample({ id: "a-ag1", entryId: "a", code: "YVA-0136-071126-0905-AG1" }),
+        sample({ id: "z1", entryId: "z", code: "YVA-0001-010826-0905-AG1" }),
       ],
     });
 
     expect(sampleRows.map((row) => sampleCell(row, "Código de Campo"))).toEqual([
-      "YVA-010826-0001-AG1",
-      "YVA-071126-0136-AG1",
-      "YVA-071126-0136-AG2",
-      "YVA-071126-0136-PL1",
-      "YVA-071126-0140-AG1",
-      "YVA-081126-0200-AG1",
+      "YVA-0001-010826-0905-AG1",
+      "YVA-0136-071126-0905-AG1",
+      "YVA-0136-071126-0905-AG2",
+      "YVA-0136-071126-0905-PL1",
+      "YVA-0140-071126-1030-AG1",
+      "YVA-0200-081126-0800-AG1",
     ]);
     expect(sampleIds).toEqual(["z1", "a-ag1", "a-ag2", "a-pl", "b1", "c1"]);
   });
@@ -314,7 +324,7 @@ describe("planilha para o Biolog: aba Amostras", () => {
   it("registro sem SIA usa o ponto que está no código gravado", () => {
     const [row] = build({
       entries: [entry({ sia: "" })],
-      samples: [sample({ code: "YVA-071126-P01-AG1" })],
+      samples: [sample({ code: "YVA-P01-071126-0905-AG1" })],
     }).sampleRows;
 
     expect(sampleCell(row, "Ponto de Coleta")).toBe("P01");
@@ -324,7 +334,7 @@ describe("planilha para o Biolog: aba Amostras", () => {
 describe("planilha para o Biolog: parâmetros medidos", () => {
   it("preenche as colunas fixas com as medições que valem para a amostra", () => {
     const { sampleRows } = build({
-      samples: [sample(), sample({ code: "YVA-071126-0136-AG2", sequence: 2, depthM: 5 })],
+      samples: [sample(), sample({ code: "YVA-0136-071126-0905-AG2", sequence: 2, depthM: 5 })],
       readings: [
         reading({ parameterId: "air_temperature", value: 22.5, unit: "°C", depthM: null }),
         reading({ parameterId: "water_temperature", value: 18.4, unit: "°C", depthM: 0 }),
@@ -379,7 +389,7 @@ describe("planilha para o Biolog: parâmetros medidos", () => {
 
   it("parâmetro que não se aplica ao tipo da amostra não entra na linha dela", () => {
     const { sampleRows, readingRows } = build({
-      samples: [sample({ code: "YVA-071126-0136-SO1", sampleType: "soil", depthM: null, quantityUnit: "g" })],
+      samples: [sample({ code: "YVA-0136-071126-0905-SO1", sampleType: "soil", depthM: null, quantityUnit: "g" })],
       readings: [
         reading({ parameterId: "ph", value: 6.1, depthM: 0 }),
         reading({ parameterId: "turbidity", value: 12, unit: "NTU", depthM: 0 }),
@@ -395,7 +405,7 @@ describe("planilha para o Biolog: parâmetros medidos", () => {
   it("a aba Parâmetros tem uma linha por medição de cada amostra, em formato longo", () => {
     const { readingRows, counts } = build({
       catalog: [...catalog, chlorophyll],
-      samples: [sample(), sample({ code: "YVA-071126-0136-PL1", sampleType: "plankton" })],
+      samples: [sample(), sample({ code: "YVA-0136-071126-0905-PL1", sampleType: "plankton" })],
       readings: [
         reading({ parameterId: "conductivity", value: 120.5, unit: "µS/cm", depthM: 0 }),
         reading({ parameterId: "clorofila_a", value: 3.4, unit: "µg/L", depthM: 0, measuredTime: "", equipment: "" }),
@@ -413,12 +423,12 @@ describe("planilha para o Biolog: parâmetros medidos", () => {
       "Equipamento / Método",
     ]);
     expect(readingRows).toEqual([
-      ["YVA-071126-0136-AG1", "Temperatura do ar", 22.5, "°C", null, "07/11/2026 09:10", "Termômetro"],
-      ["YVA-071126-0136-AG1", "Condutividade", 120.5, "µS/cm", 0, "07/11/2026 09:10", "Sonda multiparâmetro"],
-      ["YVA-071126-0136-AG1", "Clorofila a", 3.4, "µg/L", 0, "07/11/2026", ""],
-      ["YVA-071126-0136-PL1", "Temperatura do ar", 22.5, "°C", null, "07/11/2026 09:10", "Termômetro"],
-      ["YVA-071126-0136-PL1", "Condutividade", 120.5, "µS/cm", 0, "07/11/2026 09:10", "Sonda multiparâmetro"],
-      ["YVA-071126-0136-PL1", "Clorofila a", 3.4, "µg/L", 0, "07/11/2026", ""],
+      ["YVA-0136-071126-0905-AG1", "Temperatura do ar", 22.5, "°C", null, "07/11/2026 09:10", "Termômetro"],
+      ["YVA-0136-071126-0905-AG1", "Condutividade", 120.5, "µS/cm", 0, "07/11/2026 09:10", "Sonda multiparâmetro"],
+      ["YVA-0136-071126-0905-AG1", "Clorofila a", 3.4, "µg/L", 0, "07/11/2026", ""],
+      ["YVA-0136-071126-0905-PL1", "Temperatura do ar", 22.5, "°C", null, "07/11/2026 09:10", "Termômetro"],
+      ["YVA-0136-071126-0905-PL1", "Condutividade", 120.5, "µS/cm", 0, "07/11/2026 09:10", "Sonda multiparâmetro"],
+      ["YVA-0136-071126-0905-PL1", "Clorofila a", 3.4, "µg/L", 0, "07/11/2026", ""],
     ]);
     // Três medições, cada uma repetida nas duas amostras a que se aplica.
     expect(counts.readings).toBe(3);
@@ -478,7 +488,7 @@ describe("planilha para o Biolog: o que entra e o que falta", () => {
   it("registro sem amostra fica de fora e é contado", () => {
     const result = build({
       entries: [entry(), entry({ id: "entry-2", sia: "0140" }), entry({ id: "entry-3", sia: "0141" })],
-      samples: [sample(), sample({ code: "YVA-071126-0136-AG2", sequence: 2 })],
+      samples: [sample(), sample({ code: "YVA-0136-071126-0905-AG2", sequence: 2 })],
       readings: [reading({ entryId: "entry-2" })],
     });
 
@@ -511,11 +521,11 @@ describe("planilha para o Biolog: o que entra e o que falta", () => {
       ],
       samples: [
         sample({ entryId: "sem-hora" }),
-        sample({ entryId: "sem-hora", code: "YVA-071126-0136-AG2", sequence: 2 }),
-        sample({ entryId: "sem-coordenada", code: "YVA-071126-0140-AG1" }),
+        sample({ entryId: "sem-hora", code: "YVA-0136-071126-0905-AG2", sequence: 2 }),
+        sample({ entryId: "sem-coordenada", code: "YVA-0140-071126-0905-AG1" }),
         // Código fora do padrão e registro sem SIA: não há de onde tirar o ponto.
         sample({ entryId: "sem-ponto", code: "AMOSTRA-ANTIGA" }),
-        sample({ entryId: "ok", code: "YVA-071126-0150-AG1" }),
+        sample({ entryId: "ok", code: "YVA-0150-071126-0905-AG1" }),
       ],
     });
     const blocking = result.issues.filter((issue) => issue.blocking);
@@ -545,23 +555,25 @@ describe("planilha para o Biolog: o que entra e o que falta", () => {
     expect(result.counts.blockedSamples).toBe(0);
   });
 
-  it("avisa quando o código gravado não confere mais com a data ou o ponto do registro", () => {
+  it("avisa quando o código gravado não confere mais com a data, a hora ou o ponto do registro", () => {
     const oneCode = build({ entries: [entry({ entryDate: "2026-11-08" })] });
+    const otherTime = build({ entries: [entry({ collectionTime: "10:15" })] });
     const twoCodes = build({
       entries: [entry({ sia: "0140" })],
-      samples: [sample(), sample({ code: "YVA-071126-0136-AG2", sequence: 2 })],
+      samples: [sample(), sample({ code: "YVA-0136-071126-0905-AG2", sequence: 2 })],
     });
     const otherProject = build({ defaults: { ...buildProjectCollectionDefaults(), projectCode: "IGU" } });
 
     expect(oneCode.issues.map((issue) => [issue.kind, issue.message, issue.blocking])).toEqual([
       [
         "code_out_of_date",
-        "O código YVA-071126-0136-AG1 não confere com a data e o ponto do registro. Abra o registro e salve de novo.",
+        "O código YVA-0136-071126-0905-AG1 não confere com a data, a hora e o ponto do registro. Abra o registro e salve de novo.",
         false,
       ],
     ]);
+    expect(otherTime.issues.map((issue) => issue.kind)).toEqual(["code_out_of_date"]);
     expect(twoCodes.issues.map((issue) => issue.message)).toEqual([
-      "2 códigos de amostra não conferem com a data e o ponto do registro. Abra o registro e salve de novo.",
+      "2 códigos de amostra não conferem com a data, a hora e o ponto do registro. Abra o registro e salve de novo.",
     ]);
     expect(otherProject.issues.map((issue) => issue.kind)).toEqual(["code_out_of_date"]);
   });
@@ -571,29 +583,43 @@ describe("planilha para o Biolog: o que entra e o que falta", () => {
       entries: [entry({ entryDate: "2026-11-08" })],
       samples: [
         sample({ exportedAt: "2026-11-09T10:00:00.000Z" }),
-        sample({ code: "YVA-081126-0136-AG2", sequence: 2 }),
+        sample({ code: "YVA-0136-081126-0905-AG2", sequence: 2 }),
       ],
     });
 
     expect(result.sampleRows.map((row) => [sampleCell(row, "Código de Campo"), sampleCell(row, "Data da Coleta")])).toEqual([
-      ["YVA-071126-0136-AG1", "08/11/2026"],
-      ["YVA-081126-0136-AG2", "08/11/2026"],
+      ["YVA-0136-071126-0905-AG1", "08/11/2026"],
+      ["YVA-0136-081126-0905-AG2", "08/11/2026"],
     ]);
     expect(result.issues.map((issue) => [issue.kind, issue.message, issue.blocking])).toEqual([
       [
         "exported_code_kept",
-        "O código YVA-071126-0136-AG1 já tinha sido exportado e continua o mesmo, embora a data ou o ponto do registro tenham mudado.",
+        "O código YVA-0136-071126-0905-AG1 já tinha sido exportado e continua o mesmo, embora a data, a hora ou o ponto do registro tenham mudado.",
         false,
       ],
     ]);
     expect(result.counts.samplesExportedBefore).toBe(1);
   });
 
+  it("código no formato antigo (sem a hora) não pede para salvar de novo, porque não muda mais", () => {
+    const same = build({ samples: [sample({ code: "YVA-071126-0136-AG1" })] });
+    const moved = build({ entries: [entry({ entryDate: "2026-11-08" })], samples: [sample({ code: "YVA-071126-0136-AG1" })] });
+
+    expect(same.issues).toEqual([]);
+    expect(moved.issues.map((issue) => [issue.kind, issue.message])).toEqual([
+      [
+        "exported_code_kept",
+        "O código YVA-071126-0136-AG1 é do formato antigo e continua o mesmo, embora a data ou o ponto do registro tenham mudado.",
+      ],
+    ]);
+    expect(moved.counts.samplesExportedBefore).toBe(0);
+  });
+
   it("usa os padrões da campanha de cada registro", () => {
     const lapoa = { ...buildProjectCollectionDefaults(), destinationLab: "LAPOA" as const };
     const result = buildBiologExport({
       entries: [entry(), entry({ id: "entry-2", campaignId: "campanha-5", campaignName: "5ª Campanha", sia: "0140" })],
-      samples: [sample(), sample({ entryId: "entry-2", code: "YVA-071126-0140-AG1" })],
+      samples: [sample(), sample({ entryId: "entry-2", code: "YVA-0140-071126-0905-AG1" })],
       readings: [],
       catalog,
       defaultsFor: (item) => (item.campaignId === "campanha-5" ? lapoa : buildProjectCollectionDefaults()),
@@ -663,7 +689,7 @@ describe("resumo antes de gerar a planilha", () => {
         entry({ id: "a", collectionTime: "", latitude: "", longitude: "" }),
         entry({ id: "b", sia: "0140", coordinateSource: "planned" }),
       ],
-      samples: [sample({ entryId: "a" }), sample({ entryId: "b", code: "YVA-061126-0140-AG1" })],
+      samples: [sample({ entryId: "a" }), sample({ entryId: "b", code: "YVA-0140-061126-0905-AG1" })],
     });
 
     expect(groupBiologExportIssues(result.issues)).toEqual({
@@ -676,7 +702,7 @@ describe("resumo antes de gerar a planilha", () => {
           entryLabel: "0140 · 07/11/2026",
           messages: [
             "A coordenada é a planejada do ponto, e não a medida no local.",
-            "O código YVA-061126-0140-AG1 não confere com a data e o ponto do registro. Abra o registro e salve de novo.",
+            "O código YVA-0140-061126-0905-AG1 não confere com a data, a hora e o ponto do registro. Abra o registro e salve de novo.",
           ],
         },
       ],

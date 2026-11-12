@@ -134,7 +134,7 @@ function savedRow(n: number, overrides: Row = {}) {
   return {
     id: id(n),
     entry_id: ENTRY,
-    sample_code: `YVA-071126-0136-AG${n}`,
+    sample_code: `YVA-0136-071126-0905-AG${n}`,
     project_code: "YVA",
     sample_type: "water",
     sequence: n,
@@ -166,8 +166,8 @@ beforeEach(() => {
   db.auth.mockReset();
   db.auth.mockResolvedValue({ ok: true, session: { name: "Equipe A", email: "a@example.test" } });
   db.entries = [
-    { id: ENTRY, campaign_name: "4ª Campanha", entry_date: "2026-11-07", sia: "SIA-0136" },
-    { id: OTHER_ENTRY, campaign_name: "Ação pontual", entry_date: "2026-11-07", sia: "136" },
+    { id: ENTRY, campaign_name: "4ª Campanha", entry_date: "2026-11-07", collection_time: "09:05:00", sia: "SIA-0136" },
+    { id: OTHER_ENTRY, campaign_name: "Ação pontual", entry_date: "2026-11-07", collection_time: "09:05:00", sia: "136" },
   ];
   db.samples = [];
   db.changeLog = [];
@@ -178,10 +178,10 @@ beforeEach(() => {
 describe("GET /api/field-diary/samples", () => {
   it("lista as amostras do registro na ordem do padrão, sem cache", async () => {
     db.samples = [
-      savedRow(9, { sample_code: "YVA-071126-0136-PL1", sample_type: "plankton", sequence: 1, quantity: null }),
+      savedRow(9, { sample_code: "YVA-0136-071126-0905-PL1", sample_type: "plankton", sequence: 1, quantity: null }),
       savedRow(2),
       savedRow(1, { box_position: "A1" }),
-      savedRow(5, { entry_id: OTHER_ENTRY, sample_code: "YVA-081126-0136-AG1" }),
+      savedRow(5, { entry_id: OTHER_ENTRY, sample_code: "YVA-0136-081126-0905-AG1" }),
     ];
 
     const response = await GET(new Request(`https://example.test/api/field-diary/samples?entryId=${ENTRY}`));
@@ -191,9 +191,9 @@ describe("GET /api/field-diary/samples", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(payload.available).toBe(true);
     expect(payload.samples.map((item: Row) => item.code)).toEqual([
-      "YVA-071126-0136-AG1",
-      "YVA-071126-0136-AG2",
-      "YVA-071126-0136-PL1",
+      "YVA-0136-071126-0905-AG1",
+      "YVA-0136-071126-0905-AG2",
+      "YVA-0136-071126-0905-PL1",
     ]);
     expect(payload.samples[0]).toMatchObject({ depthM: 0, quantity: 1000, quantityUnit: "mL", boxPosition: "A1", entryId: ENTRY });
     expect(payload.samples[2].quantity).toBeNull();
@@ -247,7 +247,7 @@ describe("PUT /api/field-diary/samples", () => {
     const response = await put(
       body({
         samples: [
-          sample(1, { depthM: "2,5", boxPosition: "A1" }),
+          sample(1, { depthM: "2,5", boxPosition: "A1", preservative: " Longmire " }),
           sample(2),
           sample(3, { sampleType: "plankton", sequence: 1, quantity: "", conservation: "OUTRO", specification: "" }),
         ],
@@ -257,14 +257,14 @@ describe("PUT /api/field-diary/samples", () => {
 
     expect(response.status).toBe(200);
     expect(payload.samples.map((item: Row) => item.code)).toEqual([
-      "YVA-071126-0136-AG1",
-      "YVA-071126-0136-AG2",
-      "YVA-071126-0136-PL1",
+      "YVA-0136-071126-0905-AG1",
+      "YVA-0136-071126-0905-AG2",
+      "YVA-0136-071126-0905-PL1",
     ]);
     expect(db.samples[0]).toMatchObject({
       id: id(1),
       entry_id: ENTRY,
-      sample_code: "YVA-071126-0136-AG1",
+      sample_code: "YVA-0136-071126-0905-AG1",
       project_code: "YVA",
       sample_type: "water",
       sequence: 1,
@@ -272,8 +272,11 @@ describe("PUT /api/field-diary/samples", () => {
       quantity: 1000,
       quantity_unit: "mL",
       conservation: "FILTRO_CONGELADO",
+      preservative: "Longmire",
       box_position: "A1",
     });
+    expect(db.samples[1].preservative).toBeNull();
+    expect(payload.samples[0].preservative).toBe("Longmire");
     expect(db.samples[2]).toMatchObject({ quantity: null, specification: null, quantity_unit: "mL" });
     expect(db.changeLog).toEqual([
       expect.objectContaining({
@@ -281,7 +284,7 @@ describe("PUT /api/field-diary/samples", () => {
         campaign_name: "4ª Campanha",
         field_name: "Amostras",
         old_value: null,
-        new_value: "YVA-071126-0136-AG1, YVA-071126-0136-AG2, YVA-071126-0136-PL1",
+        new_value: "YVA-0136-071126-0905-AG1, YVA-0136-071126-0905-AG2, YVA-0136-071126-0905-PL1",
         origin: "app",
         changed_by: "Equipe A",
       }),
@@ -293,7 +296,7 @@ describe("PUT /api/field-diary/samples", () => {
     const again = await put(body({ samples: [sample(1), sample(2)] }));
 
     expect(again.status).toBe(200);
-    expect(codes()).toEqual(["YVA-071126-0136-AG1", "YVA-071126-0136-AG2"]);
+    expect(codes()).toEqual(["YVA-0136-071126-0905-AG1", "YVA-0136-071126-0905-AG2"]);
     // Nada mudou na lista de amostras: o histórico não ganha linha nova.
     expect(db.changeLog).toHaveLength(1);
   });
@@ -305,7 +308,7 @@ describe("PUT /api/field-diary/samples", () => {
 
     expect(response.status).toBe(200);
     expect(db.samples).toHaveLength(1);
-    expect(db.samples[0]).toMatchObject({ sample_code: "YVA-071126-0136-AG1", depth_m: 5, packaging: "Caixa térmica" });
+    expect(db.samples[0]).toMatchObject({ sample_code: "YVA-0136-071126-0905-AG1", depth_m: 5, packaging: "Caixa térmica" });
     expect(db.changeLog).toEqual([]);
   });
 
@@ -329,9 +332,9 @@ describe("PUT /api/field-diary/samples", () => {
 
   it("código que já existe em outro registro: 409 com o próximo número livre, sem gravar nada", async () => {
     db.samples = [
-      savedRow(11, { entry_id: OTHER_ENTRY, sample_code: "YVA-071126-0136-AG1", sequence: 1 }),
-      savedRow(12, { entry_id: OTHER_ENTRY, sample_code: "YVA-071126-0136-AG2", sequence: 2 }),
-      savedRow(13, { entry_id: OTHER_ENTRY, sample_code: "YVA-071126-0136-AG3", sequence: 3 }),
+      savedRow(11, { entry_id: OTHER_ENTRY, sample_code: "YVA-0136-071126-0905-AG1", sequence: 1 }),
+      savedRow(12, { entry_id: OTHER_ENTRY, sample_code: "YVA-0136-071126-0905-AG2", sequence: 2 }),
+      savedRow(13, { entry_id: OTHER_ENTRY, sample_code: "YVA-0136-071126-0905-AG3", sequence: 3 }),
     ];
 
     const response = await put(
@@ -341,31 +344,31 @@ describe("PUT /api/field-diary/samples", () => {
 
     expect(response.status).toBe(409);
     expect(payload.conflicts).toEqual([
-      { sampleId: id(1), code: "YVA-071126-0136-AG1", suggestedSequence: 4, suggestedCode: "YVA-071126-0136-AG4", sameEntry: false },
-      { sampleId: id(2), code: "YVA-071126-0136-AG2", suggestedSequence: 5, suggestedCode: "YVA-071126-0136-AG5", sameEntry: false },
+      { sampleId: id(1), code: "YVA-0136-071126-0905-AG1", suggestedSequence: 4, suggestedCode: "YVA-0136-071126-0905-AG4", sameEntry: false },
+      { sampleId: id(2), code: "YVA-0136-071126-0905-AG2", suggestedSequence: 5, suggestedCode: "YVA-0136-071126-0905-AG5", sameEntry: false },
     ]);
     expect(db.samples).toHaveLength(3);
     expect(db.samples.every((row) => row.entry_id === OTHER_ENTRY)).toBe(true);
   });
 
   it("aceita depois que o aparelho adota os números propostos", async () => {
-    db.samples = [savedRow(11, { entry_id: OTHER_ENTRY, sample_code: "YVA-071126-0136-AG1", sequence: 1 })];
+    db.samples = [savedRow(11, { entry_id: OTHER_ENTRY, sample_code: "YVA-0136-071126-0905-AG1", sequence: 1 })];
 
     const response = await put(body({ samples: [sample(1, { sequence: 2 })] }));
 
     expect(response.status).toBe(200);
-    expect(codes()).toEqual(["YVA-071126-0136-AG1", "YVA-071126-0136-AG2"]);
+    expect(codes()).toEqual(["YVA-0136-071126-0905-AG1", "YVA-0136-071126-0905-AG2"]);
   });
 
   it("código gravado neste mesmo registro por outro aparelho: avisa que é do mesmo registro e devolve o que está gravado", async () => {
-    db.samples = [savedRow(21, { sequence: 1, sample_code: "YVA-071126-0136-AG1" })];
+    db.samples = [savedRow(21, { sequence: 1, sample_code: "YVA-0136-071126-0905-AG1" })];
 
     const response = await put(body({ samples: [sample(1)] }));
     const payload = await response.json();
 
     expect(response.status).toBe(409);
     expect(payload.conflicts).toEqual([
-      { sampleId: id(1), code: "YVA-071126-0136-AG1", suggestedSequence: 2, suggestedCode: "YVA-071126-0136-AG2", sameEntry: true },
+      { sampleId: id(1), code: "YVA-0136-071126-0905-AG1", suggestedSequence: 2, suggestedCode: "YVA-0136-071126-0905-AG2", sameEntry: true },
     ]);
     expect(payload.samples.map((item: Row) => item.id)).toEqual([id(21)]);
     expect(db.samples).toHaveLength(1);
@@ -376,7 +379,7 @@ describe("PUT /api/field-diary/samples", () => {
       savedRow(1),
       savedRow(2),
       savedRow(3),
-      savedRow(30, { entry_id: OTHER_ENTRY, sample_code: "YVA-081126-0136-AG1", sequence: 1 }),
+      savedRow(30, { entry_id: OTHER_ENTRY, sample_code: "YVA-0136-081126-0905-AG1", sequence: 1 }),
     ];
 
     const response = await put(
@@ -388,7 +391,7 @@ describe("PUT /api/field-diary/samples", () => {
 
     expect(response.status).toBe(200);
     expect(db.samples.map((row) => row.id).sort()).toEqual([id(1), id(2), id(30), id(7)].sort());
-    expect(db.samples.find((row) => row.id === id(7))?.sample_code).toBe("YVA-071126-0136-AG3");
+    expect(db.samples.find((row) => row.id === id(7))?.sample_code).toBe("YVA-0136-071126-0905-AG3");
   });
 
   it("esvazia as amostras do registro quando todas são removidas", async () => {
@@ -399,16 +402,16 @@ describe("PUT /api/field-diary/samples", () => {
     expect(response.status).toBe(200);
     expect((await response.json()).samples).toEqual([]);
     expect(db.samples).toEqual([]);
-    expect(db.changeLog[0]).toMatchObject({ old_value: "YVA-071126-0136-AG1, YVA-071126-0136-AG2", new_value: null });
+    expect(db.changeLog[0]).toMatchObject({ old_value: "YVA-0136-071126-0905-AG1, YVA-0136-071126-0905-AG2", new_value: null });
   });
 
   it("não deixa regravar aqui uma amostra que pertence a outro registro", async () => {
-    db.samples = [savedRow(1, { entry_id: OTHER_ENTRY, sample_code: "YVA-081126-0136-AG1" })];
+    db.samples = [savedRow(1, { entry_id: OTHER_ENTRY, sample_code: "YVA-0136-081126-0905-AG1" })];
 
     const response = await put(body({ samples: [sample(1)] }));
 
     expect(response.status).toBe(400);
-    expect(db.samples[0]).toMatchObject({ entry_id: OTHER_ENTRY, sample_code: "YVA-081126-0136-AG1" });
+    expect(db.samples[0]).toMatchObject({ entry_id: OTHER_ENTRY, sample_code: "YVA-0136-081126-0905-AG1" });
   });
 
   it("corrida entre dois aparelhos: o banco recusa o código repetido e o app pede para salvar de novo", async () => {
@@ -441,23 +444,23 @@ describe("PUT /api/field-diary/samples", () => {
     const response = await put(
       body({
         samples: [
-          sample(1, { code: "YVA-071126-0136-AG1", packaging: "Caixa térmica" }),
-          sample(2, { code: "YVA-081126-0136-AG2" }),
+          sample(1, { code: "YVA-0136-071126-0905-AG1", packaging: "Caixa térmica" }),
+          sample(2, { code: "YVA-0136-081126-0905-AG2" }),
         ],
       }),
     );
     const payload = await response.json();
 
     expect(response.status).toBe(200);
-    expect(codes()).toEqual(["YVA-071126-0136-AG1", "YVA-081126-0136-AG2"]);
+    expect(codes()).toEqual(["YVA-0136-071126-0905-AG1", "YVA-0136-081126-0905-AG2"]);
     expect(db.samples[0]).toMatchObject({
-      sample_code: "YVA-071126-0136-AG1",
+      sample_code: "YVA-0136-071126-0905-AG1",
       packaging: "Caixa térmica",
       exported_at: "2026-11-09T10:00:00.000Z",
     });
     expect(payload.samples.map((item: Row) => [item.code, item.exportedAt])).toEqual([
-      ["YVA-071126-0136-AG1", "2026-11-09T10:00:00.000Z"],
-      ["YVA-081126-0136-AG2", null],
+      ["YVA-0136-071126-0905-AG1", "2026-11-09T10:00:00.000Z"],
+      ["YVA-0136-081126-0905-AG2", null],
     ]);
   });
 
@@ -467,13 +470,13 @@ describe("PUT /api/field-diary/samples", () => {
 
     // Aparelho com versão antiga: recalculou o código pelo ponto novo e trocou o tipo.
     const response = await put(
-      body({ samples: [sample(1, { code: "YVA-071126-0140-PL3", sampleType: "plankton", sequence: 3 })] }),
+      body({ samples: [sample(1, { code: "YVA-0140-071126-0905-PL3", sampleType: "plankton", sequence: 3 })] }),
     );
 
     expect(response.status).toBe(200);
     expect(db.samples).toHaveLength(1);
     expect(db.samples[0]).toMatchObject({
-      sample_code: "YVA-071126-0136-AG1",
+      sample_code: "YVA-0136-071126-0905-AG1",
       sample_type: "water",
       sequence: 1,
       project_code: "YVA",
@@ -487,7 +490,7 @@ describe("PUT /api/field-diary/samples", () => {
     const response = await put(body({ samples: [sample(1, { boxPosition: "B2" })] }));
 
     expect(response.status).toBe(200);
-    expect(db.samples[0]).toMatchObject({ sample_code: "YVA-071126-0136-AG1", box_position: "B2" });
+    expect(db.samples[0]).toMatchObject({ sample_code: "YVA-0136-071126-0905-AG1", box_position: "B2" });
   });
 
   it("amostra exportada pode ser retirada do registro, e a retirada fica no histórico", async () => {
@@ -496,13 +499,38 @@ describe("PUT /api/field-diary/samples", () => {
     const response = await put(body({ samples: [sample(2)], removedIds: [id(1)] }));
 
     expect(response.status).toBe(200);
-    expect(codes()).toEqual(["YVA-071126-0136-AG2"]);
+    expect(codes()).toEqual(["YVA-0136-071126-0905-AG2"]);
     expect(db.changeLog).toHaveLength(1);
     expect(db.changeLog[0]).toMatchObject({
       field_name: "Amostras",
-      old_value: "YVA-071126-0136-AG1, YVA-071126-0136-AG2",
-      new_value: "YVA-071126-0136-AG2",
+      old_value: "YVA-0136-071126-0905-AG1, YVA-0136-071126-0905-AG2",
+      new_value: "YVA-0136-071126-0905-AG2",
     });
+  });
+
+  it("registro sem hora da coleta: explica que falta a hora e não grava", async () => {
+    db.entries[0].collection_time = null;
+
+    const response = await put(body());
+
+    expect(response.status).toBe(422);
+    expect((await response.json()).error).toContain("hora da coleta");
+    expect(db.samples).toEqual([]);
+  });
+
+  it("código no formato antigo (sem a hora) fica como está, porque já pode estar na etiqueta", async () => {
+    db.samples = [savedRow(1, { sample_code: "YVA-071126-0136-AG1" })];
+    db.entries[0].collection_time = "10:40:00";
+
+    const response = await put(
+      body({ samples: [sample(1, { code: "YVA-071126-0136-AG1", packaging: "Caixa térmica" }), sample(2)] }),
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(codes()).toEqual(["YVA-0136-071126-1040-AG2", "YVA-071126-0136-AG1"]);
+    expect(db.samples[0]).toMatchObject({ sample_code: "YVA-071126-0136-AG1", packaging: "Caixa térmica" });
+    expect(payload.samples.map((item: Row) => item.code)).toEqual(["YVA-071126-0136-AG1", "YVA-0136-071126-1040-AG2"]);
   });
 
   it("registro que não existe: 404", async () => {

@@ -2,7 +2,7 @@
  * Amostras do ponto (fase 2 do padrão de coleta, docs/padrao-coleta-de-campo.md).
  *
  * Regras puras: como as amostras nascem dos padrões da campanha, como o código da
- * etiqueta acompanha a data e o ponto do registro, o que é conferido antes de
+ * etiqueta acompanha o ponto, a data e a hora do registro, o que é conferido antes de
  * gravar e como os dois campos de texto antigos são preenchidos sozinhos. Nada
  * aqui fala com banco ou tela.
  */
@@ -12,6 +12,7 @@ import {
   FieldStandardError,
   SAMPLE_CODE_MAX_SEQUENCE,
   buildSampleCode,
+  isLegacySampleCode,
   conservationTypes,
   getSampleType,
   isSampleTypeId,
@@ -42,6 +43,8 @@ export type FieldSample = {
   quantityUnit: string;
   specification: string;
   conservation: ConservationType;
+  /** Preservante (ex.: Longmire, álcool, sílica). Texto livre; vazio = não informado. */
+  preservative: string;
   packaging: string;
   boxPosition: string;
   /**
@@ -60,13 +63,14 @@ export type SampleDraft = {
   quantity: string;
   specification: string;
   conservation: ConservationType;
+  preservative: string;
   packaging: string;
   boxPosition: string;
   /** Código já gravado na nuvem; vazio enquanto a amostra é nova. */
   savedCode: string;
   /**
    * Quando a amostra saiu na planilha do Biolog; vazio = ainda não saiu. Depois de
-   * exportada, o código dela é o gravado e não acompanha mais a data e o ponto.
+   * exportada, o código dela é o gravado e não acompanha mais a data, a hora e o ponto.
    */
   exportedAt?: string;
 };
@@ -76,6 +80,8 @@ export type SampleCodeContext = {
   projectCode: string;
   /** Data da coleta, AAAA-MM-DD. */
   date: string;
+  /** Hora da coleta no ponto, "HH:MM" (a do registro). */
+  time: string;
   /** Ponto de coleta (SIA). */
   point: string;
 };
@@ -99,6 +105,8 @@ type DraftFactoryOptions = {
   defaults: CollectionDefaults;
   /** Último acondicionamento usado neste aparelho, por tipo de amostra. */
   lastPackaging?: LastPackagingByType;
+  /** Último preservante usado neste aparelho, por tipo de amostra. */
+  lastPreservative?: LastPackagingByType;
   newId: () => string;
 };
 
@@ -107,15 +115,18 @@ type DraftFactoryOptions = {
 // ---------------------------------------------------------------------------
 
 /**
- * Código da amostra para a data e o ponto do registro. Enquanto faltar o ponto ou
- * a data, devolve o motivo em vez do código. Amostra que já saiu na planilha do
- * Biolog fica com o código gravado.
+ * Código da amostra para o ponto, a data e a hora do registro. Enquanto faltar o
+ * ponto, a data ou a hora, devolve o motivo em vez do código. Amostra que já saiu
+ * na planilha do Biolog, ou gravada no formato antigo (sem a hora), fica com o
+ * código gravado.
  */
 export function sampleCodeOf(
   sample: Pick<SampleDraft, "sampleType" | "sequence"> & Partial<Pick<SampleDraft, "savedCode" | "exportedAt">>,
   context: SampleCodeContext,
 ): { code: string; error: string } {
-  if (sample.exportedAt && sample.savedCode) {
+  // Já foi para o Biolog, ou foi gravada no formato anterior (sem hora): o código
+  // pode estar numa etiqueta e fica como está.
+  if (sample.savedCode && (sample.exportedAt || isLegacySampleCode(sample.savedCode))) {
     return { code: sample.savedCode, error: "" };
   }
 
@@ -124,6 +135,7 @@ export function sampleCodeOf(
       code: buildSampleCode({
         projectCode: context.projectCode,
         date: context.date,
+        time: context.time,
         point: context.point,
         sampleType: sample.sampleType,
         sequence: sample.sequence,
@@ -143,7 +155,7 @@ export function sampleCodeOf(
  * ou vazio. As já exportadas não contam: o código delas não depende mais disso.
  */
 export function sampleCodeProblem(drafts: SampleDraft[], context: SampleCodeContext) {
-  const open = drafts.find((draft) => !draft.exportedAt);
+  const open = drafts.find((draft) => !draft.exportedAt && !isLegacySampleCode(draft.savedCode));
 
   return open ? sampleCodeOf(open, context).error : "";
 }
@@ -211,6 +223,7 @@ function draftFromDefaults(sampleType: SampleTypeId, sequence: number, options: 
   const type = getSampleType(sampleType);
   const typeDefaults = options.defaults.sampleTypes[sampleType];
   const rememberedPackaging = cleanText(options.lastPackaging?.[sampleType], COLLECTION_TEXT_MAX_LENGTH);
+  const rememberedPreservative = cleanText(options.lastPreservative?.[sampleType], COLLECTION_TEXT_MAX_LENGTH);
 
   return {
     id: options.newId(),
@@ -220,6 +233,7 @@ function draftFromDefaults(sampleType: SampleTypeId, sequence: number, options: 
     quantity: numberToInput(typeDefaults?.quantity ?? null),
     specification: typeDefaults?.specification ?? "",
     conservation: typeDefaults?.conservation ?? "OUTRO",
+    preservative: rememberedPreservative || typeDefaults?.preservative || "",
     packaging: rememberedPackaging || typeDefaults?.packaging || "",
     boxPosition: "",
     savedCode: "",
@@ -335,6 +349,7 @@ export function sampleDraftsToInputs(drafts: SampleDraft[], context: SampleCodeC
       quantityUnit: type.quantityUnit,
       specification: cleanText(draft.specification, COLLECTION_TEXT_MAX_LENGTH),
       conservation: draft.conservation,
+      preservative: cleanText(draft.preservative, COLLECTION_TEXT_MAX_LENGTH),
       packaging: cleanText(draft.packaging, COLLECTION_TEXT_MAX_LENGTH),
       boxPosition: cleanText(draft.boxPosition, SAMPLE_POSITION_MAX_LENGTH),
     };
@@ -350,6 +365,7 @@ export function samplesToDrafts(samples: FieldSample[]): SampleDraft[] {
     quantity: numberToInput(sample.quantity),
     specification: sample.specification,
     conservation: sample.conservation,
+    preservative: sample.preservative ?? "",
     packaging: sample.packaging,
     boxPosition: sample.boxPosition,
     savedCode: sample.code,
@@ -357,14 +373,24 @@ export function samplesToDrafts(samples: FieldSample[]): SampleDraft[] {
   }));
 }
 
+/** A amostra que o "−" das réplicas tira: a de maior número do tipo que ainda não foi exportada. */
+export function lastRemovableSample(drafts: SampleDraft[], sampleType: SampleTypeId): SampleDraft | null {
+  const candidates = drafts
+    .filter((draft) => draft.sampleType === sampleType && !draft.exportedAt)
+    .sort((a, b) => b.sequence - a.sequence);
+
+  return candidates[0] ?? null;
+}
+
 /**
  * Amostras que ficaram guardadas no aparelho (sem sinal) de volta ao formulário.
  * Contam como novas para a nuvem: quem tira uma delas do registro é a fila do
- * aparelho (lib/field-outbox), que manda a remoção junto.
+ * aparelho (lib/field-outbox), que manda a remoção junto. O código no formato
+ * antigo (sem a hora) continua com a amostra, porque ele já pode estar na etiqueta.
  */
 export function sampleInputsToDrafts(inputs: SampleInput[]): SampleDraft[] {
   return samplesToDrafts(inputs.map((input) => ({ ...input, entryId: "", projectCode: "", exportedAt: null }))).map(
-    (draft) => ({ ...draft, savedCode: "" }),
+    (draft) => ({ ...draft, savedCode: isLegacySampleCode(draft.savedCode) ? draft.savedCode : "" }),
   );
 }
 
@@ -417,6 +443,7 @@ export function normalizeSampleInput(value: unknown): SampleInput | null {
     quantityUnit: type.quantityUnit,
     specification: cleanText(raw.specification, COLLECTION_TEXT_MAX_LENGTH),
     conservation,
+    preservative: cleanText(raw.preservative, COLLECTION_TEXT_MAX_LENGTH),
     packaging: cleanText(raw.packaging, COLLECTION_TEXT_MAX_LENGTH),
     boxPosition: cleanText(raw.boxPosition, SAMPLE_POSITION_MAX_LENGTH),
   };
@@ -527,7 +554,7 @@ export function legacyFieldsPatch(
 type SampleDetails = Pick<
   FieldSample,
   "sampleType" | "depthM" | "quantity" | "conservation" | "packaging" | "specification" | "boxPosition"
->;
+> & { preservative?: string };
 
 /** "Superfície · 1000 mL · Filtro congelado · Isopor com gelo · eDNA". */
 export function describeSampleDetails(sample: SampleDetails) {
@@ -542,6 +569,7 @@ export function describeSampleDetails(sample: SampleDetails) {
       : "",
     sample.quantity !== null ? `${numberToInput(sample.quantity)} ${type.quantityUnit}` : "",
     conservation && conservation.value !== "OUTRO" ? conservation.label : "",
+    sample.preservative ? `Preservante ${sample.preservative}` : "",
     sample.packaging,
     sample.specification,
     sample.boxPosition ? `Posição ${sample.boxPosition}` : "",
@@ -557,6 +585,7 @@ export function describeSampleDraft(draft: SampleDraft) {
     depthM: parseSampleNumber(draft.depthM, MAX_SAMPLE_DEPTH_M).value,
     quantity: parseSampleNumber(draft.quantity, MAX_SAMPLE_QUANTITY).value,
     conservation: draft.conservation,
+    preservative: draft.preservative.trim(),
     packaging: draft.packaging.trim(),
     specification: draft.specification.trim(),
     boxPosition: draft.boxPosition.trim(),

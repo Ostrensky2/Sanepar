@@ -8,6 +8,7 @@ import {
   conservationTypes,
   destinationLabs,
   nonNegativeNumber,
+  preservativeSuggestions,
   sampleObjectives,
   sampleTypes,
   waterMatrices,
@@ -152,14 +153,20 @@ export function CampaignCollectionDefaultsPanel({
           </label>
         </div>
 
+        <datalist id="yvae-preservantes-campanha">
+          {preservativeSuggestions.map((option) => (
+            <option key={option} value={option} />
+          ))}
+        </datalist>
         <div className="overflow-x-auto rounded-2xl border border-[var(--line-ghost)] bg-white">
-          <table className="w-full min-w-[860px] text-left text-sm">
+          <table className="w-full min-w-[980px] text-left text-sm">
             <caption className="sr-only">Padrões por tipo de amostra</caption>
             <thead>
               <tr className="border-b border-[var(--line-ghost)] text-caption text-slate-500">
                 <th scope="col" className="px-3 py-3">Tipo de amostra</th>
-                <th scope="col" className="px-3 py-3">Amostras por ponto</th>
+                <th scope="col" className="px-3 py-3">Amostras sugeridas por ponto</th>
                 <th scope="col" className="px-3 py-3">Conservação</th>
+                <th scope="col" className="px-3 py-3">Preservante</th>
                 <th scope="col" className="px-3 py-3">Acondicionamento</th>
                 <th scope="col" className="px-3 py-3">Volume ou massa</th>
                 <th scope="col" className="px-3 py-3">Profundidade (m)</th>
@@ -212,6 +219,17 @@ export function CampaignCollectionDefaultsPanel({
                           </option>
                         ))}
                       </select>
+                    </td>
+                    <td className="px-3 py-3">
+                      <input
+                        aria-label={`Preservante de ${type.label}`}
+                        className={cellInputClassName}
+                        value={row.preservative}
+                        maxLength={COLLECTION_TEXT_MAX_LENGTH}
+                        list="yvae-preservantes-campanha"
+                        placeholder="Ex.: Longmire"
+                        onChange={(event) => updateSampleType(type.id, { preservative: event.target.value })}
+                      />
                     </td>
                     <td className="px-3 py-3">
                       <input

@@ -136,9 +136,9 @@ export function FieldDiaryForm({
   function update(next: Partial<FieldDiaryPayload>) {
     let merged = { ...latestEntryRef.current, ...next };
 
-    // O código das amostras leva a data e o ponto: os campos de texto antigos que o
+    // O código das amostras leva a data, a hora e o ponto: os campos de texto antigos que o
     // app preencheu acompanham.
-    if ("entryDate" in next || "sia" in next) {
+    if ("entryDate" in next || "sia" in next || "collectionTime" in next) {
       merged = { ...merged, ...entrySamples.legacyPatch(merged) };
     }
 
@@ -625,6 +625,7 @@ export function FieldDiaryForm({
               context={{
                 projectCode: entrySamples.projectCode,
                 date: entry.entryDate,
+                time: entry.collectionTime ?? "",
                 point: entry.sia ?? "",
               }}
               defaultsDescription={entrySamples.defaultsDescription}
@@ -633,8 +634,12 @@ export function FieldDiaryForm({
               message={entrySamples.message}
               expandedIds={entrySamples.expandedIds}
               onToggle={entrySamples.toggle}
-              onAdd={(sampleType) => {
-                entrySamples.add(sampleType);
+              onAdd={(sampleType, options) => {
+                entrySamples.add(sampleType, options);
+                afterSamplesChange();
+              }}
+              onRemoveLast={(sampleType) => {
+                entrySamples.removeLast(sampleType);
                 afterSamplesChange();
               }}
               onChange={(id, patch) => {

@@ -27,7 +27,7 @@ function entry(overrides: Partial<FieldDiaryEntry> = {}): FieldDiaryEntry {
 function sample(id: string, sequence: number): SampleInput {
   return {
     id,
-    code: `YVA-121126-0136-AG${sequence}`,
+    code: `YVA-0136-121126-0905-AG${sequence}`,
     sampleType: "water",
     sequence,
     depthM: 0,
@@ -35,6 +35,7 @@ function sample(id: string, sequence: number): SampleInput {
     quantityUnit: "mL",
     specification: "",
     conservation: "FILTRO_CONGELADO",
+    preservative: "",
     packaging: "",
     boxPosition: "",
   };
@@ -141,7 +142,7 @@ describe("envio do que ficou guardado", () => {
     const [record] = readFieldOutbox();
     expect(record.mode).toBe("insert");
     expect(record.samples?.samples).toHaveLength(1);
-    expect(window.localStorage.getItem(FIELD_OUTBOX_STORAGE_KEY)).toContain("YVA-121126-0136-AG1");
+    expect(window.localStorage.getItem(FIELD_OUTBOX_STORAGE_KEY)).toContain("YVA-0136-121126-0905-AG1");
   });
 
   it("registro gravado e amostras sem sinal: só as amostras ficam para depois", async () => {

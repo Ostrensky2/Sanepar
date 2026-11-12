@@ -4,6 +4,7 @@ import {
   baseFieldParameters,
   buildProjectCollectionDefaults,
   buildSampleCode,
+  isLegacySampleCode,
   nextSampleSequence,
   nonNegativeNumber,
   normalizeCollectionDefaults,
@@ -13,25 +14,26 @@ import {
 } from "@/lib/field-standard";
 
 describe("padrão de coleta — código da amostra", () => {
-  it("gera o código curto combinado: projeto, data DDMMAA, SIA, tipo e sequência", () => {
+  it("gera o código combinado: projeto, ponto, data DDMMAA, hora HHMM, tipo e sequência", () => {
     expect(
-      buildSampleCode({ projectCode: "YVA", date: "2026-11-07", point: "0136", sampleType: "water", sequence: 1 }),
-    ).toBe("YVA-071126-0136-AG1");
+      buildSampleCode({ projectCode: "YVA", date: "2026-11-07", time: "09:05", point: "0136", sampleType: "water", sequence: 1 }),
+    ).toBe("YVA-0136-071126-0905-AG1");
     expect(
-      buildSampleCode({ projectCode: "yva", date: "2026-11-07", point: "SIA 136", sampleType: "plankton", sequence: 1 }),
-    ).toBe("YVA-071126-0136-PL1");
+      buildSampleCode({ projectCode: "yva", date: "2026-11-07", time: "14:30:00", point: "SIA 136", sampleType: "plankton", sequence: 1 }),
+    ).toBe("YVA-0136-071126-1430-PL1");
   });
 
-  it("cabe na etiqueta: 19 caracteres para um SIA de 4 dígitos", () => {
+  it("cabe na etiqueta: 24 caracteres para um SIA de 4 dígitos", () => {
     const code = buildSampleCode({
       projectCode: "YVA",
       date: "2026-11-07",
+      time: "09:05",
       point: "0136",
       sampleType: "water",
       sequence: 3,
     });
 
-    expect(code).toHaveLength(19);
+    expect(code).toHaveLength(24);
   });
 
   it("usa uma sigla de 2 letras diferente para cada tipo de amostra", () => {
@@ -52,12 +54,15 @@ describe("padrão de coleta — código da amostra", () => {
   });
 
   it("recusa dados que deixariam o código ambíguo", () => {
-    const base = { projectCode: "YVA", date: "2026-11-07", point: "0136", sampleType: "water", sequence: 1 } as const;
+    const base = { projectCode: "YVA", date: "2026-11-07", time: "09:05", point: "0136", sampleType: "water", sequence: 1 } as const;
 
     expect(() => buildSampleCode({ ...base, projectCode: "YVAE" })).toThrow(FieldStandardError);
     expect(() => buildSampleCode({ ...base, projectCode: "Y1A" })).toThrow(FieldStandardError);
     expect(() => buildSampleCode({ ...base, date: "07/11/2026" })).toThrow(FieldStandardError);
     expect(() => buildSampleCode({ ...base, date: "2026-02-30" })).toThrow(FieldStandardError);
+    expect(() => buildSampleCode({ ...base, time: "" })).toThrow(/hora da coleta/);
+    expect(() => buildSampleCode({ ...base, time: "9h05" })).toThrow(FieldStandardError);
+    expect(() => buildSampleCode({ ...base, time: "24:10" })).toThrow(FieldStandardError);
     expect(() => buildSampleCode({ ...base, point: "  " })).toThrow(FieldStandardError);
     expect(() => buildSampleCode({ ...base, point: "Reservatório Muito Comprido" })).toThrow(FieldStandardError);
     expect(() => buildSampleCode({ ...base, sequence: 0 })).toThrow(FieldStandardError);
@@ -65,17 +70,21 @@ describe("padrão de coleta — código da amostra", () => {
     expect(() => buildSampleCode({ ...base, sequence: 1000 })).toThrow(FieldStandardError);
   });
 
-  it("lê de volta o que gerou", () => {
-    const input = { projectCode: "YVA", date: "2026-11-07", point: "0136", sampleType: "plankton", sequence: 12 } as const;
+  it("lê de volta o que gerou, e também o código do formato anterior (sem hora)", () => {
+    const input = { projectCode: "YVA", date: "2026-11-07", time: "09:05", point: "0136", sampleType: "plankton", sequence: 12 } as const;
 
     expect(parseSampleCode(buildSampleCode(input))).toEqual(input);
-    expect(parseSampleCode(" yva-071126-0136-ag2 ")).toEqual({
+    expect(parseSampleCode(" yva-0136-071126-0905-ag2 ")).toMatchObject({ point: "0136", time: "09:05", sequence: 2 });
+    expect(parseSampleCode("YVA-071126-0136-AG2")).toEqual({
       projectCode: "YVA",
       date: "2026-11-07",
+      time: null,
       point: "0136",
       sampleType: "water",
       sequence: 2,
     });
+    expect(isLegacySampleCode("YVA-071126-0136-AG2")).toBe(true);
+    expect(isLegacySampleCode("YVA-0136-071126-0905-AG2")).toBe(false);
   });
 
   it("não aceita como código o que está fora do padrão", () => {
@@ -85,17 +94,21 @@ describe("padrão de coleta — código da amostra", () => {
     expect(parseSampleCode("YVA-071126-0136-ZO1")).toBeNull();
     expect(parseSampleCode("YVA-311126-0136-AG1")).toBeNull();
     expect(parseSampleCode("YVA-071126-0136-AG0")).toBeNull();
+    expect(parseSampleCode("YVA-0136-071126-2460-AG1")).toBeNull();
+    expect(parseSampleCode("SIA407-R1-301")).toBeNull();
   });
 
-  it("propõe a próxima sequência livre só entre amostras do mesmo ponto, dia e tipo", () => {
-    const target = { projectCode: "YVA", date: "2026-11-07", point: "136", sampleType: "water" } as const;
+  it("propõe a próxima sequência livre só entre amostras do mesmo ponto, dia, hora e tipo", () => {
+    const target = { projectCode: "YVA", date: "2026-11-07", time: "09:05", point: "136", sampleType: "water" } as const;
     const existing = [
-      "YVA-071126-0136-AG1",
-      "YVA-071126-0136-AG3",
-      "YVA-071126-0136-PL7",
-      "YVA-081126-0136-AG9",
-      "YVA-071126-0137-AG9",
-      "ABC-071126-0136-AG9",
+      "YVA-0136-071126-0905-AG1",
+      "YVA-0136-071126-0905-AG3",
+      "YVA-0136-071126-0905-PL7",
+      "YVA-0136-071126-1100-AG9",
+      "YVA-0136-081126-0905-AG9",
+      "YVA-0137-071126-0905-AG9",
+      "ABC-0136-071126-0905-AG9",
+      "YVA-071126-0136-AG9",
       "texto antigo",
       null,
     ];

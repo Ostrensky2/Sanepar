@@ -15,7 +15,13 @@ import {
   samplesFromRows as fromRows,
   type SampleRow,
 } from "@/lib/field-samples-server";
-import { FieldStandardError, buildSampleCode, isSampleTypeId, nextSampleSequence } from "@/lib/field-standard";
+import {
+  FieldStandardError,
+  buildSampleCode,
+  isLegacySampleCode,
+  isSampleTypeId,
+  nextSampleSequence,
+} from "@/lib/field-standard";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
 
 export const runtime = "nodejs";
@@ -30,6 +36,7 @@ type EntryRow = {
   id: string;
   campaign_name: string | null;
   entry_date: string;
+  collection_time: string | null;
   sia: string | null;
 };
 
@@ -127,7 +134,7 @@ async function writeSamples(request: Request) {
 
   const { data: entry, error: entryError } = await supabase
     .from("field_diary_entries")
-    .select("id, campaign_name, entry_date, sia")
+    .select("id, campaign_name, entry_date, collection_time, sia")
     .eq("id", entryId)
     .maybeSingle<EntryRow>();
 
@@ -151,15 +158,19 @@ async function writeSamples(request: Request) {
   }
 
   // Amostra que já saiu na planilha do Biolog: o código, o tipo e o número ficam os
-  // que foram exportados, mesmo que a data ou o ponto do registro tenham mudado.
+  // que foram exportados, mesmo que a data, a hora ou o ponto do registro tenham mudado.
+  // Também ficam como estão as gravadas no formato anterior do código (sem a hora),
+  // que podem já estar numa etiqueta.
   const exportedById = new Map(
-    (existing.data ?? []).filter((row) => row.exported_at && isSampleTypeId(row.sample_type)).map((row) => [row.id, row]),
+    (existing.data ?? [])
+      .filter((row) => (row.exported_at || isLegacySampleCode(row.sample_code)) && isSampleTypeId(row.sample_type))
+      .map((row) => [row.id, row]),
   );
 
-  // Para as outras, o código vale o que está no registro GRAVADO (data e ponto), não
+  // Para as outras, o código vale o que está no registro GRAVADO (data, hora e ponto), não
   // o que o aparelho mandou: é ele que vai para a etiqueta e para a planilha.
   const entryDate = String(entry.entry_date ?? "").slice(0, 10);
-  const codeTarget = { projectCode, date: entryDate, point: entry.sia ?? "" };
+  const codeTarget = { projectCode, date: entryDate, time: String(entry.collection_time ?? "").slice(0, 5), point: entry.sia ?? "" };
   const samples: SampleInput[] = [];
 
   try {
@@ -189,7 +200,7 @@ async function writeSamples(request: Request) {
     return NextResponse.json(
       {
         error:
-          "O código das amostras mudou, porque a data ou o ponto gravados no registro são outros. " +
+          "O código das amostras mudou, porque a data, a hora ou o ponto gravados no registro são outros. " +
           "Feche o registro, abra de novo e confira as etiquetas antes de salvar.",
       },
       { status: 422 },
@@ -304,7 +315,7 @@ async function findCodeConflicts(
     entryId: string;
     samples: SampleInput[];
     idsToRemove: string[];
-    codeTarget: { projectCode: string; date: string; point: string };
+    codeTarget: { projectCode: string; date: string; time: string; point: string };
   },
 ): Promise<SampleCodeConflict[] | { error: true }> {
   const owners = await supabase
@@ -406,6 +417,7 @@ function toRow(sample: SampleInput, entryId: string, projectCode: string, update
     quantity_unit: sample.quantityUnit,
     specification: sample.specification || null,
     conservation: sample.conservation,
+    preservative: sample.preservative || null,
     packaging: sample.packaging || null,
     box_position: sample.boxPosition || null,
     updated_at: updatedAt,

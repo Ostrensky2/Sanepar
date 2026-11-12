@@ -1,6 +1,8 @@
-# Padrão de coleta de campo (versão 1)
+# Padrão de coleta de campo (versão 2)
 
-Definido em 11/11/2026. Vale para o Yva'e (projeto Sanepar) e é o modelo para os
+Definido em 11/11/2026 e revisto em 12/11/2026, depois do primeiro dia de campo
+(versão 2: código com a hora da coleta, preservante em cada amostra e número de
+amostras livre por ponto). Vale para o Yva'e (projeto Sanepar) e é o modelo para os
 outros aplicativos de projeto: cada aplicativo registra a coleta em campo, gera o
 código da amostra e exporta uma planilha no mesmo formato. O Biolog importa essa
 planilha e segue com o rastreio no laboratório.
@@ -33,45 +35,61 @@ amostra.
 ## 3. Código da amostra
 
 ```text
-{PROJETO}-{DDMMAA}-{PONTO}-{TIPO}{SEQUÊNCIA}
+{PROJETO}-{PONTO}-{DDMMAA}-{HHMM}-{TIPO}{SEQUÊNCIA}
 
-YVA-071126-0136-AG1   água, 1ª amostra de água do SIA 0136 em 07/11/2026
-YVA-071126-0136-AG2   2ª amostra (réplica) de água do mesmo ponto e dia
-YVA-071126-0136-PL1   plâncton
+YVA-0136-071126-0905-AG1   água, 1ª amostra de água do SIA 0136 em 07/11/2026, 9h05
+YVA-0136-071126-0905-AG2   2ª amostra (réplica) de água do mesmo ponto, dia e hora
+YVA-0136-071126-0905-PL1   plâncton
 ```
 
 - **Projeto:** as 3 letras do código do projeto.
-- **Data:** dia, mês e ano da coleta com 2 algarismos cada.
 - **Ponto:** o SIA com 4 dígitos (`136` e `SIA-0136` viram `0136`). Em projetos sem
   SIA, o código do ponto só com letras e números, até 8 caracteres (`P-01` vira `P01`).
+- **Data:** dia, mês e ano da coleta com 2 algarismos cada.
+- **Hora:** a hora da coleta do registro, em horas e minutos (`0905`).
 - **Tipo:** a sigla de 2 letras da tabela acima.
-- **Sequência:** 1, 2, 3… para amostras do mesmo tipo, no mesmo ponto e no mesmo dia.
+- **Sequência:** 1, 2, 3… para amostras do mesmo tipo, no mesmo ponto, dia e hora.
   Não tem zeros à esquerda.
 
-O código tem 19 caracteres com um SIA de 4 dígitos. Ele não leva o laboratório de
-destino nem a profundidade: os dois são dados da amostra e vão em colunas próprias.
-Amostras do mesmo ponto em profundidades diferentes se distinguem pela sequência.
+O código tem 24 caracteres com um SIA de 4 dígitos. O ponto vem logo depois do
+projeto porque é por ele que a equipe procura a amostra na caixa; o dia e a hora
+separam duas coletas no mesmo ponto. Ele não leva o laboratório de destino nem a
+profundidade: os dois são dados da amostra e vão em colunas próprias. Amostras do
+mesmo ponto em profundidades diferentes se distinguem pela sequência.
 
-O código é gerado pelo aplicativo de campo, nunca digitado. Enquanto a amostra não
-foi exportada, ele acompanha a data e o ponto do registro: se alguém corrige o SIA
-ou a data, o código muda junto e o aplicativo mostra qual era o código gravado,
-para a etiqueta ser refeita. Depois da exportação o código não muda mais.
+**Formato anterior.** Até a versão 2.0.6 (11/11/2026) o código era
+`{PROJETO}-{DDMMAA}-{PONTO}-{TIPO}{SEQUÊNCIA}` (`YVA-071126-0136-AG1`), sem a hora.
+As amostras gravadas nesse formato ficam com o código que têm, porque ele pode já
+estar numa etiqueta: o aplicativo, o banco e a planilha continuam aceitando os dois
+formatos. Amostra nova sai sempre no formato com a hora.
+
+O código é gerado pelo aplicativo de campo, nunca digitado. Sem a hora da coleta no
+registro não há código: o aplicativo pede a hora ("Iniciar coleta" já preenche).
+Enquanto a amostra não foi exportada, o código acompanha o ponto, a data e a hora do
+registro: se alguém corrige um deles, o código muda junto e o aplicativo mostra qual
+era o código gravado, para a etiqueta ser refeita. Depois da exportação o código não
+muda mais.
 
 "Exportação" é gerar a planilha para o Biolog (seção 8). Nesse momento a amostra
 recebe a marca de exportada, e o código, o tipo e o número dela ficam os que saíram
-na planilha, mesmo que a data ou o ponto do registro sejam corrigidos depois. Os
-outros dados da amostra (profundidade, volume, conservação, acondicionamento,
-posição) continuam podendo ser corrigidos.
+na planilha, mesmo que a data, a hora ou o ponto do registro sejam corrigidos
+depois. Os outros dados da amostra (profundidade, volume, conservação, preservante,
+acondicionamento, posição) continuam podendo ser corrigidos.
 
-Quem dá o código é o servidor, a partir da data e do ponto do registro que ficou
-gravado. Um código nunca se repete no banco. Se outro registro do mesmo ponto e dia
-já usou o número, o aplicativo avisa e oferece o próximo número livre (`AG4`, `AG5`).
+Quem dá o código é o servidor, a partir do ponto, da data e da hora do registro que
+ficou gravado. Um código nunca se repete no banco. Se outro registro do mesmo ponto,
+dia e hora já usou o número, o aplicativo avisa e oferece o próximo número livre
+(`AG4`, `AG5`).
 
 ## 4. Dados da amostra
 
 Cada amostra guarda: código, tipo, profundidade em metros (0 = superfície), volume ou
-massa, especificação (ex.: filtro 0,45 µm), tipo de conservação, acondicionamento e
-posição na caixa.
+massa, especificação (ex.: filtro 0,45 µm), tipo de conservação, preservante,
+acondicionamento e posição na caixa.
+
+**Preservante** é texto livre de até 120 caracteres, porque cada projeto usa o seu
+(Longmire, álcool, sílica, RNAlater…). O aplicativo sugere esses nomes, mas aceita
+qualquer outro. Vazio quer dizer "não informado".
 
 Tipos de conservação: `FILTRO_CONGELADO`, `FILTRO_EM_ALCOOL_COM_REFRIGERACAO`,
 `FILTRO_EM_ALCOOL_SEM_REFRIGERACAO`, `AMOSTRA_BRUTA_RESFRIADA`,
@@ -84,7 +102,11 @@ As amostras ficam no bloco **"Amostras do ponto"** do registro de campo (em cód
 
 - O aplicativo propõe as amostras do padrão da campanha quando a pessoa toca em
   "Iniciar coleta" num registro que ainda não tem amostra, ou pelo botão "Usar o
-  padrão da campanha". Abrir o formulário não cria amostra nenhuma.
+  padrão da campanha". Abrir o formulário não cria amostra nenhuma. O padrão do
+  projeto Sanepar é 5 de água e 1 de plâncton por ponto.
+- O número de amostras é livre: os botões "−" e "+" ao lado de cada tipo tiram ou
+  acrescentam uma amostra (réplica) naquele ponto, quantas a equipe quiser, até o
+  limite do registro. O "−" tira a de maior número que ainda não foi exportada.
 - "+ Amostra" acrescenta uma amostra do tipo escolhido, copiando os dados da última
   do mesmo tipo. O tipo de uma amostra não muda depois de criada: para trocar,
   remove-se a amostra e cria-se outra.
@@ -98,8 +120,8 @@ As amostras ficam no bloco **"Amostras do ponto"** do registro de campo (em cód
   campanha confere isso primeiro e, havendo amostra, não apaga nada.
 - Cada mudança na lista de amostras de um registro entra no histórico de
   alterações, no campo "Amostras".
-- O aparelho lembra o último acondicionamento usado em cada tipo, para a próxima
-  amostra já vir preenchida.
+- O aparelho lembra o último acondicionamento e o último preservante usados em cada
+  tipo, para a próxima amostra já vir preenchida.
 
 Os dois campos de texto antigos continuam no registro e são preenchidos sozinhos:
 "Amostras e Réplicas (eDNA)" recebe o número de amostras de água ("3 réplicas") e
@@ -184,8 +206,9 @@ passam para as campanhas seguintes enquanto ninguém mudar.
 - Do projeto: código, sigla, empresa, laboratório de destino (`GA`, `LAPOA` ou
   `LHM`), objetivo e matriz da água (`AGUA_DOCE`, `AGUA_ESTUARINA`, `AGUA_MARINHA`,
   `AGUA_CLORADA`, `AGUA_ULTRAPURA`).
-- De cada tipo de amostra: quantas amostras o aplicativo propõe por ponto,
-  conservação, acondicionamento, volume ou massa, profundidade e especificação.
+- De cada tipo de amostra: quantas amostras o aplicativo propõe por ponto (só a
+  sugestão inicial; no ponto a equipe acrescenta ou tira), conservação,
+  preservante, acondicionamento, volume ou massa, profundidade e especificação.
 - Parâmetros medidos em todo ponto: a lista dos parâmetros do catálogo que o
   registro de campo já traz prontos para preencher (até 30). O padrão do projeto
   começa sem nenhum marcado.
@@ -225,6 +248,26 @@ consultada de um ponto por vez, só por quem pode registrar coleta.
 O aplicativo também lembra, em cada aparelho, a última "Equipe" usada, para o
 próximo registro já vir preenchido.
 
+### Sem sinal
+
+Desde a versão 2.0.7 (12/11/2026) o registro de campo funciona sem sinal nenhum
+(em código: `public/sw.js`, `src/lib/field-outbox.ts`, `src/lib/field-record-sync.ts`).
+
+- O celular guarda as telas do aplicativo e a última cópia dos pontos, campanhas,
+  parâmetros e registros. Para isso, o aplicativo precisa ter sido aberto uma vez
+  com sinal depois da atualização, já com a conta conectada. Dá para instalar na
+  tela inicial do celular ("Adicionar à tela inicial").
+- Sem sinal, salvar o registro guarda tudo no aparelho: o registro, as amostras, as
+  medições e as fotos. O registro aparece na lista com o selo "No aparelho,
+  aguardando sinal" e pode ser aberto e corrigido.
+- Quando o sinal volta, o aplicativo envia sozinho, do mais antigo para o mais
+  novo: primeiro as fotos, depois o registro, depois as amostras e as medições. O
+  botão "Enviar agora" força o envio.
+- Se a nuvem recusar alguma coisa (código de amostra repetido, por exemplo), o
+  registro fica com o selo "Precisa de revisão" e nada se perde.
+- Sair do sistema com registros ainda no aparelho pede confirmação. Sair apaga a
+  cópia guardada dos dados da conta.
+
 ## 8. Planilha de exportação
 
 Arquivo `.xlsx` com duas abas de dados e uma de consulta (`Catálogo de parâmetros`).
@@ -238,7 +281,7 @@ Categoria da Amostra | Origem da Amostra | Objetivo | Tipo de Conservação |
 Código de Campo | Ponto de Coleta | Data da Coleta | Hora da Coleta | Latitude |
 Longitude | Profundidade (m) | Volume Filtrado (mL) | Especificação | Temp Ar (°C) |
 Temp Água (°C) | pH | Salinidade (ups) | Oxigênio Dissolvido | Transparência |
-Turbidez | Local Armazenamento | Posição | Observações
+Turbidez | Local Armazenamento | Posição | Observações | Preservante
 ```
 
 **Aba `Parâmetros`**, uma linha por medição:
@@ -259,6 +302,9 @@ Regras do formato:
   sozinho. Não usar barra (`/`) em cabeçalho.
 - `Origem da Amostra` é calculada: para água, a matriz da campanha; para os outros
   tipos, o próprio tipo.
+- `Preservante` (desde 12/11/2026, versão 1.1 do contrato com o Biolog) é a última
+  coluna, para não mudar a posição das outras. Enquanto o Biolog não a lê, o
+  preservante também vai no fim da `Especificação` (`eDNA; preservante: Longmire`).
 
 ### Como o Yva'e gera a planilha
 
@@ -302,8 +348,8 @@ se manda é a pessoa):
 | Registro sem latitude e longitude | Sim |
 | Registro sem ponto de coleta (SIA) | Sim |
 | Coordenada que é a planejada do ponto, e não a medida no local | Não |
-| Código gravado que não confere mais com a data e o ponto do registro | Não |
-| Código já exportado que ficou o mesmo depois de o registro ser corrigido | Não |
+| Código gravado que não confere mais com a data, a hora e o ponto do registro | Não |
+| Código já exportado (ou no formato antigo) que ficou o mesmo depois de o registro ser corrigido | Não |
 | Medição que não vale para nenhuma amostra do registro (outra profundidade) | Não |
 
 Depois que o arquivo sai, as amostras ficam marcadas como exportadas (coluna

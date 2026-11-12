@@ -42,7 +42,7 @@ const data = buildBiologExport({
     {
       id: "s1",
       entryId: "entry-1",
-      code: "YVA-071126-0136-AG1",
+      code: "YVA-0136-071126-0905-AG1",
       projectCode: "YVA",
       sampleType: "water",
       sequence: 1,
@@ -51,13 +51,14 @@ const data = buildBiologExport({
       quantityUnit: "mL",
       specification: "",
       conservation: "FILTRO_CONGELADO",
+      preservative: "Longmire",
       packaging: "Isopor com gelo",
       boxPosition: "",
     },
     {
       id: "s2",
       entryId: "entry-1",
-      code: "YVA-071126-0136-PL1",
+      code: "YVA-0136-071126-0905-PL1",
       projectCode: "YVA",
       sampleType: "plankton",
       sequence: 1,
@@ -66,6 +67,7 @@ const data = buildBiologExport({
       quantityUnit: "mL",
       specification: "Rede de 68 µm",
       conservation: "OUTRO",
+      preservative: "",
       packaging: "",
       boxPosition: "B2",
     },
@@ -107,10 +109,10 @@ describe("arquivo .xlsx para o Biolog", () => {
     const workbook = await roundTrip();
     const headers = (name: string, width: number) => rowValues(workbook.getWorksheet(name)!, 1, width);
 
-    expect(headers("Amostras", 28)).toEqual([...BIOLOG_SAMPLE_COLUMNS]);
+    expect(headers("Amostras", 29)).toEqual([...BIOLOG_SAMPLE_COLUMNS]);
     expect(headers("Parâmetros", 7)).toEqual([...BIOLOG_READING_COLUMNS]);
     expect(headers("Catálogo de parâmetros", 6)).toEqual([...BIOLOG_CATALOG_COLUMNS]);
-    expect(workbook.getWorksheet("Amostras")!.columnCount).toBe(28);
+    expect(workbook.getWorksheet("Amostras")!.columnCount).toBe(29);
   });
 
   it("grava uma linha por amostra, com número como número e vazio como vazio", async () => {
@@ -120,7 +122,7 @@ describe("arquivo .xlsx para o Biolog", () => {
       sheet.getRow(rowNumber).getCell(column(header)).value;
 
     expect(sheet.rowCount).toBe(3);
-    expect(cell(2, "Código de Campo")).toBe("YVA-071126-0136-AG1");
+    expect(cell(2, "Código de Campo")).toBe("YVA-0136-071126-0905-AG1");
     expect(cell(2, "Data da Coleta")).toBe("07/11/2026");
     expect(cell(2, "Hora da Coleta")).toBe("09:05");
     expect(cell(2, "Latitude")).toBe(-25.4312);
@@ -131,10 +133,11 @@ describe("arquivo .xlsx para o Biolog", () => {
     expect(cell(2, "pH")).toBe(7.2);
     expect(cell(2, "Temp Ar (°C)")).toBe(22);
     expect(cell(2, "Turbidez")).toBeNull();
-    expect(cell(2, "Especificação")).toBeNull();
+    expect(cell(2, "Especificação")).toBe("preservante: Longmire");
+    expect(cell(2, "Preservante")).toBe("Longmire");
     expect(cell(2, "Posição")).toBeNull();
 
-    expect(cell(3, "Código de Campo")).toBe("YVA-071126-0136-PL1");
+    expect(cell(3, "Código de Campo")).toBe("YVA-0136-071126-0905-PL1");
     expect(cell(3, "Categoria da Amostra")).toBe("PLANCTON");
     expect(cell(3, "Profundidade (m)")).toBe(2.5);
     expect(cell(3, "Volume Filtrado (mL)")).toBeNull();
@@ -147,10 +150,10 @@ describe("arquivo .xlsx para o Biolog", () => {
     const rows = Array.from({ length: sheet.rowCount - 1 }, (_, index) => rowValues(sheet, index + 2, 7));
 
     expect(rows).toEqual([
-      ["YVA-071126-0136-AG1", "Temperatura do ar", 22, "°C", null, "07/11/2026 09:00", null],
-      ["YVA-071126-0136-AG1", "pH", 7.2, null, 0, "07/11/2026 09:10", "Sonda"],
-      ["YVA-071126-0136-AG1", "Condutividade", 120.5, "µS/cm", 0, "07/11/2026", null],
-      ["YVA-071126-0136-PL1", "Temperatura do ar", 22, "°C", null, "07/11/2026 09:00", null],
+      ["YVA-0136-071126-0905-AG1", "Temperatura do ar", 22, "°C", null, "07/11/2026 09:00", null],
+      ["YVA-0136-071126-0905-AG1", "pH", 7.2, null, 0, "07/11/2026 09:10", "Sonda"],
+      ["YVA-0136-071126-0905-AG1", "Condutividade", 120.5, "µS/cm", 0, "07/11/2026", null],
+      ["YVA-0136-071126-0905-PL1", "Temperatura do ar", 22, "°C", null, "07/11/2026 09:00", null],
     ]);
   });
 

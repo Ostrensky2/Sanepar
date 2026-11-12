@@ -9,6 +9,7 @@ import {
   describeSampleDetails,
   describeSampleDraft,
   exportedDateLabel,
+  lastRemovableSample,
   legacyFieldsFromCodes,
   legacyFieldsFromSamples,
   legacyFieldsPatch,
@@ -18,6 +19,7 @@ import {
   sampleCodeOf,
   sampleCodeProblem,
   sampleDraftsToInputs,
+  sampleInputsToDrafts,
   samplesToDrafts,
   validateSampleDrafts,
   type FieldSample,
@@ -28,7 +30,7 @@ import { buildProjectCollectionDefaults } from "@/lib/field-standard";
 // Amostras do ponto: como nascem dos padrões da campanha, como o código acompanha
 // o registro e o que é conferido antes de gravar.
 
-const context = { projectCode: "YVA", date: "2026-11-07", point: "SIA-0136" };
+const context = { projectCode: "YVA", date: "2026-11-07", time: "09:05", point: "SIA-0136" };
 
 function idFactory() {
   let next = 0;
@@ -48,6 +50,7 @@ function draft(overrides: Partial<SampleDraft> = {}): SampleDraft {
     quantity: "1000",
     specification: "eDNA",
     conservation: "FILTRO_CONGELADO",
+    preservative: "",
     packaging: "Isopor com gelo",
     boxPosition: "",
     savedCode: "",
@@ -56,13 +59,15 @@ function draft(overrides: Partial<SampleDraft> = {}): SampleDraft {
 }
 
 describe("amostras propostas pelo padrão da campanha", () => {
-  it("propõe 3 de água e 1 de plâncton, já com os valores do padrão", () => {
+  it("propõe 5 de água e 1 de plâncton, já com os valores do padrão", () => {
     const drafts = buildDefaultSampleDrafts(options());
 
     expect(drafts.map((item) => `${item.sampleType}${item.sequence}`)).toEqual([
       "water1",
       "water2",
       "water3",
+      "water4",
+      "water5",
       "plankton1",
     ]);
     expect(drafts[0]).toMatchObject({
@@ -71,10 +76,23 @@ describe("amostras propostas pelo padrão da campanha", () => {
       conservation: "FILTRO_CONGELADO",
       packaging: "Isopor com gelo",
       specification: "eDNA",
+      preservative: "",
       savedCode: "",
     });
-    expect(describeDefaultSamples(buildProjectCollectionDefaults())).toBe("3 de Água e 1 de Plâncton");
-    expect(describeSampleCounts(drafts)).toBe("3 de Água e 1 de Plâncton");
+    expect(describeDefaultSamples(buildProjectCollectionDefaults())).toBe("5 de Água e 1 de Plâncton");
+    expect(describeSampleCounts(drafts)).toBe("5 de Água e 1 de Plâncton");
+  });
+
+  it("preservante: o último usado no aparelho, senão o da campanha", () => {
+    const defaults = buildProjectCollectionDefaults();
+    defaults.sampleTypes.water.preservative = "Longmire";
+
+    const fromCampaign = buildDefaultSampleDrafts(options({ defaults }));
+    const fromDevice = buildDefaultSampleDrafts(options({ defaults, lastPreservative: { water: "Álcool 96%" } }));
+
+    expect(fromCampaign.find((item) => item.sampleType === "water")?.preservative).toBe("Longmire");
+    expect(fromCampaign.find((item) => item.sampleType === "plankton")?.preservative).toBe("");
+    expect(fromDevice.find((item) => item.sampleType === "water")?.preservative).toBe("Álcool 96%");
   });
 
   it("usa o último acondicionamento do aparelho no lugar do padrão da campanha", () => {
@@ -105,7 +123,7 @@ describe("amostras propostas pelo padrão da campanha", () => {
 
 describe("+ Amostra", () => {
   it("repete a última amostra do tipo, com o próximo número e sem posição nem código gravado", () => {
-    const first = draft({ sequence: 2, depthM: "5", boxPosition: "A3", savedCode: "YVA-071126-0136-AG2" });
+    const first = draft({ sequence: 2, depthM: "5", boxPosition: "A3", savedCode: "YVA-0136-071126-0905-AG2" });
     const next = addSampleDraft([first], "water", options());
 
     expect(next).toHaveLength(2);
@@ -124,6 +142,19 @@ describe("+ Amostra", () => {
     expect(nextDraftSequence([draft({ sequence: 4 })], "plankton")).toBe(1);
   });
 
+  it("o − tira a de maior número que ainda não saiu na planilha do Biolog", () => {
+    const drafts = [
+      draft({ id: "a", sequence: 1 }),
+      draft({ id: "b", sequence: 3, exportedAt: "2026-11-09T15:00:00.000Z" }),
+      draft({ id: "c", sequence: 2 }),
+      draft({ id: "p", sampleType: "plankton" }),
+    ];
+
+    expect(lastRemovableSample(drafts, "water")?.id).toBe("c");
+    expect(lastRemovableSample(drafts, "plankton")?.id).toBe("p");
+    expect(lastRemovableSample(drafts, "soil")).toBeNull();
+  });
+
   it("para no limite de amostras por registro", () => {
     const full = Array.from({ length: MAX_SAMPLES_PER_ENTRY }, (_, index) => draft({ id: `id-${index}`, sequence: index + 1 }));
 
@@ -132,19 +163,34 @@ describe("+ Amostra", () => {
 });
 
 describe("código da etiqueta", () => {
-  it("acompanha a data e o ponto do registro", () => {
-    expect(sampleCodeOf(draft({ sequence: 2 }), context)).toEqual({ code: "YVA-071126-0136-AG2", error: "" });
-    expect(sampleCodeOf(draft({ sampleType: "plankton" }), { ...context, date: "2026-11-08", point: "771" }).code).toBe(
-      "YVA-081126-0771-PL1",
-    );
+  it("acompanha o ponto, a data e a hora do registro", () => {
+    expect(sampleCodeOf(draft({ sequence: 2 }), context)).toEqual({ code: "YVA-0136-071126-0905-AG2", error: "" });
+    expect(
+      sampleCodeOf(draft({ sampleType: "plankton" }), { ...context, date: "2026-11-08", time: "14:30", point: "771" }).code,
+    ).toBe("YVA-0771-081126-1430-PL1");
   });
 
-  it("sem ponto ou sem data explica o que falta, em vez de inventar um código", () => {
+  it("sem ponto, sem data ou sem hora explica o que falta, em vez de inventar um código", () => {
     expect(sampleCodeOf(draft(), { ...context, point: "" })).toEqual({
       code: "",
       error: "Informe o ponto de coleta (SIA) para gerar o código da amostra.",
     });
     expect(sampleCodeOf(draft(), { ...context, date: "" }).error).toContain("data da coleta");
+    expect(sampleCodeOf(draft(), { ...context, time: "" }).error).toContain("hora da coleta");
+  });
+
+  it("código antigo (sem a hora) fica como está, porque já pode estar na etiqueta", () => {
+    const legacy = draft({ savedCode: "YVA-071126-0136-AG1" });
+
+    expect(sampleCodeOf(legacy, { ...context, time: "10:00" })).toEqual({ code: "YVA-071126-0136-AG1", error: "" });
+    expect(sampleCodeProblem([legacy], { ...context, time: "" })).toBe("");
+    expect(sampleDraftsToInputs([legacy], context)[0].code).toBe("YVA-071126-0136-AG1");
+  });
+
+  it("código novo acompanha a hora até a amostra sair na planilha do Biolog", () => {
+    const saved = draft({ savedCode: "YVA-0136-071126-0905-AG1" });
+
+    expect(sampleCodeOf(saved, { ...context, time: "09:40" }).code).toBe("YVA-0136-071126-0940-AG1");
   });
 });
 
@@ -180,7 +226,13 @@ describe("conferência antes de gravar", () => {
   it("monta o que vai para a nuvem com o código, a unidade do tipo e os números", () => {
     const [water, tissue] = sampleDraftsToInputs(
       [
-        draft({ depthM: "2,5", quantity: "500", specification: "  filtro 0,45 µm  ", boxPosition: " A3 " }),
+        draft({
+          depthM: "2,5",
+          quantity: "500",
+          specification: "  filtro 0,45 µm  ",
+          preservative: " Longmire ",
+          boxPosition: " A3 ",
+        }),
         draft({ id: "t", sampleType: "tissue", depthM: "9", quantity: "", conservation: "AMOSTRA_BRUTA_CONGELADA" }),
       ],
       context,
@@ -188,7 +240,7 @@ describe("conferência antes de gravar", () => {
 
     expect(water).toEqual({
       id: "00000000-0000-4000-8000-0000000000aa",
-      code: "YVA-071126-0136-AG1",
+      code: "YVA-0136-071126-0905-AG1",
       sampleType: "water",
       sequence: 1,
       depthM: 2.5,
@@ -196,11 +248,12 @@ describe("conferência antes de gravar", () => {
       quantityUnit: "mL",
       specification: "filtro 0,45 µm",
       conservation: "FILTRO_CONGELADO",
+      preservative: "Longmire",
       packaging: "Isopor com gelo",
       boxPosition: "A3",
     });
     // Tecido não tem profundidade: o que estiver digitado não é gravado.
-    expect(tissue).toMatchObject({ code: "YVA-071126-0136-TE1", depthM: null, quantity: null, quantityUnit: "g" });
+    expect(tissue).toMatchObject({ code: "YVA-0136-071126-0905-TE1", depthM: null, quantity: null, quantityUnit: "g" });
   });
 
   it("lê as amostras gravadas de volta para o formulário, na ordem do padrão", () => {
@@ -213,29 +266,41 @@ describe("conferência antes de gravar", () => {
     const drafts = samplesToDrafts(saved);
 
     expect(drafts.map((item) => item.id)).toEqual(["w1", "w2", "p"]);
-    expect(drafts[1]).toMatchObject({ depthM: "0,5", quantity: "1000", savedCode: "YVA-071126-0136-AG2" });
-    expect(drafts[2]).toMatchObject({ depthM: "", savedCode: "YVA-071126-0136-PL1" });
+    expect(drafts[1]).toMatchObject({ depthM: "0,5", quantity: "1000", savedCode: "YVA-0136-071126-0905-AG2" });
+    expect(drafts[2]).toMatchObject({ depthM: "", savedCode: "YVA-0136-071126-0905-PL1" });
+  });
+
+  it("amostras guardadas no aparelho voltam ao formulário como novas, menos o código antigo", () => {
+    const inputs = sampleDraftsToInputs(
+      [draft({ preservative: "Longmire" }), draft({ id: "old", sequence: 2, savedCode: "YVA-071126-0136-AG2" })],
+      context,
+    );
+    const drafts = sampleInputsToDrafts(inputs);
+
+    expect(drafts.map((item) => item.savedCode)).toEqual(["", "YVA-071126-0136-AG2"]);
+    expect(drafts[0]).toMatchObject({ preservative: "Longmire", exportedAt: "" });
+    expect(sampleCodeOf(drafts[1], { ...context, time: "11:00" }).code).toBe("YVA-071126-0136-AG2");
   });
 });
 
 describe("amostra que já saiu na planilha do Biolog", () => {
-  const exported = draft({ savedCode: "YVA-071126-0136-AG1", exportedAt: "2026-11-09T15:00:00.000Z" });
+  const exported = draft({ savedCode: "YVA-0136-071126-0905-AG1", exportedAt: "2026-11-09T15:00:00.000Z" });
 
-  it("fica com o código gravado, mesmo com outra data ou outro ponto no registro", () => {
-    expect(sampleCodeOf(exported, { ...context, date: "2026-11-08", point: "0140" })).toEqual({
-      code: "YVA-071126-0136-AG1",
+  it("fica com o código gravado, mesmo com outra data, hora ou ponto no registro", () => {
+    expect(sampleCodeOf(exported, { ...context, date: "2026-11-08", time: "10:00", point: "0140" })).toEqual({
+      code: "YVA-0136-071126-0905-AG1",
       error: "",
     });
-    // A que ainda não foi exportada segue a data e o ponto do registro.
-    expect(sampleCodeOf(draft({ savedCode: "YVA-071126-0136-AG1" }), { ...context, date: "2026-11-08" }).code).toBe(
-      "YVA-081126-0136-AG1",
-    );
+    // A que ainda não foi exportada segue a data, a hora e o ponto do registro.
+    expect(
+      sampleCodeOf(draft({ savedCode: "YVA-0136-071126-0905-AG1" }), { ...context, date: "2026-11-08" }).code,
+    ).toBe("YVA-0136-081126-0905-AG1");
   });
 
   it("vai para a nuvem com o código gravado", () => {
     const inputs = sampleDraftsToInputs([exported, draft({ id: "b", sequence: 2 })], { ...context, date: "2026-11-08" });
 
-    expect(inputs.map((input) => input.code)).toEqual(["YVA-071126-0136-AG1", "YVA-081126-0136-AG2"]);
+    expect(inputs.map((input) => input.code)).toEqual(["YVA-0136-071126-0905-AG1", "YVA-0136-081126-0905-AG2"]);
     expect(inputs[0]).not.toHaveProperty("exportedAt");
   });
 
@@ -252,7 +317,7 @@ describe("amostra que já saiu na planilha do Biolog", () => {
     const saved: FieldSample = {
       id: "s1",
       entryId: "e1",
-      code: "YVA-071126-0136-AG1",
+      code: "YVA-0136-071126-0905-AG1",
       projectCode: "YVA",
       sampleType: "water",
       sequence: 1,
@@ -261,16 +326,27 @@ describe("amostra que já saiu na planilha do Biolog", () => {
       quantityUnit: "mL",
       specification: "",
       conservation: "FILTRO_CONGELADO",
+      preservative: "Longmire",
       packaging: "",
       boxPosition: "A1",
       exportedAt: "2026-11-09T15:00:00.000Z",
     };
-    const drafts = samplesToDrafts([saved, { ...saved, id: "s2", code: "YVA-071126-0136-PL1", sampleType: "plankton", exportedAt: null }]);
+    const drafts = samplesToDrafts([
+      saved,
+      { ...saved, id: "s2", code: "YVA-0136-071126-0905-PL1", sampleType: "plankton", exportedAt: null },
+    ]);
     const withNew = addSampleDraft(drafts, "water", options());
 
     expect(drafts.map((item) => item.exportedAt)).toEqual(["2026-11-09T15:00:00.000Z", ""]);
-    expect(withNew.at(-1)).toMatchObject({ sampleType: "water", sequence: 2, savedCode: "", exportedAt: "" });
-    expect(sampleCodeOf(withNew.at(-1)!, context).code).toBe("YVA-071126-0136-AG2");
+    expect(drafts[0].preservative).toBe("Longmire");
+    expect(withNew.at(-1)).toMatchObject({
+      sampleType: "water",
+      sequence: 2,
+      preservative: "Longmire",
+      savedCode: "",
+      exportedAt: "",
+    });
+    expect(sampleCodeOf(withNew.at(-1)!, context).code).toBe("YVA-0136-071126-0905-AG2");
   });
 
   it("não troca de número quando a nuvem propõe o próximo livre", () => {
@@ -296,12 +372,13 @@ describe("amostra que já saiu na planilha do Biolog", () => {
 describe("amostra vinda de fora (corpo da requisição)", () => {
   const valid = {
     id: "6F1F8D1E-2B7A-4A43-9A51-0D6C1F0F5A11",
-    code: "yva-071126-0136-ag1",
+    code: "yva-0136-071126-0905-ag1",
     sampleType: "water",
     sequence: 1,
     depthM: 0,
     quantity: "1000",
     conservation: "FILTRO_CONGELADO",
+    preservative: "  Sílica gel ",
     packaging: "Isopor com gelo",
     specification: "eDNA",
     boxPosition: "A1",
@@ -312,7 +389,7 @@ describe("amostra vinda de fora (corpo da requisição)", () => {
   it("normaliza id, código, unidade e descarta o que não é da amostra", () => {
     expect(normalizeSampleInput(valid)).toEqual({
       id: "6f1f8d1e-2b7a-4a43-9a51-0d6c1f0f5a11",
-      code: "YVA-071126-0136-AG1",
+      code: "YVA-0136-071126-0905-AG1",
       sampleType: "water",
       sequence: 1,
       depthM: 0,
@@ -320,9 +397,11 @@ describe("amostra vinda de fora (corpo da requisição)", () => {
       quantityUnit: "mL",
       specification: "eDNA",
       conservation: "FILTRO_CONGELADO",
+      preservative: "Sílica gel",
       packaging: "Isopor com gelo",
       boxPosition: "A1",
     });
+    expect(normalizeSampleInput({ ...valid, preservative: undefined })?.preservative).toBe("");
   });
 
   it.each([
@@ -348,7 +427,13 @@ describe("código repetido", () => {
   it("troca só o número das amostras em conflito pelo próximo livre", () => {
     const drafts = [draft({ id: "a", sequence: 1 }), draft({ id: "b", sequence: 2 }), draft({ id: "c", sampleType: "plankton" })];
     const next = applySuggestedSequences(drafts, [
-      { sampleId: "a", code: "YVA-071126-0136-AG1", suggestedSequence: 4, suggestedCode: "YVA-071126-0136-AG4", sameEntry: false },
+      {
+        sampleId: "a",
+        code: "YVA-0136-071126-0905-AG1",
+        suggestedSequence: 4,
+        suggestedCode: "YVA-0136-071126-0905-AG4",
+        sameEntry: false,
+      },
     ]);
 
     expect(next.map((item) => `${item.id}:${item.sequence}`)).toEqual(["a:4", "b:2", "c:1"]);
@@ -361,7 +446,7 @@ describe("campos de texto antigos do registro", () => {
   it("resume as amostras: quantas de água e os códigos de plâncton", () => {
     expect(legacyFieldsFromSamples(samples, context)).toEqual({
       samplesReplicasEdna: "2 réplicas",
-      zooplanktonId: "YVA-071126-0136-PL1",
+      zooplanktonId: "YVA-0136-071126-0905-PL1",
     });
     expect(legacyFieldsFromSamples([draft()], context).samplesReplicasEdna).toBe("1 réplica");
     expect(legacyFieldsFromSamples([], context)).toEqual({ samplesReplicasEdna: "", zooplanktonId: "" });
@@ -375,13 +460,13 @@ describe("campos de texto antigos do registro", () => {
     const many = Array.from({ length: 10 }, (_, index) => ({
       sampleType: "plankton" as const,
       sequence: index + 1,
-      code: `YVA-071126-0136-PL${index + 1}`,
+      code: `YVA-0136-071126-0905-PL${index + 1}`,
     }));
     const text = legacyFieldsFromCodes(many).zooplanktonId;
 
     expect(text.length).toBeLessThanOrEqual(120);
-    expect(text.split(", ").every((code) => /^YVA-071126-0136-PL\d+$/.test(code))).toBe(true);
-    expect(text.startsWith("YVA-071126-0136-PL1, YVA-071126-0136-PL2")).toBe(true);
+    expect(text.split(", ").every((code) => /^YVA-0136-071126-0905-PL\d+$/.test(code))).toBe(true);
+    expect(text.startsWith("YVA-0136-071126-0905-PL1, YVA-0136-071126-0905-PL2")).toBe(true);
   });
 
   it("preenche campo vazio e atualiza o texto que o próprio app escreveu", () => {
@@ -412,9 +497,12 @@ describe("campos de texto antigos do registro", () => {
 });
 
 describe("resumo de uma amostra em uma linha", () => {
-  it("diz superfície, quantidade com unidade, conservação, acondicionamento e posição", () => {
+  it("diz superfície, quantidade com unidade, conservação, preservante, acondicionamento e posição", () => {
     expect(describeSampleDraft(draft({ boxPosition: "A3" }))).toBe(
       "Superfície · 1000 mL · Filtro congelado · Isopor com gelo · eDNA · Posição A3",
+    );
+    expect(describeSampleDraft(draft({ preservative: " Longmire " }))).toBe(
+      "Superfície · 1000 mL · Filtro congelado · Preservante Longmire · Isopor com gelo · eDNA",
     );
     expect(describeSampleDraft(draft({ depthM: "2,5", specification: "", packaging: "" }))).toBe(
       "2,5 m de profundidade · 1000 mL · Filtro congelado",

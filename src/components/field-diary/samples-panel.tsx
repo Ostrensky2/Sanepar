@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronUp, Plus, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
+import { ChevronDown, ChevronUp, Minus, Plus, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { inputClassName } from "@/components/field-diary/constants";
 import { Field } from "@/components/field-diary/ui";
@@ -10,6 +10,7 @@ import {
   describeSampleCounts,
   describeSampleDraft,
   exportedDateLabel,
+  lastRemovableSample,
   sampleCodeOf,
   sampleCodeProblem,
   sampleShortLabel,
@@ -20,6 +21,7 @@ import {
 import {
   COLLECTION_TEXT_MAX_LENGTH,
   conservationTypes,
+  preservativeSuggestions,
   getSampleType,
   sampleTypes,
   type ConservationType,
@@ -50,6 +52,7 @@ export function SamplesPanel({
   expandedIds,
   onToggle,
   onAdd,
+  onRemoveLast,
   onChange,
   onRemove,
   onUndoRemove,
@@ -69,7 +72,10 @@ export function SamplesPanel({
   message: string;
   expandedIds: string[];
   onToggle: (id: string) => void;
-  onAdd: (sampleType: SampleTypeId) => void;
+  /** `expand: false` = acrescentada pelo "+" das réplicas, sem abrir o cartão. */
+  onAdd: (sampleType: SampleTypeId, options?: { expand?: boolean }) => void;
+  /** "−" das réplicas: tira a última amostra do tipo. */
+  onRemoveLast: (sampleType: SampleTypeId) => void;
   onChange: (id: string, patch: Partial<SampleDraft>) => void;
   onRemove: (id: string) => void;
   onUndoRemove: () => void;
@@ -92,6 +98,12 @@ export function SamplesPanel({
       <h3 id="field-diary-samples-title" className="text-sm font-black text-[var(--brand-navy-strong)]">
         Amostras do ponto
       </h3>
+      {/* Sugestões do campo Preservante; a pessoa pode escrever qualquer outro. */}
+      <datalist id="yvae-preservantes">
+        {preservativeSuggestions.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
 
       {status === "loading" ? (
         <p role="status" className="mt-1 text-sm text-[var(--ink-soft)]">
@@ -126,6 +138,13 @@ export function SamplesPanel({
               ? `${describeSampleCounts(samples)}. O código é o que vai na etiqueta.`
               : "Nenhuma amostra neste registro. O aplicativo gera o código da etiqueta de cada uma."}
           </p>
+
+          <ReplicaCounters
+            samples={samples}
+            canAdd={canAdd}
+            onAdd={(sampleType) => onAdd(sampleType, { expand: false })}
+            onRemoveLast={onRemoveLast}
+          />
 
           {codeProblem ? (
             <p role="alert" className="mt-2 text-sm font-semibold text-amber-900">
@@ -219,6 +238,73 @@ export function SamplesPanel({
   );
 }
 
+/** Tipos que sempre aparecem no contador de réplicas (os que a Sanepar coleta em todo ponto). */
+const ALWAYS_COUNTED: SampleTypeId[] = ["water", "plankton"];
+
+/**
+ * Quantas réplicas de cada tipo há neste ponto, com "−" e "+". Não há número fixo:
+ * a equipe coloca quantas quiser (até o limite do registro).
+ */
+function ReplicaCounters({
+  samples,
+  canAdd,
+  onAdd,
+  onRemoveLast,
+}: {
+  samples: SampleDraft[];
+  canAdd: boolean;
+  onAdd: (sampleType: SampleTypeId) => void;
+  onRemoveLast: (sampleType: SampleTypeId) => void;
+}) {
+  const shown = sampleTypes.filter(
+    (type) => ALWAYS_COUNTED.includes(type.id) || samples.some((sample) => sample.sampleType === type.id),
+  );
+
+  return (
+    <div role="group" aria-label="Réplicas neste ponto" className="mt-3 grid gap-2 sm:grid-cols-2">
+      {shown.map((type) => {
+        const count = samples.filter((sample) => sample.sampleType === type.id).length;
+        const canRemove = Boolean(lastRemovableSample(samples, type.id));
+
+        return (
+          <div
+            key={type.id}
+            className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-[var(--line-ghost)] bg-white px-3"
+          >
+            <span className="min-w-0 text-sm font-bold text-[var(--brand-navy-strong)]">
+              {type.label}
+              <span className="block text-xs font-semibold text-[var(--ink-soft)]">réplicas neste ponto</span>
+            </span>
+            <span className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onRemoveLast(type.id)}
+                disabled={!canRemove}
+                aria-label={`Tirar uma amostra de ${type.label}`}
+                className="flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--line-strong)] bg-white text-lg font-black text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-muted)] disabled:opacity-40"
+              >
+                <Minus className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <output aria-live="polite" className="w-8 text-center text-base font-black text-[var(--brand-navy-strong)]">
+                {count}
+              </output>
+              <button
+                type="button"
+                onClick={() => onAdd(type.id)}
+                disabled={!canAdd}
+                aria-label={`Acrescentar uma amostra de ${type.label}`}
+                className="flex h-11 w-11 items-center justify-center rounded-lg bg-[var(--brand-navy-strong)] text-white transition hover:bg-[var(--brand-navy)] disabled:opacity-40"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function SampleCard({
   sample,
   context,
@@ -288,7 +374,7 @@ function SampleCard({
         <p role="status" className="mt-2 flex items-start gap-2 text-sm font-semibold text-amber-900">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>
-            O código gravado era {sample.savedCode}. Mudou junto com a data, o ponto ou o número da amostra: se a
+            O código gravado era {sample.savedCode}. Mudou junto com a data, a hora, o ponto ou o número da amostra: se a
             etiqueta já foi escrita, corrija a etiqueta.
           </span>
         </p>
@@ -336,6 +422,16 @@ function SampleCard({
                 </option>
               ))}
             </select>
+          </Field>
+          <Field label="Preservante">
+            <input
+              value={sample.preservative}
+              onChange={(event) => onChange({ preservative: event.target.value })}
+              className={fieldClassName}
+              list="yvae-preservantes"
+              placeholder="Ex: Longmire, álcool, sílica"
+              maxLength={COLLECTION_TEXT_MAX_LENGTH}
+            />
           </Field>
           <Field label="Acondicionamento">
             <input

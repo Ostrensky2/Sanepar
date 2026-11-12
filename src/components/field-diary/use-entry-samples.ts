@@ -11,6 +11,7 @@ import {
   describeSampleCounts,
   legacyFieldsFromCodes,
   legacyFieldsFromSamples,
+  lastRemovableSample,
   legacyFieldsPatch,
   nextDraftSequence,
   sampleDraftsToInputs,
@@ -31,11 +32,12 @@ import {
   type SamplesSaveResult,
 } from "@/lib/field-samples-client";
 import type { SampleTypeId } from "@/lib/field-standard";
-import { readLastSamplePackaging } from "@/lib/last-sample-packaging";
+import { readLastSamplePackaging, readLastSamplePreservative } from "@/lib/last-sample-packaging";
 
 /** O que o código das amostras usa do registro que está no formulário. */
 type EntryForSamples = {
   entryDate: string;
+  collectionTime?: string | null;
   sia?: string | null;
   samplesReplicasEdna?: string | null;
   zooplanktonId?: string | null;
@@ -162,15 +164,21 @@ export function useEntrySamples({
     return {
       defaults: defaultsRef.current,
       lastPackaging: readLastSamplePackaging(),
+      lastPreservative: readLastSamplePreservative(),
       newId: () => crypto.randomUUID(),
     };
   }
 
   function contextOf(entry: EntryForSamples): SampleCodeContext {
-    return { projectCode: defaultsRef.current.projectCode, date: entry.entryDate, point: entry.sia ?? "" };
+    return {
+      projectCode: defaultsRef.current.projectCode,
+      date: entry.entryDate,
+      time: entry.collectionTime ?? "",
+      point: entry.sia ?? "",
+    };
   }
 
-  function add(sampleType: SampleTypeId) {
+  function add(sampleType: SampleTypeId, options: { expand?: boolean } = {}) {
     const next = addSampleDraft(samplesRef.current, sampleType, factoryOptions());
     const added = next[next.length - 1];
 
@@ -179,8 +187,19 @@ export function useEntrySamples({
     }
 
     put(sortSamples(next));
-    setExpandedIds((current) => [...current, added.id]);
+    if (options.expand ?? true) {
+      setExpandedIds((current) => [...current, added.id]);
+    }
     setMessage("");
+  }
+
+  /** Botão "−" das réplicas: tira a última amostra do tipo (a que já foi para o Biolog fica). */
+  function removeLast(sampleType: SampleTypeId) {
+    const last = lastRemovableSample(samplesRef.current, sampleType);
+
+    if (last) {
+      remove(last.id);
+    }
   }
 
   function change(id: string, patch: Partial<SampleDraft>) {
@@ -356,6 +375,7 @@ export function useEntrySamples({
     projectCode: defaults.projectCode,
     defaultsDescription: describeDefaultSamples(defaults),
     add,
+    removeLast,
     change,
     remove,
     undoRemove,

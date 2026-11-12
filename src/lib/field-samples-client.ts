@@ -176,6 +176,7 @@ export function readSamples(value: unknown): FieldSample[] {
       quantityUnit: typeof raw.quantityUnit === "string" ? raw.quantityUnit : "",
       specification: typeof raw.specification === "string" ? raw.specification : "",
       conservation,
+      preservative: typeof raw.preservative === "string" ? raw.preservative : "",
       packaging: typeof raw.packaging === "string" ? raw.packaging : "",
       boxPosition: typeof raw.boxPosition === "string" ? raw.boxPosition : "",
       exportedAt: typeof raw.exportedAt === "string" && raw.exportedAt ? raw.exportedAt : null,

@@ -49,17 +49,26 @@ export function isSampleTypeId(value: unknown): value is SampleTypeId {
 }
 
 // ---------------------------------------------------------------------------
-// Código da amostra: {PROJETO}-{DDMMAA}-{PONTO}-{TIPO}{SEQUÊNCIA}
-// Exemplo: YVA-071126-0136-AG1 (19 caracteres)
+// Código da amostra: {PROJETO}-{PONTO}-{DDMMAA}-{HHMM}-{TIPO}{SEQUÊNCIA}
+// Exemplo: YVA-0136-071126-0905-AG1 (24 caracteres). Decisão de 12/11/2026:
+// projeto, ponto, dia e hora da coleta, e as réplicas se distinguem pelo número.
+//
+// Antes (até a versão 2.0.6) era {PROJETO}-{DDMMAA}-{PONTO}-{TIPO}{SEQUÊNCIA},
+// ex.: YVA-071126-0136-AG1. Amostras gravadas nesse formato ficam com o código
+// que têm: ele pode já estar numa etiqueta.
 // ---------------------------------------------------------------------------
 
 export const SAMPLE_CODE_POINT_MAX_LENGTH = 8;
 export const SAMPLE_CODE_MAX_SEQUENCE = 999;
 
+const SAMPLE_TYPE_CODES = sampleTypes.map((type) => type.code).join("|");
+
 const SAMPLE_CODE_PATTERN = new RegExp(
-  `^([A-Z]{3})-(\\d{2})(\\d{2})(\\d{2})-([A-Z0-9]{1,${SAMPLE_CODE_POINT_MAX_LENGTH}})-(${sampleTypes
-    .map((type) => type.code)
-    .join("|")})(\\d{1,3})$`,
+  `^([A-Z]{3})-([A-Z0-9]{1,${SAMPLE_CODE_POINT_MAX_LENGTH}})-(\\d{2})(\\d{2})(\\d{2})-(\\d{2})(\\d{2})-(${SAMPLE_TYPE_CODES})(\\d{1,3})$`,
+);
+
+const LEGACY_SAMPLE_CODE_PATTERN = new RegExp(
+  `^([A-Z]{3})-(\\d{2})(\\d{2})(\\d{2})-([A-Z0-9]{1,${SAMPLE_CODE_POINT_MAX_LENGTH}})-(${SAMPLE_TYPE_CODES})(\\d{1,3})$`,
 );
 
 export class FieldStandardError extends Error {
@@ -74,10 +83,12 @@ export type SampleCodeInput = {
   projectCode: string;
   /** Data da coleta em AAAA-MM-DD. */
   date: string;
+  /** Hora da coleta no ponto, "HH:MM" (a do registro de campo). */
+  time: string;
   /** Ponto de coleta (ex.: SIA "0136", "SIA-136", "P01"). */
   point: string;
   sampleType: SampleTypeId;
-  /** Número da amostra daquele tipo, naquele ponto e dia (1, 2, 3…). */
+  /** Número da amostra daquele tipo, naquele ponto, dia e hora (1, 2, 3…). */
   sequence: number;
 };
 
@@ -85,6 +96,8 @@ export type SampleCodeParts = {
   projectCode: string;
   /** AAAA-MM-DD (o século é sempre 20xx). */
   date: string;
+  /** "HH:MM"; null nos códigos do formato anterior, que não tinham hora. */
+  time: string | null;
   point: string;
   sampleType: SampleTypeId;
   sequence: number;
@@ -92,8 +105,9 @@ export type SampleCodeParts = {
 
 export function buildSampleCode(input: SampleCodeInput): string {
   const projectCode = normalizeProjectCode(input.projectCode);
-  const date = sampleCodeDate(input.date);
   const point = samplePointToken(input.point);
+  const date = sampleCodeDate(input.date);
+  const time = sampleCodeTime(input.time);
   const type = sampleTypes.find((item) => item.id === input.sampleType);
 
   if (!type) {
@@ -106,26 +120,40 @@ export function buildSampleCode(input: SampleCodeInput): string {
     );
   }
 
-  return `${projectCode}-${date}-${point}-${type.code}${input.sequence}`;
+  return `${projectCode}-${point}-${date}-${time}-${type.code}${input.sequence}`;
 }
 
-/** Lê um código no padrão. Devolve null quando o texto não segue o padrão. */
+/**
+ * Lê um código no padrão (o atual ou o anterior, sem hora). Devolve null quando o
+ * texto não segue nenhum dos dois.
+ */
 export function parseSampleCode(code: unknown): SampleCodeParts | null {
-  const match = SAMPLE_CODE_PATTERN.exec(String(code ?? "").trim().toUpperCase());
+  const text = String(code ?? "").trim().toUpperCase();
+  const current = SAMPLE_CODE_PATTERN.exec(text);
+  const legacy = current ? null : LEGACY_SAMPLE_CODE_PATTERN.exec(text);
 
-  if (!match) {
+  if (!current && !legacy) {
     return null;
   }
 
-  const [, projectCode, day, month, year, point, typeCode, sequence] = match;
+  const [projectCode, point, day, month, year, hour, minute, typeCode, sequence] = current
+    ? current.slice(1)
+    : [legacy![1], legacy![5], legacy![2], legacy![3], legacy![4], null, null, legacy![6], legacy![7]];
   const date = `20${year}-${month}-${day}`;
   const type = sampleTypes.find((item) => item.code === typeCode);
+  const time = hour === null || minute === null ? null : `${hour}:${minute}`;
 
-  if (!type || !isRealDate(date) || Number(sequence) < 1) {
+  if (!type || !isRealDate(date) || Number(sequence) < 1 || (time !== null && !isRealTime(time))) {
     return null;
   }
 
-  return { projectCode, date, point, sampleType: type.id, sequence: Number(sequence) };
+  return { projectCode, date, time, point, sampleType: type.id, sequence: Number(sequence) };
+}
+
+/** Código no formato anterior (sem hora), que fica como foi gravado. */
+export function isLegacySampleCode(code: unknown) {
+  const parts = parseSampleCode(code);
+  return Boolean(parts && parts.time === null);
 }
 
 /**
@@ -138,6 +166,7 @@ export function nextSampleSequence(
 ): number {
   const projectCode = normalizeProjectCode(target.projectCode);
   const point = samplePointToken(target.point);
+  const time = sampleCodeTime(target.time);
   let highest = 0;
 
   for (const code of existingCodes) {
@@ -147,6 +176,7 @@ export function nextSampleSequence(
       parts &&
       parts.projectCode === projectCode &&
       parts.date === target.date &&
+      parts.time?.replace(":", "") === time &&
       parts.point === point &&
       parts.sampleType === target.sampleType
     ) {
@@ -207,6 +237,22 @@ function sampleCodeDate(value: unknown): string {
   }
 
   return `${day}${month}${year.slice(2)}`;
+}
+
+/** "09:05" (ou "09:05:00") vira "0905". */
+function sampleCodeTime(value: unknown): string {
+  const match = /^(\d{2}):(\d{2})(?::\d{2})?$/.exec(String(value ?? "").trim());
+
+  if (!match || !isRealTime(`${match[1]}:${match[2]}`)) {
+    throw new FieldStandardError("Informe a hora da coleta para gerar o código da amostra.");
+  }
+
+  return `${match[1]}${match[2]}`;
+}
+
+function isRealTime(time: string) {
+  const [hour, minute] = time.split(":").map(Number);
+  return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
 }
 
 function isRealDate(isoDate: string) {
@@ -298,6 +344,12 @@ export const conservationTypes = [
 ] as const;
 export type ConservationType = (typeof conservationTypes)[number]["value"];
 
+/**
+ * Sugestões do campo "Preservante" de cada amostra. A equipe pode escrever outro:
+ * o campo aceita qualquer preservante (retorno de campo de 12/11/2026).
+ */
+export const preservativeSuggestions = ["Longmire", "Álcool", "Sílica", "RNAlater", "Sem preservante"] as const;
+
 export const MAX_DEFAULT_REPLICAS = 20;
 export const COLLECTION_TEXT_MAX_LENGTH = 120;
 /** Quantos parâmetros o padrão da campanha pode propor em cada ponto. */
@@ -309,6 +361,8 @@ export type SampleTypeDefaults = {
   conservation: ConservationType;
   /** Acondicionamento (ex.: Isopor com gelo). */
   packaging: string;
+  /** Preservante (ex.: Longmire, álcool, sílica). Texto livre; vazio = não informado. */
+  preservative: string;
   /** Volume ou massa padrão, na unidade do tipo. */
   quantity: number | null;
   /** Profundidade padrão em metros (0 = superfície). */
@@ -337,6 +391,7 @@ export function buildProjectCollectionDefaults(): CollectionDefaults {
     replicas: 0,
     conservation: "OUTRO",
     packaging: "",
+    preservative: "",
     quantity: null,
     depthM: null,
     specification: "",
@@ -348,10 +403,13 @@ export function buildProjectCollectionDefaults(): CollectionDefaults {
     objective: "MONITORAMENTO",
     waterMatrix: "AGUA_DOCE",
     sampleTypes: {
+      // Sanepar: 5 réplicas de água e 1 de plâncton por ponto (retorno de campo de 12/11/2026).
+      // É só a sugestão: a equipe muda a quantidade em cada ponto e no padrão da campanha.
       water: {
-        replicas: 3,
+        replicas: 5,
         conservation: "FILTRO_CONGELADO",
         packaging: "Isopor com gelo",
+        preservative: "",
         quantity: 1000,
         depthM: 0,
         specification: "eDNA",
@@ -363,6 +421,7 @@ export function buildProjectCollectionDefaults(): CollectionDefaults {
         replicas: 1,
         conservation: "OUTRO",
         packaging: "Isopor com gelo",
+        preservative: "",
         quantity: null,
         depthM: 0,
         specification: "",
@@ -433,6 +492,8 @@ function normalizeSampleTypeDefaults(value: unknown, fallback: SampleTypeDefault
         : fallback.replicas,
     conservation: pickOption(conservationTypes.map((item) => item.value), value.conservation, fallback.conservation),
     packaging: "packaging" in value ? cleanText(value.packaging, COLLECTION_TEXT_MAX_LENGTH) : fallback.packaging,
+    preservative:
+      "preservative" in value ? cleanText(value.preservative, COLLECTION_TEXT_MAX_LENGTH) : fallback.preservative,
     quantity: "quantity" in value ? nonNegativeNumber(value.quantity) : fallback.quantity,
     depthM: "depthM" in value ? nonNegativeNumber(value.depthM) : fallback.depthM,
     specification:

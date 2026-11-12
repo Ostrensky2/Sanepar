@@ -20,6 +20,7 @@ import {
 import { sortSamples, type FieldSample } from "@/lib/field-samples";
 import {
   getSampleType,
+  isLegacySampleCode,
   parseSampleCode,
   sampleTypes,
   samplePointToken,
@@ -57,6 +58,10 @@ export const BIOLOG_SAMPLE_COLUMNS = [
   "Local Armazenamento",
   "Posição",
   "Observações",
+  // Acrescentada em 12/11/2026 (versão 1.1 do contrato com o Biolog): preservante da
+  // amostra, texto livre (Longmire, álcool, sílica…). Vai também em "Especificação",
+  // para não se perder enquanto o Biolog não lê esta coluna.
+  "Preservante",
 ] as const;
 
 /** Cabeçalhos da aba "Parâmetros": formato longo, uma linha por medição de cada amostra. */
@@ -287,7 +292,9 @@ function buildSampleRow(
     Longitude: hasCoordinates ? longitude.value : null,
     "Profundidade (m)": type.usesDepth ? sample.depthM : null,
     "Volume Filtrado (mL)": isMillilitres ? sample.quantity : null,
-    Especificação: [quantityText, sample.specification].filter(Boolean).join("; "),
+    Especificação: [quantityText, sample.specification, sample.preservative ? `preservante: ${sample.preservative}` : ""]
+      .filter(Boolean)
+      .join("; "),
     "Temp Ar (°C)": null,
     "Temp Água (°C)": null,
     pH: null,
@@ -298,6 +305,7 @@ function buildSampleRow(
     "Local Armazenamento": sample.packaging,
     Posição: sample.boxPosition,
     Observações: observationsOf(entry),
+    Preservante: sample.preservative || null,
   };
 
   // Os parâmetros que o Biolog já conhece também vão nas colunas fixas. Havendo mais
@@ -340,40 +348,52 @@ function findEntryIssues(
     add("planned_coordinate", "A coordenada é a planejada do ponto, e não a medida no local.", false);
   }
 
-  // O código gravado segue a data e o ponto do registro. Se o registro mudou depois
+  // O código gravado segue a data, a hora e o ponto do registro. Se o registro mudou depois
   // e as amostras não foram salvas de novo, a etiqueta ficou com o código antigo.
   const expectedPoint = entry.sia ? safePointToken(entry.sia) : "";
+  // Registro sem hora já é barrado acima ("Sem hora da coleta"); aqui não repete.
+  const expectedTime = formatTime(entry.collectionTime);
   const differing = samples.filter((sample) => {
     const parts = parseSampleCode(sample.code);
 
     return (
       !parts ||
       parts.date !== String(entry.entryDate ?? "").slice(0, 10) ||
+      (parts.time !== null && expectedTime !== "" && parts.time !== expectedTime) ||
       (expectedPoint !== "" && parts.point !== expectedPoint) ||
       parts.projectCode !== defaults.projectCode
     );
   });
-  const outdated = differing.filter((sample) => !sample.exportedAt);
-  const kept = differing.filter((sample) => sample.exportedAt);
+  // Exportada ou gravada no formato antigo (sem a hora): o código ficou como está,
+  // porque já pode estar na etiqueta. Salvar de novo não muda esse código.
+  const isKept = (sample: FieldSample) => Boolean(sample.exportedAt) || isLegacySampleCode(sample.code);
+  const outdated = differing.filter((sample) => !isKept(sample));
+  const kept = differing.filter(isKept);
 
   if (outdated.length) {
     add(
       "code_out_of_date",
       outdated.length === 1
-        ? `O código ${outdated[0].code} não confere com a data e o ponto do registro. Abra o registro e salve de novo.`
-        : `${outdated.length} códigos de amostra não conferem com a data e o ponto do registro. Abra o registro e salve de novo.`,
+        ? `O código ${outdated[0].code} não confere com a data, a hora e o ponto do registro. Abra o registro e salve de novo.`
+        : `${outdated.length} códigos de amostra não conferem com a data, a hora e o ponto do registro. Abra o registro e salve de novo.`,
       false,
     );
   }
 
-  // Amostra já exportada fica com o código que foi para o Biolog, mesmo que a data
-  // ou o ponto do registro tenham sido corrigidos depois.
+  // Amostra já exportada fica com o código que foi para o Biolog, mesmo que a data,
+  // a hora ou o ponto do registro tenham sido corrigidos depois.
   if (kept.length) {
+    const allExported = kept.every((sample) => sample.exportedAt);
+
     add(
       "exported_code_kept",
       kept.length === 1
-        ? `O código ${kept[0].code} já tinha sido exportado e continua o mesmo, embora a data ou o ponto do registro tenham mudado.`
-        : `${kept.length} códigos já tinham sido exportados e continuam os mesmos, embora a data ou o ponto do registro tenham mudado.`,
+        ? kept[0].exportedAt
+          ? `O código ${kept[0].code} já tinha sido exportado e continua o mesmo, embora a data, a hora ou o ponto do registro tenham mudado.`
+          : `O código ${kept[0].code} é do formato antigo e continua o mesmo, embora a data ou o ponto do registro tenham mudado.`
+        : allExported
+          ? `${kept.length} códigos já tinham sido exportados e continuam os mesmos, embora a data, a hora ou o ponto do registro tenham mudado.`
+          : `${kept.length} códigos já gravados (exportados ou no formato antigo) continuam os mesmos, embora a data, a hora ou o ponto do registro tenham mudado.`,
       false,
     );
   }
