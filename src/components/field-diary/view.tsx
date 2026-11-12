@@ -18,6 +18,7 @@ import { describeSampleCounts, describeSampleDetails, exportedDateLabel, type Fi
 import { fetchEntrySamples } from "@/lib/field-samples-client";
 import { getSampleType } from "@/lib/field-standard";
 import { effectiveExecutionStatus, type FieldDiaryEntry } from "@/lib/field-diary";
+import { isDevicePhotoUrl } from "@/lib/field-photo-upload";
 import { pointExecutionStatusLabels } from "@/lib/point-execution-status";
 
 const governanceLabels: Record<string, string> = {
@@ -110,14 +111,20 @@ export function FieldDiaryView({
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {photos.map((photo, index) => (
                 <figure key={photo.id} className="overflow-hidden rounded-xl border border-[var(--line-ghost)] bg-[var(--surface-soft)]">
-                  <a href={photo.url} target="_blank" rel="noreferrer" className="block">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={photo.url}
-                      alt={photo.caption || `Imagem da coleta ${index + 1}`}
-                      className="aspect-video w-full object-cover"
-                    />
-                  </a>
+                  {isDevicePhotoUrl(photo.url) ? (
+                    <p className="grid aspect-video w-full place-items-center px-4 text-center text-xs font-semibold text-slate-600">
+                      Foto guardada neste aparelho. Ela aparece aqui depois que subir para a nuvem.
+                    </p>
+                  ) : (
+                    <a href={photo.url} target="_blank" rel="noreferrer" className="block">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photo.url}
+                        alt={photo.caption || `Imagem da coleta ${index + 1}`}
+                        className="aspect-video w-full object-cover"
+                      />
+                    </a>
+                  )}
                   <figcaption className="px-3 py-2 text-xs font-semibold text-slate-600">
                     {photo.caption || `Imagem ${index + 1}`}
                   </figcaption>

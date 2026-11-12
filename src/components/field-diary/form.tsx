@@ -32,6 +32,8 @@ import {
 } from "@/lib/collection-capture";
 import { readDeviceGps } from "@/lib/device-gps";
 import type { CollectedChange, FieldRecordSaveOutcome } from "@/lib/field-collection-client";
+import type { FieldOutboxRecord } from "@/lib/field-outbox";
+import { isDevicePhotoUrl, keepPhotoOnDevice, uploadFieldPhoto } from "@/lib/field-photo-upload";
 import {
   fetchPlannedCoordinate,
   plannedCoordinateKey,
@@ -61,6 +63,7 @@ import {
 
 export function FieldDiaryForm({
   entry,
+  pendingRecord,
   message,
   campaignScope,
   onChange,
@@ -68,6 +71,8 @@ export function FieldDiaryForm({
   onClose,
 }: {
   entry: FieldDiaryPayload;
+  /** O registro está guardado neste aparelho (sem sinal): as amostras e medições vêm daqui. */
+  pendingRecord?: FieldOutboxRecord | null;
   message: string;
   campaignScope?: FieldDiaryCampaignScope;
   onChange: (entry: FieldDiaryPayload) => void;
@@ -117,8 +122,16 @@ export function FieldDiaryForm({
   // se o registro for salvo e eles não, continuam aqui para a nova tentativa.
   const [initialEntryId] = useState(entry.id ?? "");
   const collectionDefaults = useCollectionDefaults(entry.campaignId ?? "");
-  const entrySamples = useEntrySamples({ initialEntryId, collectionDefaults });
-  const entryReadings = useEntryReadings({ initialEntryId, collectionDefaults });
+  const entrySamples = useEntrySamples({
+    initialEntryId,
+    collectionDefaults,
+    pendingSamples: pendingSamplesOf(pendingRecord),
+  });
+  const entryReadings = useEntryReadings({
+    initialEntryId,
+    collectionDefaults,
+    pendingReadings: pendingReadingsOf(pendingRecord),
+  });
 
   function update(next: Partial<FieldDiaryPayload>) {
     let merged = { ...latestEntryRef.current, ...next };
@@ -394,33 +407,38 @@ export function FieldDiaryForm({
 
     try {
       const resized = await resizeImageForFieldDiary(file);
-      const formData = new FormData();
-      formData.set("file", resized.file);
-      formData.set("context", "field-diary");
-      formData.set("entryDate", entry.entryDate);
-      formData.set("pointId", [entry.campaignName, entry.entryDate, entry.sia || entry.locationName || "dia"]
-        .filter(Boolean)
-        .join("-"));
+      const current = latestEntryRef.current;
+      const context = {
+        entryDate: current.entryDate,
+        pointId: [current.campaignName, current.entryDate, current.sia || current.locationName || "dia"].filter(Boolean).join("-"),
+      };
+      const sizes = { fileName: resized.file.name, width: resized.width, height: resized.height };
+      const result = await uploadFieldPhoto(resized.file, resized.file.name, context);
 
-      const response = await fetch("/api/photos/upload", {
-        method: "POST",
-        body: formData,
-      });
-      const payload = (await response.json()) as { url?: string; bucket?: string; path?: string; error?: string };
-
-      if (!response.ok || !payload.url) {
-        throw new Error(payload.error ?? "Não foi possível enviar a foto.");
+      if (result.ok) {
+        updatePhoto(photoId, {
+          url: result.url,
+          bucket: result.bucket,
+          path: result.path,
+          ...sizes,
+          uploadedAt: new Date().toISOString(),
+        });
+        return;
       }
 
-      updatePhoto(photoId, {
-        url: payload.url,
-        bucket: payload.bucket,
-        path: payload.path,
-        fileName: resized.file.name,
-        width: resized.width,
-        height: resized.height,
-        uploadedAt: new Date().toISOString(),
-      });
+      if (!result.offline) {
+        setUploadMessage(result.error);
+        return;
+      }
+
+      // Sem sinal: a foto fica no aparelho e sobe junto com o registro.
+      try {
+        const url = await keepPhotoOnDevice(photoId, resized.file, resized.file.name, context);
+        updatePhoto(photoId, { url, ...sizes, uploadedAt: null });
+        setUploadMessage("Sem sinal: a foto ficou guardada neste aparelho e sobe junto com o registro.");
+      } catch {
+        setUploadMessage("Sem sinal, e este aparelho não conseguiu guardar a foto. Tente de novo quando houver sinal.");
+      }
     } catch (error) {
       setUploadMessage(error instanceof Error ? error.message : "Não foi possível enviar a foto.");
     } finally {
@@ -934,12 +952,18 @@ export function FieldDiaryForm({
             {(entry.photos ?? []).length ? (
               (entry.photos ?? []).map((photo, index) => (
                 <div key={photo.id} className="grid gap-2 rounded-xl bg-[var(--surface-soft)] p-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
-                  <input
-                    value={photo.url}
-                    onChange={(event) => updatePhoto(photo.id, { url: event.target.value })}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-[var(--brand-navy-strong)]"
-                    placeholder={`Link ou upload da foto ${index + 1}`}
-                  />
+                  {isDevicePhotoUrl(photo.url) ? (
+                    <p className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-[var(--brand-navy-strong)]">
+                      Foto {index + 1} guardada neste aparelho: sobe com o registro quando houver sinal.
+                    </p>
+                  ) : (
+                    <input
+                      value={photo.url}
+                      onChange={(event) => updatePhoto(photo.id, { url: event.target.value })}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-[var(--brand-navy-strong)]"
+                      placeholder={`Link ou upload da foto ${index + 1}`}
+                    />
+                  )}
                   <input
                     value={photo.caption ?? ""}
                     onChange={(event) => updatePhoto(photo.id, { caption: event.target.value })}
@@ -1041,4 +1065,20 @@ async function resizeImageForFieldDiary(file: File) {
   const resizedFile = new File([blob], `${resizedName}.jpg`, { type: "image/jpeg" });
 
   return { file: resizedFile, width, height };
+}
+
+/**
+ * Amostras guardadas no aparelho para o formulário abrir com elas. Registro que
+ * ainda não chegou à nuvem não tem o que buscar lá: abre com as guardadas (ou nenhuma).
+ */
+function pendingSamplesOf(record: FieldOutboxRecord | null | undefined) {
+  if (!record) return undefined;
+  if (record.samples) return record.samples.samples;
+  return record.mode === "insert" && !record.savedEntryId ? [] : undefined;
+}
+
+function pendingReadingsOf(record: FieldOutboxRecord | null | undefined) {
+  if (!record) return undefined;
+  if (record.readings) return record.readings.readings;
+  return record.mode === "insert" && !record.savedEntryId ? [] : undefined;
 }

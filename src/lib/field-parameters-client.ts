@@ -11,6 +11,7 @@ import {
   type FieldReading,
   type ReadingInput,
 } from "@/lib/field-parameters";
+import { isTransientStatus } from "@/lib/field-diary";
 import { cacheCatalog, rememberLastEquipment } from "@/lib/field-parameters-device";
 import { FIELD_PARAMETER_ID_PATTERN } from "@/lib/field-standard";
 
@@ -40,6 +41,10 @@ export type ReadingsSaveResult =
       conflict: boolean;
       /** Medições que estão gravadas agora no registro, quando a nuvem informou. */
       readings: FieldReading[] | null;
+      /** true = sem sinal ou sem resposta a tempo: dá para tentar de novo depois. */
+      offline?: boolean;
+      /** Código HTTP da recusa (0 = sem resposta). */
+      status?: number;
     };
 
 export type ParameterSaveResult =
@@ -112,6 +117,8 @@ export async function saveEntryReadings(entryId: string, change: ReadingsChange)
       error: "Sem conexão com o servidor na hora de salvar as medições.",
       conflict: false,
       readings: null,
+      offline: true,
+      status: 0,
     };
   }
 
@@ -124,6 +131,8 @@ export async function saveEntryReadings(entryId: string, change: ReadingsChange)
     error: describeFailure(sent.status, sent.error, "salvar as medições", "gravar medições"),
     conflict: sent.payload.conflict === true,
     readings: Array.isArray(sent.payload.readings) ? readReadings(sent.payload.readings) : null,
+    offline: isTransientStatus(sent.status),
+    status: sent.status,
   };
 }
 

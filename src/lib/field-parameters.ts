@@ -382,6 +382,14 @@ export function readingsToDrafts(readings: FieldReading[]): ReadingDraft[] {
   }));
 }
 
+/** Medições que ficaram guardadas no aparelho (sem sinal) de volta ao formulário. */
+export function readingInputsToDrafts(inputs: ReadingInput[]): ReadingDraft[] {
+  return readingsToDrafts(inputs.map((input) => ({ ...input, entryId: "", unit: "" }))).map((draft) => ({
+    ...draft,
+    saved: false,
+  }));
+}
+
 /** Parâmetro + profundidade: o que não pode se repetir num mesmo registro. */
 function readingKey(draft: Pick<ReadingDraft, "parameterId" | "depthM">, parameter: FieldParameter | null) {
   const depth = parameter?.usesDepth === false ? null : parseSampleNumber(draft.depthM, MAX_SAMPLE_DEPTH_M).value;

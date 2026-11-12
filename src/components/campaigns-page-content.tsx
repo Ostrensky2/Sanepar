@@ -41,18 +41,16 @@ import {
   FIELD_DIARY_UPDATED_EVENT,
   readFieldDiaryEntries,
   readFieldDiaryEntriesFromStorage,
-  saveFieldDiaryEntry,
   effectiveExecutionStatus,
   type FieldDiaryEntry,
   type FieldDiaryPayload,
 } from "@/lib/field-diary";
 import {
   RECORD_NOT_SAVED,
-  collectedNotSavedMessage,
-  saveCollectedOfSavedEntry,
   type CollectedChange,
   type FieldRecordSaveOutcome,
 } from "@/lib/field-collection-client";
+import { submitFieldRecord } from "@/lib/field-record-sync";
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 import {
   campaignPointMatchesSelectedCampaign,
@@ -615,44 +613,31 @@ export function CampaignsPageContent({
       return RECORD_NOT_SAVED;
     }
 
-    const result = await saveFieldDiaryEntry(payload);
+    const result = await submitFieldRecord(payload, collected);
 
-    if (result.persistence === "none") {
-      setMapEditMessage(
-        ("error" in result && result.error) ||
-          "A nuvem não confirmou a gravação. O registro não foi publicado para outros usuários.",
-      );
+    if (result.status === "none") {
+      setMapEditMessage(result.error);
       return RECORD_NOT_SAVED;
     }
 
-    setDiaryEntries((current) =>
-      [
-        result.entry,
-        ...current.filter((entry) => entry.id !== result.entry.id),
-      ].sort((a, b) => b.entryDate.localeCompare(a.entryDate) || b.updatedAt.localeCompare(a.updatedAt)),
-    );
+    if (result.status !== "device") {
+      setDiaryEntries((current) =>
+        [
+          result.entry,
+          ...current.filter((entry) => entry.id !== result.entry.id),
+        ].sort((a, b) => b.entryDate.localeCompare(a.entryDate) || b.updatedAt.localeCompare(a.updatedAt)),
+      );
+    }
 
-    // As amostras e os parâmetros são gravados depois do registro, com o id que a
-    // nuvem confirmou.
-    const outcome: FieldRecordSaveOutcome =
-      result.persistence === "cloud"
-        ? await saveCollectedOfSavedEntry(result.entry.id, collected)
-        : { ...RECORD_NOT_SAVED, savedEntryId: result.entry.id };
-    const notSaved = collectedNotSavedMessage(outcome);
-
-    if (notSaved) {
+    if (result.status === "cloud" && result.message) {
       setMapEditEntry(fieldDiaryEntryToPayload(result.entry, selectedCampaign.id, selectedCampaign.title));
-      setMapEditMessage(notSaved);
-      return outcome;
+      setMapEditMessage(result.message);
+      return result.outcome;
     }
 
     setMapEditEntry(null);
-    setMapEditMessage(
-      result.persistence === "cloud"
-        ? "Fotos atualizadas no Diário de campo."
-        : "Fotos atualizadas localmente. A nuvem será usada quando estiver disponível.",
-    );
-    return outcome;
+    setMapEditMessage(result.status === "cloud" ? "Fotos atualizadas no Diário de campo." : result.message);
+    return result.outcome;
   }
 
   return (

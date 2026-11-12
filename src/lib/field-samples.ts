@@ -357,6 +357,17 @@ export function samplesToDrafts(samples: FieldSample[]): SampleDraft[] {
   }));
 }
 
+/**
+ * Amostras que ficaram guardadas no aparelho (sem sinal) de volta ao formulário.
+ * Contam como novas para a nuvem: quem tira uma delas do registro é a fila do
+ * aparelho (lib/field-outbox), que manda a remoção junto.
+ */
+export function sampleInputsToDrafts(inputs: SampleInput[]): SampleDraft[] {
+  return samplesToDrafts(inputs.map((input) => ({ ...input, entryId: "", projectCode: "", exportedAt: null }))).map(
+    (draft) => ({ ...draft, savedCode: "" }),
+  );
+}
+
 /** Ordem de exibição: por tipo (na ordem do padrão) e depois pelo número. */
 export function sortSamples<Sample extends Pick<SampleDraft, "sampleType" | "sequence">>(samples: Sample[]): Sample[] {
   const typeOrder = new Map(sampleTypes.map((type, index) => [type.id as SampleTypeId, index]));

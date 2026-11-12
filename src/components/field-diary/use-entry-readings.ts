@@ -10,6 +10,7 @@ import {
   findParameter,
   isFilledReading,
   readingDraftsToInputs,
+  readingInputsToDrafts,
   readingsToDrafts,
   sortCatalog,
   sortReadings,
@@ -19,6 +20,7 @@ import {
   type FieldParameterInput,
   type FieldReading,
   type ReadingDraft,
+  type ReadingInput,
 } from "@/lib/field-parameters";
 import {
   createFieldParameter,
@@ -44,27 +46,40 @@ let knownAvailability: boolean | null = null;
 export function useEntryReadings({
   initialEntryId,
   collectionDefaults,
+  pendingReadings,
 }: {
   initialEntryId: string;
   /** Padrões de coleta da campanha do registro (ver useCollectionDefaults). */
   collectionDefaults: CollectionDefaultsHandle;
+  /**
+   * Medições guardadas no aparelho que ainda não subiram. Quando vêm, o formulário
+   * abre com elas e o catálogo que o aparelho guardou, sem consultar a nuvem.
+   */
+  pendingReadings?: ReadingInput[];
 }) {
   const { defaults, defaultsRef } = collectionDefaults;
-  const [status, setStatus] = useState<ReadingsPanelStatus>("loading");
-  const [catalog, setCatalog] = useState<FieldParameter[]>(baseParameterCatalog);
-  const [readings, setReadings] = useState<ReadingDraft[]>([]);
+  const [pendingAtOpen] = useState(() => {
+    if (!pendingReadings) return null;
+
+    const cached = readCachedCatalog();
+    const pendingCatalog = sortCatalog(cached.length ? cached : baseParameterCatalog());
+    return { catalog: pendingCatalog, readings: sortReadings(readingInputsToDrafts(pendingReadings), pendingCatalog) };
+  });
+  const [status, setStatus] = useState<ReadingsPanelStatus>(pendingAtOpen ? "ready" : "loading");
+  const [catalog, setCatalog] = useState<FieldParameter[]>(() => pendingAtOpen?.catalog ?? baseParameterCatalog());
+  const [readings, setReadings] = useState<ReadingDraft[]>(pendingAtOpen?.readings ?? []);
   const [removed, setRemoved] = useState<ReadingDraft[]>([]);
   const [message, setMessage] = useState("");
   const [conflict, setConflict] = useState<FieldReading[] | null>(null);
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
 
   // Cópias sempre atuais, para os toques que acontecem antes da próxima renderização.
-  const statusRef = useRef<ReadingsPanelStatus>("loading");
+  const statusRef = useRef<ReadingsPanelStatus>(pendingAtOpen ? "ready" : "loading");
   const catalogRef = useRef<FieldParameter[]>(catalog);
-  const readingsRef = useRef<ReadingDraft[]>([]);
+  const readingsRef = useRef<ReadingDraft[]>(pendingAtOpen?.readings ?? []);
   const removedRef = useRef<ReadingDraft[]>([]);
   const conflictRef = useRef<FieldReading[] | null>(null);
-  const dirtyRef = useRef(false);
+  const dirtyRef = useRef(Boolean(pendingAtOpen?.readings.length));
   const loadTokenRef = useRef(0);
 
   const put = useCallback((next: ReadingDraft[], options: { dirty?: boolean } = {}) => {
@@ -136,6 +151,10 @@ export function useEntryReadings({
   );
 
   useEffect(() => {
+    if (pendingAtOpen) {
+      return;
+    }
+
     const token = ++loadTokenRef.current;
     const tokenRef = loadTokenRef;
 
@@ -149,7 +168,7 @@ export function useEntryReadings({
       // Formulário fechado: a resposta que ainda chegar é descartada.
       tokenRef.current += 1;
     };
-  }, [initialEntryId, applyLoaded]);
+  }, [initialEntryId, applyLoaded, pendingAtOpen]);
 
   function factoryOptions() {
     return {
@@ -338,7 +357,9 @@ export function useEntryReadings({
       ...removedRef.current.map((reading) => reading.id),
       ...readingsRef.current.filter((reading) => reading.saved && !isFilledReading(reading)).map((reading) => reading.id),
     ];
-    const needsSave = removedIds.length > 0 || (dirtyRef.current && inputs.length > 0);
+    // Aberto com medições guardadas no aparelho: o que estiver aqui substitui o guardado
+    // (mesmo vazio, quando a pessoa tirou todas).
+    const needsSave = Boolean(pendingAtOpen) || removedIds.length > 0 || (dirtyRef.current && inputs.length > 0);
 
     return needsSave ? { ok: true, change: { readings: inputs, removedIds } } : { ok: true };
   }

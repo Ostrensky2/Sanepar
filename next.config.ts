@@ -26,6 +26,11 @@ const nextConfig: NextConfig = {
       { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
     ] }, { source: "/dashboards/Painel_eDNA_Campanha1_Sanepar.html", headers: [
       { key: "X-Frame-Options", value: "SAMEORIGIN" },
+    ] }, { source: "/sw.js", headers: [
+      // Service worker do modo sem sinal (public/sw.js): o celular sempre confere se há versão nova.
+      { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+      { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+      { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self'" },
     ] }];
   },
 };

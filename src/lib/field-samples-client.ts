@@ -5,6 +5,7 @@
 
 import { type FieldSample, type SampleCodeConflict, type SampleInput } from "@/lib/field-samples";
 import { conservationTypes, isSampleTypeId } from "@/lib/field-standard";
+import { isTransientStatus } from "@/lib/field-diary";
 import { rememberLastSamplePackaging } from "@/lib/last-sample-packaging";
 
 const REQUEST_TIMEOUT_MS = 20000;
@@ -30,6 +31,10 @@ export type SamplesSaveResult =
       conflicts: SampleCodeConflict[];
       /** Amostras que estão gravadas agora no registro, quando a nuvem informou. */
       samples: FieldSample[] | null;
+      /** true = sem sinal ou sem resposta a tempo: dá para tentar de novo depois. */
+      offline?: boolean;
+      /** Código HTTP da recusa (0 = sem resposta). */
+      status?: number;
     };
 
 export async function fetchEntrySamples(entryId: string, signal?: AbortSignal): Promise<EntrySamplesRead> {
@@ -82,6 +87,8 @@ export async function saveEntrySamples(entryId: string, change: SamplesChange): 
       error: describeFailure(response.status, typeof payload.error === "string" ? payload.error.trim() : ""),
       conflicts: readConflicts(payload.conflicts),
       samples: Array.isArray(payload.samples) ? readSamples(payload.samples) : null,
+      offline: isTransientStatus(response.status),
+      status: response.status,
     };
   } catch {
     return {
@@ -89,6 +96,8 @@ export async function saveEntrySamples(entryId: string, change: SamplesChange): 
       error: "Sem conexão com o servidor na hora de salvar as amostras.",
       conflicts: [],
       samples: null,
+      offline: true,
+      status: 0,
     };
   } finally {
     clearTimeout(timer);

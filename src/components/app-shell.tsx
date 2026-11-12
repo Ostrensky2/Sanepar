@@ -13,6 +13,8 @@ import {
   type AuthUiSession,
 } from "@/components/auth-ui-client";
 import { CommandPalette } from "@/components/command-palette";
+import { FieldOutboxSync } from "@/components/field-outbox-sync";
+import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
 import { HelpButton } from "@/components/help-drawer";
 import {
   InstitutionalPartners,
@@ -28,6 +30,7 @@ import {
   type UserCategory,
 } from "@/lib/access-control";
 import { recordActivity } from "@/lib/activity-log";
+import { readFieldOutbox } from "@/lib/field-outbox";
 import { getBreadcrumbsForPath, getNavigationAccessForPath, navigationItems } from "@/lib/navigation";
 import {
   SYNC_STATUS_EVENT,
@@ -142,12 +145,27 @@ export function AppShell({ children }: AppShellProps) {
   }, [currentItem.headerTitle, pathname, session]);
 
   async function signOut() {
+    const keptOnDevice = readFieldOutbox().length;
+
+    if (
+      keptOnDevice &&
+      !window.confirm(
+        `Há ${keptOnDevice === 1 ? "1 registro de campo guardado" : `${keptOnDevice} registros de campo guardados`} neste aparelho que ainda não ${keptOnDevice === 1 ? "foi" : "foram"} para a nuvem. ` +
+          "Eles continuam guardados e sobem quando alguém entrar de novo neste aparelho com sinal. Sair mesmo assim?",
+      )
+    ) {
+      return;
+    }
+
     await signOutAuthSession();
     window.location.reload();
   }
 
   return (
+    <>
+    <ServiceWorkerRegistration />
     <AuthGate>
+    <FieldOutboxSync />
     <div className="min-h-screen bg-[var(--surface-base)] text-[var(--ink)]">
       <OperationalFeedbackLayer />
       <aside className="fixed inset-y-0 left-0 z-50 hidden w-60 flex-col overflow-y-auto overflow-x-hidden border-r border-[var(--line-ghost)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(244,249,251,0.98))] p-3 shadow-[0_30px_80px_-48px_rgba(0,66,98,0.34)] lg:flex">
@@ -231,6 +249,7 @@ export function AppShell({ children }: AppShellProps) {
       </div>
     </div>
     </AuthGate>
+    </>
   );
 }
 

@@ -60,7 +60,6 @@ import {
   createEmptyFieldDiaryPayload,
   dedupeFieldDiaryEntries,
   readFieldDiaryEntries,
-  saveFieldDiaryEntry,
   waterVisualConditionOptions,
   type FieldDiaryEntry,
   type FieldDiaryPayload,
@@ -70,11 +69,13 @@ import { readSelectedCampaignId, writeSelectedCampaignId } from "@/lib/selected-
 import { getStoredSession } from "@/lib/auth-users";
 import {
   RECORD_NOT_SAVED,
-  collectedNotSavedMessage,
-  saveCollectedOfSavedEntry,
   type CollectedChange,
   type FieldRecordSaveOutcome,
 } from "@/lib/field-collection-client";
+import { DeviceStateBadge, FieldOutboxNotice } from "@/components/field-diary/outbox-notice";
+import { useFieldOutbox } from "@/components/field-outbox-sync";
+import { findFieldOutboxRecord, mergeEntriesWithOutbox } from "@/lib/field-outbox";
+import { FIELD_OUTBOX_SYNCED_EVENT, submitFieldRecord } from "@/lib/field-record-sync";
 import { readLastFieldTeam, rememberLastFieldTeam } from "@/lib/last-field-team";
 import { countLabel } from "@/lib/number-format";
 
@@ -147,7 +148,10 @@ export function FieldDiaryPageContent({
   const initialScopedCalendarStart = campaignScope
     ? getCampaignCalendarMonthStart(campaignScope.id, campaignScope.name, [])
     : "";
-  const [entries, setEntries] = useState<FieldDiaryEntry[]>([]);
+  // Registros da nuvem; `entries` junta os guardados neste aparelho que ainda não subiram.
+  const [cloudEntries, setEntries] = useState<FieldDiaryEntry[]>([]);
+  const outboxRecords = useFieldOutbox();
+  const entries = useMemo(() => mergeEntriesWithOutbox(cloudEntries, outboxRecords), [cloudEntries, outboxRecords]);
   const [filters, setFilters] = useState<Filters>(() =>
     campaignScope ? { ...emptyFilters, date: initialScopedCalendarStart } : emptyFilters,
   );
@@ -220,7 +224,7 @@ export function FieldDiaryPageContent({
         throw new Error(payload.error ?? "Falha ao consolidar a campanha.");
       }
 
-      const consolidatedEntries = entries.map((entry) => {
+      const consolidatedEntries = cloudEntries.map((entry) => {
         const governance = entry.governanceStatus ?? "importado";
         if (
           entry.campaignName === activeCampaignName &&
@@ -256,6 +260,14 @@ export function FieldDiaryPageContent({
     }
 
     void loadEntries();
+
+    // O que estava guardado no aparelho subiu: a lista passa a mostrar o que a nuvem gravou.
+    async function reloadAfterSync() {
+      setEntries(await readFieldDiaryEntries());
+    }
+
+    window.addEventListener(FIELD_OUTBOX_SYNCED_EVENT, reloadAfterSync);
+    return () => window.removeEventListener(FIELD_OUTBOX_SYNCED_EVENT, reloadAfterSync);
   }, []);
 
   // Link antigo "Planilhas de campo" (/dados/campo) chega com ?importar=1 e abre o importador único.
@@ -534,46 +546,35 @@ export function FieldDiaryPageContent({
       return RECORD_NOT_SAVED;
     }
 
-    const result = await saveFieldDiaryEntry(scopedPayload);
-    if (result.persistence === "none") {
-      setMessage(
-        ("error" in result && result.error) ||
-          "A nuvem não confirmou a gravação. O registro não foi publicado para outros usuários.",
-      );
+    const result = await submitFieldRecord(scopedPayload, collected);
+
+    if (result.status === "none") {
+      setMessage(result.error);
       return RECORD_NOT_SAVED;
     }
 
-    setEntries((current) =>
-      [
-        result.entry,
-        ...current.filter((entry) => entry.id !== result.entry.id),
-      ].sort((a, b) => b.entryDate.localeCompare(a.entryDate) || b.updatedAt.localeCompare(a.updatedAt)),
-    );
+    // Guardado só no aparelho: a lista mostra pela fila do aparelho (useFieldOutbox).
+    if (result.status !== "device") {
+      setEntries((current) =>
+        [
+          result.entry,
+          ...current.filter((entry) => entry.id !== result.entry.id),
+        ].sort((a, b) => b.entryDate.localeCompare(a.entryDate) || b.updatedAt.localeCompare(a.updatedAt)),
+      );
+    }
     rememberLastFieldTeam(result.entry.createdByName);
 
-    // As amostras e os parâmetros são gravados depois do registro, com o id que a
-    // nuvem confirmou.
-    const outcome: FieldRecordSaveOutcome =
-      result.persistence === "cloud"
-        ? await saveCollectedOfSavedEntry(result.entry.id, collected)
-        : { ...RECORD_NOT_SAVED, savedEntryId: result.entry.id };
-    const notSaved = collectedNotSavedMessage(outcome);
-
-    if (notSaved) {
+    if (result.status === "cloud" && result.message) {
       // O registro já está gravado: o formulário passa a editar esse registro, para a
       // nova tentativa não criar outro.
       setFormEntry(entryToFormPayload(result.entry));
-      setMessage(notSaved);
-      return outcome;
+      setMessage(result.message);
+      return result.outcome;
     }
 
     setFormEntry(null);
-    setMessage(
-      result.persistence === "cloud"
-        ? "Registro salvo no Diário de campo."
-        : "Registro salvo localmente. A nuvem será usada quando estiver disponível.",
-    );
-    return outcome;
+    setMessage(result.status === "cloud" ? "Registro salvo no Diário de campo." : result.message);
+    return result.outcome;
   }
 
   function selectDiaryCampaign(campaignId: string) {
@@ -673,6 +674,8 @@ export function FieldDiaryPageContent({
           onSelectCampaign={selectDiaryCampaign}
         />
       ) : null}
+
+      {!readOnly ? <FieldOutboxNotice records={outboxRecords} /> : null}
 
       {message ? (
         <div className="rounded-2xl border border-[var(--line-ghost)] bg-white px-4 py-3 text-sm font-semibold text-[var(--brand-navy-strong)] shadow-[var(--shadow-soft)]">
@@ -1078,6 +1081,7 @@ export function FieldDiaryPageContent({
                       <td className="px-3 py-4">
                         <span className="block font-semibold">{entry.locationName || "Sem local"}</span>
                         {entry.sia ? <span className="text-xs text-slate-500">{formatSiaCode(entry.sia)}</span> : null}
+                        <DeviceStateBadge state={entry.deviceState} problem={entry.deviceProblem} />
                       </td>
                       <td className="px-3 py-4 text-xs font-semibold text-slate-600">
                         {formatCoordinatePair(entry.latitude, entry.longitude)}
@@ -1122,7 +1126,7 @@ export function FieldDiaryPageContent({
           onImported={(imported) => {
             const nextEntries = [
               ...imported,
-              ...entries.filter((e) => !imported.some((i) => i.id === e.id)),
+              ...cloudEntries.filter((e) => !imported.some((i) => i.id === e.id)),
             ];
             const dedupedEntries = dedupeFieldDiaryEntries(nextEntries);
 
@@ -1137,6 +1141,7 @@ export function FieldDiaryPageContent({
       {formEntry && !readOnly ? (
         <FieldDiaryForm
           entry={formEntry}
+          pendingRecord={findFieldOutboxRecord(formEntry.id, outboxRecords)}
           message={message}
           campaignScope={campaignScope}
           onChange={setFormEntry}

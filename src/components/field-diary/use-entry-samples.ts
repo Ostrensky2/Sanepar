@@ -14,6 +14,7 @@ import {
   legacyFieldsPatch,
   nextDraftSequence,
   sampleDraftsToInputs,
+  sampleInputsToDrafts,
   samplesToDrafts,
   sortSamples,
   validateSampleDrafts,
@@ -21,6 +22,7 @@ import {
   type SampleCodeConflict,
   type SampleCodeContext,
   type SampleDraft,
+  type SampleInput,
 } from "@/lib/field-samples";
 import {
   fetchEntrySamples,
@@ -53,27 +55,34 @@ const EMPTY_LEGACY: LegacySampleFields = { samplesReplicasEdna: "", zooplanktonI
 export function useEntrySamples({
   initialEntryId,
   collectionDefaults,
+  pendingSamples,
 }: {
   initialEntryId: string;
   /** Padrões de coleta da campanha do registro (ver useCollectionDefaults). */
   collectionDefaults: CollectionDefaultsHandle;
+  /**
+   * Amostras guardadas no aparelho que ainda não subiram. Quando vêm, o formulário
+   * abre com elas e não consulta a nuvem (que ainda não as tem).
+   */
+  pendingSamples?: SampleInput[];
 }) {
   const { defaults, defaultsRef } = collectionDefaults;
-  const [status, setStatus] = useState<SamplesPanelStatus>("loading");
-  const [samples, setSamples] = useState<SampleDraft[]>([]);
+  const [pendingAtOpen] = useState(() => (pendingSamples ? sampleInputsToDrafts(pendingSamples) : null));
+  const [status, setStatus] = useState<SamplesPanelStatus>(pendingAtOpen ? "ready" : "loading");
+  const [samples, setSamples] = useState<SampleDraft[]>(pendingAtOpen ?? []);
   const [removed, setRemoved] = useState<SampleDraft[]>([]);
   const [conflicts, setConflicts] = useState<SampleCodeConflict[]>([]);
   const [message, setMessage] = useState("");
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
 
   // Cópias sempre atuais, para os toques que acontecem antes da próxima renderização.
-  const statusRef = useRef<SamplesPanelStatus>("loading");
-  const samplesRef = useRef<SampleDraft[]>([]);
+  const statusRef = useRef<SamplesPanelStatus>(pendingAtOpen ? "ready" : "loading");
+  const samplesRef = useRef<SampleDraft[]>(pendingAtOpen ?? []);
   const removedRef = useRef<SampleDraft[]>([]);
   const conflictsRef = useRef<SampleCodeConflict[]>([]);
   // O que o app escreveu por último nos dois campos de texto antigos do registro.
-  const legacyAutoRef = useRef<LegacySampleFields>(EMPTY_LEGACY);
-  const dirtyRef = useRef(false);
+  const legacyAutoRef = useRef<LegacySampleFields>(pendingSamples ? legacyFieldsFromCodes(pendingSamples) : EMPTY_LEGACY);
+  const dirtyRef = useRef(Boolean(pendingAtOpen?.length));
   const loadTokenRef = useRef(0);
 
   const put = useCallback((next: SampleDraft[], options: { dirty?: boolean } = {}) => {
@@ -130,6 +139,10 @@ export function useEntrySamples({
   );
 
   useEffect(() => {
+    if (pendingAtOpen) {
+      return;
+    }
+
     const token = ++loadTokenRef.current;
     const tokenRef = loadTokenRef;
 
@@ -143,7 +156,7 @@ export function useEntrySamples({
       // Formulário fechado: a resposta que ainda chegar é descartada.
       tokenRef.current += 1;
     };
-  }, [initialEntryId, applyLoaded]);
+  }, [initialEntryId, applyLoaded, pendingAtOpen]);
 
   function factoryOptions() {
     return {
@@ -290,7 +303,10 @@ export function useEntrySamples({
     const inputs = sampleDraftsToInputs(samplesRef.current, context);
     // Há o que gravar quando saiu amostra gravada, quando alguma é nova ou mudou de
     // código, ou quando a pessoa mexeu numa amostra que continua no registro.
+    // Aberto com amostras guardadas no aparelho: o que estiver aqui substitui o guardado
+    // (mesmo vazio, quando a pessoa tirou todas).
     const needsSave =
+      Boolean(pendingAtOpen) ||
       removedRef.current.length > 0 ||
       samplesRef.current.some((sample, index) => sample.savedCode !== inputs[index].code) ||
       (dirtyRef.current && samplesRef.current.length > 0);

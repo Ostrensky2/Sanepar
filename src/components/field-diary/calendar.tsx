@@ -15,6 +15,7 @@ import {
   shiftMonth,
   type FieldDiaryDayGroup,
 } from "@/components/field-diary/helpers";
+import { DeviceStateBadge } from "@/components/field-diary/outbox-notice";
 import { IconButton, StageBadge } from "@/components/field-diary/ui";
 import type { FieldDiaryEntry } from "@/lib/field-diary";
 
@@ -301,7 +302,8 @@ export function OperationalEntryRow({
     <tr className="border-b border-[var(--line-ghost)] align-top last:border-0">
       <td className="px-3 py-4">
         <span className="block font-bold text-[var(--brand-navy-strong)]">{entry.locationName || "Sem local"}</span>
-        {entry.sia ? <span className="text-xs font-semibold text-slate-500">{formatSiaCode(entry.sia)}</span> : null}
+        {entry.sia ? <span className="block text-xs font-semibold text-slate-500">{formatSiaCode(entry.sia)}</span> : null}
+        <DeviceStateBadge state={entry.deviceState} problem={entry.deviceProblem} />
       </td>
       <td className="px-3 py-4">{entry.municipality || "Não informado"}</td>
       {showTeam ? <td className="px-3 py-4">{entry.createdByName || "Não informado"}</td> : null}

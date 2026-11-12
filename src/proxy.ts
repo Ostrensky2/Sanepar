@@ -39,4 +39,5 @@ function safeOrigin(value: string | undefined) {
   } catch { return ""; }
 }
 
-export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"] };
+// sw.js (modo sem sinal) tem cabeçalhos próprios no next.config e não precisa da sessão.
+export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico|sw.js).*)"] };

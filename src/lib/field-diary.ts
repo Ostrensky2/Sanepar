@@ -107,6 +107,10 @@ export type FieldDiaryEntry = {
   // Marca registros que existem no app mas não vieram na última planilha importada
   // (nunca apagamos automaticamente).
   missingInImport?: boolean;
+  // Só na tela, nunca vai para a nuvem: o registro está guardado neste aparelho
+  // esperando sinal ("pending") ou a nuvem recusou algo dele ("attention").
+  deviceState?: "pending" | "attention";
+  deviceProblem?: string;
 };
 
 export const fieldDiaryGovernanceStatuses = [
@@ -246,10 +250,11 @@ export async function readFieldDiaryEntries() {
   }
 }
 
-export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
+/** Registro pronto para gravar, a partir do que está no formulário. */
+export function prepareFieldDiaryEntry(payload: FieldDiaryPayload, createdAt?: string): FieldDiaryEntry {
   const now = new Date().toISOString();
-  const localEntries = readFieldDiaryEntriesFromStorage();
-  const entry: FieldDiaryEntry = {
+
+  return {
     ...payload,
     id: payload.id ?? crypto.randomUUID(),
     campaignId: payload.campaignId ?? null,
@@ -267,59 +272,103 @@ export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
     createdBy: payload.createdBy ?? "",
     createdByName: payload.createdByName ?? "",
     photos: normalizeFieldDiaryPhotos(payload.photos),
-    createdAt: localEntries.find((item) => item.id === payload.id)?.createdAt ?? now,
+    createdAt: createdAt ?? now,
     updatedAt: now,
   };
+}
+
+const ENTRY_SEND_TIMEOUT_MS = 25000;
+
+/**
+ * Resultado de mandar um registro para a nuvem:
+ * - saved: gravado (a nuvem pode ter devolvido outro id, quando já havia registro do ponto e da data);
+ * - offline: sem sinal, sem resposta a tempo ou nuvem fora do ar por um momento (dá para tentar depois);
+ * - session: a sessão expirou (dá para tentar depois de entrar de novo);
+ * - refused: a nuvem recusou; a mensagem diz o que corrigir.
+ */
+export type FieldDiaryEntrySend =
+  | { kind: "saved"; entry: FieldDiaryEntry }
+  | { kind: "offline" }
+  | { kind: "session"; error: string }
+  | { kind: "refused"; status: number; error: string };
+
+export async function sendFieldDiaryEntry(entry: FieldDiaryEntry, method: "POST" | "PUT"): Promise<FieldDiaryEntrySend> {
   let body: string;
   try {
     body = JSON.stringify({ entry: pickFieldDiaryEntryFields(entry) });
   } catch (error) {
     console.error("[field-diary] registro não pôde ser preparado para envio", error);
     return {
-      entry,
-      persistence: "none" as const,
+      kind: "refused",
+      status: 0,
       error: `O app não conseguiu preparar o registro para envio (erro interno). Feche o formulário, abra de novo e tente outra vez. ${FIELD_DIARY_KEEP_DATA}`,
     };
   }
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ENTRY_SEND_TIMEOUT_MS);
+
   try {
     const response = await fetch("/api/field-diary", {
-      method: entry.id === payload.id ? "PUT" : "POST",
+      method,
       headers: {
         "Content-Type": "application/json",
       },
       body,
+      signal: controller.signal,
     });
 
     if (!response.ok) {
       const rejection = (await response.json().catch(() => ({}))) as { error?: unknown };
       const serverMessage = typeof rejection.error === "string" ? rejection.error.trim() : "";
 
-      // Recusa de validação (coordenada, motivo da realocação, duplicidade): o
-      // registro não pode ficar salvo só no navegador; a mensagem volta ao formulário.
+      if (isTransientStatus(response.status)) {
+        return { kind: "offline" };
+      }
+
+      // Recusa de validação (coordenada, motivo da realocação, duplicidade): a
+      // mensagem volta ao formulário.
       if (response.status === 400 || response.status === 409 || response.status === 422) {
         return {
-          entry,
-          persistence: "none" as const,
+          kind: "refused",
+          status: response.status,
           error: serverMessage || "O registro foi recusado. Confira os dados e tente de novo.",
         };
       }
 
-      if (canUseBrowserOnlyPersistence()) {
-        const nextEntries = mergeLocalFieldDiaryEntry(localEntries, entry);
-        cacheFieldDiaryEntries(nextEntries);
-        return { entry, persistence: "browser" as const };
+      if (response.status === 401) {
+        return { kind: "session", error: fieldDiarySaveFailureMessage(401, serverMessage) };
       }
 
-      return {
-        entry,
-        persistence: "none" as const,
-        error: fieldDiarySaveFailureMessage(response.status, serverMessage),
-      };
+      return { kind: "refused", status: response.status, error: fieldDiarySaveFailureMessage(response.status, serverMessage) };
     }
 
-    const result = (await response.json()) as { entry?: unknown };
-    const savedEntry = normalizeFieldDiaryEntry(result.entry) ?? entry;
+    const result = (await response.json().catch(() => ({}))) as { entry?: unknown };
+    return { kind: "saved", entry: normalizeFieldDiaryEntry(result.entry) ?? entry };
+  } catch {
+    return { kind: "offline" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Sem sinal ou nuvem fora do ar por um momento: vale tentar de novo depois. */
+export function isTransientStatus(status: number) {
+  return status === 408 || status === 429 || status === 502 || status === 503 || status === 504;
+}
+
+/**
+ * Grava um registro de campo direto na nuvem (ou, rodando no computador local, no
+ * navegador). Sem sinal, devolve "none": quem guarda no aparelho para enviar
+ * depois é lib/field-record-sync.
+ */
+export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
+  const localEntries = readFieldDiaryEntriesFromStorage();
+  const entry = prepareFieldDiaryEntry(payload, localEntries.find((item) => item.id === payload.id)?.createdAt);
+  const sent = await sendFieldDiaryEntry(entry, entry.id === payload.id ? "PUT" : "POST");
+
+  if (sent.kind === "saved") {
+    const savedEntry = sent.entry;
     const refreshedEntries = [
       savedEntry,
       ...localEntries.filter((item) => item.id !== savedEntry.id),
@@ -327,15 +376,23 @@ export async function saveFieldDiaryEntry(payload: FieldDiaryPayload) {
 
     cacheFieldDiaryEntries(refreshedEntries);
     return { entry: savedEntry, persistence: "cloud" as const };
-  } catch {
-    if (canUseBrowserOnlyPersistence()) {
-      const nextEntries = mergeLocalFieldDiaryEntry(localEntries, entry);
-      cacheFieldDiaryEntries(nextEntries);
-      return { entry, persistence: "browser" as const };
-    }
-
-    return { entry, persistence: "none" as const, error: FIELD_DIARY_OFFLINE_MESSAGE };
   }
+
+  if (sent.kind === "refused" && (sent.status === 0 || sent.status === 400 || sent.status === 409 || sent.status === 422)) {
+    return { entry, persistence: "none" as const, error: sent.error };
+  }
+
+  if (canUseBrowserOnlyPersistence()) {
+    const nextEntries = mergeLocalFieldDiaryEntry(localEntries, entry);
+    cacheFieldDiaryEntries(nextEntries);
+    return { entry, persistence: "browser" as const };
+  }
+
+  return {
+    entry,
+    persistence: "none" as const,
+    error: sent.kind === "offline" ? FIELD_DIARY_OFFLINE_MESSAGE : sent.error,
+  };
 }
 
 /** Só os campos do registro vão para a nuvem; qualquer outro valor que tenha
