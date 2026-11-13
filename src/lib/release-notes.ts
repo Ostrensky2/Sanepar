@@ -84,6 +84,17 @@ export const MAJOR_RELEASES: MajorRelease[] = [
     ],
     updates: [
       {
+        version: "2.0.9",
+        date: "13/11/2026",
+        items: [
+          "“Iniciar coleta” escolhe sozinho o ponto da campanha mais próximo do celular, como no IAGEN, também sem sinal. Se você já tinha escolhido um ponto e o celular está longe dele, o app mostra o mais próximo com o botão “Usar este ponto”.",
+          "As amostras já vêm com o que não muda de um ponto para outro: água com 250 mL, armazenamento em Criobox, conservante Longmire e plâncton com 1000 L (o volume do plâncton agora é em litros). Tudo continua editável.",
+          "Conservação e preservante viraram um campo só, “Conservante”, com as opções que a equipe usa: Álcool com congelamento, Álcool sem congelamento, Longmire, Sílica e Outro (aí escreva qual).",
+          "Novo tipo de amostra Branco (controle negativo), com código próprio, como YVA-0136-071126-0905-BR1. O padrão do ponto passou a ser 5 de água, 1 branco e 1 de plâncton, e o branco não vira mais a réplica 6 da água.",
+          "Planilha para o Biolog: a coluna “Preservante” passou a se chamar “Conservante”, e o branco sai como controle negativo. Ajuda atualizada.",
+        ],
+      },
+      {
         version: "2.0.8",
         date: "13/11/2026",
         items: [
