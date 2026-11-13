@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CircleHelp, X } from "lucide-react";
-import { findHelpModuleForPath } from "@/lib/help-content";
+import { HelpTeamRules } from "@/components/help-team-rules";
+import { findHelpModuleForPath, teamRulesForModule } from "@/lib/help-content";
 
 /**
  * Botão "?" da barra superior. Abre um painel lateral com a ajuda da tela atual,
@@ -103,6 +104,8 @@ function HelpDrawer({
 
         <div className="flex-1 space-y-5 p-5 text-sm leading-6">
           <p className="text-[var(--ink-soft)]">{helpModule.purpose}</p>
+
+          <HelpTeamRules rules={teamRulesForModule(helpModule.title)} compact />
 
           <section>
             <h3 className="type-label mb-2 font-bold text-[var(--brand-navy-strong)]">Como fazer</h3>

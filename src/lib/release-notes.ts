@@ -84,6 +84,15 @@ export const MAJOR_RELEASES: MajorRelease[] = [
     ],
     updates: [
       {
+        version: "2.0.8",
+        date: "13/11/2026",
+        items: [
+          "Ajuda: novo quadro em destaque “Regras para toda a equipe”, no alto da Ajuda e no botão “?” do Diário de campo. Ele diz como preparar o celular com internet antes de cada saída a campo, o que fazer com registros guardados no aparelho e como ler o código da etiqueta.",
+          "Ajuda › Diário de campo reescrita para o trabalho de campo: “Iniciar coleta”, situação do ponto, amostras com réplicas livres e preservante, parâmetros medidos, registro sem sinal e o que fazer quando algo não aparece.",
+          "Ajuda › Campanhas e resultados explica a planilha para o Biolog, e Ajuda › Central de dados explica os padrões de coleta da campanha.",
+        ],
+      },
+      {
         version: "2.0.7",
         date: "12/11/2026",
         items: [

@@ -7,10 +7,11 @@ import {
   History,
   Search,
 } from "lucide-react";
+import { HelpTeamRules } from "@/components/help-team-rules";
 import { ReleaseNotes } from "@/components/release-notes";
 import { APP_VERSION } from "@/lib/app-version";
 import { cn } from "@/lib/utils";
-import { generalTopics, helpModuleForPath, helpModules, type HelpModule } from "@/lib/help-content";
+import { generalTopics, helpModuleForPath, helpModules, teamRules, type HelpModule } from "@/lib/help-content";
 
 export default function AjudaPage() {
   const [query, setQuery] = useState("");
@@ -67,6 +68,9 @@ export default function AjudaPage() {
           />
         </label>
       </section>
+
+      {/* Regras que valem para toda a equipe: sempre à vista, antes dos módulos. */}
+      <HelpTeamRules rules={teamRules} />
 
       <section className="grid gap-4 xl:grid-cols-[320px_1fr]">
         <aside className="rounded-2xl border border-[var(--line-ghost)] bg-white/90 p-4 xl:sticky xl:top-4 xl:self-start">
