@@ -114,9 +114,9 @@ function build(input: Partial<BiologExportInput> & { defaults?: CollectionDefaul
 }
 
 describe("planilha para o Biolog: aba Amostras", () => {
-  it("usa os 28 cabeçalhos que o importador do Biolog reconhece, mais o Preservante, sem barra", () => {
+  it("usa os 28 cabeçalhos que o importador do Biolog reconhece, mais o Conservante, sem barra", () => {
     expect(BIOLOG_SAMPLE_COLUMNS).toHaveLength(29);
-    expect(BIOLOG_SAMPLE_COLUMNS.at(-1)).toBe("Preservante");
+    expect(BIOLOG_SAMPLE_COLUMNS.at(-1)).toBe("Conservante");
     expect(BIOLOG_SAMPLE_COLUMNS.filter((header) => header.includes("/"))).toEqual([]);
     expect(BIOLOG_SAMPLE_COLUMNS).toContain("Categoria da Amostra");
     expect(BIOLOG_SAMPLE_COLUMNS).not.toContain("Tipo de Amostra");
@@ -157,15 +157,52 @@ describe("planilha para o Biolog: aba Amostras", () => {
       "Local Armazenamento": "Isopor com gelo",
       Posição: "A1",
       Observações: "Município: Curitiba; Local: Rio Iguaçu, ponte; Situação: Realizado; Coordenada: GPS do celular; Yva'e: entry-1",
-      Preservante: null,
+      Conservante: "Filtro congelado",
     });
   });
 
-  it("o preservante vai na coluna própria e também na Especificação", () => {
-    const [row] = build({ samples: [sample({ preservative: "Longmire" })] }).sampleRows;
+  it("o conservante vai na coluna própria; na lista do Biolog, o valor mais próximo, e o nome exato na Especificação", () => {
+    const rows = build({
+      samples: [
+        sample({ conservation: "LONGMIRE" }),
+        sample({ code: "YVA-0136-071126-0905-AG2", sequence: 2, conservation: "ALCOOL_COM_CONGELAMENTO" }),
+        sample({ code: "YVA-0136-071126-0905-AG3", sequence: 3, conservation: "OUTRO", preservative: "RNAlater" }),
+        // Gravada até a 2.0.8: conservação e preservante à parte.
+        sample({ code: "YVA-0136-071126-0905-AG4", sequence: 4, preservative: "Longmire" }),
+      ],
+    }).sampleRows;
 
-    expect(sampleCell(row, "Preservante")).toBe("Longmire");
-    expect(sampleCell(row, "Especificação")).toBe("eDNA; preservante: Longmire");
+    expect(rows.map((row) => [sampleCell(row, "Tipo de Conservação"), sampleCell(row, "Conservante"), sampleCell(row, "Especificação")])).toEqual([
+      ["OUTRO", "Longmire", "eDNA; conservante: Longmire"],
+      ["FILTRO_EM_ALCOOL_COM_REFRIGERACAO", "Álcool com congelamento", "eDNA; conservante: Álcool com congelamento"],
+      ["OUTRO", "RNAlater", "eDNA; conservante: RNAlater"],
+      ["FILTRO_CONGELADO", "Filtro congelado (Longmire)", "eDNA; conservante: Filtro congelado (Longmire)"],
+    ]);
+  });
+
+  it("o branco sai como controle negativo de água ultrapura, sem profundidade nem parâmetros", () => {
+    const [, blank] = build({
+      samples: [
+        sample(),
+        sample({
+          code: "YVA-0136-071126-0905-BR1",
+          sampleType: "blank",
+          depthM: null,
+          quantity: 250,
+          conservation: "LONGMIRE",
+          specification: "Controle negativo",
+        }),
+      ],
+      readings: [reading({ parameterId: "air_temperature", value: 24, depthM: null })],
+    }).sampleRows;
+
+    expect(sampleCell(blank, "Código de Campo")).toBe("YVA-0136-071126-0905-BR1");
+    expect(sampleCell(blank, "Categoria da Amostra")).toBe("BRANCO");
+    expect(sampleCell(blank, "Origem da Amostra")).toBe("AGUA_ULTRAPURA");
+    expect(sampleCell(blank, "Objetivo")).toBe("CONTROLE");
+    expect(sampleCell(blank, "Profundidade (m)")).toBeNull();
+    expect(sampleCell(blank, "Volume Filtrado (mL)")).toBe(250);
+    expect(sampleCell(blank, "Temp Ar (°C)")).toBeNull();
   });
 
   it("para os outros tipos, a origem é o próprio tipo; a matriz da campanha vale só para água", () => {
@@ -197,6 +234,7 @@ describe("planilha para o Biolog: aba Amostras", () => {
         sample({ code: "YVA-0136-071126-0905-SO1", sampleType: "soil", depthM: null, quantity: 50, quantityUnit: "g", specification: "Margem" }),
         sample({ code: "YVA-0136-071126-0905-AR1", sampleType: "air", depthM: null, quantity: 2.5, quantityUnit: "L", specification: "" }),
         sample({ code: "YVA-0136-071126-0905-TE1", sampleType: "tissue", depthM: null, quantity: null, quantityUnit: "g", specification: "Nadadeira" }),
+        sample({ code: "YVA-0136-071126-0905-PL1", sampleType: "plankton", quantity: 1000, quantityUnit: "L", specification: "" }),
       ],
     });
 
@@ -205,6 +243,7 @@ describe("planilha para o Biolog: aba Amostras", () => {
       [null, "50 g; Margem"],
       [null, "2,5 L"],
       [null, "Nadadeira"],
+      [null, "1000 L"],
     ]);
   });
 

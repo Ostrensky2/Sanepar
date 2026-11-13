@@ -1,13 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
+  COLLECTION_DEFAULTS_VERSION,
   FieldStandardError,
   baseFieldParameters,
+  biologConservation,
   buildProjectCollectionDefaults,
   buildSampleCode,
+  conservationText,
+  conservationTypes,
+  convertQuantity,
+  currentConservationTypes,
+  getSampleType,
   isLegacySampleCode,
   nextSampleSequence,
   nonNegativeNumber,
   normalizeCollectionDefaults,
+  parameterSampleTypeIds,
   parseSampleCode,
   samplePointToken,
   sampleTypes,
@@ -39,9 +47,26 @@ describe("padrão de coleta — código da amostra", () => {
   it("usa uma sigla de 2 letras diferente para cada tipo de amostra", () => {
     const codes = sampleTypes.map((type) => type.code);
 
-    expect(codes).toEqual(["AG", "SO", "AR", "TE", "PL"]);
+    expect(codes).toEqual(["AG", "BR", "SO", "AR", "TE", "PL"]);
     expect(new Set(codes).size).toBe(codes.length);
-    expect(sampleTypes.map((type) => type.label)).toEqual(["Água", "Solo", "Ar", "Tecido", "Plâncton"]);
+    expect(sampleTypes.map((type) => type.label)).toEqual(["Água", "Branco", "Solo", "Ar", "Tecido", "Plâncton"]);
+  });
+
+  it("o branco tem código próprio, e não é mais uma réplica de água", () => {
+    const blank = buildSampleCode({
+      projectCode: "YVA",
+      date: "2026-11-13",
+      time: "09:05",
+      point: "0136",
+      sampleType: "blank",
+      sequence: 1,
+    });
+
+    expect(blank).toBe("YVA-0136-131126-0905-BR1");
+    expect(parseSampleCode(blank)?.sampleType).toBe("blank");
+    expect(getSampleType("blank").isControl).toBe(true);
+    expect(parameterSampleTypeIds).not.toContain("blank");
+    expect(baseFieldParameters.every((parameter) => !parameter.appliesTo.includes("blank"))).toBe(true);
   });
 
   it("escreve o ponto sempre do mesmo jeito", () => {
@@ -158,7 +183,35 @@ describe("padrão de coleta — padrões do projeto", () => {
     expect(defaults.objective).toBe("MONITORAMENTO");
     expect(defaults.waterMatrix).toBe("AGUA_DOCE");
     expect(defaults.sampleTypes.water.depthM).toBe(0);
-    expect(Object.keys(defaults.sampleTypes)).toEqual(["water", "soil", "air", "tissue", "plankton"]);
+    expect(Object.keys(defaults.sampleTypes)).toEqual(["water", "blank", "soil", "air", "tissue", "plankton"]);
+  });
+
+  it("já traz o que não muda no campo: 250 mL, Criobox, Longmire, branco e plâncton de 1000 L", () => {
+    const { sampleTypes: types } = buildProjectCollectionDefaults();
+
+    expect(types.water).toMatchObject({ replicas: 5, quantity: 250, packaging: "Criobox", conservation: "LONGMIRE" });
+    expect(types.blank).toMatchObject({ replicas: 1, quantity: 250, packaging: "Criobox", conservation: "LONGMIRE" });
+    expect(types.plankton).toMatchObject({ replicas: 1, quantity: 1000, packaging: "Criobox", conservation: "LONGMIRE" });
+    expect(getSampleType("plankton").quantityUnit).toBe("L");
+  });
+
+  it("padrão gravado antes da 2.0.9 fica com o número de amostras e os parâmetros, e o resto volta ao padrão", () => {
+    const fallback = buildProjectCollectionDefaults();
+    const old = normalizeCollectionDefaults({
+      destinationLab: "LAPOA",
+      fieldParameterIds: ["ph"],
+      sampleTypes: {
+        water: { replicas: 3, conservation: "FILTRO_CONGELADO", packaging: "Isopor com gelo", quantity: 1000 },
+        plankton: { replicas: 2, conservation: "OUTRO", quantity: null },
+      },
+    });
+
+    expect(old.standardVersion).toBe(COLLECTION_DEFAULTS_VERSION);
+    expect(old.destinationLab).toBe("LAPOA");
+    expect(old.fieldParameterIds).toEqual(["ph"]);
+    expect(old.sampleTypes.water).toEqual({ ...fallback.sampleTypes.water, replicas: 3 });
+    expect(old.sampleTypes.plankton).toEqual({ ...fallback.sampleTypes.plankton, replicas: 2 });
+    expect(old.sampleTypes.blank).toEqual(fallback.sampleTypes.blank);
   });
 
   it("completa com o padrão do projeto o que não foi gravado", () => {
@@ -166,6 +219,7 @@ describe("padrão de coleta — padrões do projeto", () => {
     expect(normalizeCollectionDefaults("texto")).toEqual(buildProjectCollectionDefaults());
 
     const partial = normalizeCollectionDefaults({
+      standardVersion: 2,
       destinationLab: "LAPOA",
       sampleTypes: { water: { replicas: 2, quantity: "500,5", depthM: 5 } },
     });
@@ -175,17 +229,23 @@ describe("padrão de coleta — padrões do projeto", () => {
     expect(partial.sampleTypes.water.replicas).toBe(2);
     expect(partial.sampleTypes.water.quantity).toBe(500.5);
     expect(partial.sampleTypes.water.depthM).toBe(5);
-    expect(partial.sampleTypes.water.conservation).toBe("FILTRO_CONGELADO");
+    expect(partial.sampleTypes.water.conservation).toBe("LONGMIRE");
     expect(partial.sampleTypes.plankton).toEqual(buildProjectCollectionDefaults().sampleTypes.plankton);
   });
 
   it("descarta valores fora da lista em vez de gravar algo que o laboratório não reconhece", () => {
     const normalized = normalizeCollectionDefaults({
+      standardVersion: 2,
       projectCode: "sanepar",
       destinationLab: "OUTRO LAB",
       objective: "passeio",
       waterMatrix: "AGUA_BENTA",
       sampleTypes: { water: { replicas: -1, conservation: "NO BOLSO", quantity: -5, depthM: "abc" } },
+    });
+    // As opções antigas de conservação não voltam a ser padrão de campanha.
+    const legacy = normalizeCollectionDefaults({
+      standardVersion: 2,
+      sampleTypes: { water: { conservation: "FILTRO_CONGELADO" } },
     });
     const fallback = buildProjectCollectionDefaults();
 
@@ -197,10 +257,12 @@ describe("padrão de coleta — padrões do projeto", () => {
     expect(normalized.sampleTypes.water.conservation).toBe(fallback.sampleTypes.water.conservation);
     expect(normalized.sampleTypes.water.quantity).toBeNull();
     expect(normalized.sampleTypes.water.depthM).toBeNull();
+    expect(legacy.sampleTypes.water.conservation).toBe("LONGMIRE");
   });
 
   it("permite apagar um texto ou um número padrão", () => {
     const normalized = normalizeCollectionDefaults({
+      standardVersion: 2,
       sampleTypes: { water: { packaging: "", specification: "", quantity: "", depthM: null } },
     });
 
@@ -215,5 +277,42 @@ describe("padrão de coleta — padrões do projeto", () => {
     expect(nonNegativeNumber(0)).toBe(0);
     expect(nonNegativeNumber("")).toBeNull();
     expect(nonNegativeNumber("-1")).toBeNull();
+  });
+});
+
+describe("padrão de coleta — conservante", () => {
+  it("oferece as opções que a equipe usa, nesta ordem, e guarda as antigas só para o que já foi gravado", () => {
+    expect(currentConservationTypes.map((option) => option.label)).toEqual([
+      "Álcool com congelamento",
+      "Álcool sem congelamento",
+      "Longmire",
+      "Sílica",
+      "Outro",
+    ]);
+    expect(conservationTypes.some((option) => option.value === "FILTRO_CONGELADO" && !option.current)).toBe(true);
+  });
+
+  it("mostra o nome do conservante; em Outro, o que foi escrito", () => {
+    expect(conservationText("LONGMIRE", "")).toBe("Longmire");
+    expect(conservationText("OUTRO", "RNAlater")).toBe("RNAlater");
+    expect(conservationText("OUTRO", "")).toBe("");
+    expect(conservationText("FILTRO_CONGELADO", "Longmire")).toBe("Filtro congelado (Longmire)");
+    expect(conservationText("LONGMIRE", "longmire")).toBe("Longmire");
+  });
+
+  it("na coluna do Biolog, usa o valor mais próximo da lista de lá", () => {
+    expect(biologConservation("ALCOOL_COM_CONGELAMENTO", "water")).toBe("FILTRO_EM_ALCOOL_COM_REFRIGERACAO");
+    expect(biologConservation("ALCOOL_SEM_CONGELAMENTO", "blank")).toBe("FILTRO_EM_ALCOOL_SEM_REFRIGERACAO");
+    expect(biologConservation("ALCOOL_COM_CONGELAMENTO", "plankton")).toBe("OUTRO");
+    expect(biologConservation("LONGMIRE", "water")).toBe("OUTRO");
+    expect(biologConservation("SILICA", "water")).toBe("OUTRO");
+    expect(biologConservation("FILTRO_CONGELADO", "water")).toBe("FILTRO_CONGELADO");
+  });
+
+  it("converte mL em L (plâncton gravado antes da 2.0.9)", () => {
+    expect(convertQuantity(500, "mL", "L")).toBe(0.5);
+    expect(convertQuantity(2, "L", "mL")).toBe(2000);
+    expect(convertQuantity(250, "g", "mL")).toBe(250);
+    expect(convertQuantity(null, "mL", "L")).toBeNull();
   });
 });

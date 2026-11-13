@@ -30,6 +30,7 @@ const DATA_PATHS = new Set([
   "/api/campaign-management",
   "/api/field-diary",
   "/api/field-diary/point-options",
+  "/api/field-diary/planned-points",
   "/api/field-diary/parameters",
   "/api/field-diary/samples",
   "/api/field-diary/readings",

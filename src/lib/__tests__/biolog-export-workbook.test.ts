@@ -50,8 +50,8 @@ const data = buildBiologExport({
       quantity: 1000,
       quantityUnit: "mL",
       specification: "",
-      conservation: "FILTRO_CONGELADO",
-      preservative: "Longmire",
+      conservation: "LONGMIRE",
+      preservative: "",
       packaging: "Isopor com gelo",
       boxPosition: "",
     },
@@ -133,8 +133,9 @@ describe("arquivo .xlsx para o Biolog", () => {
     expect(cell(2, "pH")).toBe(7.2);
     expect(cell(2, "Temp Ar (°C)")).toBe(22);
     expect(cell(2, "Turbidez")).toBeNull();
-    expect(cell(2, "Especificação")).toBe("preservante: Longmire");
-    expect(cell(2, "Preservante")).toBe("Longmire");
+    expect(cell(2, "Tipo de Conservação")).toBe("OUTRO");
+    expect(cell(2, "Especificação")).toBe("conservante: Longmire");
+    expect(cell(2, "Conservante")).toBe("Longmire");
     expect(cell(2, "Posição")).toBeNull();
 
     expect(cell(3, "Código de Campo")).toBe("YVA-0136-071126-0905-PL1");

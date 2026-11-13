@@ -177,3 +177,6 @@ function pointKey(value: unknown) {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+// Usados pela lista de pontos com coordenada (lib/nearest-point), com as mesmas regras.
+export { coordinateOf as plannedCoordinateOf, siaKey as siaMatchKey, pointKey as pointMatchKey };

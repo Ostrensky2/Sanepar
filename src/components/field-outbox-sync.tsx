@@ -19,6 +19,7 @@ const FIELD_DATA_TO_KEEP = [
   "/api/campaign-management",
   "/api/field-diary",
   "/api/field-diary/point-options",
+  "/api/field-diary/planned-points",
   "/api/field-diary/parameters",
   "/api/field-diary/samples?entryId=",
   "/api/field-diary/readings?entryId=",

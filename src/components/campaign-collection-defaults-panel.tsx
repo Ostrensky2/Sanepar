@@ -5,10 +5,9 @@ import { CampaignFieldParametersPanel } from "@/components/campaign-field-parame
 import {
   COLLECTION_TEXT_MAX_LENGTH,
   MAX_DEFAULT_REPLICAS,
-  conservationTypes,
+  currentConservationTypes,
   destinationLabs,
   nonNegativeNumber,
-  preservativeSuggestions,
   sampleObjectives,
   sampleTypes,
   waterMatrices,
@@ -153,11 +152,6 @@ export function CampaignCollectionDefaultsPanel({
           </label>
         </div>
 
-        <datalist id="yvae-preservantes-campanha">
-          {preservativeSuggestions.map((option) => (
-            <option key={option} value={option} />
-          ))}
-        </datalist>
         <div className="overflow-x-auto rounded-2xl border border-[var(--line-ghost)] bg-white">
           <table className="w-full min-w-[980px] text-left text-sm">
             <caption className="sr-only">Padrões por tipo de amostra</caption>
@@ -165,9 +159,9 @@ export function CampaignCollectionDefaultsPanel({
               <tr className="border-b border-[var(--line-ghost)] text-caption text-slate-500">
                 <th scope="col" className="px-3 py-3">Tipo de amostra</th>
                 <th scope="col" className="px-3 py-3">Amostras sugeridas por ponto</th>
-                <th scope="col" className="px-3 py-3">Conservação</th>
-                <th scope="col" className="px-3 py-3">Preservante</th>
-                <th scope="col" className="px-3 py-3">Acondicionamento</th>
+                <th scope="col" className="px-3 py-3">Conservante</th>
+                <th scope="col" className="px-3 py-3">Qual, se for “Outro”</th>
+                <th scope="col" className="px-3 py-3">Armazenamento</th>
                 <th scope="col" className="px-3 py-3">Volume ou massa</th>
                 <th scope="col" className="px-3 py-3">Profundidade (m)</th>
                 <th scope="col" className="px-3 py-3">Especificação</th>
@@ -206,14 +200,18 @@ export function CampaignCollectionDefaultsPanel({
                     </td>
                     <td className="px-3 py-3">
                       <select
-                        aria-label={`Conservação de ${type.label}`}
+                        aria-label={`Conservante de ${type.label}`}
                         className={cellInputClassName}
                         value={row.conservation}
-                        onChange={(event) =>
-                          updateSampleType(type.id, { conservation: event.target.value as ConservationType })
-                        }
+                        onChange={(event) => {
+                          const conservation = event.target.value as ConservationType;
+                          updateSampleType(
+                            type.id,
+                            conservation === "OUTRO" ? { conservation } : { conservation, preservative: "" },
+                          );
+                        }}
                       >
-                        {conservationTypes.map((conservation) => (
+                        {currentConservationTypes.map((conservation) => (
                           <option key={conservation.value} value={conservation.value}>
                             {conservation.label}
                           </option>
@@ -221,23 +219,26 @@ export function CampaignCollectionDefaultsPanel({
                       </select>
                     </td>
                     <td className="px-3 py-3">
-                      <input
-                        aria-label={`Preservante de ${type.label}`}
-                        className={cellInputClassName}
-                        value={row.preservative}
-                        maxLength={COLLECTION_TEXT_MAX_LENGTH}
-                        list="yvae-preservantes-campanha"
-                        placeholder="Ex.: Longmire"
-                        onChange={(event) => updateSampleType(type.id, { preservative: event.target.value })}
-                      />
+                      {row.conservation === "OUTRO" ? (
+                        <input
+                          aria-label={`Qual conservante de ${type.label}`}
+                          className={cellInputClassName}
+                          value={row.preservative}
+                          maxLength={COLLECTION_TEXT_MAX_LENGTH}
+                          placeholder="Ex.: RNAlater"
+                          onChange={(event) => updateSampleType(type.id, { preservative: event.target.value })}
+                        />
+                      ) : (
+                        <span className="text-xs text-slate-400">Não se aplica</span>
+                      )}
                     </td>
                     <td className="px-3 py-3">
                       <input
-                        aria-label={`Acondicionamento de ${type.label}`}
+                        aria-label={`Armazenamento de ${type.label}`}
                         className={cellInputClassName}
                         value={row.packaging}
                         maxLength={COLLECTION_TEXT_MAX_LENGTH}
-                        placeholder="Ex.: Isopor com gelo"
+                        placeholder="Ex.: Criobox"
                         onChange={(event) => updateSampleType(type.id, { packaging: event.target.value })}
                       />
                     </td>
@@ -294,7 +295,7 @@ export function CampaignCollectionDefaultsPanel({
           </table>
           <p className="px-3 py-3 text-xs text-[var(--ink-soft)]">
             Em &quot;Amostras por ponto&quot;, 0 significa que o tipo não é coletado de rotina. Profundidade 0 é
-            superfície.
+            superfície. O branco é o controle negativo do ponto e tem código próprio (BR1).
           </p>
         </div>
       </div>

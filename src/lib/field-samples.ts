@@ -13,7 +13,9 @@ import {
   SAMPLE_CODE_MAX_SEQUENCE,
   buildSampleCode,
   isLegacySampleCode,
+  conservationText,
   conservationTypes,
+  convertQuantity,
   getSampleType,
   isSampleTypeId,
   normalizeProjectCode,
@@ -42,9 +44,14 @@ export type FieldSample = {
   quantity: number | null;
   quantityUnit: string;
   specification: string;
+  /** Conservante (ex.: Longmire). */
   conservation: ConservationType;
-  /** Preservante (ex.: Longmire, álcool, sílica). Texto livre; vazio = não informado. */
+  /**
+   * Qual conservante, quando é "Outro" (texto livre). Nas amostras gravadas até a
+   * versão 2.0.8 era o "preservante", à parte da conservação.
+   */
   preservative: string;
+  /** Armazenamento (ex.: Criobox). */
   packaging: string;
   boxPosition: string;
   /**
@@ -99,14 +106,8 @@ export type SampleCodeConflict = {
   sameEntry: boolean;
 };
 
-export type LastPackagingByType = Partial<Record<SampleTypeId, string>>;
-
 type DraftFactoryOptions = {
   defaults: CollectionDefaults;
-  /** Último acondicionamento usado neste aparelho, por tipo de amostra. */
-  lastPackaging?: LastPackagingByType;
-  /** Último preservante usado neste aparelho, por tipo de amostra. */
-  lastPreservative?: LastPackagingByType;
   newId: () => string;
 };
 
@@ -182,7 +183,7 @@ export function nextDraftSequence(drafts: SampleDraft[], sampleType: SampleTypeI
 // Amostras propostas pelos padrões da campanha
 // ---------------------------------------------------------------------------
 
-/** As amostras que a campanha propõe para cada ponto (ex.: 3 de água e 1 de plâncton). */
+/** As amostras que a campanha propõe para cada ponto (ex.: 5 de água, 1 branco e 1 de plâncton). */
 export function buildDefaultSampleDrafts(options: DraftFactoryOptions): SampleDraft[] {
   const drafts: SampleDraft[] = [];
 
@@ -219,11 +220,10 @@ export function addSampleDraft(
   return [...drafts, draft];
 }
 
+/** Amostra nova com o padrão da campanha (que já traz conservante, armazenamento e volume). */
 function draftFromDefaults(sampleType: SampleTypeId, sequence: number, options: DraftFactoryOptions): SampleDraft {
   const type = getSampleType(sampleType);
   const typeDefaults = options.defaults.sampleTypes[sampleType];
-  const rememberedPackaging = cleanText(options.lastPackaging?.[sampleType], COLLECTION_TEXT_MAX_LENGTH);
-  const rememberedPreservative = cleanText(options.lastPreservative?.[sampleType], COLLECTION_TEXT_MAX_LENGTH);
 
   return {
     id: options.newId(),
@@ -232,15 +232,15 @@ function draftFromDefaults(sampleType: SampleTypeId, sequence: number, options: 
     depthM: type.usesDepth ? numberToInput(typeDefaults?.depthM ?? null) : "",
     quantity: numberToInput(typeDefaults?.quantity ?? null),
     specification: typeDefaults?.specification ?? "",
-    conservation: typeDefaults?.conservation ?? "OUTRO",
-    preservative: rememberedPreservative || typeDefaults?.preservative || "",
-    packaging: rememberedPackaging || typeDefaults?.packaging || "",
+    conservation: typeDefaults?.conservation ?? "LONGMIRE",
+    preservative: typeDefaults?.conservation === "OUTRO" ? typeDefaults.preservative : "",
+    packaging: typeDefaults?.packaging ?? "",
     boxPosition: "",
     savedCode: "",
   };
 }
 
-/** "3 de Água e 1 de Plâncton", para dizer o que a campanha propõe. */
+/** "5 de Água, 1 de Branco e 1 de Plâncton", para dizer o que a campanha propõe. */
 export function describeDefaultSamples(defaults: CollectionDefaults) {
   return describeCounts(
     sampleTypes.map((type) => ({ label: type.label, count: defaults.sampleTypes[type.id]?.replicas ?? 0 })),
@@ -362,7 +362,7 @@ export function samplesToDrafts(samples: FieldSample[]): SampleDraft[] {
     sampleType: sample.sampleType,
     sequence: sample.sequence,
     depthM: numberToInput(sample.depthM),
-    quantity: numberToInput(sample.quantity),
+    quantity: numberToInput(quantityInTypeUnit(sample)),
     specification: sample.specification,
     conservation: sample.conservation,
     preservative: sample.preservative ?? "",
@@ -371,6 +371,13 @@ export function samplesToDrafts(samples: FieldSample[]): SampleDraft[] {
     savedCode: sample.code,
     exportedAt: sample.exportedAt ?? "",
   }));
+}
+
+/** Plâncton gravado em mL (até a versão 2.0.8) aparece em L, como o tipo é hoje. */
+function quantityInTypeUnit(sample: Pick<FieldSample, "sampleType" | "quantity" | "quantityUnit">) {
+  const unit = getSampleType(sample.sampleType).quantityUnit;
+
+  return convertQuantity(sample.quantity, sample.quantityUnit || unit, unit);
 }
 
 /** A amostra que o "−" das réplicas tira: a de maior número do tipo que ainda não foi exportada. */
@@ -554,12 +561,12 @@ export function legacyFieldsPatch(
 type SampleDetails = Pick<
   FieldSample,
   "sampleType" | "depthM" | "quantity" | "conservation" | "packaging" | "specification" | "boxPosition"
-> & { preservative?: string };
+> & { preservative?: string; quantityUnit?: string };
 
-/** "Superfície · 1000 mL · Filtro congelado · Isopor com gelo · eDNA". */
+/** "Superfície · 250 mL · Longmire · Criobox · eDNA". */
 export function describeSampleDetails(sample: SampleDetails) {
   const type = getSampleType(sample.sampleType);
-  const conservation = conservationTypes.find((item) => item.value === sample.conservation);
+  const unit = sample.quantityUnit || type.quantityUnit;
 
   return [
     type.usesDepth && sample.depthM !== null
@@ -567,9 +574,8 @@ export function describeSampleDetails(sample: SampleDetails) {
         ? "Superfície"
         : `${numberToInput(sample.depthM)} m de profundidade`
       : "",
-    sample.quantity !== null ? `${numberToInput(sample.quantity)} ${type.quantityUnit}` : "",
-    conservation && conservation.value !== "OUTRO" ? conservation.label : "",
-    sample.preservative ? `Preservante ${sample.preservative}` : "",
+    sample.quantity !== null ? `${numberToInput(sample.quantity)} ${unit}` : "",
+    conservationText(sample.conservation, sample.preservative),
     sample.packaging,
     sample.specification,
     sample.boxPosition ? `Posição ${sample.boxPosition}` : "",

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { findHelpModuleForPath, helpModules, teamRules, teamRulesForModule } from "@/lib/help-content";
-import { buildSampleCode, isLegacySampleCode, preservativeSuggestions } from "@/lib/field-standard";
+import { buildSampleCode, currentConservationTypes, isLegacySampleCode } from "@/lib/field-standard";
 
 // A Ajuda acompanha o que o app faz: regra que vale para todos fica em destaque, e
 // os exemplos de código de amostra são os que o app gera de verdade.
@@ -51,17 +51,33 @@ describe("Diário de campo na Ajuda", () => {
     });
     const help = textOf([diary, teamRules]);
 
+    const blank = buildSampleCode({
+      projectCode: "YVA",
+      point: "0136",
+      date: "2026-11-07",
+      time: "09:05",
+      sampleType: "blank",
+      sequence: 1,
+    });
+
     expect(code).toBe("YVA-0136-071126-0905-AG1");
     expect(help).toContain(code);
+    expect(textOf(teamRules)).toContain(blank);
     expect(help).toContain("YVA-071126-0136-AG1");
     expect(isLegacySampleCode("YVA-071126-0136-AG1")).toBe(true);
   });
 
-  it("cobre sem sinal, réplicas, preservante, parâmetros e “Iniciar coleta”", () => {
+  it("cobre sem sinal, réplicas, branco, conservante, ponto mais próximo, parâmetros e “Iniciar coleta”", () => {
     const help = textOf(diary);
 
     for (const expected of [
       "Iniciar coleta",
+      "ponto da campanha mais próximo",
+      "Usar este ponto",
+      "BR1",
+      "250 mL",
+      "1000 L",
+      "Criobox",
       "No aparelho, aguardando sinal",
       "Precisa de revisão",
       "Enviar agora",
@@ -72,8 +88,8 @@ describe("Diário de campo na Ajuda", () => {
     ]) {
       expect(help).toContain(expected);
     }
-    for (const suggestion of preservativeSuggestions) {
-      expect(help).toContain(suggestion);
+    for (const option of currentConservationTypes) {
+      expect(help).toContain(option.label);
     }
   });
 
@@ -83,6 +99,7 @@ describe("Diário de campo na Ajuda", () => {
 
     expect(campaigns).toContain("Exportar › Planilha para o Biolog (.xlsx)");
     expect(dataHub).toContain("Padrões de coleta");
-    expect(dataHub).toContain("preservante");
+    expect(dataHub).toContain("conservante");
+    expect(dataHub).toContain("branco");
   });
 });

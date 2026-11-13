@@ -21,7 +21,7 @@ import {
 import {
   COLLECTION_TEXT_MAX_LENGTH,
   conservationTypes,
-  preservativeSuggestions,
+  currentConservationTypes,
   getSampleType,
   sampleTypes,
   type ConservationType,
@@ -98,12 +98,6 @@ export function SamplesPanel({
       <h3 id="field-diary-samples-title" className="text-sm font-black text-[var(--brand-navy-strong)]">
         Amostras do ponto
       </h3>
-      {/* Sugestões do campo Preservante; a pessoa pode escrever qualquer outro. */}
-      <datalist id="yvae-preservantes">
-        {preservativeSuggestions.map((option) => (
-          <option key={option} value={option} />
-        ))}
-      </datalist>
 
       {status === "loading" ? (
         <p role="status" className="mt-1 text-sm text-[var(--ink-soft)]">
@@ -238,8 +232,8 @@ export function SamplesPanel({
   );
 }
 
-/** Tipos que sempre aparecem no contador de réplicas (os que a Sanepar coleta em todo ponto). */
-const ALWAYS_COUNTED: SampleTypeId[] = ["water", "plankton"];
+/** Tipos que sempre aparecem no contador (os que a Sanepar coleta em todo ponto). */
+const ALWAYS_COUNTED: SampleTypeId[] = ["water", "blank", "plankton"];
 
 /**
  * Quantas réplicas de cada tipo há neste ponto, com "−" e "+". Não há número fixo:
@@ -261,7 +255,7 @@ function ReplicaCounters({
   );
 
   return (
-    <div role="group" aria-label="Réplicas neste ponto" className="mt-3 grid gap-2 sm:grid-cols-2">
+    <div role="group" aria-label="Réplicas neste ponto" className="mt-3 grid gap-2 sm:grid-cols-3">
       {shown.map((type) => {
         const count = samples.filter((sample) => sample.sampleType === type.id).length;
         const canRemove = Boolean(lastRemovableSample(samples, type.id));
@@ -273,7 +267,9 @@ function ReplicaCounters({
           >
             <span className="min-w-0 text-sm font-bold text-[var(--brand-navy-strong)]">
               {type.label}
-              <span className="block text-xs font-semibold text-[var(--ink-soft)]">réplicas neste ponto</span>
+              <span className="block text-xs font-semibold text-[var(--ink-soft)]">
+                {type.isControl ? "controle negativo" : "réplicas neste ponto"}
+              </span>
             </span>
             <span className="flex shrink-0 items-center gap-1">
               <button
@@ -410,35 +406,41 @@ function SampleCard({
               maxLength={10}
             />
           </Field>
-          <Field label="Conservação">
+          <Field label="Conservante">
             <select
               value={sample.conservation}
-              onChange={(event) => onChange({ conservation: event.target.value as ConservationType })}
+              onChange={(event) => {
+                const conservation = event.target.value as ConservationType;
+                // Escolhida uma opção da lista, o texto do "Outro" não vale mais.
+                onChange(conservation === "OUTRO" ? { conservation } : { conservation, preservative: "" });
+              }}
               className={fieldClassName}
             >
-              {conservationTypes.map((option) => (
+              {conservationOptionsFor(sample.conservation).map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {option.current ? option.label : `${option.label} (opção antiga)`}
                 </option>
               ))}
             </select>
           </Field>
-          <Field label="Preservante">
-            <input
-              value={sample.preservative}
-              onChange={(event) => onChange({ preservative: event.target.value })}
-              className={fieldClassName}
-              list="yvae-preservantes"
-              placeholder="Ex: Longmire, álcool, sílica"
-              maxLength={COLLECTION_TEXT_MAX_LENGTH}
-            />
-          </Field>
-          <Field label="Acondicionamento">
+          {/* "Outro": a pessoa escreve qual. Amostra antiga com preservante à parte também mostra o texto. */}
+          {sample.conservation === "OUTRO" || sample.preservative ? (
+            <Field label={sample.conservation === "OUTRO" ? "Qual conservante?" : "Conservante (como estava escrito)"}>
+              <input
+                value={sample.preservative}
+                onChange={(event) => onChange({ preservative: event.target.value })}
+                className={fieldClassName}
+                placeholder="Ex: RNAlater"
+                maxLength={COLLECTION_TEXT_MAX_LENGTH}
+              />
+            </Field>
+          ) : null}
+          <Field label="Armazenamento">
             <input
               value={sample.packaging}
               onChange={(event) => onChange({ packaging: event.target.value })}
               className={fieldClassName}
-              placeholder="Ex: Isopor com gelo"
+              placeholder="Ex: Criobox"
               maxLength={COLLECTION_TEXT_MAX_LENGTH}
             />
           </Field>
@@ -464,6 +466,13 @@ function SampleCard({
       ) : null}
     </li>
   );
+}
+
+/** As opções de hoje e, numa amostra antiga, a que ela tem gravada. */
+function conservationOptionsFor(current: ConservationType) {
+  const saved = conservationTypes.find((option) => option.value === current && !option.current);
+
+  return saved ? [...currentConservationTypes, saved] : currentConservationTypes;
 }
 
 function ConflictAlert({

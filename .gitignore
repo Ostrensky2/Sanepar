@@ -60,3 +60,6 @@ migration-reports/
 /public/modelo-planilha-resultados.xlsx
 /src/data/campaign-map-points.json
 /public/dashboards/Painel_eDNA_Campanha1_Sanepar.html
+
+# Pasta que o backup cria quando roda fora do Windows (build e testes no Linux).
+/D:*

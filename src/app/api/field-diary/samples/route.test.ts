@@ -277,7 +277,7 @@ describe("PUT /api/field-diary/samples", () => {
     });
     expect(db.samples[1].preservative).toBeNull();
     expect(payload.samples[0].preservative).toBe("Longmire");
-    expect(db.samples[2]).toMatchObject({ quantity: null, specification: null, quantity_unit: "mL" });
+    expect(db.samples[2]).toMatchObject({ quantity: null, specification: null, quantity_unit: "L" });
     expect(db.changeLog).toEqual([
       expect.objectContaining({
         entry_id: ENTRY,
@@ -289,6 +289,29 @@ describe("PUT /api/field-diary/samples", () => {
         changed_by: "Equipe A",
       }),
     ]);
+  });
+
+  it("o branco ganha código próprio (BR1) e as réplicas de água seguem AG1 a AG5, com o conservante novo", async () => {
+    const response = await put(
+      body({
+        samples: [
+          ...[1, 2, 3, 4, 5].map((n) => sample(n, { conservation: "LONGMIRE", quantity: 250, packaging: "Criobox" })),
+          sample(6, { sampleType: "blank", sequence: 1, depthM: 3, quantity: 250, conservation: "LONGMIRE" }),
+          sample(7, { sampleType: "plankton", sequence: 1, quantity: 1000, conservation: "SILICA" }),
+        ],
+      }),
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.samples.map((item: Row) => item.code).slice(-3)).toEqual([
+      "YVA-0136-071126-0905-AG5",
+      "YVA-0136-071126-0905-BR1",
+      "YVA-0136-071126-0905-PL1",
+    ]);
+    // O branco não tem profundidade.
+    expect(db.samples[5]).toMatchObject({ sample_type: "blank", depth_m: null, quantity: 250, quantity_unit: "mL" });
+    expect(db.samples[6]).toMatchObject({ conservation: "SILICA", quantity: 1000, quantity_unit: "L" });
   });
 
   it("repetir o mesmo envio não duplica nem acusa conflito", async () => {

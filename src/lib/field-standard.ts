@@ -1,5 +1,5 @@
 /**
- * Padrão comum de coleta de campo (versão 1).
+ * Padrão comum de coleta de campo (versão 3, de 13/11/2026).
  *
  * É a regra que o Yva'e segue para identificar amostras e que os outros aplicativos
  * de projeto vão adotar igual: tipos de amostra, código da amostra, catálogo de
@@ -9,7 +9,7 @@
  * Nada aqui fala com banco ou tela: são só as definições e as funções puras.
  */
 
-export const FIELD_STANDARD_VERSION = "1";
+export const FIELD_STANDARD_VERSION = "3";
 
 // ---------------------------------------------------------------------------
 // Projeto
@@ -26,12 +26,20 @@ export const projectFieldIdentity = {
 // Tipos de amostra
 // ---------------------------------------------------------------------------
 
+/**
+ * `isControl`: o branco (controle negativo) é coletado no ponto com água ultrapura.
+ * Tem código próprio (BR1), para não virar mais uma réplica de água, e não leva
+ * parâmetro medido (retorno de campo de 13/11/2026).
+ *
+ * Plâncton é em litros (volume de água que passou pela rede) desde a versão 2.0.9.
+ */
 export const sampleTypes = [
-  { id: "water", label: "Água", code: "AG", exportValue: "AGUA", quantityLabel: "Volume", quantityUnit: "mL", usesDepth: true },
-  { id: "soil", label: "Solo", code: "SO", exportValue: "SOLO", quantityLabel: "Massa", quantityUnit: "g", usesDepth: false },
-  { id: "air", label: "Ar", code: "AR", exportValue: "AR", quantityLabel: "Volume", quantityUnit: "L", usesDepth: false },
-  { id: "tissue", label: "Tecido", code: "TE", exportValue: "TECIDO", quantityLabel: "Massa", quantityUnit: "g", usesDepth: false },
-  { id: "plankton", label: "Plâncton", code: "PL", exportValue: "PLANCTON", quantityLabel: "Volume", quantityUnit: "mL", usesDepth: true },
+  { id: "water", label: "Água", code: "AG", exportValue: "AGUA", quantityLabel: "Volume", quantityUnit: "mL", usesDepth: true, isControl: false },
+  { id: "blank", label: "Branco", code: "BR", exportValue: "BRANCO", quantityLabel: "Volume", quantityUnit: "mL", usesDepth: false, isControl: true },
+  { id: "soil", label: "Solo", code: "SO", exportValue: "SOLO", quantityLabel: "Massa", quantityUnit: "g", usesDepth: false, isControl: false },
+  { id: "air", label: "Ar", code: "AR", exportValue: "AR", quantityLabel: "Volume", quantityUnit: "L", usesDepth: false, isControl: false },
+  { id: "tissue", label: "Tecido", code: "TE", exportValue: "TECIDO", quantityLabel: "Massa", quantityUnit: "g", usesDepth: false, isControl: false },
+  { id: "plankton", label: "Plâncton", code: "PL", exportValue: "PLANCTON", quantityLabel: "Volume", quantityUnit: "L", usesDepth: true, isControl: false },
 ] as const;
 
 export type SampleType = (typeof sampleTypes)[number];
@@ -39,6 +47,29 @@ export type SampleTypeId = SampleType["id"];
 export type SampleTypeCode = SampleType["code"];
 
 export const sampleTypeIds = sampleTypes.map((type) => type.id) as SampleTypeId[];
+
+/** Tipos em que se mede parâmetro de campo: todos menos o branco. */
+export const parameterSampleTypes = sampleTypes.filter((type) => !type.isControl);
+export const parameterSampleTypeIds = parameterSampleTypes.map((type) => type.id) as SampleTypeId[];
+
+/**
+ * Volume ou massa gravados numa unidade e lidos noutra (ex.: plâncton em mL até a
+ * versão 2.0.8, em L depois). Só converte mL e L, g e kg; o resto fica como está.
+ */
+export function convertQuantity(value: number | null, fromUnit: string, toUnit: string): number | null {
+  if (value === null || fromUnit === toUnit) {
+    return value;
+  }
+
+  const factors: Record<string, number> = { mL: 0.001, L: 1, g: 1, kg: 1000 };
+  const sameKind = (fromUnit === "mL" || fromUnit === "L") === (toUnit === "mL" || toUnit === "L");
+
+  if (!(fromUnit in factors) || !(toUnit in factors) || !sameKind) {
+    return value;
+  }
+
+  return Math.round(((value * factors[fromUnit]) / factors[toUnit]) * 1e6) / 1e6;
+}
 
 export function getSampleType(id: SampleTypeId): SampleType {
   return sampleTypes.find((type) => type.id === id) ?? sampleTypes[0];
@@ -297,7 +328,7 @@ export const FIELD_PARAMETER_LABEL_MAX_LENGTH = 60;
 export const FIELD_PARAMETER_UNIT_MAX_LENGTH = 20;
 
 export const baseFieldParameters: FieldParameterDefinition[] = [
-  { id: "air_temperature", label: "Temperatura do ar", unit: "°C", min: -20, max: 60, appliesTo: sampleTypeIds, usesDepth: false, biologColumn: "Temp Ar (°C)" },
+  { id: "air_temperature", label: "Temperatura do ar", unit: "°C", min: -20, max: 60, appliesTo: parameterSampleTypeIds, usesDepth: false, biologColumn: "Temp Ar (°C)" },
   { id: "water_temperature", label: "Temperatura da água", unit: "°C", min: -2, max: 40, appliesTo: ["water", "plankton"], usesDepth: true, biologColumn: "Temp Água (°C)" },
   { id: "ph", label: "pH", unit: "", min: 0, max: 14, appliesTo: ["water", "plankton", "soil"], usesDepth: true, biologColumn: "pH" },
   { id: "conductivity", label: "Condutividade", unit: "µS/cm", min: 0, max: 100000, appliesTo: ["water", "plankton"], usesDepth: true, biologColumn: null },
@@ -334,21 +365,66 @@ export const waterMatrices = [
 ] as const;
 export type WaterMatrix = (typeof waterMatrices)[number]["value"];
 
+/**
+ * Conservante da amostra. Um campo só desde a versão 2.0.9 (retorno de campo de
+ * 13/11/2026: "conservação" e "preservante" eram a mesma coisa). As opções são as
+ * que a equipe usa; em "Outro" a pessoa escreve qual (campo `preservative`).
+ *
+ * As opções antigas (`current: false`) continuam valendo para as amostras gravadas
+ * até a versão 2.0.8, mas não são oferecidas para amostra nova.
+ */
 export const conservationTypes = [
-  { value: "FILTRO_CONGELADO", label: "Filtro congelado" },
-  { value: "FILTRO_EM_ALCOOL_COM_REFRIGERACAO", label: "Filtro em álcool, com refrigeração" },
-  { value: "FILTRO_EM_ALCOOL_SEM_REFRIGERACAO", label: "Filtro em álcool, sem refrigeração" },
-  { value: "AMOSTRA_BRUTA_RESFRIADA", label: "Amostra bruta resfriada" },
-  { value: "AMOSTRA_BRUTA_CONGELADA", label: "Amostra bruta congelada" },
-  { value: "OUTRO", label: "Outro" },
+  { value: "ALCOOL_COM_CONGELAMENTO", label: "Álcool com congelamento", current: true },
+  { value: "ALCOOL_SEM_CONGELAMENTO", label: "Álcool sem congelamento", current: true },
+  { value: "LONGMIRE", label: "Longmire", current: true },
+  { value: "SILICA", label: "Sílica", current: true },
+  { value: "OUTRO", label: "Outro", current: true },
+  { value: "FILTRO_CONGELADO", label: "Filtro congelado", current: false },
+  { value: "FILTRO_EM_ALCOOL_COM_REFRIGERACAO", label: "Filtro em álcool, com refrigeração", current: false },
+  { value: "FILTRO_EM_ALCOOL_SEM_REFRIGERACAO", label: "Filtro em álcool, sem refrigeração", current: false },
+  { value: "AMOSTRA_BRUTA_RESFRIADA", label: "Amostra bruta resfriada", current: false },
+  { value: "AMOSTRA_BRUTA_CONGELADA", label: "Amostra bruta congelada", current: false },
 ] as const;
 export type ConservationType = (typeof conservationTypes)[number]["value"];
 
+/** As opções oferecidas para amostra nova, na ordem que a equipe pediu. */
+export const currentConservationTypes = conservationTypes.filter((option) => option.current);
+
 /**
- * Sugestões do campo "Preservante" de cada amostra. A equipe pode escrever outro:
- * o campo aceita qualquer preservante (retorno de campo de 12/11/2026).
+ * Nome do conservante para mostrar e exportar: o rótulo da opção ou, em "Outro", o
+ * que a pessoa escreveu. Amostra antiga com preservante escrito à parte mostra os dois.
  */
-export const preservativeSuggestions = ["Longmire", "Álcool", "Sílica", "RNAlater", "Sem preservante"] as const;
+export function conservationText(conservation: ConservationType, detail?: string | null) {
+  const option = conservationTypes.find((item) => item.value === conservation);
+  const text = String(detail ?? "").trim();
+
+  if (!option || conservation === "OUTRO") {
+    return text;
+  }
+
+  return text && text.toLowerCase() !== option.label.toLowerCase() ? `${option.label} (${text})` : option.label;
+}
+
+/**
+ * O valor da lista do Biolog na coluna "Tipo de Conservação". As opções novas que
+ * não existem lá viram a mais próxima (álcool em filtro de água) ou OUTRO; o
+ * conservante exato vai na coluna "Conservante" (seção 8 do padrão).
+ */
+export function biologConservation(conservation: ConservationType, sampleType: SampleTypeId): string {
+  const isFilter = sampleType === "water" || sampleType === "blank";
+
+  switch (conservation) {
+    case "ALCOOL_COM_CONGELAMENTO":
+      return isFilter ? "FILTRO_EM_ALCOOL_COM_REFRIGERACAO" : "OUTRO";
+    case "ALCOOL_SEM_CONGELAMENTO":
+      return isFilter ? "FILTRO_EM_ALCOOL_SEM_REFRIGERACAO" : "OUTRO";
+    case "LONGMIRE":
+    case "SILICA":
+      return "OUTRO";
+    default:
+      return conservation;
+  }
+}
 
 export const MAX_DEFAULT_REPLICAS = 20;
 export const COLLECTION_TEXT_MAX_LENGTH = 120;
@@ -358,10 +434,11 @@ export const MAX_DEFAULT_FIELD_PARAMETERS = 30;
 export type SampleTypeDefaults = {
   /** Quantas amostras deste tipo o app propõe em cada ponto (0 = não propõe). */
   replicas: number;
+  /** Conservante (ex.: Longmire). */
   conservation: ConservationType;
-  /** Acondicionamento (ex.: Isopor com gelo). */
+  /** Armazenamento (ex.: Criobox). */
   packaging: string;
-  /** Preservante (ex.: Longmire, álcool, sílica). Texto livre; vazio = não informado. */
+  /** Qual conservante, quando é "Outro". Texto livre; vazio = não informado. */
   preservative: string;
   /** Volume ou massa padrão, na unidade do tipo. */
   quantity: number | null;
@@ -371,7 +448,16 @@ export type SampleTypeDefaults = {
   specification: string;
 };
 
+/**
+ * Versão dos padrões de coleta. Padrões gravados numa versão anterior ficam com o
+ * número de amostras e os parâmetros que a campanha escolheu, e o resto de cada tipo
+ * de amostra volta ao padrão do projeto (na 2: conservante, armazenamento, volume).
+ */
+export const COLLECTION_DEFAULTS_VERSION = 2;
+
 export type CollectionDefaults = {
+  /** Ver COLLECTION_DEFAULTS_VERSION. */
+  standardVersion: number;
   projectCode: string;
   projectShortName: string;
   company: string;
@@ -387,10 +473,12 @@ export type CollectionDefaults = {
 };
 
 export function buildProjectCollectionDefaults(): CollectionDefaults {
-  const empty: SampleTypeDefaults = {
+  // O que não muda de um ponto para outro já vem preenchido; tudo continua editável
+  // em cada amostra (retorno de campo de 13/11/2026).
+  const base: SampleTypeDefaults = {
     replicas: 0,
-    conservation: "OUTRO",
-    packaging: "",
+    conservation: "LONGMIRE",
+    packaging: "Criobox",
     preservative: "",
     quantity: null,
     depthM: null,
@@ -398,34 +486,20 @@ export function buildProjectCollectionDefaults(): CollectionDefaults {
   };
 
   return {
+    standardVersion: COLLECTION_DEFAULTS_VERSION,
     ...projectFieldIdentity,
     destinationLab: "GA",
     objective: "MONITORAMENTO",
     waterMatrix: "AGUA_DOCE",
     sampleTypes: {
-      // Sanepar: 5 réplicas de água e 1 de plâncton por ponto (retorno de campo de 12/11/2026).
-      // É só a sugestão: a equipe muda a quantidade em cada ponto e no padrão da campanha.
-      water: {
-        replicas: 5,
-        conservation: "FILTRO_CONGELADO",
-        packaging: "Isopor com gelo",
-        preservative: "",
-        quantity: 1000,
-        depthM: 0,
-        specification: "eDNA",
-      },
-      soil: { ...empty },
-      air: { ...empty },
-      tissue: { ...empty },
-      plankton: {
-        replicas: 1,
-        conservation: "OUTRO",
-        packaging: "Isopor com gelo",
-        preservative: "",
-        quantity: null,
-        depthM: 0,
-        specification: "",
-      },
+      // Sanepar, por ponto: 5 réplicas de água, 1 branco e 1 plâncton. É só a sugestão:
+      // a equipe muda a quantidade em cada ponto e no padrão da campanha.
+      water: { ...base, replicas: 5, quantity: 250, depthM: 0, specification: "eDNA" },
+      blank: { ...base, replicas: 1, quantity: 250, specification: "Controle negativo" },
+      soil: { ...base },
+      air: { ...base },
+      tissue: { ...base },
+      plankton: { ...base, replicas: 1, quantity: 1000, depthM: 0 },
     },
     fieldParameterIds: [],
   };
@@ -443,8 +517,10 @@ export function normalizeCollectionDefaults(value: unknown): CollectionDefaults 
   }
 
   const savedTypes = isRecord(value.sampleTypes) ? value.sampleTypes : {};
+  const isCurrentVersion = Number(value.standardVersion) >= COLLECTION_DEFAULTS_VERSION;
 
   return {
+    standardVersion: COLLECTION_DEFAULTS_VERSION,
     projectCode: safeProjectCode(value.projectCode, fallback.projectCode),
     projectShortName: cleanText(value.projectShortName, 20).toUpperCase() || fallback.projectShortName,
     company: cleanText(value.company, COLLECTION_TEXT_MAX_LENGTH) || fallback.company,
@@ -452,7 +528,12 @@ export function normalizeCollectionDefaults(value: unknown): CollectionDefaults 
     objective: pickOption(sampleObjectives.map((item) => item.value), value.objective, fallback.objective),
     waterMatrix: pickOption(waterMatrices.map((item) => item.value), value.waterMatrix, fallback.waterMatrix),
     sampleTypes: Object.fromEntries(
-      sampleTypeIds.map((id) => [id, normalizeSampleTypeDefaults(savedTypes[id], fallback.sampleTypes[id])]),
+      sampleTypeIds.map((id) => {
+        const saved = normalizeSampleTypeDefaults(savedTypes[id], fallback.sampleTypes[id]);
+
+        // Gravado antes da versão atual: fica o número de amostras escolhido.
+        return [id, isCurrentVersion ? saved : { ...fallback.sampleTypes[id], replicas: saved.replicas }];
+      }),
     ) as Record<SampleTypeId, SampleTypeDefaults>,
     fieldParameterIds:
       "fieldParameterIds" in value
@@ -490,7 +571,7 @@ function normalizeSampleTypeDefaults(value: unknown, fallback: SampleTypeDefault
       Number.isInteger(replicas) && replicas >= 0 && replicas <= MAX_DEFAULT_REPLICAS
         ? replicas
         : fallback.replicas,
-    conservation: pickOption(conservationTypes.map((item) => item.value), value.conservation, fallback.conservation),
+    conservation: pickOption(currentConservationTypes.map((item) => item.value), value.conservation, fallback.conservation),
     packaging: "packaging" in value ? cleanText(value.packaging, COLLECTION_TEXT_MAX_LENGTH) : fallback.packaging,
     preservative:
       "preservative" in value ? cleanText(value.preservative, COLLECTION_TEXT_MAX_LENGTH) : fallback.preservative,

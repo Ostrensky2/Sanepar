@@ -35,7 +35,7 @@ export const teamRules: TeamRule[] = [
   {
     title: "Antes de cada saída a campo, abra o Yva’e com internet",
     summary:
-      "Sem sinal, o app só funciona no celular que foi preparado com internet. É assim que ele guarda as telas, os pontos, a campanha e os parâmetros para usar no campo.",
+      "Sem sinal, o app só funciona no celular que foi preparado com internet. É assim que ele guarda as telas, os pontos (com as coordenadas, para o GPS achar o ponto mais próximo), a campanha e os parâmetros para usar no campo.",
     steps: [
       "Com internet, abra o Yva’e no celular que vai a campo e entre com a sua conta.",
       "Abra Central de dados › Diário de campo, escolha a campanha e espere a lista carregar.",
@@ -60,7 +60,8 @@ export const teamRules: TeamRule[] = [
     summary:
       "O código é gerado pelo app, nunca digitado: projeto, ponto, dia e hora da coleta, tipo e número da amostra. Exemplo: YVA-0136-071126-0905-AG1 é a 1ª amostra de água do ponto 0136, em 07/11/2026, às 9h05.",
     steps: [
-      "Toque em “Iniciar coleta” ao chegar no ponto: o app grava a hora, a data e o GPS. Sem ponto, data e hora não há código.",
+      "Toque em “Iniciar coleta” ao chegar no ponto: o app grava a hora, a data e o GPS e escolhe o ponto da campanha mais próximo. Confira o SIA antes de escrever a etiqueta, porque o ponto faz parte do código. Sem ponto, data e hora não há código.",
+      "O branco (controle negativo) tem código próprio, com BR no lugar de AG: YVA-0136-071126-0905-BR1. Ele não conta como réplica de água.",
       "Se corrigir o ponto, a data ou a hora depois de escrever a etiqueta, o código muda e o app mostra qual era o gravado: refaça a etiqueta.",
       "Depois que a amostra sai na planilha para o Biolog, o código não muda mais. Amostras gravadas antes da versão 2.0.7 (13/11/2026) ficam com o código antigo, sem a hora (ex.: YVA-071126-0136-AG1).",
     ],
@@ -182,6 +183,7 @@ export const helpModules: HelpModule[] = [
       "Os índices vão de 0 a 1 e são relativos aos pontos da campanha; não são classes de risco.",
       "A edição de campo fica em Central de dados → Diário de campo.",
       "A planilha para o Biolog leva todas as amostras da campanha, também as que já foram antes: o Biolog ignora a amostra que já importou.",
+      "Na planilha, o branco sai como controle negativo (objetivo CONTROLE, origem água ultrapura) e o conservante de cada amostra vai na coluna Conservante.",
     ],
     troubleshooting: [
       {
@@ -225,7 +227,8 @@ export const helpModules: HelpModule[] = [
         title: "Registrar um ponto em campo",
         steps: [
           "Toque em Novo registro (ou em Registrar ponto, no dia escolhido do calendário).",
-          "Escolha o ponto em SIA (código SIA) e toque em “Iniciar coleta”: o app grava a hora e a data do celular e a posição pelo GPS.",
+          "Ao chegar no ponto, toque em “Iniciar coleta”: o app grava a hora e a data do celular, lê o GPS e escolhe sozinho o ponto da campanha mais próximo. Confira o SIA; se não for este, escolha outro na lista.",
+          "Se você já tinha escolhido um ponto e o celular está longe dele, o app mostra o ponto mais próximo com o botão “Usar este ponto”.",
           "Confira a Situação do ponto (Realizado, Não realizado, Realocado ou Bloqueado). Ponto realocado pede o motivo.",
           "A Equipe do último registro feito no celular já vem preenchida; confira.",
           "Confira as amostras e os parâmetros (veja as rotinas abaixo), acrescente as fotos e as ocorrências.",
@@ -233,12 +236,14 @@ export const helpModules: HelpModule[] = [
         ],
       },
       {
-        title: "Amostras do ponto: réplicas, preservante e etiqueta",
+        title: "Amostras do ponto: réplicas, branco, conservante e etiqueta",
         steps: [
-          "Num registro ainda sem amostras, “Iniciar coleta” já propõe as amostras do padrão da campanha (o padrão do projeto é 5 de água e 1 de plâncton). “Usar o padrão da campanha” faz o mesmo.",
-          "O número de réplicas é livre: use “−” e “+” ao lado de cada tipo para tirar ou acrescentar uma amostra naquele ponto. Para outro tipo (solo, ar, tecido), escolha o tipo e toque em “+ Amostra”.",
-          "Toque em Editar numa amostra para mudar profundidade (0 = superfície), volume ou massa, conservação, preservante, acondicionamento, especificação e posição na caixa.",
-          "Preservante é texto livre: escolha uma sugestão (Longmire, Álcool, Sílica, RNAlater, Sem preservante) ou escreva outro. O último usado em cada tipo já vem preenchido na próxima amostra.",
+          "Num registro ainda sem amostras, “Iniciar coleta” já propõe as amostras do padrão da campanha (o padrão do projeto é 5 de água, 1 branco e 1 de plâncton). “Usar o padrão da campanha” faz o mesmo.",
+          "Elas já vêm com o que não muda de um ponto para outro: água e branco com 250 mL, plâncton com 1000 L, conservante Longmire e armazenamento em Criobox. Tudo continua editável.",
+          "O número de réplicas é livre: use “−” e “+” ao lado de Água, Branco e Plâncton para tirar ou acrescentar uma amostra naquele ponto. Para outro tipo (solo, ar, tecido), escolha o tipo e toque em “+ Amostra”.",
+          "O branco é o controle negativo do ponto: tem código próprio (BR1) e não vira a réplica 6 da água. Não leva parâmetro medido.",
+          "Toque em Editar numa amostra para mudar profundidade (0 = superfície), volume, conservante, armazenamento, especificação e posição na caixa.",
+          "Conservante é uma lista: Álcool com congelamento, Álcool sem congelamento, Longmire, Sílica ou Outro. Em Outro, escreva qual.",
           "Escreva na etiqueta o código que aparece em cada amostra, por exemplo YVA-0136-071126-0905-AG1.",
         ],
       },
@@ -276,12 +281,14 @@ export const helpModules: HelpModule[] = [
       },
     ],
     controls: [
-      { label: "Iniciar coleta", detail: "Grava hora, data e GPS de uma vez e propõe as amostras e os parâmetros da campanha." },
-      { label: "Ler o GPS de novo", detail: "Atualiza só a posição, sem mexer na hora." },
+      { label: "Iniciar coleta", detail: "Grava hora, data e GPS de uma vez, escolhe o ponto mais próximo e propõe as amostras e os parâmetros da campanha." },
+      { label: "Ler o GPS de novo", detail: "Atualiza só a posição, sem mexer na hora, e confere de novo o ponto mais próximo." },
+      { label: "Usar este ponto", detail: "Troca o ponto do registro pelo ponto da campanha mais próximo do celular." },
       { label: "Situação do ponto", detail: "Planejado, Realizado, Não realizado, Realocado ou Bloqueado; aparece também no mapa." },
-      { label: "Réplicas − e +", detail: "Tiram ou acrescentam uma amostra do tipo naquele ponto. O “−” tira a de maior número." },
+      { label: "Réplicas − e +", detail: "Tiram ou acrescentam uma amostra de Água, Branco ou Plâncton naquele ponto. O “−” tira a de maior número." },
       { label: "+ Amostra", detail: "Acrescenta uma amostra do tipo escolhido, copiando os dados da última do mesmo tipo." },
-      { label: "Preservante", detail: "Texto livre com sugestões; vai para a planilha do Biolog." },
+      { label: "Conservante", detail: "Lista com as opções da equipe; Longmire já vem marcado. Em Outro, escreva qual. Vai para a planilha do Biolog." },
+      { label: "Armazenamento", detail: "Onde a amostra vai guardada; Criobox já vem preenchido." },
       { label: "+ Parâmetro", detail: "Cria um parâmetro novo para toda a equipe." },
       { label: "No aparelho, aguardando sinal", detail: "Registro guardado só no celular; sobe sozinho quando houver sinal." },
       { label: "Precisa de revisão", detail: "A nuvem recusou o envio; abra o registro, corrija e salve de novo." },
@@ -290,7 +297,9 @@ export const helpModules: HelpModule[] = [
     ],
     notes: [
       "Antes de cada saída a campo, abra o app com internet no celular que vai a campo (veja “Regras para toda a equipe”).",
-      "O código da amostra é projeto, ponto, dia, hora, tipo e número: YVA-0136-071126-0905-AG1. Tipos: AG água, PL plâncton, SO solo, AR ar, TE tecido.",
+      "O código da amostra é projeto, ponto, dia, hora, tipo e número: YVA-0136-071126-0905-AG1. Tipos: AG água, BR branco, PL plâncton, SO solo, AR ar, TE tecido.",
+      "O ponto mais próximo é procurado entre os pontos da campanha do registro, pela coordenada planejada, também sem sinal. Sem ponto escolhido, ele entra sozinho se estiver a até 1 km; mais longe, o app só sugere. O ponto que você escolheu nunca é trocado sem você tocar em “Usar este ponto”.",
+      "Amostras gravadas até a versão 2.0.8 ficam com a conservação e o preservante que tinham. Ao editar, a opção antiga aparece como “(opção antiga)”; o plâncton antigo, gravado em mL, aparece convertido em L.",
       "Enquanto a amostra não sai na planilha do Biolog, o código acompanha o ponto, a data e a hora do registro. Depois, não muda mais.",
       "Amostras gravadas antes da versão 2.0.7 ficam com o código antigo, sem a hora (YVA-071126-0136-AG1).",
       "Com o GPS com precisão pior que 100 m, o app pede conferência; a mais de 200 m do ponto planejado, avisa e oferece marcar o ponto como realocado.",
@@ -310,6 +319,10 @@ export const helpModules: HelpModule[] = [
       {
         issue: "Registro com o selo “Precisa de revisão”",
         action: "Abra o registro e leia o aviso: em geral é código de amostra repetido ou sessão expirada. Corrija e salve de novo; nada foi perdido.",
+      },
+      {
+        issue: "“Iniciar coleta” não escolheu o ponto",
+        action: "O GPS precisa ter lido a posição, o celular precisa ter sido preparado com internet (é assim que ele guarda os pontos com coordenada) e o ponto precisa ter coordenada na planilha da campanha. Escolha o ponto na lista.",
       },
       {
         issue: "A amostra não mostra o código",
@@ -335,7 +348,12 @@ export const helpModules: HelpModule[] = [
       "amostra",
       "replica",
       "preservante",
+      "conservante",
       "longmire",
+      "criobox",
+      "branco",
+      "controle negativo",
+      "ponto mais proximo",
       "codigo",
       "etiqueta",
       "gps",
@@ -491,7 +509,7 @@ export const helpModules: HelpModule[] = [
         steps: [
           "Abra Fase e etapas, escolha a campanha e desça até Padrões de coleta.",
           "Escolha laboratório de destino, objetivo e matriz das amostras de água.",
-          "Para cada tipo de amostra, informe quantas amostras sugerir por ponto (0 = não coletado de rotina), conservação, preservante, acondicionamento, volume ou massa, profundidade e especificação.",
+          "Para cada tipo de amostra (água, branco, plâncton e os outros), informe quantas amostras sugerir por ponto (0 = não coletado de rotina), conservante (e qual, se for Outro), armazenamento, volume ou massa, profundidade e especificação.",
           "Marque os parâmetros medidos em todo ponto: eles já vêm prontos para preencher no registro de campo.",
           "Vale para esta campanha e para as seguintes, até alguém mudar. “Voltar a usar os padrões anteriores” desfaz.",
         ],
@@ -500,7 +518,7 @@ export const helpModules: HelpModule[] = [
     controls: [
       { label: "Visão geral", detail: "Checklist por campanha e o assistente “Onde importo?”." },
       { label: "Fase e etapas", detail: "Fase, datas e etapas de cada campanha, e os padrões de coleta." },
-      { label: "Padrões de coleta", detail: "O que o registro de campo já traz preenchido: amostras sugeridas por ponto, conservação, preservante e parâmetros." },
+      { label: "Padrões de coleta", detail: "O que o registro de campo já traz preenchido: amostras sugeridas por ponto, conservante, armazenamento, volume e parâmetros." },
       { label: "Diário de campo", detail: "Registros de campo, um a um ou pela planilha (importador único)." },
       { label: "Planilhas de resultados", detail: "Prévia e publicação das planilhas do laboratório." },
       { label: "Pendências", detail: "Conflitos de importação à espera de decisão." },
@@ -508,6 +526,7 @@ export const helpModules: HelpModule[] = [
     notes: [
       "Somente categorias autorizadas podem importar, publicar ou excluir dados.",
       "O número de amostras dos padrões de coleta é só a sugestão inicial: no ponto, a equipe acrescenta ou tira réplicas.",
+      "Padrões de coleta salvos antes da versão 2.0.9 ficam com o número de amostras e os parâmetros escolhidos; conservante, armazenamento e volume passam ao padrão novo (Longmire, Criobox, 250 mL de água e 1000 L de plâncton).",
       "Enquanto a campanha está aberta, a planilha atualiza o que foi importado antes; depois de revisado no app, o app prevalece e a diferença vira pendência.",
       "Atividades complementares são registradas em Atividades complementares › Registrar.",
     ],
@@ -521,7 +540,7 @@ export const helpModules: HelpModule[] = [
         action: "O mapa da campanha usa só os registros do Diário. Confira se a importação foi confirmada (não só pré-visualizada) e se o ponto tem coordenada.",
       },
     ],
-    keywords: ["dados", "importar", "publicar", "planilha", "xlsx", "csv", "padroes de coleta", "preservante", "replicas"],
+    keywords: ["dados", "importar", "publicar", "planilha", "xlsx", "csv", "padroes de coleta", "conservante", "preservante", "replicas", "branco"],
   },
   {
     title: "Documentos",

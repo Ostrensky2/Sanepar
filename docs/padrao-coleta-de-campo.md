@@ -1,8 +1,10 @@
-# Padrão de coleta de campo (versão 2)
+# Padrão de coleta de campo (versão 3)
 
-Definido em 11/11/2026 e revisto em 12/11/2026, depois do primeiro dia de campo
+Definido em 11/11/2026 e revisto depois dos primeiros dias de campo: em 12/11/2026
 (versão 2: código com a hora da coleta, preservante em cada amostra e número de
-amostras livre por ponto). Vale para o Yva'e (projeto Sanepar) e é o modelo para os
+amostras livre por ponto) e em 13/11/2026 (versão 3: branco com código próprio, um
+campo só de conservante, valores que não mudam já preenchidos e o ponto mais próximo
+escolhido pelo GPS). Vale para o Yva'e (projeto Sanepar) e é o modelo para os
 outros aplicativos de projeto: cada aplicativo registra a coleta em campo, gera o
 código da amostra e exporta uma planilha no mesmo formato. O Biolog importa essa
 planilha e segue com o rastreio no laboratório.
@@ -24,13 +26,19 @@ corrija os dois juntos.
 | Tipo | Sigla no código | Valor na planilha | Quantidade | Tem profundidade |
 | --- | --- | --- | --- | --- |
 | Água | `AG` | `AGUA` | Volume (mL) | Sim |
+| Branco | `BR` | `BRANCO` | Volume (mL) | Não |
 | Solo | `SO` | `SOLO` | Massa (g) | Não |
 | Ar | `AR` | `AR` | Volume (L) | Não |
 | Tecido | `TE` | `TECIDO` | Massa (g) | Não |
-| Plâncton | `PL` | `PLANCTON` | Volume (mL) | Sim |
+| Plâncton | `PL` | `PLANCTON` | Volume (L) | Sim |
 
 "Plâncton" cobre zooplâncton e fitoplâncton; o detalhe vai na especificação da
-amostra.
+amostra. O volume do plâncton é o de água que passou pela rede, em litros (até a
+versão 2.0.8 era em mL; as amostras antigas aparecem convertidas para L).
+
+**Branco** é o controle negativo do ponto (água ultrapura). Tem sigla própria para
+não virar mais uma réplica de água no código (`BR1`, e não `AG6`), não tem
+profundidade e não leva parâmetro medido.
 
 ## 3. Código da amostra
 
@@ -39,6 +47,7 @@ amostra.
 
 YVA-0136-071126-0905-AG1   água, 1ª amostra de água do SIA 0136 em 07/11/2026, 9h05
 YVA-0136-071126-0905-AG2   2ª amostra (réplica) de água do mesmo ponto, dia e hora
+YVA-0136-071126-0905-BR1   branco (controle negativo) do mesmo ponto
 YVA-0136-071126-0905-PL1   plâncton
 ```
 
@@ -73,8 +82,8 @@ muda mais.
 "Exportação" é gerar a planilha para o Biolog (seção 8). Nesse momento a amostra
 recebe a marca de exportada, e o código, o tipo e o número dela ficam os que saíram
 na planilha, mesmo que a data, a hora ou o ponto do registro sejam corrigidos
-depois. Os outros dados da amostra (profundidade, volume, conservação, preservante,
-acondicionamento, posição) continuam podendo ser corrigidos.
+depois. Os outros dados da amostra (profundidade, volume, conservante,
+armazenamento, posição) continuam podendo ser corrigidos.
 
 Quem dá o código é o servidor, a partir do ponto, da data e da hora do registro que
 ficou gravado. Um código nunca se repete no banco. Se outro registro do mesmo ponto,
@@ -84,16 +93,27 @@ dia e hora já usou o número, o aplicativo avisa e oferece o próximo número l
 ## 4. Dados da amostra
 
 Cada amostra guarda: código, tipo, profundidade em metros (0 = superfície), volume ou
-massa, especificação (ex.: filtro 0,45 µm), tipo de conservação, preservante,
-acondicionamento e posição na caixa.
+massa, especificação (ex.: filtro 0,45 µm), conservante, armazenamento e posição na
+caixa.
 
-**Preservante** é texto livre de até 120 caracteres, porque cada projeto usa o seu
-(Longmire, álcool, sílica, RNAlater…). O aplicativo sugere esses nomes, mas aceita
-qualquer outro. Vazio quer dizer "não informado".
+**Conservante** é um campo só desde a versão 2.0.9 (antes eram dois, "conservação"
+e "preservante", que diziam a mesma coisa). As opções são as que a equipe usa:
 
-Tipos de conservação: `FILTRO_CONGELADO`, `FILTRO_EM_ALCOOL_COM_REFRIGERACAO`,
+| Opção | Valor gravado |
+| --- | --- |
+| Álcool com congelamento | `ALCOOL_COM_CONGELAMENTO` |
+| Álcool sem congelamento | `ALCOOL_SEM_CONGELAMENTO` |
+| Longmire | `LONGMIRE` |
+| Sílica | `SILICA` |
+| Outro (a pessoa escreve qual, até 120 caracteres) | `OUTRO` |
+
+As opções anteriores (`FILTRO_CONGELADO`, `FILTRO_EM_ALCOOL_COM_REFRIGERACAO`,
 `FILTRO_EM_ALCOOL_SEM_REFRIGERACAO`, `AMOSTRA_BRUTA_RESFRIADA`,
-`AMOSTRA_BRUTA_CONGELADA`, `OUTRO`.
+`AMOSTRA_BRUTA_CONGELADA`) continuam valendo para as amostras gravadas com elas,
+junto com o preservante escrito à parte, mas não são oferecidas para amostra nova.
+No banco, o texto do "Outro" (e o preservante antigo) fica na coluna `preservative`.
+
+**Armazenamento** é texto livre (ex.: Criobox).
 
 ### Amostras no registro de campo
 
@@ -103,15 +123,21 @@ As amostras ficam no bloco **"Amostras do ponto"** do registro de campo (em cód
 - O aplicativo propõe as amostras do padrão da campanha quando a pessoa toca em
   "Iniciar coleta" num registro que ainda não tem amostra, ou pelo botão "Usar o
   padrão da campanha". Abrir o formulário não cria amostra nenhuma. O padrão do
-  projeto Sanepar é 5 de água e 1 de plâncton por ponto.
-- O número de amostras é livre: os botões "−" e "+" ao lado de cada tipo tiram ou
-  acrescentam uma amostra (réplica) naquele ponto, quantas a equipe quiser, até o
-  limite do registro. O "−" tira a de maior número que ainda não foi exportada.
+  projeto Sanepar é 5 de água, 1 branco e 1 de plâncton por ponto, já com o que não
+  muda de um ponto para outro: 250 mL de água e de branco, 1000 L de plâncton,
+  conservante Longmire e armazenamento em Criobox. Tudo continua editável.
+- O número de amostras é livre: os botões "−" e "+" ao lado de Água, Branco e
+  Plâncton tiram ou acrescentam uma amostra naquele ponto, quantas a equipe quiser,
+  até o limite do registro. O "−" tira a de maior número que ainda não foi
+  exportada.
 - "+ Amostra" acrescenta uma amostra do tipo escolhido, copiando os dados da última
   do mesmo tipo. O tipo de uma amostra não muda depois de criada: para trocar,
   remove-se a amostra e cria-se outra.
 - Profundidade só existe nos tipos que têm profundidade (água e plâncton), em
   metros, com 0 para superfície. Volume ou massa segue a unidade do tipo.
+- Amostra nova vem do padrão da campanha; a acrescentada com "+" copia a anterior
+  do mesmo tipo. O aparelho não guarda mais o último acondicionamento ou
+  preservante usado (até a versão 2.0.8 guardava): o que vale é o padrão.
 - As amostras são gravadas depois do registro, com o registro que a nuvem
   confirmou. Se o registro foi salvo e as amostras não, o formulário fica aberto e
   avisa.
@@ -120,8 +146,6 @@ As amostras ficam no bloco **"Amostras do ponto"** do registro de campo (em cód
   campanha confere isso primeiro e, havendo amostra, não apaga nada.
 - Cada mudança na lista de amostras de um registro entra no histórico de
   alterações, no campo "Amostras".
-- O aparelho lembra o último acondicionamento e o último preservante usados em cada
-  tipo, para a próxima amostra já vir preenchida.
 
 Os dois campos de texto antigos continuam no registro e são preenchidos sozinhos:
 "Amostras e Réplicas (eDNA)" recebe o número de amostras de água ("3 réplicas") e
@@ -207,15 +231,19 @@ passam para as campanhas seguintes enquanto ninguém mudar.
   `LHM`), objetivo e matriz da água (`AGUA_DOCE`, `AGUA_ESTUARINA`, `AGUA_MARINHA`,
   `AGUA_CLORADA`, `AGUA_ULTRAPURA`).
 - De cada tipo de amostra: quantas amostras o aplicativo propõe por ponto (só a
-  sugestão inicial; no ponto a equipe acrescenta ou tira), conservação,
-  preservante, acondicionamento, volume ou massa, profundidade e especificação.
+  sugestão inicial; no ponto a equipe acrescenta ou tira), conservante (e qual, se
+  for "Outro"), armazenamento, volume ou massa, profundidade e especificação.
+- Os padrões gravados guardam a versão (`standardVersion`, hoje 2). Padrões
+  gravados antes da versão 2.0.9 ficam com o número de amostras de cada tipo e os
+  parâmetros que a campanha escolheu; o resto de cada tipo de amostra volta ao
+  padrão do projeto.
 - Parâmetros medidos em todo ponto: a lista dos parâmetros do catálogo que o
   registro de campo já traz prontos para preencher (até 30). O padrão do projeto
   começa sem nenhum marcado.
 
 ## 7. O que o celular registra sozinho
 
-No registro de campo, a pessoa escolhe o ponto e toca em **"Iniciar coleta"**. O
+No registro de campo, a pessoa toca em **"Iniciar coleta"** ao chegar no ponto. O
 aplicativo grava:
 
 - A hora da coleta e a data, do relógio do aparelho, no momento do toque. O instante
@@ -224,6 +252,8 @@ aplicativo grava:
 - De onde veio a coordenada: `gps` (medida pelo aparelho), `planned` (coordenada
   planejada do ponto) ou `manual` (digitada). Registros antigos e os que vieram de
   planilha ficam sem origem.
+- O ponto de coleta, quando nenhum foi escolhido: o da campanha mais próximo do
+  celular (ver "Ponto mais próximo", abaixo).
 
 Regras da captura (em código: `src/lib/collection-capture.ts`):
 
@@ -242,8 +272,25 @@ Regras da captura (em código: `src/lib/collection-capture.ts`):
   apagada; quando não troca, a origem, a precisão e o início da coleta são mantidos.
 - "Ler o GPS de novo" atualiza só a posição, sem mexer na hora.
 
-A lista de pontos do formulário não leva coordenadas. A coordenada planejada é
-consultada de um ponto por vez, só por quem pode registrar coleta.
+### Ponto mais próximo
+
+Desde a versão 2.0.9 (13/11/2026), como no IAGEN, a leitura do GPS associa o
+registro ao ponto mais próximo (em código: `src/lib/nearest-point.ts`).
+
+- Valem os pontos da campanha do registro que têm coordenada planejada; se a
+  campanha não tem nenhum, valem os das outras campanhas.
+- Registro sem ponto escolhido: o mais próximo entra sozinho se estiver a até 1 km
+  (já descontada a incerteza do GPS). Mais longe, o aplicativo só sugere, com o
+  botão "Usar este ponto".
+- Registro com ponto escolhido: nada é trocado sem a pessoa tocar. O aplicativo
+  sugere o mais próximo só quando o celular está a mais de 200 m do ponto escolhido
+  e outro ponto está mais perto.
+- Funciona sem sinal: a lista de pontos com coordenada fica guardada no aparelho.
+
+A lista de pontos do formulário (`/api/field-diary/point-options`) não leva
+coordenadas. A lista com coordenadas (`/api/field-diary/planned-points`) e a
+coordenada de um ponto (`/api/field-diary/planned-coordinate`) são só para quem pode
+registrar coleta, e saem só com ponto, município, campanha e coordenada.
 
 O aplicativo também lembra, em cada aparelho, a última "Equipe" usada, para o
 próximo registro já vir preenchido.
@@ -253,8 +300,8 @@ próximo registro já vir preenchido.
 Desde a versão 2.0.7 (12/11/2026) o registro de campo funciona sem sinal nenhum
 (em código: `public/sw.js`, `src/lib/field-outbox.ts`, `src/lib/field-record-sync.ts`).
 
-- O celular guarda as telas do aplicativo e a última cópia dos pontos, campanhas,
-  parâmetros e registros. Para isso, o aplicativo precisa ter sido aberto uma vez
+- O celular guarda as telas do aplicativo e a última cópia dos pontos (com a
+  coordenada planejada), campanhas, parâmetros e registros. Para isso, o aplicativo precisa ter sido aberto uma vez
   com sinal depois da atualização, já com a conta conectada. Dá para instalar na
   tela inicial do celular ("Adicionar à tela inicial").
 - Sem sinal, salvar o registro guarda tudo no aparelho: o registro, as amostras, as
@@ -281,7 +328,7 @@ Categoria da Amostra | Origem da Amostra | Objetivo | Tipo de Conservação |
 Código de Campo | Ponto de Coleta | Data da Coleta | Hora da Coleta | Latitude |
 Longitude | Profundidade (m) | Volume Filtrado (mL) | Especificação | Temp Ar (°C) |
 Temp Água (°C) | pH | Salinidade (ups) | Oxigênio Dissolvido | Transparência |
-Turbidez | Local Armazenamento | Posição | Observações | Preservante
+Turbidez | Local Armazenamento | Posição | Observações | Conservante
 ```
 
 **Aba `Parâmetros`**, uma linha por medição:
@@ -300,11 +347,20 @@ Regras do formato:
   não pode ser usado, porque o Biolog o lê como "Origem da Amostra".
 - Os cabeçalhos da aba `Amostras` são os que o importador do Biolog reconhece
   sozinho. Não usar barra (`/`) em cabeçalho.
-- `Origem da Amostra` é calculada: para água, a matriz da campanha; para os outros
-  tipos, o próprio tipo.
-- `Preservante` (desde 12/11/2026, versão 1.1 do contrato com o Biolog) é a última
-  coluna, para não mudar a posição das outras. Enquanto o Biolog não a lê, o
-  preservante também vai no fim da `Especificação` (`eDNA; preservante: Longmire`).
+- `Origem da Amostra` é calculada: para água, a matriz da campanha; para o branco,
+  `AGUA_ULTRAPURA`; para os outros tipos, o próprio tipo.
+- `Objetivo` do branco é sempre `CONTROLE` (controle negativo).
+- `Tipo de Conservação` é da lista do Biolog: as opções de conservante que não
+  existem lá saem como a mais próxima (álcool com ou sem congelamento, em água e
+  branco, como `FILTRO_EM_ALCOOL_COM_REFRIGERACAO` ou `..._SEM_REFRIGERACAO`) ou
+  `OUTRO` (Longmire, Sílica, álcool em plâncton).
+- `Conservante` é a última coluna, para não mudar a posição das outras. Foi
+  acrescentada em 12/11/2026 como `Preservante` (versão 1.1 do contrato com o
+  Biolog) e virou `Conservante` em 13/11/2026 (versão 1.2): o nome exato que a
+  equipe escolheu (`Longmire`, `Sílica`, `Álcool com congelamento`, ou o que foi
+  escrito em "Outro"). Enquanto o Biolog não a lê, o conservante também vai no fim
+  da `Especificação` (`eDNA; conservante: Longmire`) quando a coluna `Tipo de
+  Conservação` não diz o mesmo.
 
 ### Como o Yva'e gera a planilha
 
@@ -328,7 +384,7 @@ Como cada coluna é preenchida:
   elas, o nome da equipe.
 - `Ponto de Coleta`: o ponto como está no código (`0136`).
 - `Volume Filtrado (mL)`: só para quantidade em mL. Massa e litros (solo, tecido,
-  ar) vão no começo da `Especificação` (`50 g; Margem`).
+  ar, plâncton) vão no começo da `Especificação` (`50 g; Margem`, `1000 L`).
 - `Profundidade (m)`: só nos tipos que têm profundidade. `0` é superfície.
 - Colunas fixas de parâmetro (`Temp Ar (°C)`, `pH`…): a medição que vale para a
   amostra. Havendo mais de uma, fica a mais rasa.

@@ -6,7 +6,6 @@
 import { type FieldSample, type SampleCodeConflict, type SampleInput } from "@/lib/field-samples";
 import { conservationTypes, isSampleTypeId } from "@/lib/field-standard";
 import { isTransientStatus } from "@/lib/field-diary";
-import { rememberLastSamplePackaging } from "@/lib/last-sample-packaging";
 
 const REQUEST_TIMEOUT_MS = 20000;
 
@@ -116,13 +115,7 @@ export async function saveSamplesOfSavedEntry(
     return null;
   }
 
-  const result = await saveEntrySamples(entryId, change);
-
-  if (result.ok) {
-    rememberLastSamplePackaging(change.samples);
-  }
-
-  return result;
+  return saveEntrySamples(entryId, change);
 }
 
 /** Aviso do formulário quando o registro foi salvo e as amostras não. */

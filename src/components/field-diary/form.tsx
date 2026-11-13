@@ -15,6 +15,7 @@ import { SamplesPanel } from "@/components/field-diary/samples-panel";
 import { useCollectionDefaults } from "@/components/field-diary/use-collection-defaults";
 import { useEntryReadings } from "@/components/field-diary/use-entry-readings";
 import { useEntrySamples } from "@/components/field-diary/use-entry-samples";
+import { usePlannedPoints } from "@/components/field-diary/use-planned-points";
 import {
   findFieldDiaryPointOption,
   normalizeFieldDiaryPointKey,
@@ -25,8 +26,10 @@ import {
   buildPositionCapture,
   buildTimeCapture,
   collectionRestartWarning,
+  RELOCATION_WARNING_DISTANCE_M,
   describeCoordinateSource,
   formatCollectionStart,
+  formatDistance,
   localIsoDate,
   plannedPatchForPointChange,
 } from "@/lib/collection-capture";
@@ -34,6 +37,12 @@ import { readDeviceGps } from "@/lib/device-gps";
 import type { CollectedChange, FieldRecordSaveOutcome } from "@/lib/field-collection-client";
 import type { FieldOutboxRecord } from "@/lib/field-outbox";
 import { isDevicePhotoUrl, keepPhotoOnDevice, uploadFieldPhoto } from "@/lib/field-photo-upload";
+import {
+  decideNearestPoint,
+  nearestPointLabel,
+  plannedCoordinateFromList,
+  type CampaignPlannedPoint,
+} from "@/lib/nearest-point";
 import {
   fetchPlannedCoordinate,
   plannedCoordinateKey,
@@ -194,8 +203,13 @@ export function FieldDiaryForm({
       : fieldDiaryPointOptions;
   }, [entry.municipality, fieldDiaryPointOptions]);
 
-  // Coordenada planejada do ponto: consultada uma vez por ponto e campanha. A lista
-  // de pontos do formulário não traz coordenadas.
+  // Pontos com a coordenada planejada (guardados no aparelho, para funcionar sem
+  // sinal): dizem qual ponto está mais perto do celular. A lista de pontos do
+  // formulário não traz coordenadas.
+  const loadPlannedPoints = usePlannedPoints();
+
+  // Coordenada planejada do ponto: consultada uma vez por ponto e campanha, primeiro
+  // na lista guardada e, sem ela, na nuvem.
   const plannedCacheRef = useRef(new Map<string, Promise<PlannedCoordinate | null>>());
 
   function plannedFor(target: PlannedCoordinateTarget) {
@@ -206,7 +220,9 @@ export function FieldDiaryForm({
       return cached;
     }
 
-    const pending = fetchPlannedCoordinate(target).then((planned) => {
+    const pending = loadPlannedPoints()
+      .then((points) => plannedCoordinateFromList(points, target) ?? fetchPlannedCoordinate(target))
+      .then((planned) => {
       // Sem resposta, a próxima captura consulta de novo.
       if (!planned) {
         plannedCacheRef.current.delete(key);
@@ -225,6 +241,11 @@ export function FieldDiaryForm({
     const cleared = plannedPatchForPointChange(latestEntryRef.current.coordinateSource, null);
 
     update({ ...next, ...(cleared ?? {}) });
+
+    // O aviso de distância e a sugestão de ponto eram do ponto anterior.
+    setCaptureFeedback((current) =>
+      current ? { ...current, farFromPlanned: null, nearestSuggestion: null } : current,
+    );
 
     if (cleared) {
       setCaptureFeedback({
@@ -256,10 +277,37 @@ export function FieldDiaryForm({
 
   async function capturePosition() {
     setIsLocating(true);
-    const [reading] = await Promise.all([readDeviceGps(), plannedFor(latestEntryRef.current)]);
+    const [reading, plannedPoints] = await Promise.all([
+      readDeviceGps(),
+      loadPlannedPoints(),
+      plannedFor(latestEntryRef.current),
+    ]);
 
     if (!isMountedRef.current) {
       return null;
+    }
+
+    // Como no IAGEN: com a posição do celular, o ponto mais próximo entra sozinho
+    // (se nenhum foi escolhido) ou é sugerido (se o escolhido está longe).
+    const pointNotices: string[] = [];
+    let nearestSuggestion: CaptureFeedback["nearestSuggestion"] = null;
+
+    if (reading.gps) {
+      const decision = decideNearestPoint({ points: plannedPoints, gps: reading.gps, entry: latestEntryRef.current });
+
+      if (decision.kind === "select") {
+        applyPlannedPoint(decision.nearest.point);
+        pointNotices.push(
+          `Ponto escolhido pelo GPS: ${nearestPointLabel(decision.nearest.point)}, a ` +
+            `${formatDistance(decision.nearest.distanceM)} do celular. Se não for este, escolha outro na lista.`,
+        );
+      } else if (decision.kind === "suggest") {
+        nearestSuggestion = {
+          point: decision.nearest.point,
+          label: nearestPointLabel(decision.nearest.point),
+          distanceM: decision.nearest.distanceM,
+        };
+      }
     }
 
     // A pessoa pode ter trocado o ponto enquanto o GPS respondia: vale o de agora.
@@ -279,7 +327,34 @@ export function FieldDiaryForm({
 
     update(position.patch);
     setIsLocating(false);
-    return position;
+    return { ...position, notices: [...pointNotices, ...position.notices], nearestSuggestion };
+  }
+
+  /** Põe no registro um ponto da lista com coordenada (o mais próximo do celular). */
+  function applyPlannedPoint(point: CampaignPlannedPoint) {
+    update({ sia: point.sia, locationName: point.locationName, municipality: point.municipality });
+    void plannedFor(latestEntryRef.current);
+  }
+
+  /** Botão "Usar este ponto" da sugestão. */
+  function acceptNearestSuggestion() {
+    const suggestion = captureFeedback?.nearestSuggestion;
+
+    if (!suggestion) {
+      return;
+    }
+
+    applyPlannedPoint(suggestion.point);
+
+    const accuracyM = Number(latestEntryRef.current.gpsAccuracyM) || 0;
+    const isFar = suggestion.distanceM - accuracyM > RELOCATION_WARNING_DISTANCE_M;
+
+    setCaptureFeedback({
+      notices: [`Ponto trocado para ${suggestion.label}, a ${formatDistance(suggestion.distanceM)} do celular.`],
+      farFromPlanned: isFar ? { distanceM: suggestion.distanceM } : null,
+      needsCoordinateCheck: captureFeedback?.needsCoordinateCheck ?? false,
+      nearestSuggestion: null,
+    });
   }
 
   async function startCollection() {
@@ -591,6 +666,7 @@ export function FieldDiaryForm({
               canMarkRelocated={executionStatus !== "relocated"}
               onStart={() => void startCollection()}
               onReadPosition={() => void readPositionAgain()}
+              onUseNearest={acceptNearestSuggestion}
               onMarkRelocated={markRelocated}
             />
           </div>

@@ -1,14 +1,17 @@
 "use client";
 
-import { LocateFixed, RefreshCw, TriangleAlert } from "lucide-react";
+import { LocateFixed, MapPin, RefreshCw, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { formatDistance } from "@/lib/collection-capture";
+import type { CampaignPlannedPoint } from "@/lib/nearest-point";
 
-/** O que mostrar depois de uma captura (ver lib/collection-capture). */
+/** O que mostrar depois de uma captura (ver lib/collection-capture e lib/nearest-point). */
 export type CaptureFeedback = {
   notices: string[];
   farFromPlanned: { distanceM: number } | null;
   needsCoordinateCheck: boolean;
+  /** Ponto da campanha mais próximo do celular, quando não é o escolhido. */
+  nearestSuggestion?: { point: CampaignPlannedPoint; label: string; distanceM: number } | null;
 };
 
 /**
@@ -23,6 +26,7 @@ export function CollectionStartPanel({
   canMarkRelocated,
   onStart,
   onReadPosition,
+  onUseNearest,
   onMarkRelocated,
 }: {
   isLocating: boolean;
@@ -34,6 +38,8 @@ export function CollectionStartPanel({
   canMarkRelocated: boolean;
   onStart: () => void;
   onReadPosition: () => void;
+  /** Troca o ponto do registro pelo mais próximo do celular. */
+  onUseNearest: () => void;
   onMarkRelocated: () => void;
 }) {
   const [overwriteWarning, setOverwriteWarning] = useState("");
@@ -64,7 +70,7 @@ export function CollectionStartPanel({
           <p className="mt-1 text-sm text-[var(--ink-soft)]">
             {startedLabel
               ? `Coleta iniciada em ${startedLabel}.`
-              : "Toque ao chegar no ponto. O aplicativo grava a hora, a data e a posição do celular."}
+              : "Toque ao chegar no ponto. O aplicativo grava a hora, a data e a posição do celular e escolhe o ponto da campanha mais próximo."}
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -126,6 +132,26 @@ export function CollectionStartPanel({
           </ul>
         ) : null}
       </div>
+
+      {feedback?.nearestSuggestion ? (
+        <div className="mt-3 rounded-xl border border-[var(--line-strong)] bg-white p-3">
+          <p className="flex items-start gap-2 text-sm font-semibold text-[var(--brand-navy-strong)]">
+            <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>
+              O ponto da campanha mais próximo do celular é {feedback.nearestSuggestion.label}, a{" "}
+              {formatDistance(feedback.nearestSuggestion.distanceM)}.
+            </span>
+          </p>
+          <button
+            type="button"
+            onClick={onUseNearest}
+            className="mt-3 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[var(--brand-navy-strong)] px-4 text-sm font-bold text-white transition hover:bg-[var(--brand-navy)]"
+          >
+            <MapPin className="h-4 w-4" aria-hidden="true" />
+            Usar este ponto
+          </button>
+        </div>
+      ) : null}
 
       {feedback?.farFromPlanned ? (
         <div role="alert" className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3">

@@ -59,7 +59,7 @@ function draft(overrides: Partial<SampleDraft> = {}): SampleDraft {
 }
 
 describe("amostras propostas pelo padrão da campanha", () => {
-  it("propõe 5 de água e 1 de plâncton, já com os valores do padrão", () => {
+  it("propõe 5 de água, 1 branco e 1 de plâncton, já com 250 mL, Longmire e Criobox", () => {
     const drafts = buildDefaultSampleDrafts(options());
 
     expect(drafts.map((item) => `${item.sampleType}${item.sequence}`)).toEqual([
@@ -68,43 +68,52 @@ describe("amostras propostas pelo padrão da campanha", () => {
       "water3",
       "water4",
       "water5",
+      "blank1",
       "plankton1",
     ]);
     expect(drafts[0]).toMatchObject({
       depthM: "0",
-      quantity: "1000",
-      conservation: "FILTRO_CONGELADO",
-      packaging: "Isopor com gelo",
+      quantity: "250",
+      conservation: "LONGMIRE",
+      packaging: "Criobox",
       specification: "eDNA",
       preservative: "",
       savedCode: "",
     });
-    expect(describeDefaultSamples(buildProjectCollectionDefaults())).toBe("5 de Água e 1 de Plâncton");
-    expect(describeSampleCounts(drafts)).toBe("5 de Água e 1 de Plâncton");
+    expect(drafts.find((item) => item.sampleType === "blank")).toMatchObject({
+      depthM: "",
+      quantity: "250",
+      conservation: "LONGMIRE",
+      specification: "Controle negativo",
+    });
+    expect(drafts.find((item) => item.sampleType === "plankton")).toMatchObject({ quantity: "1000", packaging: "Criobox" });
+    expect(describeDefaultSamples(buildProjectCollectionDefaults())).toBe("5 de Água, 1 de Branco e 1 de Plâncton");
+    expect(describeSampleCounts(drafts)).toBe("5 de Água, 1 de Branco e 1 de Plâncton");
   });
 
-  it("preservante: o último usado no aparelho, senão o da campanha", () => {
+  it("o branco ganha código BR1, e as réplicas de água continuam AG1 a AG5", () => {
+    const codes = buildDefaultSampleDrafts(options()).map((item) => sampleCodeOf(item, context).code);
+
+    expect(codes).toContain("YVA-0136-071126-0905-AG5");
+    expect(codes).toContain("YVA-0136-071126-0905-BR1");
+    expect(codes).not.toContain("YVA-0136-071126-0905-AG6");
+  });
+
+  it("conservante “Outro” do padrão da campanha traz o texto; as outras opções, não", () => {
     const defaults = buildProjectCollectionDefaults();
-    defaults.sampleTypes.water.preservative = "Longmire";
+    defaults.sampleTypes.water = { ...defaults.sampleTypes.water, conservation: "OUTRO", preservative: "RNAlater" };
+    defaults.sampleTypes.plankton = { ...defaults.sampleTypes.plankton, preservative: "sobra antiga" };
 
-    const fromCampaign = buildDefaultSampleDrafts(options({ defaults }));
-    const fromDevice = buildDefaultSampleDrafts(options({ defaults, lastPreservative: { water: "Álcool 96%" } }));
+    const drafts = buildDefaultSampleDrafts(options({ defaults }));
 
-    expect(fromCampaign.find((item) => item.sampleType === "water")?.preservative).toBe("Longmire");
-    expect(fromCampaign.find((item) => item.sampleType === "plankton")?.preservative).toBe("");
-    expect(fromDevice.find((item) => item.sampleType === "water")?.preservative).toBe("Álcool 96%");
-  });
-
-  it("usa o último acondicionamento do aparelho no lugar do padrão da campanha", () => {
-    const drafts = buildDefaultSampleDrafts(options({ lastPackaging: { water: "Caixa térmica 2" } }));
-
-    expect(drafts.filter((item) => item.sampleType === "water").every((item) => item.packaging === "Caixa térmica 2")).toBe(true);
-    expect(drafts.find((item) => item.sampleType === "plankton")?.packaging).toBe("Isopor com gelo");
+    expect(drafts.find((item) => item.sampleType === "water")).toMatchObject({ conservation: "OUTRO", preservative: "RNAlater" });
+    expect(drafts.find((item) => item.sampleType === "plankton")).toMatchObject({ conservation: "LONGMIRE", preservative: "" });
   });
 
   it("não propõe nada quando a campanha zera as réplicas", () => {
     const defaults = buildProjectCollectionDefaults();
     defaults.sampleTypes.water.replicas = 0;
+    defaults.sampleTypes.blank.replicas = 0;
     defaults.sampleTypes.plankton.replicas = 0;
 
     expect(buildDefaultSampleDrafts(options({ defaults }))).toEqual([]);
@@ -134,7 +143,7 @@ describe("+ Amostra", () => {
   it("primeira amostra de um tipo vem do padrão da campanha", () => {
     const next = addSampleDraft([draft()], "tissue", options());
 
-    expect(next[1]).toMatchObject({ sampleType: "tissue", sequence: 1, depthM: "", conservation: "OUTRO" });
+    expect(next[1]).toMatchObject({ sampleType: "tissue", sequence: 1, depthM: "", conservation: "LONGMIRE" });
   });
 
   it("numera pelo maior número do tipo, e não pela quantidade", () => {
@@ -268,6 +277,22 @@ describe("conferência antes de gravar", () => {
     expect(drafts.map((item) => item.id)).toEqual(["w1", "w2", "p"]);
     expect(drafts[1]).toMatchObject({ depthM: "0,5", quantity: "1000", savedCode: "YVA-0136-071126-0905-AG2" });
     expect(drafts[2]).toMatchObject({ depthM: "", savedCode: "YVA-0136-071126-0905-PL1" });
+  });
+
+  it("plâncton gravado em mL até a 2.0.8 volta em L, e o plâncton novo é gravado em L", () => {
+    const old: FieldSample = {
+      ...sampleDraftsToInputs([draft({ sampleType: "plankton", quantity: "500" })], context)[0],
+      quantityUnit: "mL",
+      id: "p",
+      entryId: "e",
+      projectCode: "YVA",
+    };
+
+    expect(samplesToDrafts([old])[0].quantity).toBe("0,5");
+    expect(sampleDraftsToInputs([draft({ sampleType: "plankton", quantity: "1000" })], context)[0]).toMatchObject({
+      quantity: 1000,
+      quantityUnit: "L",
+    });
   });
 
   it("amostras guardadas no aparelho voltam ao formulário como novas, menos o código antigo", () => {
@@ -497,16 +522,38 @@ describe("campos de texto antigos do registro", () => {
 });
 
 describe("resumo de uma amostra em uma linha", () => {
-  it("diz superfície, quantidade com unidade, conservação, preservante, acondicionamento e posição", () => {
+  it("diz superfície, quantidade com unidade, conservante, armazenamento e posição", () => {
     expect(describeSampleDraft(draft({ boxPosition: "A3" }))).toBe(
       "Superfície · 1000 mL · Filtro congelado · Isopor com gelo · eDNA · Posição A3",
     );
+    expect(describeSampleDraft(draft({ conservation: "LONGMIRE", packaging: "Criobox", quantity: "250" }))).toBe(
+      "Superfície · 250 mL · Longmire · Criobox · eDNA",
+    );
+    expect(describeSampleDraft(draft({ conservation: "OUTRO", preservative: " RNAlater " }))).toBe(
+      "Superfície · 1000 mL · RNAlater · Isopor com gelo · eDNA",
+    );
+    // Amostra gravada até a 2.0.8, com preservante à parte.
     expect(describeSampleDraft(draft({ preservative: " Longmire " }))).toBe(
-      "Superfície · 1000 mL · Filtro congelado · Preservante Longmire · Isopor com gelo · eDNA",
+      "Superfície · 1000 mL · Filtro congelado (Longmire) · Isopor com gelo · eDNA",
     );
     expect(describeSampleDraft(draft({ depthM: "2,5", specification: "", packaging: "" }))).toBe(
       "2,5 m de profundidade · 1000 mL · Filtro congelado",
     );
+  });
+
+  it("usa a unidade gravada na amostra (plâncton antigo em mL)", () => {
+    expect(
+      describeSampleDetails({
+        sampleType: "plankton",
+        depthM: 0,
+        quantity: 500,
+        quantityUnit: "mL",
+        conservation: "LONGMIRE",
+        packaging: "",
+        specification: "",
+        boxPosition: "",
+      }),
+    ).toBe("Superfície · 500 mL · Longmire");
   });
 
   it("omite o que não foi informado, a conservação “Outro” e a profundidade de quem não tem", () => {

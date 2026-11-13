@@ -8,7 +8,7 @@ import { numberToInput } from "@/lib/field-samples";
 import {
   FIELD_PARAMETER_LABEL_MAX_LENGTH,
   FIELD_PARAMETER_UNIT_MAX_LENGTH,
-  sampleTypes,
+  parameterSampleTypes,
   type SampleTypeId,
 } from "@/lib/field-standard";
 
@@ -138,7 +138,7 @@ export function ParameterForm({
       <fieldset className="mt-3">
         <legend className="type-label text-slate-500">Medido em amostras de</legend>
         <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-          {sampleTypes.map((type) => (
+          {parameterSampleTypes.map((type) => (
             <label key={type.id} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[var(--brand-navy-strong)]">
               <input
                 type="checkbox"

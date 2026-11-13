@@ -32,7 +32,6 @@ import {
   type SamplesSaveResult,
 } from "@/lib/field-samples-client";
 import type { SampleTypeId } from "@/lib/field-standard";
-import { readLastSamplePackaging, readLastSamplePreservative } from "@/lib/last-sample-packaging";
 
 /** O que o código das amostras usa do registro que está no formulário. */
 type EntryForSamples = {
@@ -163,8 +162,6 @@ export function useEntrySamples({
   function factoryOptions() {
     return {
       defaults: defaultsRef.current,
-      lastPackaging: readLastSamplePackaging(),
-      lastPreservative: readLastSamplePreservative(),
       newId: () => crypto.randomUUID(),
     };
   }

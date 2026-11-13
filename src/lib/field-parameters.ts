@@ -17,7 +17,7 @@ import {
   baseFieldParameters,
   getSampleType,
   isSampleTypeId,
-  sampleTypeIds,
+  parameterSampleTypeIds,
   type FieldParameterDefinition,
   type SampleTypeId,
 } from "@/lib/field-standard";
@@ -188,9 +188,10 @@ export function normalizeParameterInput(
     return { ok: false, error: "Na faixa esperada, o máximo deve ser maior que o mínimo." };
   }
 
+  // O branco (controle negativo) não tem parâmetro medido.
   const appliesTo = Array.isArray(value.appliesTo)
-    ? sampleTypeIds.filter((type) => (value.appliesTo as unknown[]).includes(type))
-    : [...sampleTypeIds];
+    ? parameterSampleTypeIds.filter((type) => (value.appliesTo as unknown[]).includes(type))
+    : [...parameterSampleTypeIds];
 
   if (!appliesTo.length) {
     return { ok: false, error: "Marque pelo menos um tipo de amostra em que o parâmetro é medido." };

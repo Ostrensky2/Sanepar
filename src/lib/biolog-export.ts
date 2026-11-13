@@ -19,6 +19,8 @@ import {
 } from "@/lib/field-parameters";
 import { sortSamples, type FieldSample } from "@/lib/field-samples";
 import {
+  biologConservation,
+  conservationText,
   getSampleType,
   isLegacySampleCode,
   parseSampleCode,
@@ -58,10 +60,11 @@ export const BIOLOG_SAMPLE_COLUMNS = [
   "Local Armazenamento",
   "Posição",
   "Observações",
-  // Acrescentada em 12/11/2026 (versão 1.1 do contrato com o Biolog): preservante da
-  // amostra, texto livre (Longmire, álcool, sílica…). Vai também em "Especificação",
-  // para não se perder enquanto o Biolog não lê esta coluna.
-  "Preservante",
+  // Acrescentada em 12/11/2026 (versão 1.1 do contrato com o Biolog) como
+  // "Preservante"; desde 13/11/2026 (versão 1.2) é o conservante da amostra, como a
+  // equipe escolheu (Longmire, Sílica, Álcool com congelamento…). Vai também em
+  // "Especificação", para não se perder enquanto o Biolog não lê esta coluna.
+  "Conservante",
 ] as const;
 
 /** Cabeçalhos da aba "Parâmetros": formato longo, uma linha por medição de cada amostra. */
@@ -269,9 +272,15 @@ function buildSampleRow(
   const longitude = parseCoordinate(entry.longitude, "longitude");
   const hasCoordinates = latitude.status === "valid" && longitude.status === "valid";
   const isMillilitres = sample.quantityUnit === "mL";
-  // Quantidade que não é em mL (massa de solo, litros de ar) vai junto da especificação.
+  // Quantidade que não é em mL (massa de solo, litros de ar ou de plâncton) vai junto da especificação.
   const quantityText =
     sample.quantity !== null && !isMillilitres ? `${decimal(sample.quantity)} ${sample.quantityUnit}`.trim() : "";
+  const conservante = conservationText(sample.conservation, sample.preservative);
+  // Na Especificação, só quando a coluna "Tipo de Conservação" não diz o mesmo.
+  const conservanteInSpecification =
+    conservante && (biologConservation(sample.conservation, sample.sampleType) !== sample.conservation || sample.preservative)
+      ? `conservante: ${conservante}`
+      : "";
 
   const cells: Record<BiologSampleColumn, BiologCell> = {
     "Lab Destino": defaults.destinationLab,
@@ -280,10 +289,16 @@ function buildSampleRow(
     "Nome da Campanha": entry.campaignName,
     Coletores: collectorsOf(entry),
     "Categoria da Amostra": type.exportValue,
-    // Para água, a matriz da campanha; para os outros tipos, o próprio tipo.
-    "Origem da Amostra": sample.sampleType === "water" ? defaults.waterMatrix : type.exportValue,
-    Objetivo: defaults.objective,
-    "Tipo de Conservação": sample.conservation,
+    // Para água, a matriz da campanha; o branco é água ultrapura; os outros tipos, o próprio tipo.
+    "Origem da Amostra":
+      sample.sampleType === "water"
+        ? defaults.waterMatrix
+        : sample.sampleType === "blank"
+          ? "AGUA_ULTRAPURA"
+          : type.exportValue,
+    // O branco é controle negativo, qualquer que seja o objetivo da campanha.
+    Objetivo: type.isControl ? "CONTROLE" : defaults.objective,
+    "Tipo de Conservação": biologConservation(sample.conservation, sample.sampleType),
     "Código de Campo": sample.code,
     "Ponto de Coleta": pointOf(entry, sample),
     "Data da Coleta": formatDate(entry.entryDate),
@@ -292,7 +307,7 @@ function buildSampleRow(
     Longitude: hasCoordinates ? longitude.value : null,
     "Profundidade (m)": type.usesDepth ? sample.depthM : null,
     "Volume Filtrado (mL)": isMillilitres ? sample.quantity : null,
-    Especificação: [quantityText, sample.specification, sample.preservative ? `preservante: ${sample.preservative}` : ""]
+    Especificação: [quantityText, sample.specification, conservanteInSpecification]
       .filter(Boolean)
       .join("; "),
     "Temp Ar (°C)": null,
@@ -305,7 +320,7 @@ function buildSampleRow(
     "Local Armazenamento": sample.packaging,
     Posição: sample.boxPosition,
     Observações: observationsOf(entry),
-    Preservante: sample.preservative || null,
+    Conservante: conservante || null,
   };
 
   // Os parâmetros que o Biolog já conhece também vão nas colunas fixas. Havendo mais
