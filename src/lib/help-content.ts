@@ -62,7 +62,7 @@ export const teamRules: TeamRule[] = [
     steps: [
       "Toque em “Iniciar coleta” ao chegar no ponto: o app grava a hora, a data e o GPS. Sem ponto, data e hora não há código.",
       "Se corrigir o ponto, a data ou a hora depois de escrever a etiqueta, o código muda e o app mostra qual era o gravado: refaça a etiqueta.",
-      "Depois que a amostra sai na planilha para o Biolog, o código não muda mais. Amostras gravadas antes de 13/11/2026 ficam com o código antigo, sem a hora (ex.: YVA-071126-0136-AG1).",
+      "Depois que a amostra sai na planilha para o Biolog, o código não muda mais. Amostras gravadas antes da versão 2.0.7 (13/11/2026) ficam com o código antigo, sem a hora (ex.: YVA-071126-0136-AG1).",
     ],
     modules: ["Diário de campo", "Campanhas e resultados"],
   },
