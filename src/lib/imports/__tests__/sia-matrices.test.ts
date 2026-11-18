@@ -21,6 +21,22 @@ async function file(name = "16S_C1_familias.xlsx", formula = false) {
 }
 
 describe("preparação local das matrizes SIA", () => {
+  it("prévia e download partilham abas e valores, com limite apenas na prévia", async () => {
+    const pkg = await readMatrixPackage([await file()]);
+    const matrix = pkg.sources[0].matrix;
+    matrix.headers = Array.from({ length: 18 }, (_, i) => `Táxon ${i}`);
+    matrix.rows = Array.from({ length: 27 }, (_, i) => ({ sia: `SIA-${String(i + 1).padStart(4, "0")}`, values: matrix.headers.map((_, c) => i * c) }));
+    const output = await buildCampaignMatrixWorkbook(pkg, snapshot(), 1);
+    const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(output.bytes);
+    expect(output.preview.map((s) => s.name)).toEqual(workbook.worksheets.map((s) => s.name));
+    for (const sheet of output.preview) {
+      const actual = workbook.getWorksheet(sheet.name)!;
+      expect([sheet.rowCount, sheet.columnCount]).toEqual([actual.rowCount, actual.columnCount]);
+      expect(sheet.rows).toEqual(Array.from({ length: Math.min(21, actual.rowCount) }, (_, r) =>
+        Array.from({ length: Math.min(12, actual.columnCount) }, (_, c) => actual.getCell(r + 1, c + 1).text)));
+    }
+    expect(workbook.getWorksheet("16S familias")!.getCell(28, 21).value).toBe(26 * 17);
+  });
   it("transporta limitação e status de referências vazias para Pendências", async () => {
     const pkg = await readMatrixPackage([await file()]);
     const result = await buildCampaignMatrixWorkbook(pkg, snapshot(), 1, undefined, [], { status: "campaign_absent_in_available_sources", source: "Fonte histórica", limitation: "Não confirma completude atual da nuvem." });

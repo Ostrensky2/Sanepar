@@ -331,5 +331,10 @@ export async function buildCampaignMatrixWorkbook(pkg: MatrixPackage, snapshot: 
   pkg.notes.forEach((note) => note.split(/\r?\n/).forEach((line) => notes.addRow([matrixText(line)])));
   progress(`Serializando XLSX C${campaign}…`); await pause();
   const bytes = await workbook.xlsx.writeBuffer();
-  return { bytes, filename: `matrizes-SIA-C${campaign}-${new Date().toISOString().slice(0, 10)}.xlsx`, points: allSias.length, unresolved: allSias.filter((sia) => !resolveMatrixCollection(snapshot, campaign, sia).entry).length };
+  const preview = workbook.worksheets.map((sheet) => ({
+    name: sheet.name, rowCount: sheet.rowCount, columnCount: sheet.columnCount,
+    rows: Array.from({ length: Math.min(21, sheet.rowCount) }, (_, r) =>
+      Array.from({ length: Math.min(12, sheet.columnCount) }, (_, c) => sheet.getRow(r + 1).getCell(c + 1).text)),
+  }));
+  return { bytes, preview, filename: `matrizes-SIA-C${campaign}-${new Date().toISOString().slice(0, 10)}.xlsx`, points: allSias.length, unresolved: allSias.filter((sia) => !resolveMatrixCollection(snapshot, campaign, sia).entry).length };
 }

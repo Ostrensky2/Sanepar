@@ -25,6 +25,58 @@ function processMatrices<T>(kind: "parse" | "export", args: unknown[], progress:
   });
 }
 
+async function diary(signal?: AbortSignal) {
+  const timeout = AbortSignal.timeout(30000);
+  const response = await fetch("/api/field-diary", { method: "GET", cache: "no-store", signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+  if (!response.ok) throw new Error("Diário indisponível ou sessão expirada. Nenhum vínculo presumido.");
+  const snapshot = await response.json() as DiarySnapshot;
+  if (!Array.isArray(snapshot.entries)) throw new Error("Resposta do Diário inválida.");
+  return snapshot;
+}
+
+type WorkFile = Omit<Awaited<ReturnType<typeof import("@/lib/imports/sia-matrices").buildCampaignMatrixWorkbook>>, "bytes"> & { bytes: ArrayBuffer };
+
+function CampaignWorkbook({ data, campaign }: { data: MatrixPackage; campaign: number }) {
+  const [file, setFile] = useState<WorkFile | null>(null);
+  const [index, setIndex] = useState(0);
+  const [attempt, setAttempt] = useState(0);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const controller = new AbortController(), signal = controller.signal;
+    async function build() {
+      const snapshot = await diary(signal);
+      const response = await fetch(`/api/imports/sia-matrices?campaign=${campaign}&references=1`, { cache: "no-store", signal: AbortSignal.any([signal, AbortSignal.timeout(30000)]) });
+      if (!response.ok) throw new Error("Referências de coordenadas indisponíveis.");
+      const { references, status, source, limitation } = await response.json();
+      const result = await processMatrices<WorkFile>("export", [data, snapshot, campaign, undefined, references, { status, source, limitation }], () => {}, signal);
+      if (!signal.aborted) setFile(result);
+    }
+    void build().catch((reason) => { if (!signal.aborted) setError(reason instanceof Error ? reason.message : "Planilha indisponível."); });
+    return () => controller.abort();
+  }, [data, campaign, attempt]);
+  function download() {
+    if (!file) return;
+    const url = URL.createObjectURL(new Blob([new Uint8Array(file.bytes)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    const anchor = document.createElement("a"); anchor.href = url; anchor.download = file.filename; anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+  const sheet = file?.preview[index];
+  return <div className="min-w-0 space-y-3">
+    <button type="button" className={control} disabled={!file} onClick={download}>Baixar planilha (.xlsx)</button>
+    {error ? <div role="alert">{error} <button className={control} type="button" onClick={() => { setError(""); setAttempt(attempt + 1); }}>Tentar novamente</button></div> : !file && <p role="status">Montando a planilha da C{campaign}…</p>}
+    {sheet && file && <>
+      <label className="flex flex-col gap-1 text-sm">Aba da prévia<select aria-label="Aba da prévia" className={control} value={index} onChange={(e) => setIndex(Number(e.target.value))}>{file.preview.map((s, i) => <option key={s.name} value={i}>{s.name}</option>)}</select></label>
+      <p className="type-metadata">C{campaign} · {sheet.name}: {sheet.rows.length - 1} de {sheet.rowCount - 1} linhas e {sheet.rows[0].length} de {sheet.columnCount} colunas. O download inclui todas as abas, linhas e colunas.</p>
+      <div tabIndex={0} role="region" aria-label={`Prévia de ${sheet.name}`} className="max-h-96 max-w-full overflow-auto rounded border">
+        <table className="w-full text-left text-sm"><caption className="sr-only">{sheet.name} · C{campaign}</caption>
+          <thead><tr>{sheet.rows[0].map((v, c) => <th scope="col" key={c} className="p-2 align-top">{v}</th>)}</tr></thead>
+          <tbody>{sheet.rows.slice(1).map((row, r) => <tr key={r}>{row.map((v, c) => <td key={c} className="border-t p-2 align-top">{v}</td>)}</tr>)}</tbody>
+        </table>
+      </div>
+    </>}
+  </div>;
+}
+
 export function SiaMatricesPreparation({ canImport }: { canImport: boolean }) {
   const processing = useRef<AbortController | null>(null);
   useEffect(() => () => processing.current?.abort(), []);
@@ -67,13 +119,6 @@ export function SiaMatricesPreparation({ canImport }: { canImport: boolean }) {
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Arquivos inválidos."); setFiles([]); }
     finally { setBusy(false); }
   }
-  async function diary() {
-    const response = await fetch("/api/field-diary", { method: "GET", cache: "no-store", signal: AbortSignal.timeout(30000) });
-    if (!response.ok) throw new Error("Diário indisponível ou sessão expirada. Nenhum vínculo presumido.");
-    const snapshot = await response.json() as DiarySnapshot;
-    if (!Array.isArray(snapshot.entries)) throw new Error("Resposta do Diário inválida.");
-    return snapshot;
-  }
   function invalidateReview() { setReview(null); setSelected([]); }
   async function prepare() {
     if (started) return;
@@ -83,23 +128,6 @@ export function SiaMatricesPreparation({ canImport }: { canImport: boolean }) {
       setData(result); setCampaign(result.sources[0]?.campaign ?? null); setMessage(`${result.sources.length} matrizes conferidas. Selecione a campanha para cruzar com o Diário e baixar.`);
       setRuns(Object.fromEntries(result.sources.map((s) => [s.name, /^[a-z0-9][a-z0-9._-]{0,79}$/i.test(s.run) ? s.run.toLowerCase() : ""])));
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível preparar os arquivos."); setMessage(""); }
-    finally { setBusy(false); }
-  }
-  async function download(campaign: number) {
-    if (!data || busy) return;
-    setBusy(true); setError(""); setMessage("Consultando o Diário, sem gravar…");
-    try {
-      const snapshot = await diary();
-      const refResponse = await fetch(`/api/imports/sia-matrices?campaign=${campaign}&references=1`, { cache: "no-store" });
-      if (!refResponse.ok) throw new Error("Referências de coordenadas indisponíveis. Tente novamente sem presumir o par original.");
-      const { references, status, source, limitation } = await refResponse.json();
-      const result = await processMatrices<{ bytes: ArrayBuffer; filename: string; points: number; unresolved: number }>("export", [data, snapshot, campaign, undefined, references, { status, source, limitation }], setMessage, processingSignal());
-      const bytes = new Uint8Array(result.bytes);
-      const url = URL.createObjectURL(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-      const anchor = document.createElement("a"); anchor.href = url; anchor.download = result.filename; anchor.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-      setMessage(`C${campaign}: ${result.points} SIAs exportados; ${result.unresolved} sem vínculo único confirmado (consulte Pendências). Nada foi salvo na nuvem.`);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Download indisponível."); setMessage(""); }
     finally { setBusy(false); }
   }
   async function compare(subset = false) {
@@ -157,15 +185,16 @@ export function SiaMatricesPreparation({ canImport }: { canImport: boolean }) {
       </details>}
       <button type="button" className={control} disabled={!files.length} onClick={() => void prepare()}>Conferir matrizes localmente</button>
     </fieldset>
-    {(data || archiveCampaigns.length > 0) && <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end">
+    {(data || archiveCampaigns.length > 0) && <section aria-label="Planilha de trabalho" className="min-w-0 space-y-3">
+      <h3 className="type-section-title">Planilha de trabalho</h3>
       <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">Campanha disponível
         <select aria-label="Campanha disponível" className={control} value={campaign ?? ""} disabled={busy || started} onChange={(event) => { setCampaign(Number(event.target.value)); setExcludedSias([]); invalidateReview(); setArchiveCount(null); }}>
           {[...new Set([...(data?.sources.map((source) => source.campaign) ?? []), ...archiveCampaigns])].sort((a, b) => a - b).map((number) => <option key={number} value={number}>{resolveCanonicalCampaign(number)?.name}</option>)}
         </select>
       </label>
-      <button type="button" className={control} disabled={!canImport || busy || campaign === null || !data?.sources.some((source) => source.campaign === campaign)} onClick={() => campaign !== null && void download(campaign)}>Baixar planilha (.xlsx)</button>
+      {canImport && data && campaign !== null && data.sources.some((source) => source.campaign === campaign) && <CampaignWorkbook key={JSON.stringify([campaign, data.sources.map((s) => s.hash)])} data={data} campaign={campaign} />}
       {archiveCampaigns.includes(campaign ?? 0) && <button type="button" className={control} disabled={busy} onClick={() => void inspectArchive()}>Carregar acervo</button>}
-    </div>}
+    </section>}
     {data && <details className="space-y-3"><summary className="min-h-11 cursor-pointer py-3">Acervo compartilhado</summary>
       <fieldset disabled={busy || !canImport || started} className="space-y-2"><legend className="text-sm">Corridas estáveis da campanha</legend>
         {data.sources.filter((s) => s.campaign === campaign).map((source) => <label key={source.name} className="flex min-w-0 flex-col gap-1 text-sm"><span className="break-words">{source.name}</span><input className={control} value={runs[source.name] ?? ""} placeholder="Corrida confirmada, ex.: miseq-run1" onChange={(event) => { setRuns({ ...runs, [source.name]: event.target.value }); invalidateReview(); }} /></label>)}

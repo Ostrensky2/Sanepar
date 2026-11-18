@@ -63,7 +63,7 @@ export function InstitutionalPartners({
         <div className="brand-logo-shell radius-card border px-3 py-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/brand/sanepar-logo.jpg"
+            src="/brand/sanepar-logo.png"
             alt="Sanepar"
             className={cn("h-auto object-contain", compact ? "w-[92px]" : "w-[122px]")}
           />
