@@ -497,6 +497,21 @@ export const helpModules: HelpModule[] = [
         ],
       },
       {
+        title: "Preparar matrizes por SIA sem publicar",
+        steps: [
+          "Em Planilhas de resultados, use Preparar matrizes por SIA. Selecione o ZIP do laboratório ou os XLSX de famílias/gêneros 16S/COI e clique em Conferir matrizes localmente.",
+          "Limites: 32 arquivos, 32 MiB de entrada e 128 MiB expandidos. A leitura fica no navegador. Arquivos com fórmulas, caminhos inseguros, contagens inválidas ou datasets conflitantes são recusados.",
+          "Escolha uma das campanhas detectadas e clique em Baixar planilha (.xlsx). Trocar a campanha não relê os arquivos. O Diário é consultado sem gravação; se a resposta estiver incompleta, o download de vínculos é bloqueado.",
+          "Confira Pendências no XLSX: coletas ambíguas, ausência de coleta confirmada, datasets ausentes e coletas do Diário sem matriz. Data ou nome do ponto nunca substituem a chave campanha + SIA.",
+          "Famílias, gêneros e plataformas/runs permanecem separados. Zero com biblioteca presente não é biblioteca ausente. Rótulos de candidatas e status regional pendente não são convertidos em espécie confirmada.",
+          "Se o arquivo foi renomeado, abra Identificação dos arquivos e informe campanha, marcador, nível e corrida. O nome do arquivo não é a identidade do dado.",
+          "Em Acervo compartilhado, confirme as corridas e clique em Comparar com acervo. Idênticos não são gravados novamente. Abra cada grupo novo ou alterado para conferir táxon/associação, Antes e Depois; as páginas mostram todo o conteúdo sem somar níveis.",
+          "Desmarque grupos que não quer incorporar e use Revisar seleção / saldo. Todos os lotes são comparados antes da confirmação única. Cada lote contém grupos inteiros, até 32 grupos, 16.000 valores e 4 MB; um grupo individual acima do limite é recusado sem divisão taxonômica. Nada exclui grupos omitidos nem altera o Diário ou a publicação científica.",
+          "Se um lote falhar, os anteriores permanecem salvos. O envio para na primeira falha: os estados são confirmado, verificar e não enviado. Conflito exige nova prévia e confirmação somente do saldo, sem reenviar confirmados. Resposta indeterminada permite repetir o mesmo UUID, conteúdo e digest para obter o recibo; não reconstrua o pedido. Cancelar saldo não desfaz confirmações anteriores. Fechar a página perde a revisão em memória; consulte o acervo antes de preparar outra.",
+          "Em outro navegador, escolha uma campanha disponível e use Carregar acervo. A leitura usa a mesma revisão entre páginas; se mudar durante a consulta, reinicie a leitura. Baixar planilha gera o XLSX da campanha carregada.",
+        ],
+      },
+      {
         title: "Atualizar a fase de uma campanha",
         steps: [
           "Abra Fase e etapas e escolha a campanha.",

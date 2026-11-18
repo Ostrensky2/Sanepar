@@ -32,6 +32,7 @@ import type { ResultsWorkbookPreviewResponse } from "@/lib/imports/results";
 import type { ResultsInventoryResponse } from "@/lib/results-publication-contract";
 import { planCampaignPublicationScope, RESULTS_CONTRACT_VERSION } from "@/modules/results";
 import { ResultsPreparationPanel } from "@/modules/results/components/results-preparation-panel";
+import { SiaMatricesPreparation } from "@/components/sia-matrices-preparation";
 import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
 
 type CampaignScope = "Ordinária" | "Extraordinária";
@@ -382,6 +383,9 @@ export function SpreadsheetRepository() {
 
   return (
     <div className="space-y-4">
+      <SiaMatricesPreparation canImport={canImportSpreadsheets} />
+      <details className="space-y-4 rounded-xl border border-[var(--line-strong)] p-3">
+      <summary className="type-panel-title min-h-11 cursor-pointer py-3">Publicação oficial / fluxo legado</summary>
       {/* Resumo em uma linha: os 4 cartões anteriores repetiam o mesmo número. */}
       <p role="status" className="type-metadata rounded-xl bg-[var(--surface-soft)] px-4 py-2 font-semibold text-[var(--brand-navy-strong)]">
         {resultsInventory
@@ -622,6 +626,7 @@ export function SpreadsheetRepository() {
           ) : null}
         </div>
       </section>
+      </details>
     </div>
   );
 }

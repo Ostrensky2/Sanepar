@@ -5,7 +5,7 @@ import { SectionTabs } from "@/components/section-tabs";
 export default function DadosResultadosPage() {
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Central de dados" title="Planilhas de resultados" description="Publique a planilha laboratorial de cada campanha. A última publicação válida alimenta os Resultados." tabs={<SectionTabs />} />
+      <PageHeader eyebrow="Central de dados" title="Planilhas de resultados" description="Prepare matrizes por campanha e consulte o acervo interno." tabs={<SectionTabs />} />
       <SpreadsheetRepository />
     </div>
   );

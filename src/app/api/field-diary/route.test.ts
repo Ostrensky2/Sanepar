@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   upsert: vi.fn(),
+  select: vi.fn(),
+  read: vi.fn(),
 }));
 
 vi.mock("@/lib/api-auth", () => ({ requireApiSession: mocks.auth }));
@@ -10,9 +12,10 @@ vi.mock("@/lib/supabase", () => ({
   createOptionalSupabaseClient: () => ({
     from: () => {
       const query = {
-        select: () => query,
+        select: (...args: unknown[]) => { mocks.select(...args); return query; },
+        order: () => query,
         eq: () => query,
-        returns: async () => ({ data: [], error: null }),
+        returns: async () => mocks.read(),
         maybeSingle: async () => ({ data: null, error: null }),
         upsert: (row: Record<string, unknown>) => {
           mocks.upsert(row);
@@ -29,7 +32,7 @@ vi.mock("@/lib/supabase", () => ({
   }),
 }));
 
-import { POST, PUT } from "@/app/api/field-diary/route";
+import { GET, POST, PUT } from "@/app/api/field-diary/route";
 
 function entry(overrides: Record<string, unknown> = {}) {
   return {
@@ -64,6 +67,19 @@ describe("API do Diário de campo: regras conferidas antes do banco", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.auth.mockResolvedValue({ ok: true, session: { name: "Teste" } });
+    mocks.read.mockResolvedValue({ data: [], error: null, count: 0 });
+  });
+
+  it.each([null, 3, 2])("GET preserva duplicatas e informa completude, count=%s", async (count) => {
+    const row = { id: "id-a", campaign_id: "campanha-1-verao-2026", campaign_name: "1ª Campanha", sia: "SIA-0011", photos: [] };
+    mocks.read.mockResolvedValue({ data: [row, { ...row, id: "id-b" }], error: null, count });
+    const response = await GET(new Request("https://sanepar.test/api/field-diary"));
+    const value = await response.json();
+    expect(mocks.select).toHaveBeenCalledWith("*", { count: "exact" });
+    expect(value.entries.map((e: { id: string }) => e.id)).toEqual(["id-a", "id-b"]);
+    expect(value.totalCount).toBe(count);
+    expect(value.complete).toBe(count === 2);
+    expect(mocks.upsert).not.toHaveBeenCalled();
   });
 
   it("recusa coordenada inválida com mensagem em português e não grava", async () => {

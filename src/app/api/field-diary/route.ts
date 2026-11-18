@@ -73,9 +73,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ entries: [], persistence: "browser" });
   }
 
-  const { data, error } = await supabase
+  const { data, error, count } = await supabase
     .from("field_diary_entries")
-    .select("*")
+    .select("*", { count: "exact" })
     .order("entry_date", { ascending: false })
     .order("updated_at", { ascending: false })
     .returns<FieldDiaryRow[]>();
@@ -90,6 +90,8 @@ export async function GET(request: Request) {
   return NextResponse.json({
     entries: data.map(fromRow),
     persistence: "cloud",
+    totalCount: count,
+    complete: count !== null && count === data.length,
   });
 }
 
