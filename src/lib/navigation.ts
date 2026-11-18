@@ -181,14 +181,14 @@ export const navigationItems: NavigationItem[] = [
       {
         href: "/dados/resultados",
         label: "Planilhas de resultados",
-        summary: "publicação dos resultados laboratoriais",
+        summary: "preparo das matrizes e planilha de trabalho",
         headerTitle: "Planilhas de resultados",
         icon: FileSpreadsheet,
       },
       {
         href: "/dados/pendencias",
         label: "Pendências",
-        summary: "conflitos de importação a decidir",
+        summary: "conflitos de importação a decidir e fluxo legado de publicação",
         headerTitle: "Pendências de importação",
         icon: AlertTriangle,
       },

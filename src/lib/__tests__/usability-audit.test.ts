@@ -71,7 +71,7 @@ describe("fases da campanha", () => {
 
 describe("assistente de importação", () => {
   it("indica a tela certa pelas abas da planilha", () => {
-    expect(detectImportDestination(["Metadados", "Indices_pontos"])).toMatchObject({ href: "/dados/resultados" });
+    expect(detectImportDestination(["Metadados", "Indices_pontos"])).toMatchObject({ href: "/dados/pendencias#fluxo-legado" });
     expect(detectImportDestination(["Pontos"])).toMatchObject({ href: "/dados/acoes-pontuais" });
     expect(detectImportDestination(["Campanhas"])).toMatchObject({ href: "/dados/diario-de-campo" });
     expect(detectImportDestination(["Plan1"])).toHaveProperty("error");

@@ -94,8 +94,43 @@ function workbookKey(file: File) {
   return `${file.name}:${file.size}:${file.lastModified}`;
 }
 
-export function SpreadsheetRepository() {
+function useSpreadsheetAccess() {
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<UserCategory>("Admin");
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setActiveCategory(normalizeUserCategory(window.localStorage.getItem(ACCESS_CATEGORY_STORAGE_KEY)));
+      setHasLoaded(true);
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, []);
+
+  useEffect(() => {
+    function refreshAccessCategory() {
+      setActiveCategory(normalizeUserCategory(window.localStorage.getItem(ACCESS_CATEGORY_STORAGE_KEY)));
+    }
+
+    window.addEventListener("storage", refreshAccessCategory);
+    window.addEventListener("yvae:access-category-updated", refreshAccessCategory);
+
+    return () => {
+      window.removeEventListener("storage", refreshAccessCategory);
+      window.removeEventListener("yvae:access-category-updated", refreshAccessCategory);
+    };
+  }, []);
+
+  const canImportSpreadsheets = hasLoaded && hasPrivilege(activeCategory, "data.import");
+  return { hasLoaded, canImportSpreadsheets };
+}
+
+export function SpreadsheetRepository() {
+  const { canImportSpreadsheets } = useSpreadsheetAccess();
+  return <SiaMatricesPreparation canImport={canImportSpreadsheets} />;
+}
+
+export function LegacyPublicationFlow() {
+  const { hasLoaded, canImportSpreadsheets } = useSpreadsheetAccess();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -111,7 +146,6 @@ export function SpreadsheetRepository() {
   const resultsPreviewAbortRef = useRef<AbortController | null>(null);
   const stagedUploadRef = useRef<{ key: string; staged: StagedResultsUpload | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [activeCategory, setActiveCategory] = useState<UserCategory>("Admin");
   useEffect(() => () => resultsPreviewAbortRef.current?.abort(), []);
 
   const refreshResultsInventory = useCallback(async (signal?: AbortSignal) => {
@@ -138,30 +172,6 @@ export function SpreadsheetRepository() {
     return () => controller.abort();
   }, [refreshResultsInventory]);
 
-  useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      setActiveCategory(normalizeUserCategory(window.localStorage.getItem(ACCESS_CATEGORY_STORAGE_KEY)));
-      setHasLoaded(true);
-    }, 0);
-
-    return () => window.clearTimeout(timeout);
-  }, []);
-
-  useEffect(() => {
-    function refreshAccessCategory() {
-      setActiveCategory(normalizeUserCategory(window.localStorage.getItem(ACCESS_CATEGORY_STORAGE_KEY)));
-    }
-
-    window.addEventListener("storage", refreshAccessCategory);
-    window.addEventListener("yvae:access-category-updated", refreshAccessCategory);
-
-    return () => {
-      window.removeEventListener("storage", refreshAccessCategory);
-      window.removeEventListener("yvae:access-category-updated", refreshAccessCategory);
-    };
-  }, []);
-
-  const canImportSpreadsheets = hasPrivilege(activeCategory, "data.import");
   const selectedResultPublicationScope = useMemo(() => {
     if (!resultsPreview || !selectedResultCampaigns.length) return null;
     return planCampaignPublicationScope(resultsPreview.currentCampaigns, resultsPreview.campaigns
@@ -383,9 +393,8 @@ export function SpreadsheetRepository() {
 
   return (
     <div className="space-y-4">
-      <SiaMatricesPreparation canImport={canImportSpreadsheets} />
-      <details className="space-y-4 rounded-xl border border-[var(--line-strong)] p-3">
-      <summary className="type-panel-title min-h-11 cursor-pointer py-3">Publicação oficial / fluxo legado</summary>
+      <details id="fluxo-legado" className="space-y-4 rounded-xl border border-[var(--line-strong)] p-3">
+      <summary className="type-panel-title min-h-11 cursor-pointer py-3">Fluxo legado</summary>
       {/* Resumo em uma linha: os 4 cartões anteriores repetiam o mesmo número. */}
       <p role="status" className="type-metadata rounded-xl bg-[var(--surface-soft)] px-4 py-2 font-semibold text-[var(--brand-navy-strong)]">
         {resultsInventory

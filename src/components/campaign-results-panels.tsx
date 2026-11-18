@@ -310,7 +310,7 @@ function ResultsUnavailablePanel({ campaign }: { campaign: CampaignView }) {
         A campanha pode ser acompanhada nas telas de campo e diário de campo. Esta área será liberada após uma publicação válida na Central de dados.
       </p>
       <Link
-        href="/dados/resultados"
+        href="/dados/pendencias#fluxo-legado"
         className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-sm font-bold text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)]"
       >
         Ir para Central de dados

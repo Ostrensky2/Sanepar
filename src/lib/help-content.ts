@@ -120,7 +120,7 @@ export const helpModules: HelpModule[] = [
       },
       {
         issue: "Campanha sem coluna na evolução",
-        action: "Os resultados dessa campanha ainda não foram publicados em Central de dados → Planilhas de resultados.",
+        action: "Os resultados dessa campanha ainda não foram publicados em Central de dados → Pendências → Fluxo legado.",
       },
     ],
     keywords: ["mapa", "inicio", "evolucao", "indice", "painel"],
@@ -188,7 +188,7 @@ export const helpModules: HelpModule[] = [
     troubleshooting: [
       {
         issue: "Aba Resultados sem dados",
-        action: "Publique a planilha da campanha em Central de dados → Planilhas de resultados.",
+        action: "Publique a planilha da campanha em Central de dados → Pendências → Fluxo legado.",
       },
       {
         issue: "Ficha demora a gerar",
@@ -491,7 +491,7 @@ export const helpModules: HelpModule[] = [
       {
         title: "Publicar resultados do laboratório",
         steps: [
-          "Abra Planilhas de resultados e selecione o arquivo.",
+          "Abra Pendências → Fluxo legado e selecione o arquivo.",
           "Confira na prévia as campanhas encontradas e desmarque as que não quer publicar.",
           "Publique. A publicação anterior de cada campanha marcada é substituída por inteiro; as demais ficam como estão.",
         ],
@@ -535,8 +535,8 @@ export const helpModules: HelpModule[] = [
       { label: "Fase e etapas", detail: "Fase, datas e etapas de cada campanha, e os padrões de coleta." },
       { label: "Padrões de coleta", detail: "O que o registro de campo já traz preenchido: amostras sugeridas por ponto, conservante, armazenamento, volume e parâmetros." },
       { label: "Diário de campo", detail: "Registros de campo, um a um ou pela planilha (importador único)." },
-      { label: "Planilhas de resultados", detail: "Prévia e publicação das planilhas do laboratório." },
-      { label: "Pendências", detail: "Conflitos de importação à espera de decisão." },
+      { label: "Planilhas de resultados", detail: "Preparo de matrizes e download da planilha de trabalho por campanha." },
+      { label: "Pendências", detail: "Conflitos de importação à espera de decisão e, em seção separada, fluxo legado de publicação." },
     ],
     notes: [
       "Somente categorias autorizadas podem importar, publicar ou excluir dados.",

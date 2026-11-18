@@ -1,10 +1,25 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { LegacyPublicationFlow, SpreadsheetRepository } from "../spreadsheet-repository";
 import { describe, expect, it } from "vitest";
 
 const source = readFileSync(resolve(process.cwd(), "src/components/spreadsheet-repository.tsx"), "utf8");
 
 describe("results spreadsheet actions contract", () => {
+  it("mantém preparo e publicação separados e o fluxo legado fora da lista de conflitos", () => {
+    const current = renderToStaticMarkup(createElement(SpreadsheetRepository));
+    const legacy = renderToStaticMarkup(createElement(LegacyPublicationFlow));
+    expect(current).toContain("Preparar matrizes por SIA");
+    expect(current).not.toMatch(/Fluxo legado|Publicar campanhas selecionadas/);
+    expect(legacy).toContain("Fluxo legado");
+    expect(legacy).toContain("Publicar campanhas selecionadas");
+    expect(legacy).not.toMatch(/Preparar matrizes por SIA|pendências abertas/);
+    const destination = readFileSync(resolve(process.cwd(), "src/app/(dashboard)/dados/pendencias/page.tsx"), "utf8");
+    expect(destination).toMatch(/<ImportConflictsPageContent \/>\s*<LegacyPublicationFlow \/>/);
+    expect(readFileSync(resolve(process.cwd(), "src/app/(dashboard)/dados/resultados/page.tsx"), "utf8")).not.toContain("LegacyPublicationFlow");
+  });
   it("seleciona todas as campanhas reais da prévia e exige ao menos uma", () => {
     expect(source).toContain('fetch("/api/imports/results/preview"');
     expect(source).toContain("setSelectedResultCampaigns(payload.campaigns.map((campaign) => campaign.code))");

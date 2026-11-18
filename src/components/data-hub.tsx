@@ -188,7 +188,7 @@ export function DataHub() {
                     ? "Análises concluídas, mas a planilha ainda não foi publicada"
                     : "Ainda não publicados"
             }
-            href="/dados/resultados"
+            href="/dados/pendencias#fluxo-legado"
             action={focus.publication ? "Publicar nova versão" : "Publicar planilha"}
           />
           <ChecklistStep
@@ -304,9 +304,9 @@ export function detectImportDestination(sheetNames: string[]): Detection {
   if (["Metadados", "Metadata-C2", "Indices_pontos", "Calculo_conjuntos"].some((name) => names.has(name))) {
     return {
       title: "Planilha de resultados laboratoriais",
-      detail: "Publique em Planilhas de resultados. A prévia mostra as campanhas encontradas antes de publicar.",
-      href: "/dados/resultados",
-      action: "Ir para Planilhas de resultados",
+      detail: "Publique em Pendências → Fluxo legado. A prévia mostra as campanhas encontradas antes de publicar.",
+      href: "/dados/pendencias#fluxo-legado",
+      action: "Ir para Fluxo legado",
     };
   }
   if (names.has("Pontos")) {
