@@ -10,7 +10,8 @@ vi.mock("@/components/campaign-hydro-map", () => ({ CampaignHydroMap: () => null
 
 import { GET } from "@/app/api/results/capture-index/campaigns/route";
 import { captureIndexRows } from "@/lib/capture-index";
-import { captureIndexResultsCampaigns } from "@/lib/capture-index/results-adapter";
+import { canonicalSia, captureIndexResultsCampaigns } from "@/lib/capture-index/results-adapter";
+import { buildResultMapPoints } from "@/modules/results/components/results-index-dashboard";
 import { completeOverallSummary, orderCaptureCampaignsForHome } from "@/modules/results/components/home-results-v2";
 import { ResultsIndexDashboard } from "@/modules/results/components/results-index-dashboard";
 
@@ -42,6 +43,14 @@ describe("ponte do índice de captação para as telas de resultados", () => {
     expect(located[0]).toMatchObject({ waterBody: "Rio de teste", municipality: "Município de teste" });
   });
 
+  it("reconhece o código SIA em qualquer grafia e põe o ponto no mapa", () => {
+    expect(["SIA-0220", "0220", "220", " sia 220 "].map(canonicalSia)).toEqual(["220", "220", "220", "220"]);
+    expect(canonicalSia("lab12")).not.toBe(canonicalSia("SIA-0012")); // código de laboratório sem SIA não vira ponto 12
+    const mapped = buildResultMapPoints(campaigns[2].points);
+    expect(mapped).toHaveLength(1);
+    expect(mapped[0]).toMatchObject({ code: "220", effective: { lat: -25.4, lon: -49.2 }, resultValue: campaigns[2].points.find(point => point.siaCode === "220")!.overall.value });
+  });
+
   it("o painel de resultados existente renderiza com o índice novo", () => {
     const markup = renderToStaticMarkup(createElement(ResultsIndexDashboard, { campaigns, initialCampaignCode: "C3", summary: true }));
     expect(markup).toContain("Resultados por índices");
@@ -52,7 +61,7 @@ describe("ponte do índice de captação para as telas de resultados", () => {
     auth.mockResolvedValue({ ok: false, response: new Response(null, { status: 401 }) });
     expect((await GET(new Request("http://local.test/api/results/capture-index/campaigns"))).status).toBe(401);
     auth.mockResolvedValue({ ok: true });
-    dashboard.mockResolvedValue({ campaignPoints: [{ code: "0220", effective: { lat: -25.4, lon: -49.2 }, waterBody: "Rio", municipality: "Cidade" }, { code: "78", effective: null, waterBody: "", municipality: "" }] });
+    dashboard.mockResolvedValue({ campaignPoints: [{ code: "SIA-0220", effective: { lat: -25.4, lon: -49.2 }, waterBody: "Rio", municipality: "Cidade" }, { code: "78", effective: null, waterBody: "", municipality: "" }] });
     const ok = await GET(new Request("http://local.test/api/results/capture-index/campaigns"));
     expect(auth).toHaveBeenCalledWith(expect.any(Request), "data.view");
     expect(ok.headers.get("cache-control")).toBe("private, no-store");

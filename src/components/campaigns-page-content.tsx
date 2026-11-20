@@ -80,7 +80,7 @@ import { parseInternalStorageUrl } from "@/lib/imports/media-policy";
 import type {
   ResultsPublicationV2,
 } from "@/lib/results-v2-persistence";
-import { CaptureIndexPanel } from "@/components/capture-index-panel";
+import { CaptureCampaignResults } from "@/components/capture-campaign-results";
 import type { ResultsCampaign } from "@/modules/results";
 import type { ResultsInventoryItem, ResultsInventoryResponse } from "@/lib/results-publication-contract";
 import { CampaignPointFicha } from "@/modules/results/components/campaign-point-ficha";
@@ -788,11 +788,9 @@ export function CampaignsPageContent({
           {/* O resultado exibido é o índice de captação (IR-CAPTACAO). As publicações do índice anterior (SANEPAR-INDICE-0.3)
               continuam guardadas e podem ser baixadas em Dados, mas não são mais mostradas aqui. */}
           <CampaignResultsPanels>
-            <section className="app-card p-4">
-              {captureCampaignNumber
-                ? <CaptureIndexPanel key={captureCampaignNumber} campaign={captureCampaignNumber} />
-                : <p role="status">Esta campanha ainda não tem índice de captação calculado.</p>}
-            </section>
+            {captureCampaignNumber
+              ? <CaptureCampaignResults key={captureCampaignNumber} campaign={captureCampaignNumber} />
+              : <section className="app-card p-4"><p role="status">Esta campanha ainda não tem índice de captação calculado.</p></section>}
           </CampaignResultsPanels>
         </div>
       )}

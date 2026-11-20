@@ -11,7 +11,13 @@ const domainOf = { environmental: "Ambiental", operational: "Operacional", human
 const componentOf = { bacteria: "16S", cyanobacteria: "ALGAS", coi: "COI" } as const;
 const statusOf = (status: string): AnalyticalStatus =>
   status === "disponível" ? "approved" : status === "inconclusivo" ? "inconclusive" : status === "ausente" ? "not_performed" : "missing_records";
-export const canonicalSia = (value: string) => value.replace(/^0+(?=\d)/, "").trim();
+/** "SIA-0220", "0220" e "220" são o mesmo ponto. Códigos de laboratório sem SIA (C1, "lab12") não são confundidos com um SIA. */
+export const canonicalSia = (value: string) => {
+  const text = value.trim();
+  if (/^lab/i.test(text)) return text.toLowerCase();
+  const digits = text.match(/\d+/)?.[0];
+  return digits ? digits.replace(/^0+(?=\d)/, "") : text;
+};
 const perDomain = <T,>(pick: (domain: ResultDomain) => T) =>
   ({ environmental: pick("environmental"), operational: pick("operational"), humanHealth: pick("humanHealth") });
 

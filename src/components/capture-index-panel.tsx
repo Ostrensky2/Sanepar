@@ -74,7 +74,7 @@ export function CaptureIndexPanel({ campaign }: { campaign?: number }) {
             {row.measured ? <>
               <p className="type-metadata">Cenários das fichas cadastradas, do piso (só evidência plena) ao teto (fichas ainda indeterminadas com peso cheio): {row.range}. O teto não inclui efeitos que o cadastro ainda não conhece. Medição: {row.coverage}. Há {row.elevated}.</p>
               <ul className="space-y-1">{row.domains.map(domain => <li key={domain.key}>
-                <strong>{domain.label}: {domain.score}</strong>{domain.maturity !== "piloto com base" && <span className="type-metadata"> [categoria {domain.maturity}]</span>} <span className="type-metadata">(piso a teto {domain.range}; cobertura da curadoria {domain.confidence}: {domain.evaluated})</span>
+                <strong>{domain.label}: {domain.score}</strong>{domain.maturity !== "com base de comparação" && <span className="type-metadata"> [{domain.maturity}]</span>} <span className="type-metadata">(piso a teto {domain.range}; cobertura da curadoria {domain.confidence}: {domain.evaluated})</span>
                 <br /><span className="type-metadata">{domain.component ? `Determinado por ${domain.component}. ` : ""}{domain.main}{domain.evaluatedBy ? `. Reads avaliados por marcador: ${domain.evaluatedBy}` : ""}</span>
                 {domain.contributions.length > 0 && <details className="ml-3"><summary className="cursor-pointer type-metadata">Fichas que formam esta nota ({domain.contributions.length})</summary>
                   <ul className="space-y-1">{domain.contributions.map(item => <li key={item.ficha + item.taxon} className="type-metadata break-words">

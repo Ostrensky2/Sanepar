@@ -119,7 +119,7 @@ describe("saída versionada do índice de triagem", () => {
     expect(captureIndexView(row).elevated).toBe("1 de 3 categorias na faixa de referência (0,15)");
     expect(captureIndexRows().filter(item => item.general! >= 0.15)).toHaveLength(45);
     expect(captureIndexRows().filter(item => item.elevated === 2)).toHaveLength(7);
-    expect(captureIndexMeta.maturity.map(item => item.level)).toEqual(["em construção", "em construção", "piloto com base"]);
+    expect(captureIndexMeta.maturity.map(item => item.level)).toEqual(["evidência parcial", "evidência parcial", "com base de comparação"]);
   });
 
   it("diatomáceas pontuam só onde há resultado delas (cloroplasto) e só acima da base da rede", () => {
