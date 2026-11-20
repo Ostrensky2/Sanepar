@@ -57,9 +57,9 @@ describe("results index dashboard v2 contract", () => {
 
     expect(ResultsIndexDashboard).toBeTypeOf("function");
     expect(source).toContain("Síntese integrada por ponto");
-    expect(source).toContain("Completos (3/3)");
+    expect(source).toContain("Com índice calculado"); // rótulos do índice de captação
     expect(source).toContain("Parcial — 2/3");
-    expect(source).toContain("Indisponível — 0/3");
+    expect(source).toContain('unavailable: "Sem medição"');
     expect(source).toContain("Ponto parcial tem uma faixa.");
     expect(source).toContain("Resultados parciais e indisponíveis ficam fora do ranking");
     expect(source).not.toMatch(/risco (baixo|moderado|alto|crítico)/i);

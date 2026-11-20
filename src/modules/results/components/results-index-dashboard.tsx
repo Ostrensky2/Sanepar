@@ -42,10 +42,10 @@ const metricOptions: Array<{ value: ResultMetric; label: string }> = [
 
 const completenessOptions: Array<{ value: "all" | ResultCompleteness; label: string }> = [
   { value: "all", label: "Todos os resultados" },
-  { value: "complete", label: "Completos (3/3)" },
+  { value: "complete", label: "Com índice calculado" },
   { value: "partial_2", label: "Parciais (2/3)" },
   { value: "partial_1", label: "Parciais (1/3)" },
-  { value: "unavailable", label: "Indisponíveis (0/3)" },
+  { value: "unavailable", label: "Sem medição" },
 ];
 
 export function ResultsIndexDashboard({
@@ -143,13 +143,13 @@ export function ResultsIndexDashboard({
           Síntese integrada por ponto
         </h2>
         <div className="mt-2 flex items-center gap-1">
-          <p className="type-body text-[var(--ink)]">Índices de 0 a 1 · resultado provisório.</p>
+          <p className="type-body text-[var(--ink)]">Índices de 0 a 1 · versão piloto.</p>
           <ResultsInterpretationHelp title="Como ler a síntese por ponto">
-            <p>A cor de cada ponto no mapa é o seu índice, de 0 a 1. O anel mostra quantos dos três conjuntos foram analisados.</p>
+            <p>A cor de cada ponto no mapa é o seu índice, de 0 a 1. O anel mostra quais marcadores foram usados: bactérias (16S), algas pelo cloroplasto e COI.</p>
             <IndexScaleBar />
             <p>Ponto completo tem um número. Ponto parcial tem uma faixa.</p>
             <CompleteVsPartialSketch />
-            <p><strong>Provisório:</strong> o laboratório ainda não informou a qualidade de cada conjunto. Os valores podem mudar quando essa revisão chegar.</p>
+            <p><strong>Piloto:</strong> o índice de captação ainda não foi confrontado com ocorrências reais. Zero significa nenhuma contribuição pontuada, não ausência demonstrada de risco.</p>
           </ResultsInterpretationHelp>
         </div>
       </header>
@@ -265,7 +265,7 @@ export function mapHelpSections(campaign: ResultsCampaign, visiblePoints: Result
   return [
     { title: "Índice e cores", text: `${metricLabel(metric)}: escala de 0 a 1, fixa entre campanhas. O índice não representa probabilidade, percentual de dano ou classes de risco. Cor uniforme indica valor completo.` },
     { title: "Faixas", text: "Ponto parcial aparece como faixa em gradiente: do menor valor possível (limite inferior à esquerda) ao maior (limite superior à direita), sem valor central." },
-    { title: "Anel e selo", text: "Topo: Bactérias. Inferior direito: Cianobactérias. Inferior esquerdo: COI. Segmento escuro indica conjunto utilizado; vazado, não utilizado. O selo k/3 informa uso no cálculo, não sequenciamento ou aprovação analítica. 0/3 significa indisponível, não índice zero." },
+    { title: "Anel e selo", text: "Topo: Bactérias (16S). Inferior direito: Algas, pelo cloroplasto no 16S. Inferior esquerdo: COI. Segmento escuro indica conjunto utilizado; vazado, não utilizado. O selo k/3 informa uso no cálculo, não sequenciamento ou aprovação analítica. 0/3 significa indisponível, não índice zero." },
     { title: "Localização", text: `${mappedIds.length} de ${visiblePoints.length} resultados filtrados no mapa. ${missing.length} sem coordenada utilizável${missing.length ? ` (${missing.map((point) => point.siaCode).join(", ")})` : ""}. Resultados sem coordenada permanecem nos totais e na tabela de resultados da campanha.` },
     { title: "Navegação", text: "Clique simples seleciona o cartão, sem zoom. Duplo clique amplia e centra o ponto no zoom máximo; repetir no mesmo ponto retorna ao enquadramento geral da campanha. Em outro ponto, amplia o novo alvo. Os botões de zoom, enquadramento e Ir para o ponto também estão disponíveis por teclado." },
     ...(conditions.length ? [{ title: "Condição de uso", text: `Condição de uso informada: ${conditions.join("; ")}.` }] : []),
@@ -285,9 +285,9 @@ function CompletenessSummary({ campaign, metric }: { campaign: ResultsCampaign; 
     ? completeValues.reduce((sum, value) => sum + value, 0) / completeValues.length
     : null;
   const items = [
-    ["Completos", String(campaign.counts.complete), "3/3"],
+    ["Com índice calculado", String(campaign.counts.complete), "pontos medidos"],
     ["Parciais", String(campaign.counts.partialWithTwoSets + campaign.counts.partialWithOneSet), "2/3 ou 1/3"],
-    ["Indisponíveis", String(campaign.counts.unavailable), "0/3"],
+    ["Sem medição", String(campaign.counts.unavailable), "sem biblioteca utilizável"],
     ["Total", String(campaign.counts.total), "pontos"],
     ["Índice médio — pontos completos", formatValue(mean), `${completeValues.length} pontos completos`],
   ];
@@ -331,7 +331,7 @@ function PointDetail({ points, onSelect, point, metric, photoUrl, onFocus }: { p
       {point.completeness.startsWith("partial") && <p className="type-metadata mt-2 text-[var(--ink)]">Intervalo possível do índice; sem estimativa pontual.</p>}
       <details className="mt-3 border-t border-[var(--line-ghost)] pt-2 type-metadata text-[var(--ink)]">
         <summary className="flex min-h-11 cursor-pointer items-center font-semibold">Situação dos conjuntos utilizados</summary>
-        <ul className="space-y-2">{([['bacteria', 'Bactérias'], ['cyanobacteria', 'Cianobactérias'], ['coi', 'COI']] as const).map(([key, label]) => {
+        <ul className="space-y-2">{([['bacteria', 'Bactérias (16S)'], ['cyanobacteria', 'Algas (cloroplasto)'], ['coi', 'COI']] as const).map(([key, label]) => {
           const component = point.components[key];
           return <li key={key}><strong>{label}: {component.included ? "utilizado" : "não utilizado"}</strong><p>{analyticalStatusText(component)}</p>{component.reason && <p>Motivo informado: {component.reason}</p>}</li>;
         })}</ul>
@@ -467,7 +467,7 @@ function metricLabel(metric: ResultMetric) {
 
 
 function completenessLabel(value: ResultCompleteness) {
-  return ({ complete: "Completo — 3/3", partial_2: "Parcial — 2/3", partial_1: "Parcial — 1/3", unavailable: "Indisponível — 0/3" } as const)[value];
+  return ({ complete: "Índice calculado", partial_2: "Parcial — 2/3", partial_1: "Parcial — 1/3", unavailable: "Sem medição" } as const)[value];
 }
 
 function formatRange(range: { value: number | null; lower: number; upper: number }) {
