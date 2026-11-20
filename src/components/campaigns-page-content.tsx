@@ -80,6 +80,7 @@ import { parseInternalStorageUrl } from "@/lib/imports/media-policy";
 import type {
   ResultsPublicationV2,
 } from "@/lib/results-v2-persistence";
+import { CaptureIndexPanel } from "@/components/capture-index-panel";
 import type { ResultsCampaign } from "@/modules/results";
 import type { ResultsInventoryItem, ResultsInventoryResponse } from "@/lib/results-publication-contract";
 import { CampaignPointFicha } from "@/modules/results/components/campaign-point-ficha";
@@ -355,6 +356,10 @@ export function CampaignsPageContent({
     () => resolveCollectionDefaults(campaignManagement, selectedCampaign.id, campaigns).defaults,
     [campaignManagement, campaigns, selectedCampaign.id],
   );
+  const captureCampaignNumber = (() => {
+    const number = Number(selectedCampaign.id.match(/campanha-(\d+)/)?.[1]);
+    return number >= 1 && number <= 3 ? number : undefined;
+  })();
   const v2Campaign = useMemo<ResultsCampaign | null>(() => {
     if (!isPublishedV2Response(publishedResults) || !publishedResults.campaign.points) return null;
     return {
@@ -780,28 +785,15 @@ export function CampaignsPageContent({
       {view === "resultados" && resultLinkError && <p role="alert">{resultLinkError}</p>}
       {view === "resultados" && !resultLinkError && (
         <div className="space-y-6">
-          {initialSia && selectedCampaign.id === initialCampaignId && !linkedPointClosed && v2Campaign && isPublishedV2Response(publishedResults) && (linkedResultPoint(v2Campaign, initialSia) ? <CampaignPointFicha point={linkedResultPoint(v2Campaign, initialSia)!} campaign={v2Campaign} publicationId={publishedResults.publication.publicationId} sourceHash={publishedResults.publication.source.sha256} photoUrl={v2FieldPhotos[linkedResultPoint(v2Campaign, initialSia)!.siaCode]} onClose={() => setLinkedPointClosed(true)} /> : <p role="status">O SIA vinculado não existe de forma inequívoca nesta publicação. Nenhum homônimo foi selecionado.</p>)}
-          <CampaignResultsPanels
-            isHydrating={isCampaignHydrating}
-            resultsUnavailable={resultsUnavailable}
-            showUnavailableNotice={showUnavailableResultsNotice}
-            campaign={selectedCampaign}
-            publication={isPublishedLegacyResponse(publishedResults) ? publishedResults.publication : undefined}
-            resultsV2={v2Campaign ? [v2Campaign] : undefined}
-            resultsV2Publication={isPublishedV2Response(publishedResults) ? publishedResults.publication : undefined}
-            resultsV2Photos={v2FieldPhotos}
-            resultsV2PayloadUnavailable={
-              isPublishedV2Response(publishedResults) && publishedResults.campaign.points === null
-            }
-            stages={selectedStages}
-            stageTitle={selectedManagement.stageTitle}
-            points={visibleResultPoints}
-            canDownload={!isCampaignHydrating && Boolean(v2Campaign || isPublishedLegacyResponse(publishedResults))}
-            isDownloading={isExporting}
-            downloadMessage={exportMessage}
-            onDownload={() => void exportCampaignResultsWorkbook()}
-            onDismissUnavailableNotice={() => setDismissedUnavailableResultsNoticeCampaignId(selectedCampaign.id)}
-          />
+          {/* O resultado exibido é o índice de captação (IR-CAPTACAO). As publicações do índice anterior (SANEPAR-INDICE-0.3)
+              continuam guardadas e podem ser baixadas em Dados, mas não são mais mostradas aqui. */}
+          <CampaignResultsPanels>
+            <section className="app-card p-4">
+              {captureCampaignNumber
+                ? <CaptureIndexPanel key={captureCampaignNumber} campaign={captureCampaignNumber} />
+                : <p role="status">Esta campanha ainda não tem índice de captação calculado.</p>}
+            </section>
+          </CampaignResultsPanels>
         </div>
       )}
 

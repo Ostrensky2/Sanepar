@@ -11,17 +11,12 @@ import { continuousResultColor } from "@/components/campaign-hydro-map";
 import { buildResultsV2PhotoMap } from "@/components/campaigns-page-content";
 import { readFieldDiaryEntries, type FieldDiaryEntry } from "@/lib/field-diary";
 import { campaignIdentityKey } from "@/lib/campaign-identity";
-import { isPublishedLegacyResponse, isPublishedV2Response, type PublishedResultsResponse as ResultsResponse } from "../published-response";
-import type { ResultsPublication } from "@/lib/imports/results-contract";
-import { LegacyPublishedResults } from "./legacy-published-results";
 import type { ResultsCampaign } from "@/modules/results";
 import { ResultsIndexDashboard } from "@/modules/results/components/results-index-dashboard";
 
 export function HomeResultsV2({ operationalKpis, projectSummary }: { operationalKpis?: React.ReactNode; projectSummary?: React.ReactNode }) {
   const [campaigns, setCampaigns] = useState<ResultsCampaign[] | null>(null);
-  const [legacy, setLegacy] = useState<ResultsPublication[]>([]);
   const [failed, setFailed] = useState(false);
-  const [partialFailure, setPartialFailure] = useState(false);
   const [diary, setDiary] = useState<FieldDiaryEntry[] | null>(null);
   const [management, setManagement] = useState<CampaignManagementById | null>(null);
 
@@ -34,37 +29,14 @@ export function HomeResultsV2({ operationalKpis, projectSummary }: { operational
 
   useEffect(() => {
     const controller = new AbortController();
-    // 1) Inventário leve diz quais campanhas têm publicação; 2) só essas são carregadas.
-    //    allSettled: uma campanha com falha momentânea não derruba as demais.
-    void publishedCampaignNumbers(controller.signal)
-      .then((numbers) => Promise.allSettled(numbers.map(async (number) => {
-        const response = await fetch(`/api/imports/results?campaignNumber=${number}`, {
-          cache: "no-store",
-          signal: controller.signal,
-        });
+    // O índice exibido é o de captação (IR-CAPTACAO), entregue no formato das telas de resultados.
+    // As publicações antigas (SANEPAR-INDICE-0.3) continuam guardadas, mas não alimentam mais a Home.
+    void fetch("/api/results/capture-index/campaigns", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
         if (!response.ok) throw new Error("results unavailable");
-        return await response.json() as ResultsResponse;
-      })))
-      .then((settled) => {
-        if (controller.signal.aborted) return [];
-        const rejected = settled.filter((item) => item.status === "rejected").length;
-        if (settled.length && rejected === settled.length) throw new Error("results unavailable");
-        setPartialFailure(rejected > 0);
-        const responses = settled.flatMap((item) => (item.status === "fulfilled" ? [item.value] : []));
-        setLegacy(responses.filter(isPublishedLegacyResponse).map((response) => response.publication));
-        return responses;
+        return (await response.json()) as { campaigns: ResultsCampaign[] };
       })
-      .then((responses) => orderPublishedResultsForHome(responses.flatMap((response) => {
-        if (!isPublishedV2Response(response) || !response.campaign.points) return [];
-        return [{
-          campaign: {
-            campaignCode: response.campaign.campaignCode,
-            points: response.campaign.points,
-            counts: response.campaign.counts,
-          } satisfies ResultsCampaign,
-          publishedAt: response.publication.publishedAt,
-        }];
-      })))
+      .then((payload) => orderCaptureCampaignsForHome(payload.campaigns))
       .then(setCampaigns)
       .catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === "AbortError")) setFailed(true);
@@ -97,14 +69,7 @@ export function HomeResultsV2({ operationalKpis, projectSummary }: { operational
   const activeCampaigns = management ? countOperationallyActiveCampaigns(Object.values(management).map((item) => item.status)) : null;
   return (
     <>
-    {partialFailure ? (
-      <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
-        Algumas campanhas não puderam ser consultadas agora; as demais estão abaixo. Recarregue a página em instantes.
-      </p>
-    ) : null}
-    {legacy.map((publication) => <LegacyPublishedResults key={publication.campaignId} publication={publication} />)}
-    {!campaigns.length && legacy.length > 0 && operationalKpis}
-    {(campaigns.length > 0 || !legacy.length) && <ResultsIndexDashboard
+    <ResultsIndexDashboard
       summary
       campaigns={campaigns}
       initialCampaignCode={campaigns[0]?.campaignCode}
@@ -114,34 +79,24 @@ export function HomeResultsV2({ operationalKpis, projectSummary }: { operational
         const stats = completeOverallSummary(campaign);
         return <>
           <section className="grid grid-cols-2 items-stretch gap-3 xl:grid-cols-4" aria-label="Indicadores da operação e da campanha">
-            <CanonicalKpi icon={CheckCircle2} label="Pontos com resultado" value={String(campaign.counts.total)} detail={`${campaign.campaignCode} · ${campaign.counts.complete} completos · ${campaign.counts.partialWithOneSet + campaign.counts.partialWithTwoSets} parciais`} />
-            <CanonicalKpi icon={FlaskConical} label="Índice médio — pontos completos" value={formatMean(stats.mean)} detail={`${campaign.campaignCode} · média de ${stats.count} pontos completos; parciais fora da média`} accentColor={stats.mean === null ? undefined : continuousResultColor(stats.mean)} />
+            <CanonicalKpi icon={CheckCircle2} label="Pontos com resultado" value={String(campaign.counts.complete)} detail={`${campaign.campaignCode} · ${campaign.counts.total} pontos na campanha · ${campaign.counts.unavailable} sem medição`} />
+            <CanonicalKpi icon={FlaskConical} label="Índice médio da rede" value={formatMean(stats.mean)} detail={`${campaign.campaignCode} · média de ${stats.count} pontos medidos, um voto por ponto`} accentColor={stats.mean === null ? undefined : continuousResultColor(stats.mean)} />
             <CanonicalKpi icon={CircleDot} label="Campanhas ativas" value={activeCampaigns === null ? "—" : String(activeCampaigns)} detail="em campo, laboratório ou análise" />
             {operationalKpis}
           </section>
           <HomeIndexEvolution campaigns={campaigns} />
         </>;
       }}
-    />}
+    />
     <ProjectStatusPanel compact />
     {projectSummary}
     </>
   );
 }
 
-/** Números das campanhas com publicação vigente; se o inventário falhar, consulta todas. */
-async function publishedCampaignNumbers(signal: AbortSignal) {
-  const all = defaultCampaigns.map((_, index) => index + 1);
-  try {
-    const response = await fetch("/api/imports/results?inventory=1", { cache: "no-store", signal });
-    if (!response.ok) return all;
-    const inventory = (await response.json()) as { campaigns?: Array<{ campaignCode: string }> };
-    if (!Array.isArray(inventory.campaigns)) return all;
-    return inventory.campaigns.map((item) => campaignNumber(item.campaignCode)).filter((number) => number > 0);
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
-    return all;
-  }
+/** A campanha mais recente abre a Home. */
+export function orderCaptureCampaignsForHome(campaigns: ResultsCampaign[]) {
+  return [...campaigns].sort((left, right) => campaignNumber(right.campaignCode) - campaignNumber(left.campaignCode));
 }
 
 export function completeOverallSummary(campaign?: ResultsCampaign) {
