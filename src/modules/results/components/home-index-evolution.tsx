@@ -17,8 +17,9 @@ export const EVOLUTION_SERIES = [
 
 export const EVOLUTION_HELP = [
   "Cada coluna é uma campanha. A altura é a média do índice (0 a 1) nos pontos medidos, com um voto por ponto.",
+  "As campanhas não são diretamente comparáveis: a C1 usou outra região do 16S, e a C3 usou outro aparelho de sequenciamento. Uma diferença entre colunas não é, sozinha, uma tendência da água.",
   "Ao escolher um ponto, as colunas mostram o valor desse ponto em cada campanha. Ponto sem medição na campanha não aparece.",
-  "Pontos com faixa ficam fora da média. Por isso cada coluna informa quantos completos e quantos parciais teve.",
+  "Ponto sem medição fica fora da média. Cada coluna informa quantos pontos entraram.",
 ];
 
 export function evolutionExclusions(campaign: ResultsCampaign, included: number) {

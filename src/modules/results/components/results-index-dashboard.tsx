@@ -286,7 +286,7 @@ function CompletenessSummary({ campaign, metric }: { campaign: ResultsCampaign; 
     : null;
   const items = [
     ["Com índice calculado", String(campaign.counts.complete), "pontos medidos"],
-    ["Parciais", String(campaign.counts.partialWithTwoSets + campaign.counts.partialWithOneSet), "2/3 ou 1/3"],
+    ["Com um só marcador", String(campaign.points.filter((point) => point.completeness !== "unavailable" && (!point.components.coi.included || !point.components.bacteria.included)).length), "índice calculado sem o COI ou sem o 16S"],
     ["Sem medição", String(campaign.counts.unavailable), "sem biblioteca utilizável"],
     ["Total", String(campaign.counts.total), "pontos"],
     ["Índice médio — pontos completos", formatValue(mean), `${completeValues.length} pontos completos`],
