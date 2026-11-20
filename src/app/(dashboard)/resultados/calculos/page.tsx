@@ -1,25 +1,57 @@
-import { MethodologyPdfLink } from "@/modules/results/components/methodology-pdf-link";
+import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { SectionTabs } from "@/components/section-tabs";
-import { ResearchBrowser } from "@/modules/results/components/research-browser";
 import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
 
-export default async function CalculationsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(await searchParams)) for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) query.append(key, item);
+/** Metodologia do índice de captação (IR-CAPTACAO). O texto completo e versionado fica em docs/contracts/INDICE_CAPTACAO_0.7.md.
+ * O passo a passo do índice anterior (SANEPAR-INDICE-0.3) saiu desta página: a metodologia mudou e os resultados também. */
+export default function CalculationsPage() {
+  const card = "app-card space-y-2 p-4";
+  const title = "heading-font type-panel-title text-[var(--brand-navy-strong)]";
   return <div className="app-container min-w-0 space-y-5">
     <PageHeader
       eyebrow="Ciência e método"
       title="Como o índice é calculado"
-      description="Do organismo detectado ao índice de 0 a 1, com os números de cada ponto."
+      description="Do organismo detectado ao índice de 0 a 1: fórmula, regras de evidência e limites do método."
       help={<ResultsInterpretationHelp title="Como ler o cálculo">
-        <p><strong>Passo a passo:</strong> escolha um ponto no topo e acompanhe, passo a passo, como os organismos detectados nele viram o índice de 0 a 1.</p>
-        <p><strong>Valores por ponto:</strong> o valor de cada conjunto (Cianobactérias, Bactérias, COI) em cada domínio, para todos os pontos.</p>
-        <p>O índice vai de 0 a 1 e é relativo aos pontos da campanha: não é probabilidade, percentual de dano nem classe de risco. Ponto com menos de três conjuntos mostra uma faixa possível, não um número.</p>
+        <p>O índice ordena a atenção entre os pontos de captação. Não é porcentagem, não é probabilidade de dano e não descreve a água tratada.</p>
+        <p>Os números de cada ponto, com as fichas que formam cada nota, estão em <strong>Índice de risco na captação</strong>.</p>
       </ResultsInterpretationHelp>}
-      actions={<MethodologyPdfLink />}
       tabs={<SectionTabs />}
     />
-    <ResearchBrowser key={query.toString()} module="calculations" initialQuery={query.toString()} />
+    <section className={card}>
+      <h2 className={title}>Fórmula</h2>
+      <p>Cada organismo detectado contribui com a sua participação nos reads válidos da biblioteca × a gravidade do efeito (1 a 3, dividida por 3) × a aplicabilidade registrada na ficha (1, 0,5, 0,1 ou 0). A soma passa por uma curva logarítmica e vira a nota da categoria, de 0 a 1.</p>
+      <p>São três categorias: danos físicos e ambientais, riscos operacionais e perigo potencial à saúde, identificado na captação. A nota de cada categoria é a maior entre os marcadores utilizáveis, e o índice geral do ponto é a maior das três notas. O número da rede é a média dos pontos, com um voto por ponto.</p>
+      <p>A escala é fixa e tem folga: uma nota de 0,15 corresponde a cerca de 1% de participação ponderada, 0,35 a 4% e 0,60 a 15%.</p>
+    </section>
+    <section className={card}>
+      <h2 className={title}>Regras de evidência</h2>
+      <ul className="list-disc space-y-1 pl-5">
+        <li>Só pontua organismo com efeito documentado em fonte lida. Organismo sem ficha decidida contribui com zero e reduz a cobertura da curadoria, não a nota.</li>
+        <li>Evidência de espécie não vale para o gênero, salvo quando só uma espécie do gênero ocorre no Brasil, como o mexilhão-dourado.</li>
+        <li>Diatomáceas e a assinatura de esgoto somam como grupos e só pontuam o que passa da base da rede.</li>
+        <li>Ocorrência com menos de 10 reads ou menos de 0,01% da biblioteca vira alerta, sem elevar a nota.</li>
+        <li>Zero significa nenhuma contribuição pontuada, não ausência demonstrada de risco.</li>
+      </ul>
+    </section>
+    <section className={card}>
+      <h2 className={title}>Dados usados</h2>
+      <ul className="list-disc space-y-1 pl-5">
+        <li>Marcadores 16S e COI das campanhas C1 a C3, da reanálise do laboratório. Quando há duas corridas da mesma amostra, usa-se o NextSeq e, na falta dele, o MiSeq.</li>
+        <li>Organismos marinhos identificados no COI foram retirados da leitura, porque não têm como ocorrer nas captações.</li>
+        <li>Espécies exóticas são listadas por ponto, sem nota.</li>
+      </ul>
+    </section>
+    <section className={card}>
+      <h2 className={title}>O que o índice não enxerga</h2>
+      <ul className="list-disc space-y-1 pl-5">
+        <li>Mosquito-fantasma (Chaoboridae), problema conhecido da ETA Passaúna.</li>
+        <li>Protozoários como Cryptosporidium e Giardia.</li>
+        <li>Algas cujo cloroplasto não foi classificado. Não há marcador próprio para diatomáceas.</li>
+      </ul>
+      <p>Versão piloto, ainda não confrontada com ocorrências reais.</p>
+    </section>
+    <p><Link className="inline-flex min-h-11 items-center rounded-lg bg-[var(--brand-navy-strong)] px-4 text-sm font-bold text-white" href="/resultados/indice-captacao">Ver o índice por ponto e por campanha</Link></p>
   </div>;
 }

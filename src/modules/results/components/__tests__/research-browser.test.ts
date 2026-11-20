@@ -23,7 +23,8 @@ describe("research consultation contract (synthetic fixtures only)", () => {
     expect(markup).not.toContain("Descrição metodológica");
     expect(markup).not.toContain("Como interpretar");
     const page = readFileSync(new URL("../../../../app/(dashboard)/resultados/calculos/page.tsx", import.meta.url), "utf8");
-    expect(page).toContain('actions={<MethodologyPdfLink />');
+    expect(page).toContain('href="/resultados/indice-captacao"'); // a página descreve a metodologia do índice de captação e leva aos números por ponto
+    expect(page).not.toContain("MethodologyPdfLink"); // o PDF era da metodologia anterior
     expect(page).toContain("help={<ResultsInterpretationHelp");
     const repository = readFileSync(new URL("../../../../components/spreadsheet-repository.tsx", import.meta.url), "utf8");
     expect(repository).not.toContain("MethodologyDocumentEntry");

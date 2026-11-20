@@ -111,6 +111,13 @@ export const navigationItems: NavigationItem[] = [
         headerTitle: "Como o índice é calculado",
         icon: Calculator,
       },
+      {
+        href: "/resultados/indice-captacao",
+        label: "Índice de risco na captação",
+        summary: "triagem por ponto, em três categorias, nas campanhas C1 a C3",
+        headerTitle: "Índice de risco na captação",
+        icon: Calculator,
+      },
     ],
   },
   {

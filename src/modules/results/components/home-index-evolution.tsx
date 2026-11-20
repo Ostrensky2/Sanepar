@@ -16,8 +16,8 @@ export const EVOLUTION_SERIES = [
 ] as const;
 
 export const EVOLUTION_HELP = [
-  "Cada coluna é uma campanha. A altura é a média do índice (0 a 1) nos pontos em que os três conjuntos foram analisados.",
-  "Ao escolher um ponto, as colunas mostram o valor desse ponto em cada campanha. Se faltou um conjunto, aparece uma faixa com o menor e o maior valor possível, em vez de um número.",
+  "Cada coluna é uma campanha. A altura é a média do índice (0 a 1) nos pontos medidos, com um voto por ponto.",
+  "Ao escolher um ponto, as colunas mostram o valor desse ponto em cada campanha. Ponto sem medição na campanha não aparece.",
   "Pontos com faixa ficam fora da média. Por isso cada coluna informa quantos completos e quantos parciais teve.",
 ];
 
