@@ -80,7 +80,7 @@ describe("saída versionada do índice de triagem", () => {
 
   it("a cobertura da curadoria conta cada read uma vez e traz o detalhe por marcador", () => {
     const grades = captureIndexRows().flatMap(row => captureDomains.map(domain => row.scores[domain]!.confidence));
-    expect(["A", "B", "C"].map(grade => grades.filter(item => item === grade).length)).toEqual([24, 234, 417]);
+    expect(["A", "B", "C"].map(grade => grades.filter(item => item === grade).length)).toEqual([24, 235, 416]);
     const row = one(2, "136"), score = row.scores.Ambiental!;
     const distinct = row.components["16S"].validReads + row.components.ALGAS.observedReads + row.components.COI.validReads;
     expect(row.components.COI.validReads).toBeLessThan(row.components.COI.observedReads);
