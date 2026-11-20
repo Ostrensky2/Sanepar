@@ -16,6 +16,15 @@ Números com essas decisões: média do índice geral 0,05 (C1), 0,13 (C2) e 0,0
 6. **Pesos aprovados.** O administrador aprovou em 20/11 os pesos das fichas curadas nesta rodada: Microcystis (aplicabilidade 0,5), gosto e odor (gravidade 2, aplicabilidade 0,5), quironomídeos (2 e 0,5), Cordylophora (2 e 0,5), mexilhão-dourado (3 e 1) e assinatura de esgoto (2 e 0,5, base de 1,0%). Onde este documento ainda diz "proposto" para esses pesos, vale a aprovação.
 7. **Espécies exóticas: presença não é dano.** A categoria de danos ambientais só pontua organismo com dano documentado. A presença de exóticas é listada por ponto, sem nota, a partir da tabela de exóticas aquáticas do pipeline do Marcio (`COI/C*/exotic_aquatic_species.tsv`), com dois complementos: Corbicula em gênero (as duas espécies candidatas são exóticas) e o mexilhão reatribuído de Perna. Há exóticas em 116 das 225 observações.
 
+## Auditoria independente de 20/11 (`audit/AUDITORIA-INDEPENDENTE-INDICE-0-7-20261120.md`)
+
+A auditoria refez as 675 notas sem usar o motor e elas bateram. Apontou defeitos de explicação, corrigidos em seguida, e limites que continuam valendo:
+
+- **Corrigido:** o texto de medição dizia "16S e COI" em um ponto que só tinha COI (C2/SIA 257); o organismo apresentado como principal vinha de outro marcador que não o que decidiu a nota (C3/SIA 780, operacional); a coluna `geral_rms_v05` da exportação era a média quadrática das notas atuais, não o valor arquivado da versão 0.5, e passou a se chamar `media_quadratica_das_tres_notas`; a coordenada do mapa passa a preferir a registrada na própria campanha.
+- **Vale como limite:** o peso de Microcystis foi confirmado pelo administrador tendo em vista o que se espera em Iraí e Passaúna. Por isso esses pontos não servem de validação independente do índice. Com esse peso em 0,1, 70 das 225 notas gerais mudam.
+- **Vale como limite:** o índice é uma triagem para priorizar investigação. Não é probabilidade de dano nem garantia sobre a água entregue. A capacidade de antecipar problemas ainda não foi demonstrada: falta o confronto com registros operacionais independentes, contando acertos, episódios perdidos e falsos alertas por categoria.
+- **Correções de contagem:** são 263 fichas herdadas do catálogo 0.3 (não 268), das quais só três pontuam; e 416 notas com cobertura C (não 417).
+
 ## O que o índice entrega
 
 Para cada ponto de coleta (SIA) em cada campanha:

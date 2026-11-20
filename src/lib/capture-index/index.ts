@@ -51,7 +51,12 @@ export type CaptureIndexView = ReturnType<typeof captureIndexView>;
 export function captureIndexView(row: CaptureIndexRow) {
   const measured = row.general !== null;
   const coi = row.components.COI;
-  const coverage = !measured ? "sem medição" : coi.status === "disponível" ? "16S e COI" : `só 16S (COI ${coi.status})`;
+  const s16 = row.components["16S"];
+  // Diz o que foi efetivamente medido: os dois marcadores, só um deles, ou nenhum.
+  const coverage = !measured ? "sem medição"
+    : s16.status === "disponível" && coi.status === "disponível" ? "16S e COI"
+    : s16.status === "disponível" ? `só 16S (COI ${coi.status})`
+    : coi.status === "disponível" ? `só COI (16S ${s16.status})` : "sem medição";
   return {
     campaign: `C${row.campaign}`, sia: row.sia, measured,
     general: formatCaptureIndex(row.general),
@@ -63,7 +68,8 @@ export function captureIndexView(row: CaptureIndexRow) {
     elevated: !measured ? "" : row.elevated === 0 ? "nenhuma categoria na faixa de referência (0,15)" : `${row.elevated} de 3 categorias na faixa de referência (0,15)`,
     domains: captureDomains.map(domain => {
       const score = row.scores[domain];
-      const main = score?.contributions[0];
+      // O principal é o maior contribuinte DENTRO do marcador que determinou a nota, não o maior entre todos os marcadores.
+      const main = score?.contributions.find(item => item.component === score.component) ?? score?.contributions[0];
       return {
         key: domain, label: captureDomainLabels[domain], maturity: data.maturity[domain].nivel,
         score: formatCaptureIndex(score?.score), range: score ? `${formatCaptureIndex(score.floor)} a ${formatCaptureIndex(score.ceiling)}` : "",
@@ -114,7 +120,7 @@ export function captureIndexCsv(rows: CaptureIndexRow[]): string {
 /** CSV de auditoria: valores sem arredondar e uma linha por contribuição (ponto, domínio, táxon, ficha), para refazer cada nota. */
 export function captureIndexAuditCsv(rows: CaptureIndexRow[]): string {
   const header = ["versao", "linhas_sha256", "campanha", "SIA", "tipo", "dominio", "componente", "corrida", "taxon", "reads", "reads_validos_componente", "gravidade", "aplicabilidade",
-    "ficha", "fonte", "q", "nota_dominio", "piso_dominio", "teto_dominio", "fracao_avaliada", "confianca", "geral", "geral_piso", "geral_teto", "geral_rms_v05", "posicao", "situacao", "reads_observados", "base_do_grupo", "participacao", "referencia_na_rede"];
+    "ficha", "fonte", "q", "nota_dominio", "piso_dominio", "teto_dominio", "fracao_avaliada", "confianca", "geral", "geral_piso", "geral_teto", "media_quadratica_das_tres_notas", "posicao", "situacao", "reads_observados", "base_do_grupo", "participacao", "referencia_na_rede"];
   const lines: string[][] = [];
   for (const row of rows) {
     const base = [captureIndexMeta.version, captureIndexMeta.rowsSha256, `C${row.campaign}`, row.sia];

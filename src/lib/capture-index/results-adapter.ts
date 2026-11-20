@@ -50,11 +50,14 @@ function toPoint(row: CaptureIndexRow, place?: CapturePointPlace): ResultPoint {
   return point as unknown as ResultPoint; // as versões de cálculo e catálogo são as do índice novo, não as constantes do contrato antigo
 }
 
+/** Chave de lugar: a coordenada registrada na própria campanha vale antes da registrada em outra campanha para o mesmo SIA. */
+export const placeKey = (sia: string, campaign?: number) => campaign ? `C${campaign}|${canonicalSia(sia)}` : canonicalSia(sia);
+
 export function captureIndexResultsCampaigns(places: ReadonlyMap<string, CapturePointPlace> = new Map()): ResultsCampaign[] {
   return [1, 2, 3].flatMap(campaign => {
     const rows = captureIndexRows(campaign);
     if (!rows.length) return [];
-    const points = [...rows].sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity)).map(row => toPoint(row, places.get(canonicalSia(row.sia))));
+    const points = [...rows].sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity)).map(row => toPoint(row, places.get(placeKey(row.sia, campaign)) ?? places.get(placeKey(row.sia))));
     const complete = points.filter(point => point.completeness === "complete").length;
     return [{ campaignCode: `C${campaign}`, points, counts: { total: points.length, complete, partialWithTwoSets: 0, partialWithOneSet: 0, unavailable: points.length - complete } }];
   });

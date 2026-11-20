@@ -61,7 +61,7 @@ describe("ponte do índice de captação para as telas de resultados", () => {
     auth.mockResolvedValue({ ok: false, response: new Response(null, { status: 401 }) });
     expect((await GET(new Request("http://local.test/api/results/capture-index/campaigns"))).status).toBe(401);
     auth.mockResolvedValue({ ok: true });
-    dashboard.mockResolvedValue({ campaignPoints: [{ code: "SIA-0220", effective: { lat: -25.4, lon: -49.2 }, waterBody: "Rio", municipality: "Cidade" }, { code: "78", effective: null, waterBody: "", municipality: "" }] });
+    dashboard.mockResolvedValue({ campaignPoints: [{ code: "SIA-0220", campaign: "Campanha 1", effective: { lat: -25.9, lon: -49.9 }, waterBody: "Rio", municipality: "Cidade" }, { code: "SIA-0220", campaign: "Campanha 3", effective: { lat: -25.4, lon: -49.2 }, waterBody: "Rio", municipality: "Cidade" }, { code: "78", effective: null, waterBody: "", municipality: "" }] });
     const ok = await GET(new Request("http://local.test/api/results/capture-index/campaigns"));
     expect(auth).toHaveBeenCalledWith(expect.any(Request), "data.view");
     expect(ok.headers.get("cache-control")).toBe("private, no-store");
@@ -69,6 +69,9 @@ describe("ponte do índice de captação para as telas de resultados", () => {
     expect(payload.version).toBe("IR-CAPTACAO-0.7-piloto");
     expect(payload.campaigns[2].points.find((point: { siaCode: string }) => point.siaCode === "220").coordinates).toMatchObject({ latitude: -25.4, longitude: -49.2 });
     expect(payload.campaigns[2].points.find((point: { siaCode: string }) => point.siaCode === "78").coordinates).toBeNull();
+    // a ordem de entrada não decide: cada campanha usa a sua coordenada; a C2, sem registro próprio, usa a reserva do mesmo SIA
+    expect(payload.campaigns[0].points.find((point: { siaCode: string }) => point.siaCode === "220").coordinates).toMatchObject({ latitude: -25.9 });
+    expect(payload.campaigns[1].points.find((point: { siaCode: string }) => point.siaCode === "220").coordinates).toMatchObject({ latitude: -25.9 });
     dashboard.mockRejectedValue(new Error("offline"));
     const fallback = await (await GET(new Request("http://local.test/api/results/capture-index/campaigns"))).json();
     expect(fallback.campaigns).toHaveLength(3);

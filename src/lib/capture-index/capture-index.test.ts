@@ -184,6 +184,26 @@ describe("saída versionada do índice de triagem", () => {
     expect(captureIndexMeta.status).toContain("aprovados pelo administrador");
   });
 
+  it("diz o que foi medido e atribui o principal ao marcador que decidiu a nota (auditoria de 20/11)", () => {
+    const onlyCoi = one(2, "257");
+    expect([onlyCoi.components["16S"].status, onlyCoi.components.COI.status]).toEqual(["ausente", "disponível"]);
+    expect(captureIndexView(onlyCoi).coverage).toBe("só COI (16S ausente)");
+    const texts = captureIndexRows().map(row => captureIndexView(row).coverage);
+    expect([texts.filter(text => text === "16S e COI").length, texts.filter(text => text.startsWith("só 16S")).length, texts.filter(text => text.startsWith("só COI")).length]).toEqual([177, 47, 1]);
+    const row = one(3, "780"), score = row.scores.Operacional!, domain = captureIndexView(row).domains[1];
+    expect(score.component).toBe("COI");
+    expect(score.contributions[0].component).toBe("16S"); // o maior entre todos os marcadores não é o que decidiu a nota
+    expect(domain.main.startsWith(score.contributions.find(item => item.component === "COI")!.taxon)).toBe(true);
+    for (const item of captureIndexRows()) for (const key of captureDomains) {
+      const s = item.scores[key]!, view = captureIndexView(item).domains[captureDomains.indexOf(key)];
+      const winner = s.contributions.find(c => c.component === s.component);
+      if (winner) expect(view.main.startsWith(winner.taxon)).toBe(true);
+    }
+    const head = captureIndexAuditCsv(captureIndexRows(3)).split("\r\n")[0];
+    expect(head).toContain("media_quadratica_das_tres_notas"); // é das notas atuais, não o valor arquivado da versão 0.5
+    expect(head).not.toContain("v05");
+  });
+
   it("declara os pontos cegos, incluindo o mosquito-fantasma de Passaúna", () => {
     expect(captureIndexMeta.blindSpots.map(item => item.tema).join(" ")).toMatch(/Chaoboridae/);
     expect(captureIndexMeta.blindSpots.length).toBeGreaterThanOrEqual(4);
