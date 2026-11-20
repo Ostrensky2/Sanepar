@@ -71,7 +71,8 @@ describe("Home evolution: general index only and independent point search", () =
     expect(markup).toContain("font-bold tabular-nums");
     const help = renderToStaticMarkup(createElement(ResultsReviewDialog as (props: { title: string; children?: ReactNode }) => ReactNode, { title: "Como ler" }, EVOLUTION_HELP.join("\n\n")));
     expect(help).toContain("<dialog");
-    expect(help).toContain("Pontos com faixa ficam fora da média");
+    expect(help).toContain("Ponto sem medição fica fora da média");
+    expect(help).toContain("As campanhas não são diretamente comparáveis");
     const defaultDialog = renderToStaticMarkup(createElement(ResultsReviewDialog));
     expect(defaultDialog).toContain(">Conheça a nova versão do Yva’e<");
     expect(defaultDialog).toContain("Explorar a nova versão");
