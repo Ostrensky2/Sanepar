@@ -51,6 +51,8 @@ export type CampaignHydroMapPoint = {
   resultCompleteness?: "complete" | "partial_2" | "partial_1" | "unavailable";
   resultMetricLabel?: string;
   resultIncluded?: readonly [boolean, boolean, boolean];
+  /** Nota baixa com pouca coisa avaliada: o índice não sabe dizer. */
+  resultUndefined?: boolean;
   // Situação do ponto (registro de campo). O ponto continua preto no mapa de
   // percurso (REGRAS 13); a situação aparece no tooltip, no card e na legenda.
   executionStatus?: PointExecutionStatus;
@@ -966,7 +968,7 @@ function PointTooltip({
             <dt className="font-bold text-slate-400">{point.resultMetricLabel || "Índice"}</dt>
             <dd className="font-black text-[var(--brand-navy-strong)]">
               {typeof point.resultValue === "number"
-                ? formatResultIndex(point.resultValue)
+                ? `${formatResultIndex(point.resultValue)}${point.resultUndefined ? " · indefinido: menos de 20% avaliado" : ""}`
                 : `${formatResultBound(point.resultLower)}–${formatResultBound(point.resultUpper)}`}
             </dd>
           </>
@@ -2144,6 +2146,7 @@ function drawResultIndexMarker(
     lower: point.resultLower ?? 0,
     upper: point.resultUpper ?? 1,
     included: point.resultIncluded ?? [false, false, false],
+    undefinedResult: point.resultUndefined,
   }, selected);
 }
 

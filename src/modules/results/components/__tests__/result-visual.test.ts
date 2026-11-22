@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { continuousResultColor, drawResultMarker, RESULT_BANDS, RESULT_PALETTE, resultBand, resultIntervalStops } from "../result-visual";
+import { continuousResultColor, drawResultMarker, isUndefinedResult, RESULT_BANDS, RESULT_PALETTE, resultBand, resultIntervalStops, UNDEFINED_COLOR } from "../result-visual";
 
 describe("shared result colors and completeness markers", () => {
   it("colore por quatro faixas fixas, com cinza para a faixa sem sinal relevante", () => {
@@ -30,6 +30,20 @@ describe("shared result colors and completeness markers", () => {
     expect(unavailable.fills).toContain("#edf4f7");
     expect(unavailable.fills).not.toContain(RESULT_BANDS[0].color);
     expect(unavailable.context.fillText).toHaveBeenCalledWith("0/3", 40, 65);
+  });
+
+  it("indefinido é nota baixa com pouca coisa avaliada; sinal encontrado vale mesmo com pouca cobertura", () => {
+    expect([isUndefinedResult(0.01, 0.07), isUndefinedResult(0.01, 0.3), isUndefinedResult(0.049, 0.199), isUndefinedResult(0.05, 0.07), isUndefinedResult(0.4, 0.02), isUndefinedResult(null, 0.05), isUndefinedResult(0.01, null)])
+      .toEqual([true, false, true, false, false, false, false]);
+    const record = recordingContext();
+    drawResultMarker(record.context, 40, 40, { value: 0.01, lower: 0, upper: 0.2, included: [true, true, false], undefinedResult: true });
+    expect(record.fills).toContain(UNDEFINED_COLOR);
+    expect(record.fills).not.toContain(RESULT_BANDS[0].color);
+    const scored = recordingContext();
+    drawResultMarker(scored.context, 40, 40, { value: 0.4, lower: 0, upper: 0.6, included: [true, true, false] }); // sem COI, mas com nota: cor da faixa, não intervalo
+    expect(scored.fills).toContain(RESULT_BANDS[3].color);
+    expect(scored.context.createLinearGradient).not.toHaveBeenCalled();
+    expect(scored.context.fillText).toHaveBeenCalledWith("2/3", 40, 65);
   });
 
   it("uses a horizontal interval and the exact mask even with a selection halo", () => {

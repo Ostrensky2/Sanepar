@@ -37,10 +37,21 @@ export function resultIntervalStops(lower: number, upper: number) {
   ];
 }
 
+/** Indefinição: nota na faixa mais baixa com menos de 20% dos reads pertencendo a organismos já avaliados.
+ * Não é um ponto tranquilo: é um ponto sobre o qual o índice ainda não sabe dizer. Quando há sinal, o achado vale mesmo com pouca cobertura. */
+export const UNDEFINED_COVERAGE = 0.2;
+export const UNDEFINED_COLOR = "#FFFFFF";
+export function isUndefinedResult(value: number | null, coverage: number | null | undefined) {
+  return value !== null && Number.isFinite(value) && value < RESULT_BANDS[1].from
+    && typeof coverage === "number" && Number.isFinite(coverage) && coverage < UNDEFINED_COVERAGE;
+}
+
 export type ResultMarkerVisual = {
   value: number | null;
   lower: number;
   upper: number;
+  /** true quando o ponto é indefinido (ver isUndefinedResult). */
+  undefinedResult?: boolean;
   included: readonly [boolean, boolean, boolean];
 };
 
@@ -66,7 +77,10 @@ export function drawResultMarker(
   }
 
   let fill: string | CanvasGradient = "#edf4f7";
-  if (count === 3 && result.value !== null && Number.isFinite(result.value)) {
+  if (count > 0 && result.undefinedResult) {
+    fill = UNDEFINED_COLOR;
+  } else if (count > 0 && result.value !== null && Number.isFinite(result.value)) {
+    // Há nota calculada: a cor é a da faixa, com dois ou três marcadores. O selo k/3 informa quais foram usados.
     fill = continuousResultColor(result.value);
   } else if (count > 0 && count < 3) {
     const stops = resultIntervalStops(result.lower, result.upper);

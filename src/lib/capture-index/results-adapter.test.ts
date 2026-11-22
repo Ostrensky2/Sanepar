@@ -11,7 +11,8 @@ vi.mock("@/components/campaign-hydro-map", () => ({ CampaignHydroMap: () => null
 import { GET } from "@/app/api/results/capture-index/campaigns/route";
 import { captureIndexRows } from "@/lib/capture-index";
 import { canonicalSia, captureIndexResultsCampaigns } from "@/lib/capture-index/results-adapter";
-import { buildResultMapPoints } from "@/modules/results/components/results-index-dashboard";
+import { buildResultMapPoints, pointCoverage } from "@/modules/results/components/results-index-dashboard";
+import { isUndefinedResult } from "@/modules/results/components/result-visual";
 import { completeOverallSummary, orderCaptureCampaignsForHome } from "@/modules/results/components/home-results-v2";
 import { ResultsIndexDashboard } from "@/modules/results/components/results-index-dashboard";
 
@@ -49,6 +50,17 @@ describe("ponte do índice de captação para as telas de resultados", () => {
     const mapped = buildResultMapPoints(campaigns[2].points);
     expect(mapped).toHaveLength(1);
     expect(mapped[0]).toMatchObject({ code: "220", effective: { lat: -25.4, lon: -49.2 }, resultValue: campaigns[2].points.find(point => point.siaCode === "220")!.overall.value });
+  });
+
+  it("separa indefinido de sem sinal relevante pela fração avaliada de cada ponto", () => {
+    const count = (code: string) => {
+      const points = campaigns.find(item => item.campaignCode === code)!.points;
+      const low = points.filter(point => point.overall.value! < 0.05);
+      return [low.filter(point => isUndefinedResult(point.overall.value, pointCoverage(point))).length, low.length, points.length];
+    };
+    expect([count("C1"), count("C2"), count("C3")]).toEqual([[13, 57, 73], [26, 29, 76], [38, 57, 76]]);
+    const signal = campaigns.flatMap(item => item.points).filter(point => point.overall.value! >= 0.05);
+    expect(signal.some(point => isUndefinedResult(point.overall.value, pointCoverage(point)))).toBe(false);
   });
 
   it("o painel de resultados existente renderiza com o índice novo", () => {
