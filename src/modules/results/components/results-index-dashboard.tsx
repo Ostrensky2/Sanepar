@@ -12,7 +12,7 @@ import {
   type CampaignHydroMapPoint,
 } from "@/components/campaign-hydro-map";
 import { ResultMarkerLegend } from "./result-marker-legend";
-import { isUndefinedResult } from "./result-visual";
+import { hasLimitedCoverage } from "./result-visual";
 import { analyticalStatusText } from "../presentation";
 import { CompleteVsPartialSketch, IndexScaleBar } from "./help-visuals";
 import { ResultsInterpretationHelp } from "./results-interpretation-help";
@@ -288,7 +288,7 @@ function CompletenessSummary({ campaign, metric }: { campaign: ResultsCampaign; 
   const items = [
     ["Com índice calculado", String(campaign.counts.complete), "pontos medidos"],
     ["Com um só marcador", String(campaign.points.filter((point) => point.completeness !== "unavailable" && (!point.components.coi.included || !point.components.bacteria.included)).length), "índice calculado sem o COI ou sem o 16S"],
-    ["Indefinidos", String(campaign.points.filter((point) => isUndefinedResult(point.overall.value, pointCoverage(point))).length), "nota baixa com menos de 20% dos reads avaliados"],
+    ["Cobertura limitada", String(campaign.points.filter((point) => point.completeness !== "unavailable" && hasLimitedCoverage(pointCoverage(point))).length), "menos de 20% dos reads avaliados, em qualquer nota"],
     ["Sem medição", String(campaign.counts.unavailable), "sem biblioteca utilizável"],
     ["Total", String(campaign.counts.total), "pontos"],
     ["Índice médio — pontos completos", formatValue(mean), `${completeValues.length} pontos completos`],
@@ -458,7 +458,8 @@ export function buildResultMapPoints(
       resultUpper: range.upper,
       resultCompleteness: point.completeness,
       resultIncluded: [point.components.bacteria.included, point.components.cyanobacteria.included, point.components.coi.included] as const,
-      resultUndefined: isUndefinedResult(range.value, pointCoverage(point)),
+      resultLimitedCoverage: hasLimitedCoverage(pointCoverage(point)),
+      resultCoverage: pointCoverage(point),
       resultMetricLabel: metricLabel(metric),
     } satisfies CampaignHydroMapPoint];
   });

@@ -2,15 +2,17 @@
 // A faixa mais baixa é cinza de propósito: "sem sinal relevante" não é "bom". O índice só pontua organismo com efeito documentado,
 // então silêncio não demonstra segurança.
 export const RESULT_BANDS = [
-  { from: 0, to: 0.05, label: "Sem sinal relevante", range: "abaixo de 0,05", color: "#9AA5B1" },
+  { from: 0, to: 0.05, label: "Sinal muito baixo", range: "abaixo de 0,05", color: "#C5CCD3" },
   { from: 0.05, to: 0.15, label: "Sinal fraco", range: "0,05 a 0,15", color: "#F2C94C" },
   { from: 0.15, to: 0.35, label: "Atenção", range: "0,15 a 0,35", color: "#F2994A" },
-  { from: 0.35, to: 1, label: "Prioridade", range: "0,35 ou mais", color: "#D7263D" },
+  { from: 0.35, to: 0.7, label: "Prioridade", range: "0,35 a 0,70", color: "#D7263D" },
+  // Reservada: nenhuma observação de C1 a C3 chega aqui (máximo 0,69). Existe para situações piores que as já vistas.
+  { from: 0.7, to: 1, label: "Prioridade máxima", range: "0,70 ou mais", color: "#762A83" },
 ] as const;
 
 /** Âncoras da cor, para quem desenha um intervalo: a cor muda em degraus nos limites das faixas. */
 export const RESULT_PALETTE = [
-  [0, RESULT_BANDS[0].color], [0.05, RESULT_BANDS[1].color], [0.15, RESULT_BANDS[2].color], [0.35, RESULT_BANDS[3].color], [1, RESULT_BANDS[3].color],
+  ...RESULT_BANDS.map((band) => [band.from, band.color] as const), [1, RESULT_BANDS[RESULT_BANDS.length - 1].color] as const,
 ] as const;
 
 export function resultBand(value: number) {
@@ -37,21 +39,20 @@ export function resultIntervalStops(lower: number, upper: number) {
   ];
 }
 
-/** Indefinição: nota na faixa mais baixa com menos de 20% dos reads pertencendo a organismos já avaliados.
- * Não é um ponto tranquilo: é um ponto sobre o qual o índice ainda não sabe dizer. Quando há sinal, o achado vale mesmo com pouca cobertura. */
-export const UNDEFINED_COVERAGE = 0.2;
-export const UNDEFINED_COLOR = "#FFFFFF";
-export function isUndefinedResult(value: number | null, coverage: number | null | undefined) {
-  return value !== null && Number.isFinite(value) && value < RESULT_BANDS[1].from
-    && typeof coverage === "number" && Number.isFinite(coverage) && coverage < UNDEFINED_COVERAGE;
+/** São duas perguntas diferentes: qual foi o sinal encontrado (a cor) e quanto da amostra foi possível interpretar (o contorno).
+ * Cobertura limitada = menos de 20% dos reads do ponto pertencem a organismos já avaliados. Vale para qualquer nota:
+ * um ponto pode ter sinal forte e, ainda assim, muita coisa desconhecida. É lacuna de conhecimento, não probabilidade de risco. */
+export const LIMITED_COVERAGE = 0.2;
+export function hasLimitedCoverage(coverage: number | null | undefined) {
+  return typeof coverage === "number" && Number.isFinite(coverage) && coverage < LIMITED_COVERAGE;
 }
 
 export type ResultMarkerVisual = {
   value: number | null;
   lower: number;
   upper: number;
-  /** true quando o ponto é indefinido (ver isUndefinedResult). */
-  undefinedResult?: boolean;
+  /** true quando a cobertura da avaliação é limitada (ver hasLimitedCoverage): contorno tracejado. */
+  limitedCoverage?: boolean;
   included: readonly [boolean, boolean, boolean];
 };
 
@@ -77,9 +78,7 @@ export function drawResultMarker(
   }
 
   let fill: string | CanvasGradient = "#edf4f7";
-  if (count > 0 && result.undefinedResult) {
-    fill = UNDEFINED_COLOR;
-  } else if (count > 0 && result.value !== null && Number.isFinite(result.value)) {
+  if (count > 0 && result.value !== null && Number.isFinite(result.value)) {
     // Há nota calculada: a cor é a da faixa, com dois ou três marcadores. O selo k/3 informa quais foram usados.
     fill = continuousResultColor(result.value);
   } else if (count > 0 && count < 3) {
@@ -89,6 +88,16 @@ export function drawResultMarker(
       stops.forEach(({ offset, color }) => gradient.addColorStop(offset, color));
       fill = gradient;
     }
+  }
+  if (count > 0 && result.limitedCoverage) {
+    // Contorno tracejado por fora do anel: pouco do que havia na amostra pôde ser avaliado.
+    context.beginPath();
+    context.arc(x, y, selected ? 23.5 : 19.5, 0, Math.PI * 2);
+    context.setLineDash([3, 3]);
+    context.strokeStyle = "#17354c";
+    context.lineWidth = 1.5;
+    context.stroke();
+    context.setLineDash([]);
   }
   context.beginPath();
   context.arc(x, y, 10, 0, Math.PI * 2);

@@ -12,7 +12,7 @@ import { GET } from "@/app/api/results/capture-index/campaigns/route";
 import { captureIndexRows } from "@/lib/capture-index";
 import { canonicalSia, captureIndexResultsCampaigns } from "@/lib/capture-index/results-adapter";
 import { buildResultMapPoints, pointCoverage } from "@/modules/results/components/results-index-dashboard";
-import { isUndefinedResult } from "@/modules/results/components/result-visual";
+import { hasLimitedCoverage } from "@/modules/results/components/result-visual";
 import { completeOverallSummary, orderCaptureCampaignsForHome } from "@/modules/results/components/home-results-v2";
 import { ResultsIndexDashboard } from "@/modules/results/components/results-index-dashboard";
 
@@ -52,15 +52,15 @@ describe("ponte do índice de captação para as telas de resultados", () => {
     expect(mapped[0]).toMatchObject({ code: "220", effective: { lat: -25.4, lon: -49.2 }, resultValue: campaigns[2].points.find(point => point.siaCode === "220")!.overall.value });
   });
 
-  it("separa indefinido de sem sinal relevante pela fração avaliada de cada ponto", () => {
+  it("a cobertura limitada é medida em todos os pontos, com qualquer nota", () => {
     const count = (code: string) => {
       const points = campaigns.find(item => item.campaignCode === code)!.points;
-      const low = points.filter(point => point.overall.value! < 0.05);
-      return [low.filter(point => isUndefinedResult(point.overall.value, pointCoverage(point))).length, low.length, points.length];
+      const limited = points.filter(point => hasLimitedCoverage(pointCoverage(point)));
+      return [limited.length, limited.filter(point => point.overall.value! >= 0.05).length, points.length];
     };
-    expect([count("C1"), count("C2"), count("C3")]).toEqual([[13, 57, 73], [26, 29, 76], [38, 57, 76]]);
-    const signal = campaigns.flatMap(item => item.points).filter(point => point.overall.value! >= 0.05);
-    expect(signal.some(point => isUndefinedResult(point.overall.value, pointCoverage(point)))).toBe(false);
+    // [com cobertura limitada, desses com algum sinal, pontos da campanha]
+    expect([count("C1"), count("C2"), count("C3")]).toEqual([[19, 6, 73], [66, 40, 76], [47, 9, 76]]);
+    expect(buildResultMapPoints(campaigns[2].points)[0]).toMatchObject({ resultLimitedCoverage: expect.any(Boolean), resultCoverage: expect.any(Number) });
   });
 
   it("o painel de resultados existente renderiza com o índice novo", () => {

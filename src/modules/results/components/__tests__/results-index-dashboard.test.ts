@@ -26,7 +26,7 @@ describe("results index dashboard v2 contract", () => {
     const legend = readFileSync(new URL("../result-marker-legend.tsx", import.meta.url), "utf8");
     for (const label of ["3/3", "2/3", "1/3", "0/3"]) expect(legend).toContain(label);
     expect(legend).toContain("RESULT_BANDS"); // faixas nomeadas no lugar do degradê
-    expect(legend).toContain("Cinza não quer dizer água boa");
+    expect(legend).toContain("Sinal muito baixo não quer dizer água boa");
   });
   it("summarizes only complete overall indices and preserves campaign and point in detail links", () => {
     expect(completeOverallSummary(fixtureCampaign())).toEqual({ count: 1, mean: 0.62 });
@@ -80,8 +80,8 @@ describe("results index dashboard v2 contract", () => {
       lower: 0.519230121182,
       upper: 0.776719365641,
     });
-    expect(continuousResultColor(0)).toBe("#9AA5B1");
-    expect(continuousResultColor(1)).toBe("#D7263D");
+    expect(continuousResultColor(0)).toBe("#C5CCD3");
+    expect(continuousResultColor(1)).toBe("#762A83");
   });
 
   it("starts Home with the most recently published campaign and uses campaign number as a stable tie-break", () => {
