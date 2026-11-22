@@ -19,10 +19,10 @@ describe("mapa de captação", () => {
   });
   it("calcula mediana/P90 no universo medido e mantém empates na mesma faixa", () => {
     const population = distribution([0, 0, 0.5, 1, null]);
-    expect(population).toMatchObject({count:4, median:0.25, max:1});
-    expect(population.p90).toBeCloseTo(0.85);
-    expect(reading(point(0.25),"overall",population).label).toBe("Até a mediana");
-    expect(reading(point(1),"overall",population).label).toBe("Acima do P90");
+    expect(population).toMatchObject({count:4, median:0, max:1, p90:1});
+    expect(reading(point(0),"overall",population).label).toBe("Até a mediana");
+    expect(reading(point(1),"overall",population).label).toBe("Acima da mediana até P90");
+    expect(reading(point(1),"overall",distribution([...Array<number>(9).fill(0), 1])).label).toBe("Acima do P90");
     expect(reading(point(0),"overall",distribution([0,0])).label).toBe("Até a mediana");
   });
 });

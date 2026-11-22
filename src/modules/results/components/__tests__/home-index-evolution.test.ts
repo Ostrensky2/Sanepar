@@ -53,7 +53,7 @@ describe("Home evolution: general index only and independent point search", () =
     // Ajuda como ícone "?" ao lado do título, acionável por clique, toque ou teclado.
     expect(markup).toContain('aria-label="Como ler a evolução"');
     expect(markup).toContain('aria-haspopup="dialog"');
-    expect(markup).toContain("P90: 0,56");
+    expect(markup).toContain("P90: 0,60 · Rede da campanha (N=2)");
     expect(markup).toContain('role="combobox"');
     expect(markup).toContain("Limpar");
     const source = readFileSync(new URL("../home-index-evolution.tsx", import.meta.url), "utf8");

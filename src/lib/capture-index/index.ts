@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { formatCaptureIndex, formatCaptureShare } from "./format";
+import { distribution } from "./distribution";
 
 /** Saída imutável do índice de triagem de risco da biota na captação (IR-CAPTACAO-0.7-piloto).
  * O cálculo é feito fora do aplicativo (audit/.../indice_v07) e materializado em `indice-captacao.json`.
@@ -100,12 +101,15 @@ export function captureIndexView(row: CaptureIndexRow) {
 }
 
 export function captureIndexCampaigns() {
-  return Object.entries(data.campaigns).map(([code, summary]) => ({
-    campaign: `C${code}`, number: Number(code), points: summary.pontos, measured: summary.medidos,
-    mean: formatCaptureIndex(summary.media), median: formatCaptureIndex(summary.mediana), p90: formatCaptureIndex(summary.p90),
+  return Object.entries(data.campaigns).map(([code, summary]) => {
+    const stats = distribution(captureIndexRows(Number(code)).map(row => row.general));
+    return {
+    campaign: `C${code}`, number: Number(code), points: summary.pontos, measured: stats.count,
+    mean: formatCaptureIndex(summary.media), median: formatCaptureIndex(stats.median), p90: formatCaptureIndex(stats.p90),
     bands: Object.entries(summary.faixas).sort(([a], [b]) => bandOrder(a) - bandOrder(b)).map(([band, count]) => ({ band, count })),
     domains: captureDomains.map(domain => ({ label: captureDomainLabels[domain], mean: formatCaptureIndex(summary.dominios?.[domain]) })),
-  }));
+    };
+  });
 }
 const bandOrder = (band: string) => band.startsWith("<") ? 0 : band.startsWith(">=") ? 9 : Number(band.slice(0, 4).replace(",", "."));
 

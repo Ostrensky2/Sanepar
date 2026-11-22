@@ -96,9 +96,7 @@ export function ResultsIndexDashboard({
     return campaign.points.filter((point) => {
       if (completeness !== "all" && point.completeness !== completeness) return false;
       if (!normalizedQuery) return true;
-      return normalizeText([point.siaCode, point.waterBody, point.municipality].join(" ")).includes(
-        normalizedQuery,
-      );
+      return matchesPointQuery(point, normalizedQuery);
     });
   }, [campaign, completeness, query]);
   const selectedPoint =
@@ -140,7 +138,7 @@ export function ResultsIndexDashboard({
     <section id="results-index-dashboard" className="scroll-mt-20 space-y-4" aria-labelledby="results-index-title">
       {overview?.(campaign)}
       <header className={summary ? "sr-only" : "app-card p-4 sm:p-5"}>
-        <p className="type-eyebrow text-[var(--brand-teal)]">Resultados por índices</p>
+        <p className="type-eyebrow text-[var(--brand-navy-strong)]">Resultados por índices</p>
         <h2 id="results-index-title" className="heading-font type-section-title text-[var(--brand-navy-strong)]">
           Síntese integrada por ponto
         </h2>
@@ -217,8 +215,8 @@ export function ResultsIndexDashboard({
               <h3 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">Mapa do índice</h3>
               <button type="button" aria-label="Como ler o mapa" title="Como ler o mapa" aria-haspopup="dialog" className="-my-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--brand-teal)] transition hover:bg-[var(--surface-soft)] hover:text-[var(--brand-navy-strong)] focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]" onClick={() => setMapHelpOpen(true)}><CircleHelp aria-hidden="true" className="h-5 w-5" /></button>
             </div>
-            <p className="type-metadata mt-1 text-[var(--ink-soft)]">
-              {mapPoints.length} de {visiblePoints.length} resultados no mapa.
+            <p role="status" className="type-metadata mt-1 text-[var(--ink-soft)]">
+              {visiblePoints.length ? <>{mapPoints.length} de {visiblePoints.length} resultados no mapa.</> : "Nenhum ponto corresponde à busca e aos filtros desta campanha."}
             </p>
             {mapPoints.length < visiblePoints.length && <button type="button" className="min-h-11 text-xs text-[var(--ink-soft)] underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]" onClick={() => setMapHelpOpen(true)}>{visiblePoints.length - mapPoints.length} sem localização no mapa — detalhes</button>}
             <button type="button" aria-expanded={mobileMapOpen} className="mt-2 min-h-11 rounded-lg border border-[var(--line-strong)] bg-white px-4 text-sm font-bold text-[var(--brand-navy-strong)] sm:hidden" onClick={() => setMobileMapOpen((open) => !open)}>{mobileMapOpen ? "Ocultar mapa" : "Ver mapa"}</button>
@@ -295,12 +293,14 @@ function CompletenessSummary({ campaign, metric }: { campaign: ResultsCampaign; 
     : null;
   const items = [
     ["Com índice calculado", String(campaign.counts.complete), "pontos medidos"],
+    ["Com 16S utilizável", String(campaign.points.filter(p => p.components.bacteria.included).length), "pontos na campanha"],
+    ["Com COI utilizável", String(campaign.points.filter(p => p.components.coi.included).length), "pontos na campanha"],
     ["Com um só marcador", String(campaign.points.filter((point) => point.completeness !== "unavailable" && (!point.components.coi.included || !point.components.bacteria.included)).length), "índice calculado sem o COI ou sem o 16S"],
     ["Sem medição", String(campaign.counts.unavailable), "sem biblioteca utilizável"],
     ["Total", String(campaign.counts.total), "pontos"],
-    ["Índice médio — pontos completos", formatValue(mean), `${completeValues.length} pontos completos`],
+    ["Índice médio", formatValue(mean), `${completeValues.length} pontos com índice calculado`],
   ];
-  return <div className="grid grid-cols-2 gap-3 lg:grid-cols-5" aria-label="Completude dos resultados">
+  return <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Completude dos resultados">
     {items.map(([label, value, suffix]) => <article key={label} className="app-card p-4">
       <p className="type-label text-[var(--ink-soft)]">{label}</p>
       <p className="heading-font type-kpi text-[var(--brand-navy-strong)]">{value}</p>
@@ -327,7 +327,7 @@ function PointDetail({ points, onSelect, point, metric, photoUrl, onFocus }: { p
     </button> : <div className="flex h-32 items-center justify-center gap-2 bg-[var(--surface-soft)] text-[var(--ink-soft)] type-metadata"><Camera aria-hidden="true" className="h-5 w-5" />Foto de campo indisponível</div>}
     {photoOpen && photoUrl && <RiskPhotoModal point={{ code: point.siaCode, municipality: point.municipality ?? "", photoUrl }} onClose={() => setPhotoOpen(false)} />}
     <div className="p-5">
-      <p className="type-eyebrow text-[var(--brand-teal)]">{point.siaCode}</p>
+      <p className="type-eyebrow text-[var(--brand-navy-strong)]">{point.siaCode}</p>
       <h3 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">{point.waterBody || "Ponto sem manancial informado"}</h3>
       <p className="type-metadata text-[var(--ink-soft)]">{point.municipality || "Município não informado"}</p>
       <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 type-metadata">
@@ -347,7 +347,7 @@ function PointDetail({ points, onSelect, point, metric, photoUrl, onFocus }: { p
       </details>
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="button" disabled={!point.coordinates} onClick={onFocus} className="min-h-11 rounded-lg border border-[var(--line-strong)] px-3 type-label text-[var(--brand-navy-strong)] disabled:opacity-50">Ir para o ponto</button>
-        <Link href={`/resultados/indice-captacao?${new URLSearchParams({campaign:point.campaignCode.slice(1), sia:point.siaCode})}`} className="inline-flex min-h-11 items-center rounded-lg bg-[var(--brand-navy-strong)] px-3 type-label text-white">Ver resultado completo</Link>
+        <Link href={`/resultados/indice-captacao?${new URLSearchParams({campaign:point.campaignCode.slice(1), sia:point.siaCode, origem:"mapa"})}`} className="inline-flex min-h-11 items-center rounded-lg bg-[var(--brand-navy-strong)] px-3 type-label text-white">Ver resultado completo</Link>
       </div>
       {point.conditionOfUse ? <ConditionOfUseNote text={point.conditionOfUse} /> : null}
       {point.observations ? <p className="type-metadata mt-3 text-[var(--ink-soft)]">{point.observations}</p> : null}
@@ -416,7 +416,11 @@ function ResultsHistory({ campaigns, metric, campaignLabels }: { campaigns: Resu
 }
 
 function TablePanel({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
-  return <section className="app-card min-w-0 overflow-hidden p-0"><header className="border-b border-[var(--line-soft)] p-4"><h3 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">{title}</h3><p className="type-metadata mt-1 text-[var(--ink-soft)]">{description}</p></header><div className="overflow-x-auto">{children}</div></section>;
+  return <details name="result-tables" className="app-card min-w-0 overflow-hidden p-0">
+    <summary className="cursor-pointer p-4 type-panel-title text-[var(--brand-navy-strong)]">{title}</summary>
+    <p className="px-4 pb-2 type-metadata text-[var(--ink-soft)]">{description}</p>
+    <div className="overflow-x-auto">{children}</div>
+  </details>;
 }
 
 export function metricRange(point: ResultPoint, metric: ResultMetric) {
@@ -495,6 +499,12 @@ function photoKey(campaignCode: string, siaCode: string) {
 
 function normalizeSia(value: string) {
   return value.trim().replace(/^(?:SIA[-\s]*)?0*(\d+)$/i, "$1");
+}
+
+export function matchesPointQuery(point: ResultPoint, query: string) {
+  const sia = normalizeSia(query);
+  if (/^\d+$/.test(sia)) return normalizeSia(point.siaCode) === sia;
+  return normalizeText([point.waterBody, point.municipality].join(" ")).includes(normalizeText(query));
 }
 
 function normalizeText(value: string) {

@@ -1,4 +1,6 @@
 import type { ResultDomain, ResultPoint } from "../types";
+import { distribution } from "@/lib/capture-index/distribution";
+export { distribution };
 
 export type Metric = "overall" | ResultDomain;
 export const domains = { environmental: "Ambiental", operational: "Operacional", humanHealth: "Saúde humana" };
@@ -14,16 +16,6 @@ export const relativeBands = [
   { label: "Acima da mediana até P90", color: "#6dabc3" },
   { label: "Acima do P90", color: "#245d83" },
 ];
-
-export function distribution(values: (number | null)[]) {
-  const sorted = values.filter((v): v is number => v !== null && Number.isFinite(v)).sort((a,b) => a-b);
-  function quantile(p: number) {
-    if (!sorted.length) return null;
-    const i = (sorted.length - 1) * p;
-    return sorted[Math.floor(i)] + (i % 1) * (sorted[Math.ceil(i)] - sorted[Math.floor(i)]);
-  }
-  return {count: sorted.length, median: quantile(0.5), p90: quantile(0.9), max: sorted.at(-1) ?? null, sorted};
-}
 
 export function reading(point: ResultPoint, metric: Metric, relative?: ReturnType<typeof distribution>) {
   const value = metric === "overall" ? point.overall.value : point.domains[metric].value;

@@ -9,10 +9,20 @@ import {
   summarizeMunicipalities,
   resultDetailHref,
   mapHelpSections,
+  matchesPointQuery,
 } from "@/modules/results/components/results-index-dashboard";
 import { orderPublishedResultsForHome, completeOverallSummary } from "@/modules/results/components/home-results-v2";
 
 describe("results index dashboard v2 contract", () => {
+  it("matches canonical SIA exactly and keeps locality search independent of padding and accents", () => {
+    const original = fixtureCampaign().points[0];
+    const points = ["11", "110", "211"].map(code => ({ ...original, siaCode: code, municipality: "São José" }));
+    for (const query of ["11", "0011", "SIA-0011", "sia 0011"]) {
+      expect(points.filter(point => matchesPointQuery(point, query))).toEqual([points[0]]);
+    }
+    expect(points.filter(point => matchesPointQuery(point, "sao jose"))).toHaveLength(3);
+    expect(points.some(point => matchesPointQuery(point, "SIA-9999"))).toBe(false);
+  });
   it("keeps map guidance contextual with live counts, metadata and scientific distinctions", () => {
     const campaign = fixtureCampaign();
     campaign.points[0].conditionOfUse = "Provisório; qualidade não informada";

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { domainEvidenceRoles, pointLibraryEvidence } from "@/lib/capture-index/point-library-evidence";
 import { sampleEffects } from "@/lib/capture-index/sample-effects";
 import { formatCaptureIndex } from "@/lib/capture-index/format";
@@ -18,11 +18,11 @@ function normalizedSia(sia: string) {
   return sia.trim().toLowerCase().replace(/^sia[-\s]*/, "").replace(/^0+(?=\d)/, "");
 }
 
-function SampleEffects({row}: {row: CaptureIndexView}) {
+function SampleEffects({row, effectId}: {row: CaptureIndexView; effectId?: string}) {
   return <ul aria-label="Tipos metodológicos da amostra" className="divide-y divide-[var(--line-strong)]">
     {sampleEffects(row).map(({effect, marker, status, contributions, alerts}) => <li key={effect.id} className="py-2">
-      <details>
-        <summary className="min-h-11 cursor-pointer py-2"><strong>{effect.title}</strong> · {status}{alerts.length > 0 && " · alerta de baixo suporte"}</summary>
+      <details open={effect.id === effectId || undefined}>
+        <summary id={`sample-${row.campaign}-${row.sia}-${effect.id}`} className="scroll-mt-24 min-h-11 cursor-pointer py-2"><strong>{effect.title}</strong> · {status}{alerts.length > 0 && " · alerta de baixo suporte"}</summary>
         <div className="space-y-1 break-words type-metadata">
           <p>{marker && <>Marcador: {marker}. </>}{effect.note}</p>
           {contributions.map(({item, determining}, i) => <p key={i}>{item.taxon} · {item.reads} reads · {determining ? "No componente determinante do domínio" : "Em outro componente observado"} · ficha {item.ficha}.
@@ -49,7 +49,7 @@ function PointLibraries({row}: {row: CaptureIndexView}) {
 
 /** Índice de triagem de risco da biota na captação. Os textos chegam prontos da API, os mesmos das exportações.
  * Quatro estados distintos: carregando, sem acesso, falha, e resultado (com ou sem dados na campanha). */
-export function CaptureIndexPanel({ campaign, initialSia = "" }: { campaign?: number; initialSia?: string }) {
+export function CaptureIndexPanel({ campaign, initialSia = "", effectId, returnHref }: { campaign?: number; initialSia?: string; effectId?: string; returnHref?: string }) {
   const key = campaign ? `?campaign=${campaign}` : "";
   const [state, setState] = useState<State>({ key, status: "loading" });
   const [search, setSearch] = useState(initialSia);
@@ -65,6 +65,15 @@ export function CaptureIndexPanel({ campaign, initialSia = "" }: { campaign?: nu
     return () => { active = false; };
   }, [key]);
   const current: State = state.key === key ? state : { key, status: "loading" };
+  const destination = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!initialSia || current.status !== "ready") return;
+    const section = destination.current;
+    const target = section?.querySelector<HTMLElement>("details[open] > summary") ?? section;
+    target?.focus({preventScroll:true});
+    target?.scrollIntoView({block:"start", behavior:"instant"});
+  }, [current.status, initialSia, effectId]);
+  const back = returnHref && <a className="inline-flex min-h-11 items-center font-semibold underline" href={returnHref}>{returnHref.endsWith("tipos-de-efeito") ? "Voltar ao quadro de efeitos da campanha" : "Voltar ao mapa da campanha"}</a>;
   const title = <h2 className="type-panel-title">Índice de triagem de risco da biota na captação</h2>;
   if (current.status === "loading") return <div className="space-y-1">{title}<p role="status">Carregando o índice…</p></div>;
   if (current.status === "denied") return <div className="space-y-1">{title}<p role="alert">Seu perfil não tem acesso a este resultado.</p></div>;
@@ -74,11 +83,12 @@ export function CaptureIndexPanel({ campaign, initialSia = "" }: { campaign?: nu
   const summary = campaigns.find(item => item.number === campaign);
   const exportLink = (format: "csv" | "audit") => `/api/results/capture-index?${new URLSearchParams({ ...(campaign ? { campaign: String(campaign) } : {}), format })}`;
   const wanted = normalizedSia(search);
-  const filtered = rows.filter(row => row.campaign === `C${campaign}` && (search === initialSia && initialSia ? normalizedSia(row.sia) === wanted : !wanted || normalizedSia(row.sia).includes(wanted)));
+  const filtered = rows.filter(row => row.campaign === `C${campaign}` && (!wanted || normalizedSia(row.sia) === wanted));
   const visible = filtered.slice(page * PAGE, page * PAGE + PAGE);
 
   return <div className="space-y-3">
     {title}
+    {(!openSia || !filtered.length) && back}
     <p className="type-metadata">Escore de 0 a 1 que ordena a atenção entre os pontos. Não é porcentagem, não é probabilidade de dano e não descreve a água tratada. Versão {meta.version} · {meta.status}.</p>
 
     <details open={!campaign}><summary className="cursor-pointer">Situação de cada categoria: {meta.maturity.map(item => `${item.label}, ${item.level}`).join(" · ")}</summary>
@@ -91,7 +101,7 @@ export function CaptureIndexPanel({ campaign, initialSia = "" }: { campaign?: nu
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4">
         <div><dt className="type-metadata">Pontos medidos</dt><dd className="type-kpi">{item.measured} de {item.points}</dd></div>
         <div><dt className="type-metadata">Índice geral médio</dt><dd className="type-kpi">{item.mean}</dd></div>
-        <div><dt className="type-metadata">Percentil 90</dt><dd className="type-kpi">{item.p90}</dd></div>
+        <div><dt className="type-metadata">Percentil 90 da rede (N={item.measured})</dt><dd className="type-kpi">{item.p90}</dd></div>
         <div><dt className="type-metadata">Mediana</dt><dd className="type-kpi">{item.median}</dd></div>
       </dl>
       {campaign && <p className="type-metadata">Média dos {item.measured} pontos: {item.mean} · Maior índice de um ponto: {formatCaptureIndex(rows.find(row => row.measured)?.exact.general)}</p>}
@@ -113,10 +123,12 @@ export function CaptureIndexPanel({ campaign, initialSia = "" }: { campaign?: nu
             <span className="font-semibold">SIA {row.sia}</span> · índice geral <strong>{row.general}</strong>
             {row.measured && <> · {row.position} · determinado por: {row.predominant}</>}
           </summary>
-          {openSia === normalizedSia(row.sia) && <section aria-label={`Efeitos da amostra · ${row.campaign} · SIA ${row.sia}`} className="mt-2 min-w-0 space-y-3">
+          {openSia === normalizedSia(row.sia) && <section ref={destination} tabIndex={-1} aria-label={`Efeitos da amostra · ${row.campaign} · SIA ${row.sia}`} className="mt-2 min-w-0 scroll-mt-24 space-y-3">
             <h3 className="type-panel-title">Efeitos da amostra</h3>
             <p className="type-metadata">{row.campaign} · SIA {row.sia} · Curadoria {meta.version}. Associação documentada, efeito não medido. Uma ficha ausente não demonstra ausência do efeito.</p>
-            <SampleEffects row={row} />
+            <p className="type-metadata"><strong>Índice geral: {row.general}</strong> · Marcadores: {row.coverage}.</p>
+            {back}
+            <SampleEffects row={row} effectId={effectId} />
             {row.measured ? <>
               <p className="type-metadata">Cenários das fichas cadastradas, do piso (só evidência plena) ao teto (fichas ainda indeterminadas com peso cheio): {row.range}. O teto não inclui efeitos que o cadastro ainda não conhece. Medição: {row.coverage}. Há {row.elevated}.</p>
               <ul className="space-y-3">{row.domains.map(domain => {

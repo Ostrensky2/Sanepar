@@ -259,7 +259,8 @@ export function AppShell({ children }: AppShellProps) {
  * página fica no H1 do conteúdo, para não repetir o mesmo nome duas vezes.
  */
 function TopbarTrail({ pathname }: { pathname: string }) {
-  const trail = getBreadcrumbsForPath(pathname).slice(0, -1);
+  const trail = getBreadcrumbsForPath(pathname);
+  if (pathname === "/") trail.pop();
 
   if (!trail.length) {
     return (
@@ -277,13 +278,13 @@ function TopbarTrail({ pathname }: { pathname: string }) {
             key={crumb.href}
             className={index < trail.length - 1 ? "hidden min-w-0 items-center gap-1.5 sm:flex" : "flex min-w-0 items-center gap-1.5"}
           >
-            <Link
+            {index === trail.length - 1 ? <span aria-current="page" className="truncate font-semibold text-[var(--brand-navy-strong)]">{crumb.label}</span> : <><Link
               href={crumb.href}
               className="truncate font-semibold transition hover:text-[var(--brand-navy-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)]"
             >
               {crumb.label}
             </Link>
-            <ChevronRight aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <ChevronRight aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-slate-400" /></>}
           </li>
         ))}
       </ol>

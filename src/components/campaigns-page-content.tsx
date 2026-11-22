@@ -1373,14 +1373,14 @@ function CampaignSummaryStrip({
     <><strong className="tabular-nums">{collected}</strong> pontos com coleta confirmada no Diário</>,
     pendingSia ? `${pendingSia} ${pendingSia === 1 ? "registro de visita com SIA pendente" : "registros de visita com SIA pendente"}` : null,
     <><strong className="tabular-nums">{fieldRows.toLocaleString("pt-BR")}</strong> registros de campo</>,
-    molecularLabel,
+    molecularLabel && <>Medição molecular: {molecularLabel}</>,
     resultPoints === null ? (publicationKnown ? "Publicação no acervo: não localizada" : "Publicação no acervo: consulta indisponível") : <>Publicação no acervo: <strong className="tabular-nums">{resultPoints.toLocaleString("pt-BR")}</strong> pontos</>,
   ].filter(Boolean);
 
   return (
     <details className="app-card group px-4 py-1" aria-label="Resumo da campanha">
       <summary className="flex min-h-12 cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[var(--ink)] [&::-webkit-details-marker]:hidden">
-        <strong className="text-[var(--brand-navy-strong)]">{phase}</strong>
+        <strong className="text-[var(--brand-navy-strong)]">Andamento administrativo: {phase}</strong>
         {items.map((item, index) => <span key={index} className="before:mr-2 before:text-[var(--ink-soft)] before:content-['·']">{item}</span>)}
         <span className="ml-auto inline-flex min-h-11 items-center gap-1 font-bold text-[var(--brand-navy-strong)]">
           {done}/{stages.length} etapas

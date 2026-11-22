@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { CaptureIndexPanel } from "@/components/capture-index-panel";
+import { effects } from "@/lib/capture-index/effect-catalog";
+import { defaultCampaigns } from "@/lib/campaign-management";
 import { PageHeader } from "@/components/page-header";
 import { SectionTabs } from "@/components/section-tabs";
 import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
@@ -7,8 +9,15 @@ import { ResultsInterpretationHelp } from "@/modules/results/components/results-
 const campaigns = [1, 2, 3];
 
 export default async function CaptureIndexPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const { campaign: value, sia } = await searchParams;
+  const { campaign: value, sia, effect, origem } = await searchParams;
   const selected = typeof value === "string" && campaigns.includes(Number(value)) ? Number(value) : undefined;
+  const selectedEffect = effects.find(item => item.id === effect);
+  const returnParams = new URLSearchParams({campaign: selected ? defaultCampaigns[selected - 1].id : ""});
+  if (origem === "efeitos" && selectedEffect) returnParams.set("effect", selectedEffect.id);
+  if (origem === "mapa" && typeof sia === "string") returnParams.set("sia", sia);
+  const returnHref = selected && (origem === "efeitos" || origem === "mapa")
+    ? `/campanhas/resultados?${returnParams}#${origem === "efeitos" ? "tipos-de-efeito" : "results-index-dashboard"}`
+    : undefined;
   const tab = (active: boolean) => `inline-flex min-h-11 items-center rounded-lg border px-4 text-sm font-bold ${active ? "bg-[var(--brand-navy-strong)] text-white" : "text-[var(--brand-navy-strong)]"}`;
   return <div className="app-container min-w-0 space-y-5">
     <PageHeader
@@ -27,6 +36,6 @@ export default async function CaptureIndexPage({ searchParams }: { searchParams:
       <Link className={tab(selected === undefined)} href="/resultados/indice-captacao">Visão da rede</Link>
       {campaigns.map(campaign => <Link key={campaign} className={tab(selected === campaign)} href={`/resultados/indice-captacao?campaign=${campaign}`}>Campanha {campaign}</Link>)}
     </nav>
-    <section className="app-card p-4"><CaptureIndexPanel key={JSON.stringify([selected,sia])} campaign={selected} initialSia={selected && typeof sia === "string" ? sia : ""} /></section>
+    <section className="app-card p-4"><CaptureIndexPanel key={JSON.stringify([selected,sia,selectedEffect?.id])} campaign={selected} effectId={selectedEffect?.id} returnHref={returnHref} initialSia={selected && typeof sia === "string" ? sia : ""} /></section>
   </div>;
 }

@@ -6,6 +6,7 @@ vi.mock("@/lib/api-auth", () => ({ requireApiSession: auth }));
 import { GET } from "@/app/api/results/capture-index/route";
 import { captureDomains, captureIndexAuditCsv, captureIndexCampaigns, captureIndexCsv, captureIndexMeta, captureIndexRows, captureIndexView, sha256Hex } from "@/lib/capture-index";
 import { formatCaptureIndex, formatCaptureShare } from "@/lib/capture-index/format";
+import { distribution } from "./distribution";
 
 const one = (campaign: number, sia: string) => captureIndexRows(campaign).find(row => row.sia === sia)!;
 const get = (query = "") => GET(new Request(`http://local.test/api/results/capture-index${query}`));
@@ -22,6 +23,19 @@ describe("formatação única", () => {
 });
 
 describe("saída versionada do índice de triagem", () => {
+  it("reproduz P90 oficial das redes e distingue os SIAs comuns na C3", () => {
+    const campaigns = [1, 2, 3].map(n => captureIndexRows(n));
+    const measured = campaigns.map(rows => new Set(rows.filter(r => r.general !== null).map(r => r.sia)));
+    const common = campaigns[2].filter(r => measured.every(ids => ids.has(r.sia)));
+    const subsets = [...campaigns, common].map(rows => distribution(rows.map(r => r.general)));
+    expect(subsets.map(s => [s.count, formatCaptureIndex(s.p90)])).toEqual([
+      [73, "0,13"], [76, "0,31"], [76, "0,31"], [72, "0,27"],
+    ]);
+    expect(captureIndexCampaigns().map(c => [c.measured, c.p90])).toEqual(
+      subsets.slice(0, 3).map(s => [s.count, formatCaptureIndex(s.p90)]));
+    expect(distribution([null, NaN])).toMatchObject({count: 0, median: null, p90: null});
+    expect(distribution([null, 0])).toMatchObject({count: 1, median: 0, p90: 0});
+  });
   it("tem uma linha por ponto e campanha, sem duplicar as corridas da C3", () => {
     expect(captureIndexMeta.version).toBe("IR-CAPTACAO-0.7-piloto");
     expect([1, 2, 3].map(campaign => captureIndexRows(campaign).length)).toEqual([73, 76, 76]);

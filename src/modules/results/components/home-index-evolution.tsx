@@ -182,7 +182,7 @@ export function HomeIndexEvolution({ campaigns }: { campaigns: ResultsCampaign[]
                   <p className="mt-1 min-h-9 text-xs font-bold tabular-nums text-[var(--ink)]">{item.range?.value === null ? <>{format(item.range.lower)}<br />–{format(item.range.upper)}</> : text}</p>
                   {selectedSia === null && campaign && <div className="text-xs text-[var(--ink-soft)]">
                     <p>Média dos {item.included} pontos: {text}</p>
-                    <p>P90: {formatCaptureIndex(stats.p90)}</p>
+                    <p>P90: {formatCaptureIndex(stats.p90)} · {commonOnly ? "SIAs comuns" : "Rede da campanha"} (N={stats.count})</p>
                     <p>Maior índice de um ponto: {formatCaptureIndex(stats.max)}</p>
                     {item.excluded > 0 && <button type="button" className="min-h-11 underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]" onClick={() => setExplanation({ title: `${label}: fora da média`, paragraphs: [evolutionExclusions(campaign, item.included).detail] })}>{evolutionExclusions(campaign, item.included).label}</button>}
                   </div>}
