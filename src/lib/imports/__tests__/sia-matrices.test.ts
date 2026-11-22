@@ -5,6 +5,9 @@ import { resolveCanonicalCampaign } from "@/lib/campaign-identity";
 import { describe, expect, it } from "vitest";
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ArchiveStatus, LinkedDates, type ArchiveStage } from "@/components/sia-matrices-preparation";
 import { boundedInflate, matrixLimits, buildCampaignMatrixWorkbook, inspectMatrixArchive, legitimateMatrixPhotos, normalizeMatrixSia, readMatrixPackage, resolveMatrixCollection, resolveSheetCollection, SHEET_LINK, type DiarySnapshot, type MatrixPackage, type MatrixReferencePoint } from "../sia-matrices";
 import type { FieldDiaryEntry } from "@/lib/field-diary";
 
@@ -60,9 +63,11 @@ describe("preparação local das matrizes SIA", () => {
 
     const without = await buildCampaignMatrixWorkbook(pkg, snapshot(), 1);
     expect([without.points, without.linkedByDiary, without.linkedBySheet, without.unresolved]).toEqual([2, 1, 0, 1]);
+    expect([without.sheetSias, without.unresolvedSias]).toEqual([[], ["SIA-0012"]]);
 
     const output = await buildCampaignMatrixWorkbook(pkg, snapshot(), 1, undefined, [ref("SIA-0011", "2026-09-09"), ref("SIA-0012", "2026-02-03")], { status: "published", source: "teste" });
     expect([output.points, output.linkedByDiary, output.linkedBySheet, output.unresolved]).toEqual([2, 1, 1, 0]);
+    expect([output.sheetSias, output.unresolvedSias]).toEqual([["SIA-0012"], []]);
     const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(output.bytes);
     const rows = workbook.getWorksheet("Coletas")!.getSheetValues().slice(2).map((row) => (row as unknown[]).slice(1, 8).map((cell) => String(cell ?? "")));
     expect(rows.find((row) => row[0] === "SIA-0011")!.slice(0, 4)).toEqual(["SIA-0011", "COLETA_ÚNICA", "collection-a", "2026-01-01"]); // o Diário prevalece sobre a planilha
@@ -71,14 +76,41 @@ describe("preparação local das matrizes SIA", () => {
     expect(pending).toContain("Coleta vinculada pela planilha de campanha");
     expect(pending).not.toContain("SEM_COLETA_REAL_CONFIRMADA");
   });
-  it("a tela mostra o que foi integrado e avalia se a integração funcionou", () => {
+  it("a tela separa arquivo gerado, datas vinculadas e incorporação ao acervo (cenário da C1)", () => {
     const component = readFileSync(join(process.cwd(), "src/components/sia-matrices-preparation.tsx"), "utf8");
     expect(component).toContain('aria-label="Planilhas integradas"');
     expect(component).toContain("Nenhuma planilha integrada está guardada no aplicativo.");
-    expect(component).toContain("Integração funcionando na C{campaign}.");
-    expect(component).toContain("Integração incompleta na C{campaign}.");
     expect(component).toContain("Abrir para conferir e baixar");
-    expect(component).toContain("Isso é uma falha de consulta, não quer dizer que não haja nada guardado.");
+    expect(component).toContain("<strong>1. Arquivo gerado:</strong>");
+    expect(component).toContain("Baixar {file ? file.filename"); // o nome do .xlsx aparece antes do download
+    expect(component).not.toContain("Integração funcionando"); // data vinculada não é incorporação
+
+    const sheetSias = Array.from({ length: 72 }, (_, i) => `SIA-${String(i + 1).padStart(4, "0")}`);
+    const dates = renderToStaticMarkup(createElement(LinkedDates, { points: 73, byDiary: 0, sheetSias, unresolvedSias: ["SIA-0305"] }));
+    expect(dates).toContain("72 de 73 pontos têm data");
+    expect(dates).toContain("72 pela planilha de campanha");
+    expect(dates).toContain("Data encontrada na planilha de campanha não equivale a coleta confirmada no Diário.");
+    expect(dates).toContain("Sem data em nenhuma via (1):</strong> SIA 305");
+    expect(dates).not.toContain("Diário de Campo ·");
+    const allDiary = renderToStaticMarkup(createElement(LinkedDates, { points: 76, byDiary: 76, sheetSias: [], unresolvedSias: [] }));
+    expect(allDiary).toContain("76 de 76 pontos têm data · 76 pelo Diário de Campo");
+    expect(allDiary).not.toContain("não equivale");
+
+    const render = (status: ArchiveStage) => renderToStaticMarkup(createElement(ArchiveStatus, { status }));
+    expect(render({ kind: "not-sent" })).toContain("ainda não foi enviado ao acervo");
+    const blocked = render({ kind: "blocked", reason: "SIA-0011: SEM_COLETA_REAL_CONFIRMADA. Corrija/confirme a coleta no Diário antes de incorporar este grupo." });
+    expect(blocked).toContain("nenhum ponto deste envio foi incorporado.");
+    expect(blocked).toContain("SIA-0011: SEM_COLETA_REAL_CONFIRMADA");
+    const unknown = render({ kind: "unknown", reason: "Acervo indisponível." });
+    expect(unknown).toContain("não foi possível verificar.");
+    expect(unknown).toContain("Isso não quer dizer que não foi incorporado.");
+    expect(unknown).not.toContain("nenhum ponto deste envio foi incorporado");
+    expect(render({ kind: "reviewed", groups: 10, fresh: 6, changed: 1, same: 3 })).toContain("ainda sem gravar");
+    const partial = render({ kind: "applied", confirmed: 2, total: 5, sias: ["SIA-0011", "SIA-0017"], pending: false });
+    expect(partial).toContain("incorporação parcial.");
+    expect(partial).toContain("2 de 5 lotes gravados, cobrindo 2 pontos: SIA 11, SIA 17");
+    expect(render({ kind: "applied", confirmed: 5, total: 5, sias: ["SIA-0011"], pending: false })).toContain("incorporação confirmada.");
+    expect(render({ kind: "applied", confirmed: 5, total: 5, sias: ["SIA-0011"], pending: true })).toContain("incorporação parcial."); // lote indeterminado não conta como confirmado
   });
   it("normaliza somente SIA numérico completo", () => {
     expect([11, "SIA-0011", "0011"].map(normalizeMatrixSia)).toEqual(["SIA-0011", "SIA-0011", "SIA-0011"]);

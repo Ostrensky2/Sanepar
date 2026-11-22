@@ -280,7 +280,7 @@ export async function buildCampaignMatrixWorkbook(pkg: MatrixPackage, snapshot: 
     (resolveCanonicalCampaign(entry.campaignId)?.id === campaignId || resolveCanonicalCampaign(entry.campaignName)?.id === campaignId),
   ).flatMap((entry) => { const sia = normalizeMatrixSia(entry.sia); return sia ? [sia] : []; });
   const allSias = [...new Set(matrixSias)].sort();
-  let linkedBySheet = 0;
+  const sheetSias: string[] = [];
   const diagnostics = add("Pendências", ["SIA / dataset", "Condição"]);
   if (referenceContext && (referenceContext.limitation || referenceContext.status !== "published")) {
     diagnostics.addRow(["Referências de coordenadas", matrixText(`Estado: ${referenceContext.status ?? "não informado"}. Fonte: ${referenceContext.source ?? "não informada"}. ${referenceContext.limitation ?? "Completude não comprovada."} Referências retornadas: ${references.length}; lista vazia não comprova ausência de coordenadas.`)]);
@@ -302,7 +302,7 @@ export async function buildCampaignMatrixWorkbook(pkg: MatrixPackage, snapshot: 
         fields.addRow([sia, SHEET_LINK, "", sheetRef.sourceDate, "", sheetRef.waterBody ?? "", sheetRef.municipality ?? "", "planilha de campanha",
           sheetRef.original?.lat ?? "", sheetRef.original?.lon ?? "", sheetRef.effective?.lat ?? "", sheetRef.effective?.lon ?? "", matrixText(`Planilha de campanha: ${sheetRef.source}`)]);
         diagnostics.addRow([sia, "Coleta vinculada pela planilha de campanha; sem registro no Diário"]);
-        linkedBySheet += 1; continue;
+        sheetSias.push(sia); continue;
       }
       fields.addRow([sia, resolution.status]); diagnostics.addRow([sia, resolution.status]); continue;
     }
@@ -353,6 +353,8 @@ export async function buildCampaignMatrixWorkbook(pkg: MatrixPackage, snapshot: 
     rows: Array.from({ length: Math.min(21, sheet.rowCount) }, (_, r) =>
       Array.from({ length: Math.min(12, sheet.columnCount) }, (_, c) => sheet.getRow(r + 1).getCell(c + 1).text)),
   }));
-  return { bytes, preview, filename: `matrizes-SIA-C${campaign}-${new Date().toISOString().slice(0, 10)}.xlsx`, points: allSias.length, linkedByDiary: allSias.filter((sia) => resolveMatrixCollection(snapshot, campaign, sia).entry).length, linkedBySheet,
-    unresolved: allSias.filter((sia) => !resolveMatrixCollection(snapshot, campaign, sia).entry).length - linkedBySheet };
+  return { bytes, preview, filename: `matrizes-SIA-C${campaign}-${new Date().toISOString().slice(0, 10)}.xlsx`, points: allSias.length, linkedByDiary: allSias.filter((sia) => resolveMatrixCollection(snapshot, campaign, sia).entry).length, linkedBySheet: sheetSias.length,
+    // Pontos cuja data veio só da planilha de campanha (não confirmam coleta no Diário) e pontos sem data em nenhuma via.
+    sheetSias, unresolvedSias: allSias.filter((sia) => !resolveMatrixCollection(snapshot, campaign, sia).entry && !sheetSias.includes(sia)),
+    unresolved: allSias.filter((sia) => !resolveMatrixCollection(snapshot, campaign, sia).entry).length - sheetSias.length };
 }

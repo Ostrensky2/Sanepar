@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { matrixIdentityFromName, matrixInputNames, type MatrixIdentity, type DiarySnapshot, type MatrixPackage } from "@/lib/imports/sia-matrices";
-import { archivePackage, prepareArchiveSheets, previewArchiveBatches, applyArchiveBatches, selectArchiveGroups, readArchiveCampaign, type ArchiveBatch, type ArchivePlan, type ArchiveSheet, type MatrixScope } from "@/lib/imports/sia-matrix-archive";
+import { archivePackage, prepareArchiveSheets, previewArchiveBatches, applyArchiveBatches, selectArchiveGroups, readArchiveCampaign, ArchiveRequestError, type ArchiveBatch, type ArchivePlan, type ArchiveSheet, type MatrixScope } from "@/lib/imports/sia-matrix-archive";
 import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
 import { resolveCanonicalCampaign } from "@/lib/campaign-identity";
 
@@ -62,8 +62,12 @@ function CampaignWorkbook({ data, campaign }: { data: MatrixPackage; campaign: n
   }
   const sheet = file?.preview[index];
   return <div className="min-w-0 space-y-3">
-    <button type="button" className={control} disabled={!file} onClick={download}>Baixar planilha (.xlsx)</button>
-    {file && <IntegrationCheck campaign={campaign} points={file.points} byDiary={file.linkedByDiary} bySheet={file.linkedBySheet} unresolved={file.unresolved} />}
+    <div className={stage} aria-label="Arquivo gerado">
+      <p><strong>1. Arquivo gerado:</strong> {file ? <span className="break-all font-mono">{file.filename}</span> : "em preparação…"}</p>
+      <p>Confira as abas na prévia abaixo antes de baixar. O download traz todas as abas, linhas e colunas.</p>
+      <button type="button" className={control} disabled={!file} onClick={download}>Baixar {file ? file.filename : "planilha (.xlsx)"}</button>
+    </div>
+    {file && <LinkedDates points={file.points} byDiary={file.linkedByDiary} sheetSias={file.sheetSias} unresolvedSias={file.unresolvedSias} />}
     {error ? <div role="alert">{error} <button className={control} type="button" onClick={() => { setError(""); setAttempt(attempt + 1); }}>Tentar novamente</button></div> : !file && <p role="status">Montando a planilha da C{campaign}…</p>}
     {sheet && file && <>
       <label className="flex flex-col gap-1 text-sm">Aba da prévia<select aria-label="Aba da prévia" className={control} value={index} onChange={(e) => setIndex(Number(e.target.value))}>{file.preview.map((s, i) => <option key={s.name} value={i}>{s.name}</option>)}</select></label>
@@ -78,13 +82,37 @@ function CampaignWorkbook({ data, campaign }: { data: MatrixPackage; campaign: n
   </div>;
 }
 
-/** Avaliação da integração: cada ponto das matrizes precisa de uma coleta com data, vinda do Diário de Campo ou da planilha de campanha. */
-export function IntegrationCheck({ campaign, points, byDiary, bySheet, unresolved }: { campaign: number; points: number; byDiary: number; bySheet: number; unresolved: number }) {
-  const linked = byDiary + bySheet;
-  const origin = [byDiary ? `${byDiary} pelo Diário de Campo` : "", bySheet ? `${bySheet} pela planilha de campanha` : ""].filter(Boolean).join(" e ");
-  return unresolved === 0
-    ? <p role="status" className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900"><strong>Integração funcionando na C{campaign}.</strong> Os {points} pontos das matrizes têm coleta e data ({origin}). Confira a aba Coletas na prévia abaixo.</p>
-    : <p role="alert" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><strong>Integração incompleta na C{campaign}.</strong> {linked} de {points} pontos têm coleta e data{origin ? ` (${origin})` : ""}; {unresolved} {unresolved === 1 ? "ficou" : "ficaram"} sem coleta vinculada, portanto sem data. A aba Pendências diz o motivo de cada um.</p>;
+const shortSia = (sia: string) => sia.replace(/^SIA-0*/, "SIA ");
+const stage = "rounded border p-3 text-sm";
+
+/** Etapa 2 de 3. Diz só o que é: quantos pontos têm data e por qual via. Data achada na planilha de campanha
+ * não é coleta confirmada no Diário, e nada aqui informa se o arquivo foi guardado (isso é a etapa 3). */
+export function LinkedDates({ points, byDiary, sheetSias, unresolvedSias }: { points: number; byDiary: number; sheetSias: string[]; unresolvedSias: string[] }) {
+  const linked = byDiary + sheetSias.length;
+  return <div className={stage} aria-label="Datas vinculadas">
+    <p><strong>2. Datas vinculadas:</strong> {linked} de {points} pontos têm data{byDiary ? ` · ${byDiary} pelo Diário de Campo` : ""}{sheetSias.length ? ` · ${sheetSias.length} pela planilha de campanha` : ""}.</p>
+    {sheetSias.length > 0 && <p>Data encontrada na planilha de campanha não equivale a coleta confirmada no Diário. Esses {sheetSias.length} pontos entram no Excel com a data, mas não podem ser guardados no acervo enquanto a coleta não estiver confirmada no Diário.</p>}
+    {unresolvedSias.length > 0 && <p role="alert"><strong>Sem data em nenhuma via ({unresolvedSias.length}):</strong> {unresolvedSias.map(shortSia).join(", ")}. O motivo de cada um está na aba Pendências.</p>}
+  </div>;
+}
+
+/** Etapa 3 de 3. Estados distintos, para nunca trocar "não foi possível verificar" por "não incorporado". */
+export type ArchiveStage =
+  | { kind: "not-sent" }
+  | { kind: "blocked"; reason: string }
+  | { kind: "reviewed"; groups: number; fresh: number; changed: number; same: number }
+  | { kind: "applied"; confirmed: number; total: number; sias: string[]; pending: boolean }
+  | { kind: "unknown"; reason: string };
+export function ArchiveStatus({ status }: { status: ArchiveStage }) {
+  const title = <strong>3. Incorporação ao acervo:</strong>;
+  if (status.kind === "not-sent") return <div className={stage} aria-label="Incorporação ao acervo"><p>{title} este arquivo ainda não foi enviado ao acervo. Ele existe só nesta tela e no download. Para guardar, abra Acervo compartilhado, compare com o acervo e confirme.</p></div>;
+  if (status.kind === "blocked") return <div className={stage} aria-label="Incorporação ao acervo"><p role="alert">{title} <strong>nenhum ponto deste envio foi incorporado.</strong> A operação foi bloqueada antes de gravar. Motivo: {status.reason}</p></div>;
+  if (status.kind === "unknown") return <div className={stage} aria-label="Incorporação ao acervo"><p role="alert">{title} <strong>não foi possível verificar.</strong> Isso não quer dizer que não foi incorporado. Motivo: {status.reason}</p></div>;
+  if (status.kind === "reviewed") return <div className={stage} aria-label="Incorporação ao acervo"><p>{title} comparado com o acervo, <strong>ainda sem gravar</strong>. De {status.groups} grupos: {status.fresh} novos, {status.changed} alterados e {status.same} já guardados e idênticos. A gravação só acontece ao confirmar.</p></div>;
+  const all = status.confirmed === status.total && !status.pending;
+  return <div className={stage} aria-label="Incorporação ao acervo">
+    <p role={all ? "status" : "alert"}>{title} {all ? <strong>incorporação confirmada.</strong> : <strong>incorporação parcial.</strong>} {status.confirmed} de {status.total} lotes gravados{status.sias.length ? `, cobrindo ${status.sias.length} pontos: ${status.sias.map(shortSia).join(", ")}` : ""}.{all ? "" : " Os demais lotes não foram gravados."}</p>
+  </div>;
 }
 
 type StoredSummary = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; groups: number; points: number; datasets: string[] };
@@ -141,6 +169,7 @@ export function SiaMatricesPreparation({ canImport }: { canImport: boolean }) {
   const [archiveCount, setArchiveCount] = useState<number | null>(null);
   const [archiveCampaigns, setArchiveCampaigns] = useState<number[]>([]);
   const [inventoryState, setInventoryState] = useState<"loading" | "error" | "ready">("loading");
+  const [archiveStage, setArchiveStage] = useState<ArchiveStage>({ kind: "not-sent" });
   useEffect(() => {
     if (!canImport) return;
     const controller = new AbortController();
@@ -167,7 +196,7 @@ export function SiaMatricesPreparation({ canImport }: { canImport: boolean }) {
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Arquivos inválidos."); setFiles([]); }
     finally { setBusy(false); }
   }
-  function invalidateReview() { setReview(null); setSelected([]); }
+  function invalidateReview() { setReview(null); setSelected([]); setArchiveStage({ kind: "not-sent" }); }
   async function prepare() {
     if (started) return;
     setBusy(true); setError(""); setData(null); invalidateReview(); setMessage("Conferindo arquivos locais…");
@@ -189,7 +218,15 @@ export function SiaMatricesPreparation({ canImport }: { canImport: boolean }) {
       setReview({ sheets, plan, batches: [...(subset ? review?.batches.filter((batch) => batch.state === "confirmado") ?? [] : []), ...batches], confirmedSubset: true });
       setSelected(plan.details.map((detail) => detail.scope));
       setMessage(`${plan.new} novos, ${plan.changed} alterados, ${plan.unchanged} idênticos. Prévia sem gravação.`);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Comparação indisponível."); setReview((current) => current ? { ...current, confirmedSubset: false } : null); }
+      setArchiveStage({ kind: "reviewed", groups: plan.new + plan.changed + plan.unchanged, fresh: plan.new, changed: plan.changed, same: plan.unchanged });
+    } catch (reason) {
+      const text = reason instanceof Error ? reason.message : "Comparação indisponível.";
+      setError(text); setReview((current) => current ? { ...current, confirmedSubset: false } : null);
+      // A comparação nunca grava. Recusa por regra (resposta 4xx do acervo, ou trava local) permite afirmar que nada entrou;
+      // falha do servidor ou de rede, não.
+      const refused = reason instanceof ArchiveRequestError ? reason.status >= 400 && reason.status < 500 && ![401, 403, 408, 429].includes(reason.status) : reason instanceof Error;
+      setArchiveStage(refused ? { kind: "blocked", reason: text } : { kind: "unknown", reason: text });
+    }
     finally { setBusy(false); }
   }
   async function apply() {
@@ -200,9 +237,14 @@ export function SiaMatricesPreparation({ canImport }: { canImport: boolean }) {
       setReview({ ...review, batches, confirmedSubset: !batches.some((batch) => batch.conflict) });
       const confirmed = batches.filter((batch) => batch.state === "confirmado").length;
       setMessage(`${confirmed}/${batches.length} lotes confirmados. Resultados científicos não publicados.`);
+      setArchiveStage({ kind: "applied", confirmed, total: batches.length, pending: batches.some((batch) => batch.state === "verificar"),
+        sias: [...new Set(batches.filter((batch) => batch.state === "confirmado").flatMap((batch) => batch.sheets.flatMap((sheet) => sheet.rows.map((row) => row.sia))))].sort() });
       if (batches.some((batch) => batch.conflict)) setError("Conflito: revise novamente somente o saldo antes de confirmar. Lotes anteriores permanecem salvos.");
       else if (batches.some((batch) => batch.state === "verificar")) setError("Resposta indeterminada. Repetir confirmação consultará o mesmo pedido, sem alterar UUID, conteúdo ou digest.");
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Confirmação indisponível. O identificador da operação foi mantido para reconsulta/reenvio seguro."); }
+    } catch (reason) {
+      const text = reason instanceof Error ? reason.message : "Confirmação indisponível. O identificador da operação foi mantido para reconsulta/reenvio seguro.";
+      setError(text); setArchiveStage({ kind: "unknown", reason: text });
+    }
     finally { setBusy(false); }
   }
   async function inspectArchive(target: number | null = campaign) {
@@ -243,6 +285,7 @@ export function SiaMatricesPreparation({ canImport }: { canImport: boolean }) {
         </select>
       </label>
       {canImport && data && campaign !== null && data.sources.some((source) => source.campaign === campaign) && <CampaignWorkbook key={JSON.stringify([campaign, data.sources.map((s) => s.hash)])} data={data} campaign={campaign} />}
+      {canImport && data && campaign !== null && data.sources.some((source) => source.campaign === campaign) && <ArchiveStatus status={archiveStage} />}
       {archiveCampaigns.includes(campaign ?? 0) && <button type="button" className={control} disabled={busy} onClick={() => void inspectArchive()}>Carregar acervo</button>}
     </section>}
     {data && <details className="space-y-3"><summary className="min-h-11 cursor-pointer py-3">Acervo compartilhado</summary>
