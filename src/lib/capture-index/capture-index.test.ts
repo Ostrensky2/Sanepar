@@ -204,6 +204,27 @@ describe("saída versionada do índice de triagem", () => {
     expect(head).not.toContain("v05");
   });
 
+  it("alertas de parentesco avisam o que investigar e nunca entram na nota (consenso de 22/11)", () => {
+    const rows = captureIndexRows();
+    const kin = rows.flatMap(row => row.alerts.filter(alert => alert.motivo === "alerta de parentesco").map(alert => ({ row, alert })));
+    expect(kin).toHaveLength(5413);
+    for (const { row, alert } of kin) {
+      expect(alert.reads).toBeGreaterThanOrEqual(10); // mesmo piso de suporte da nota
+      expect(alert.participacao!).toBeGreaterThanOrEqual(0.0001);
+      expect(alert.aplicabilidade).toBeNull();
+      expect(row.scores[alert.dominio as "Ambiental"]!.contributions.some(c => c.taxon === alert.taxon && c.component === alert.componente)).toBe(false); // quem alerta por parentesco não pontua ali
+    }
+    const view = captureIndexView(one(3, "220"));
+    expect(view.kinshipTotal).toBe(view.kinship.reduce((sum, group) => sum + group.total, 0));
+    expect(view.kinshipTotal).toBeGreaterThan(0);
+    for (const group of view.kinship) {
+      expect(group.top.length).toBeLessThanOrEqual(5);
+      expect(group.top.length + group.rest.length).toBe(group.total); // a lista completa continua acessível
+    }
+    expect(view.alerts.some(alert => alert.reason.includes("parentesco"))).toBe(false); // ficam em seção própria, separados de baixo suporte
+    expect(one(3, "220").scores["Saúde humana"]!.score).toBeCloseTo(0.6075, 3); // a nota da 0.7 não muda
+  });
+
   it("declara os pontos cegos, incluindo o mosquito-fantasma de Passaúna", () => {
     expect(captureIndexMeta.blindSpots.map(item => item.tema).join(" ")).toMatch(/Chaoboridae/);
     expect(captureIndexMeta.blindSpots.length).toBeGreaterThanOrEqual(4);

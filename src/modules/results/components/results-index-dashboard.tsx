@@ -12,6 +12,7 @@ import {
   type CampaignHydroMapPoint,
 } from "@/components/campaign-hydro-map";
 import { ResultMarkerLegend } from "./result-marker-legend";
+import { hasLimitedCoverage } from "./result-visual";
 import { analyticalStatusText } from "../presentation";
 import { CompleteVsPartialSketch, IndexScaleBar } from "./help-visuals";
 import { ResultsInterpretationHelp } from "./results-interpretation-help";
@@ -143,7 +144,7 @@ export function ResultsIndexDashboard({
           Síntese integrada por ponto
         </h2>
         <div className="mt-2 flex items-center gap-1">
-          <p className="type-body text-[var(--ink)]">Índices de 0 a 1 · versão piloto.</p>
+          <p className="type-body text-[var(--ink)]">Índice de triagem de 0 a 1, lido em quatro faixas · versão piloto.</p>
           <ResultsInterpretationHelp title="Como ler a síntese por ponto">
             <p>A cor de cada ponto no mapa é o seu índice, de 0 a 1. O anel mostra quais marcadores foram usados: bactérias (16S), algas pelo cloroplasto e COI.</p>
             <IndexScaleBar />
@@ -232,7 +233,7 @@ export function ResultsIndexDashboard({
               zoomOnSelect={false}
               focusRequest={focusRequest}
               showPointTooltip
-              caption={`${metricLabel(metric)} · escala fixa 0–1 · anel: conjuntos utilizados`}
+              caption={`${metricLabel(metric)} · faixas fixas entre campanhas · anel: marcadores usados`}
             />
           </div>
         </div>
@@ -287,11 +288,12 @@ function CompletenessSummary({ campaign, metric }: { campaign: ResultsCampaign; 
   const items = [
     ["Com índice calculado", String(campaign.counts.complete), "pontos medidos"],
     ["Com um só marcador", String(campaign.points.filter((point) => point.completeness !== "unavailable" && (!point.components.coi.included || !point.components.bacteria.included)).length), "índice calculado sem o COI ou sem o 16S"],
+    ["Cobertura limitada", String(campaign.points.filter((point) => point.completeness !== "unavailable" && hasLimitedCoverage(pointCoverage(point, metric))).length), "menos de 20% dos reads avaliados na categoria exibida ou na que deu a nota"],
     ["Sem medição", String(campaign.counts.unavailable), "sem biblioteca utilizável"],
     ["Total", String(campaign.counts.total), "pontos"],
     ["Índice médio — pontos completos", formatValue(mean), `${completeValues.length} pontos completos`],
   ];
-  return <div className="grid grid-cols-2 gap-3 lg:grid-cols-5" aria-label="Completude dos resultados">
+  return <div className="grid grid-cols-2 gap-3 lg:grid-cols-6" aria-label="Completude dos resultados">
     {items.map(([label, value, suffix]) => <article key={label} className="app-card p-4">
       <p className="type-label text-[var(--ink-soft)]">{label}</p>
       <p className="heading-font type-kpi text-[var(--brand-navy-strong)]">{value}</p>
@@ -456,9 +458,23 @@ export function buildResultMapPoints(
       resultUpper: range.upper,
       resultCompleteness: point.completeness,
       resultIncluded: [point.components.bacteria.included, point.components.cyanobacteria.included, point.components.coi.included] as const,
+      resultLimitedCoverage: hasLimitedCoverage(pointCoverage(point, metric)),
+      resultCoverage: pointCoverage(point, metric),
       resultMetricLabel: metricLabel(metric),
     } satisfies CampaignHydroMapPoint];
   });
+}
+
+/** Fração dos reads avaliados que qualifica a nota exibida. Em uma categoria, é a cobertura dela. Na visão geral, é a da categoria
+ * que determinou a nota (a maior das três); se houver empate na nota, vale a menor cobertura entre as empatadas. */
+export function pointCoverage(point: ResultPoint, metric: ResultMetric = "overall") {
+  const finite = (value: number | null | undefined): value is number => typeof value === "number" && Number.isFinite(value);
+  if (metric !== "overall") { const value = point.bibliographicCoverage[metric]; return finite(value) ? value : null; }
+  const domains = (Object.keys(point.domains) as Array<keyof ResultPoint["domains"]>).filter((domain) => finite(point.domains[domain].value));
+  if (!domains.length) return null;
+  const top = Math.max(...domains.map((domain) => point.domains[domain].value as number));
+  const values = domains.filter((domain) => point.domains[domain].value === top).map((domain) => point.bibliographicCoverage[domain]).filter(finite);
+  return values.length ? Math.min(...values) : null;
 }
 
 function metricLabel(metric: ResultMetric) {

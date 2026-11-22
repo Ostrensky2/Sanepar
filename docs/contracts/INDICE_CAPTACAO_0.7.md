@@ -16,6 +16,16 @@ Números com essas decisões: média do índice geral 0,05 (C1), 0,13 (C2) e 0,0
 6. **Pesos aprovados.** O administrador aprovou em 20/11 os pesos das fichas curadas nesta rodada: Microcystis (aplicabilidade 0,5), gosto e odor (gravidade 2, aplicabilidade 0,5), quironomídeos (2 e 0,5), Cordylophora (2 e 0,5), mexilhão-dourado (3 e 1) e assinatura de esgoto (2 e 0,5, base de 1,0%). Onde este documento ainda diz "proposto" para esses pesos, vale a aprovação.
 7. **Espécies exóticas: presença não é dano.** A categoria de danos ambientais só pontua organismo com dano documentado. A presença de exóticas é listada por ponto, sem nota, a partir da tabela de exóticas aquáticas do pipeline do Marcio (`COI/C*/exotic_aquatic_species.tsv`), com dois complementos: Corbicula em gênero (as duas espécies candidatas são exóticas) e o mexilhão reatribuído de Perna. Há exóticas em 116 das 225 observações.
 
+## Consenso de 22/11: fórmula congelada, leitura em faixas e alertas de parentesco
+
+Decidido pelo administrador, com dois pareceres concordantes.
+
+- **A fórmula da 0.7 fica congelada como referência.** Nenhum peso muda. Qualquer regra nova roda como versão comparativa, ao lado da oficial, e só a substitui se ganhar no confronto com registros independentes, por categoria e por data. A prova de uma regra melhor não é o mapa ficar mais colorido: é quantos episódios documentados ela teria apontado na categoria certa e quantos alertas a mais teria produzido em períodos comprovadamente normais.
+- **Leitura em faixas no mapa, número contínuo no detalhe.** Sinal muito baixo (abaixo de 0,05), sinal fraco (0,05 a 0,15), atenção (0,15 a 0,35), prioridade (0,35 a 0,70) e prioridade máxima (0,70 ou mais, faixa reservada: nenhuma observação chega a ela). São faixas de triagem fixas entre campanhas, não classes de risco nem limites sanitários. Símbolo vazado só para ponto sem medição utilizável.
+- **Sinal e cobertura são perguntas diferentes.** A cor diz o sinal encontrado. O contorno tracejado diz que menos de 20% dos reads foram avaliados na categoria exibida ou, na visão geral, na categoria que determinou a nota; em empate de nota, vale a menor cobertura. Os 20% são um aviso de leitura, não um certificado de confiança. Com essa regra, têm cobertura limitada 19 pontos na C1, 66 na C2 e 48 na C3.
+- **Alertas de parentesco, sem nota.** Quando o organismo detectado pertence a um grupo em que só parte das espécies tem efeito documentado (ficha indeterminada) e não há ficha decidida, o ponto recebe um aviso do que vale investigar. Exige o mesmo suporte da nota: pelo menos 10 reads e 0,01% da biblioteca. O detalhe mostra, por categoria, as cinco maiores participações nos reads, que não são os maiores riscos, e mantém a lista completa. São 5.413 alertas de 115 organismos nas 225 observações, com mediana de 23 por ponto. Nenhuma nota, piso, teto ou posição mudou com a inclusão deles.
+- **Simulação arquivada, não adotada:** dar aplicabilidade 0,1 a esses organismos mudaria 187 das 225 notas (`simular_genero.py`). Fica como versão comparativa.
+
 ## Auditoria independente de 20/11 (`audit/AUDITORIA-INDEPENDENTE-INDICE-0-7-20261120.md`)
 
 A auditoria refez as 675 notas sem usar o motor e elas bateram. Apontou defeitos de explicação, corrigidos em seguida, e limites que continuam valendo:

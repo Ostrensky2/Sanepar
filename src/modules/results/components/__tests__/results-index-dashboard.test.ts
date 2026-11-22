@@ -25,8 +25,8 @@ describe("results index dashboard v2 contract", () => {
     expect(source).toContain("{mapPoints.length} de {visiblePoints.length} resultados no mapa.");
     const legend = readFileSync(new URL("../result-marker-legend.tsx", import.meta.url), "utf8");
     for (const label of ["3/3", "2/3", "1/3", "0/3"]) expect(legend).toContain(label);
-    expect(legend).not.toContain("<p>");
-    expect(legend).toContain("RESULT_PALETTE");
+    expect(legend).toContain("RESULT_BANDS"); // faixas nomeadas no lugar do degradê
+    expect(legend).toContain("Sinal muito baixo não quer dizer água boa");
   });
   it("summarizes only complete overall indices and preserves campaign and point in detail links", () => {
     expect(completeOverallSummary(fixtureCampaign())).toEqual({ count: 1, mean: 0.62 });
@@ -80,7 +80,7 @@ describe("results index dashboard v2 contract", () => {
       lower: 0.519230121182,
       upper: 0.776719365641,
     });
-    expect(continuousResultColor(0)).toBe("#1A9850");
+    expect(continuousResultColor(0)).toBe("#C5CCD3");
     expect(continuousResultColor(1)).toBe("#762A83");
   });
 
