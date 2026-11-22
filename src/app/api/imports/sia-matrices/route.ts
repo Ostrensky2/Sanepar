@@ -71,7 +71,7 @@ export async function GET(request: Request) {
     }
     return json({ status: sourceStatus, source, limitation: sourceStatus === "published" ? null : "Fonte histórica local; não é confirmação de completude atual da nuvem.", references: points.flatMap((point) => {
       const sia = normalizeMatrixSia(point.code);
-      return sia ? [{ campaign, sia, original: point.original, effective: point.effective, source, sourceDate: point.date }] : [];
+      return sia ? [{ campaign, sia, original: point.original, effective: point.effective, source, sourceDate: point.date, waterBody: point.waterBody || point.point || "", municipality: point.municipality || "" }] : [];
     }) });
   }
   let after: unknown = null;

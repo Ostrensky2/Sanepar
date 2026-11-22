@@ -5,7 +5,7 @@ import { resolveCanonicalCampaign } from "@/lib/campaign-identity";
 import { describe, expect, it } from "vitest";
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
-import { boundedInflate, matrixLimits, buildCampaignMatrixWorkbook, inspectMatrixArchive, legitimateMatrixPhotos, normalizeMatrixSia, readMatrixPackage, resolveMatrixCollection, type DiarySnapshot, type MatrixPackage } from "../sia-matrices";
+import { boundedInflate, matrixLimits, buildCampaignMatrixWorkbook, inspectMatrixArchive, legitimateMatrixPhotos, normalizeMatrixSia, readMatrixPackage, resolveMatrixCollection, resolveSheetCollection, SHEET_LINK, type DiarySnapshot, type MatrixPackage, type MatrixReferencePoint } from "../sia-matrices";
 import type { FieldDiaryEntry } from "@/lib/field-diary";
 
 function entry(overrides: Partial<FieldDiaryEntry> = {}): FieldDiaryEntry {
@@ -48,6 +48,37 @@ describe("preparação local das matrizes SIA", () => {
     const component = readFileSync(join(process.cwd(), "src/components/sia-matrices-preparation.tsx"), "utf8");
     expect(component).toContain("references, { status, source, limitation }");
     expect(readFileSync(join(process.cwd(), "src/lib/imports/sia-matrices.worker.ts"), "utf8")).toContain("data.args[4], data.args[5]");
+  });
+  it("sem coleta no Diário, a data e o vínculo vêm da planilha de campanha; o Diário vale primeiro", async () => {
+    const pkg = await readMatrixPackage([await file()]); // SIAs 11 e 12; o Diário de teste só tem o 11
+    const ref = (sia: string, sourceDate: string, extra: Partial<MatrixReferencePoint> = {}): MatrixReferencePoint =>
+      ({ campaign: 1, sia, original: { lat: -25.1, lon: -49.1 }, effective: { lat: -25.2, lon: -49.2 }, source: "campaign_imports teste", sourceDate, waterBody: "Rio de teste", municipality: "Cidade", ...extra });
+    expect(resolveSheetCollection([ref("SIA-0012", "2026-02-03")], 1, "SIA-0012")?.sourceDate).toBe("2026-02-03");
+    expect(resolveSheetCollection([ref("SIA-0012", "2026-02-03"), ref("SIA-0012", "2026-02-09")], 1, "SIA-0012")).toBeUndefined(); // duas datas: não escolhe por suposição
+    expect(resolveSheetCollection([ref("SIA-0012", "")], 1, "SIA-0012")).toBeUndefined();
+    expect(resolveSheetCollection([ref("SIA-0012", "2026-02-03", { campaign: 2 })], 1, "SIA-0012")).toBeUndefined(); // outra campanha não serve
+
+    const without = await buildCampaignMatrixWorkbook(pkg, snapshot(), 1);
+    expect([without.points, without.linkedByDiary, without.linkedBySheet, without.unresolved]).toEqual([2, 1, 0, 1]);
+
+    const output = await buildCampaignMatrixWorkbook(pkg, snapshot(), 1, undefined, [ref("SIA-0011", "2026-09-09"), ref("SIA-0012", "2026-02-03")], { status: "published", source: "teste" });
+    expect([output.points, output.linkedByDiary, output.linkedBySheet, output.unresolved]).toEqual([2, 1, 1, 0]);
+    const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(output.bytes);
+    const rows = workbook.getWorksheet("Coletas")!.getSheetValues().slice(2).map((row) => (row as unknown[]).slice(1, 8).map((cell) => String(cell ?? "")));
+    expect(rows.find((row) => row[0] === "SIA-0011")!.slice(0, 4)).toEqual(["SIA-0011", "COLETA_ÚNICA", "collection-a", "2026-01-01"]); // o Diário prevalece sobre a planilha
+    expect(rows.find((row) => row[0] === "SIA-0012")).toEqual(["SIA-0012", SHEET_LINK, "", "2026-02-03", "", "Rio de teste", "Cidade"]);
+    const pending = workbook.getWorksheet("Pendências")!.getSheetValues().flat().join(" ");
+    expect(pending).toContain("Coleta vinculada pela planilha de campanha");
+    expect(pending).not.toContain("SEM_COLETA_REAL_CONFIRMADA");
+  });
+  it("a tela mostra o que foi integrado e avalia se a integração funcionou", () => {
+    const component = readFileSync(join(process.cwd(), "src/components/sia-matrices-preparation.tsx"), "utf8");
+    expect(component).toContain('aria-label="Planilhas integradas"');
+    expect(component).toContain("Nenhuma planilha integrada está guardada no aplicativo.");
+    expect(component).toContain("Integração funcionando na C{campaign}.");
+    expect(component).toContain("Integração incompleta na C{campaign}.");
+    expect(component).toContain("Abrir para conferir e baixar");
+    expect(component).toContain("Isso é uma falha de consulta, não quer dizer que não haja nada guardado.");
   });
   it("normaliza somente SIA numérico completo", () => {
     expect([11, "SIA-0011", "0011"].map(normalizeMatrixSia)).toEqual(["SIA-0011", "SIA-0011", "SIA-0011"]);

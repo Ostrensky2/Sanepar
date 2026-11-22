@@ -63,6 +63,7 @@ function CampaignWorkbook({ data, campaign }: { data: MatrixPackage; campaign: n
   const sheet = file?.preview[index];
   return <div className="min-w-0 space-y-3">
     <button type="button" className={control} disabled={!file} onClick={download}>Baixar planilha (.xlsx)</button>
+    {file && <IntegrationCheck campaign={campaign} points={file.points} byDiary={file.linkedByDiary} bySheet={file.linkedBySheet} unresolved={file.unresolved} />}
     {error ? <div role="alert">{error} <button className={control} type="button" onClick={() => { setError(""); setAttempt(attempt + 1); }}>Tentar novamente</button></div> : !file && <p role="status">Montando a planilha da C{campaign}…</p>}
     {sheet && file && <>
       <label className="flex flex-col gap-1 text-sm">Aba da prévia<select aria-label="Aba da prévia" className={control} value={index} onChange={(e) => setIndex(Number(e.target.value))}>{file.preview.map((s, i) => <option key={s.name} value={i}>{s.name}</option>)}</select></label>
@@ -75,6 +76,51 @@ function CampaignWorkbook({ data, campaign }: { data: MatrixPackage; campaign: n
       </div>
     </>}
   </div>;
+}
+
+/** Avaliação da integração: cada ponto das matrizes precisa de uma coleta com data, vinda do Diário de Campo ou da planilha de campanha. */
+export function IntegrationCheck({ campaign, points, byDiary, bySheet, unresolved }: { campaign: number; points: number; byDiary: number; bySheet: number; unresolved: number }) {
+  const linked = byDiary + bySheet;
+  const origin = [byDiary ? `${byDiary} pelo Diário de Campo` : "", bySheet ? `${bySheet} pela planilha de campanha` : ""].filter(Boolean).join(" e ");
+  return unresolved === 0
+    ? <p role="status" className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900"><strong>Integração funcionando na C{campaign}.</strong> Os {points} pontos das matrizes têm coleta e data ({origin}). Confira a aba Coletas na prévia abaixo.</p>
+    : <p role="alert" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><strong>Integração incompleta na C{campaign}.</strong> {linked} de {points} pontos têm coleta e data{origin ? ` (${origin})` : ""}; {unresolved} {unresolved === 1 ? "ficou" : "ficaram"} sem coleta vinculada, portanto sem data. A aba Pendências diz o motivo de cada um.</p>;
+}
+
+type StoredSummary = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; groups: number; points: number; datasets: string[] };
+
+/** O que já foi integrado e guardado no aplicativo, por campanha. Fica sempre à vista: sem isso não há como conferir o que entrou. */
+function IntegratedSheets({ state, campaigns, busy, onOpen }: { state: "loading" | "error" | "ready"; campaigns: number[]; busy: boolean; onOpen: (campaign: number) => void }) {
+  const [summaries, setSummaries] = useState<Record<number, StoredSummary>>({});
+  useEffect(() => {
+    let active = true;
+    for (const campaign of campaigns) {
+      void readArchiveCampaign(campaign).then((groups): StoredSummary => ({
+        status: "ready", groups: groups.length, points: new Set(groups.map((group) => group.scope[1])).size,
+        datasets: [...new Set(groups.map((group) => `${group.scope[3]} ${group.scope[5] === "familias" ? "famílias" : "gêneros"} · ${group.scope[4]}`))].sort(),
+      })).catch((reason): StoredSummary => ({ status: "error", message: reason instanceof Error ? reason.message : "Consulta indisponível." }))
+        .then((summary) => { if (active) setSummaries((current) => ({ ...current, [campaign]: summary })); });
+    }
+    return () => { active = false; };
+  }, [campaigns]);
+  return <section aria-label="Planilhas integradas" className="min-w-0 space-y-2 rounded border border-[var(--line-strong)] p-3">
+    <h3 className="type-section-title">Planilhas integradas</h3>
+    {state === "loading" && <p role="status" className="text-sm">Consultando o que já foi integrado…</p>}
+    {state === "error" && <p role="alert" className="text-sm">Não foi possível consultar as planilhas integradas agora. Isso é uma falha de consulta, não quer dizer que não haja nada guardado.</p>}
+    {state === "ready" && campaigns.length === 0 && <p className="text-sm"><strong>Nenhuma planilha integrada está guardada no aplicativo.</strong> Baixar a planilha não a guarda: o arquivo fica só no computador de quem baixou. Para guardar, confira as matrizes abaixo, abra Acervo compartilhado, compare com o acervo e confirme.</p>}
+    {state === "ready" && campaigns.length > 0 && <ul className="space-y-2">{campaigns.map((campaign) => {
+      const summary = summaries[campaign] ?? { status: "loading" as const };
+      return <li key={campaign} className="flex flex-wrap items-center justify-between gap-2 rounded border p-2 text-sm">
+        <div className="min-w-0">
+          <p className="font-semibold">{resolveCanonicalCampaign(campaign)?.name ?? `C${campaign}`}</p>
+          {summary.status === "loading" && <p role="status">Lendo o que está guardado…</p>}
+          {summary.status === "error" && <p role="alert">Não foi possível ler: {summary.message}</p>}
+          {summary.status === "ready" && <p className="break-words">{summary.points} pontos · {summary.datasets.length} conjuntos guardados: {summary.datasets.join("; ")}</p>}
+        </div>
+        <button type="button" className={control} disabled={busy} onClick={() => onOpen(campaign)}>Abrir para conferir e baixar</button>
+      </li>;
+    })}</ul>}
+  </section>;
 }
 
 export function SiaMatricesPreparation({ canImport }: { canImport: boolean }) {
@@ -94,14 +140,16 @@ export function SiaMatricesPreparation({ canImport }: { canImport: boolean }) {
   const indeterminate = review?.batches.some((batch) => batch.state === "verificar" && !batch.conflict) ?? false;
   const [archiveCount, setArchiveCount] = useState<number | null>(null);
   const [archiveCampaigns, setArchiveCampaigns] = useState<number[]>([]);
+  const [inventoryState, setInventoryState] = useState<"loading" | "error" | "ready">("loading");
   useEffect(() => {
     if (!canImport) return;
     const controller = new AbortController();
     void fetch("/api/imports/sia-matrices?inventory=1", { cache: "no-store", signal: controller.signal }).then(async (response) => {
-      if (!response.ok) return;
+      if (!response.ok) { setInventoryState("error"); return; }
       const value = await response.json();
-      if (Array.isArray(value.campaigns)) { setArchiveCampaigns(value.campaigns); setCampaign((current) => current ?? value.campaigns[0] ?? null); }
-    }).catch(() => {});
+      if (Array.isArray(value.campaigns)) { setArchiveCampaigns(value.campaigns); setCampaign((current) => current ?? value.campaigns[0] ?? null); setInventoryState("ready"); }
+      else setInventoryState("error");
+    }).catch((reason: unknown) => { if (!(reason instanceof DOMException && reason.name === "AbortError")) setInventoryState("error"); });
     return () => controller.abort();
   }, [canImport]);
   const [excludedSias, setExcludedSias] = useState<string[]>([]);
@@ -157,9 +205,10 @@ export function SiaMatricesPreparation({ canImport }: { canImport: boolean }) {
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Confirmação indisponível. O identificador da operação foi mantido para reconsulta/reenvio seguro."); }
     finally { setBusy(false); }
   }
-  async function inspectArchive() {
-    if (campaign === null || started) return;
-    setBusy(true); setError("");
+  async function inspectArchive(target: number | null = campaign) {
+    if (target === null || started) return;
+    const campaign = target;
+    setCampaign(campaign); setBusy(true); setError("");
     try {
       const groups = await readArchiveCampaign(campaign); setArchiveCount(groups.length);
       const loaded = await archivePackage(groups, await diary()); setData(loaded); setRuns(Object.fromEntries(loaded.sources.map((s) => [s.name, s.run]))); invalidateReview();
@@ -170,6 +219,7 @@ export function SiaMatricesPreparation({ canImport }: { canImport: boolean }) {
   }
   return <section aria-label="Preparação local de matrizes por SIA" aria-busy={busy} className="min-w-0 space-y-3 border-t border-[var(--line-strong)] pt-5">
     <h2 className="type-section-title text-[var(--brand-navy-strong)]">Preparar matrizes por SIA</h2>
+    {canImport && <IntegratedSheets state={inventoryState} campaigns={archiveCampaigns} busy={busy || started} onOpen={(number) => void inspectArchive(number)} />}
     <fieldset disabled={!canImport || busy || started} className="flex min-w-0 flex-col items-start gap-3">
       <legend className="sr-only">Selecionar matrizes locais</legend>
       <label className="flex w-full min-w-0 flex-col gap-1 text-sm">Arquivos de matrizes (.zip ou .xlsx)

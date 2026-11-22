@@ -27,7 +27,14 @@ export async function matrixInputNames(files: Array<{ name: string; size: number
   if (new Set(names).size !== names.length) throw new Error("Nomes de arquivos duplicados; selecione fontes inequívocas.");
   return names;
 }
-export type MatrixReferencePoint = { campaign: number; sia: string; original: { lat: number; lon: number } | null; effective: { lat: number; lon: number } | null; source: string; sourceDate: string };
+export type MatrixReferencePoint = { campaign: number; sia: string; original: { lat: number; lon: number } | null; effective: { lat: number; lon: number } | null; source: string; sourceDate: string; waterBody?: string; municipality?: string };
+/** A coleta pode ter entrado por duas vias: o Diário de Campo (registro feito na coleta) ou a planilha de campanha (upload do Excel).
+ * O Diário vale primeiro. Sem coleta real no Diário, vale a planilha, desde que traga UMA data para aquele SIA na campanha. */
+export const SHEET_LINK = "PLANILHA_DE_CAMPANHA";
+export function resolveSheetCollection(references: MatrixReferencePoint[], campaign: number, sia: string) {
+  const matches = references.filter((point) => point.campaign === campaign && normalizeMatrixSia(point.sia) === sia && Boolean(point.sourceDate?.trim()));
+  return new Set(matches.map((point) => point.sourceDate.trim())).size === 1 ? matches[0] : undefined;
+}
 export type DiarySnapshot = { entries: FieldDiaryEntry[]; persistence: string; complete?: boolean; totalCount?: number | null };
 export const matrixLimits = { inputBytes: 32 * 1024 * 1024, expandedBytes: 128 * 1024 * 1024, entries: 256, rows: 1000, columns: 5000 };
 const pause = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -273,6 +280,7 @@ export async function buildCampaignMatrixWorkbook(pkg: MatrixPackage, snapshot: 
     (resolveCanonicalCampaign(entry.campaignId)?.id === campaignId || resolveCanonicalCampaign(entry.campaignName)?.id === campaignId),
   ).flatMap((entry) => { const sia = normalizeMatrixSia(entry.sia); return sia ? [sia] : []; });
   const allSias = [...new Set(matrixSias)].sort();
+  let linkedBySheet = 0;
   const diagnostics = add("Pendências", ["SIA / dataset", "Condição"]);
   if (referenceContext && (referenceContext.limitation || referenceContext.status !== "published")) {
     diagnostics.addRow(["Referências de coordenadas", matrixText(`Estado: ${referenceContext.status ?? "não informado"}. Fonte: ${referenceContext.source ?? "não informada"}. ${referenceContext.limitation ?? "Completude não comprovada."} Referências retornadas: ${references.length}; lista vazia não comprova ausência de coordenadas.`)]);
@@ -288,7 +296,16 @@ export async function buildCampaignMatrixWorkbook(pkg: MatrixPackage, snapshot: 
   }
   for (const sia of allSias) {
     const resolution = resolveMatrixCollection(snapshot, campaign, sia), e = resolution.entry;
-    if (!e) { fields.addRow([sia, resolution.status]); diagnostics.addRow([sia, resolution.status]); continue; }
+    if (!e) {
+      const sheetRef = resolution.status === "SEM_COLETA_REAL_CONFIRMADA" ? resolveSheetCollection(references, campaign, sia) : undefined;
+      if (sheetRef) {
+        fields.addRow([sia, SHEET_LINK, "", sheetRef.sourceDate, "", sheetRef.waterBody ?? "", sheetRef.municipality ?? "", "planilha de campanha",
+          sheetRef.original?.lat ?? "", sheetRef.original?.lon ?? "", sheetRef.effective?.lat ?? "", sheetRef.effective?.lon ?? "", matrixText(`Planilha de campanha: ${sheetRef.source}`)]);
+        diagnostics.addRow([sia, "Coleta vinculada pela planilha de campanha; sem registro no Diário"]);
+        linkedBySheet += 1; continue;
+      }
+      fields.addRow([sia, resolution.status]); diagnostics.addRow([sia, resolution.status]); continue;
+    }
     const matches = references.filter((point) => point.campaign === campaign && normalizeMatrixSia(point.sia) === sia);
     const refKeys = new Set(matches.map((point) => JSON.stringify([point.original, point.effective])));
     const ref = refKeys.size === 1 ? matches[0] : undefined;
@@ -336,5 +353,6 @@ export async function buildCampaignMatrixWorkbook(pkg: MatrixPackage, snapshot: 
     rows: Array.from({ length: Math.min(21, sheet.rowCount) }, (_, r) =>
       Array.from({ length: Math.min(12, sheet.columnCount) }, (_, c) => sheet.getRow(r + 1).getCell(c + 1).text)),
   }));
-  return { bytes, preview, filename: `matrizes-SIA-C${campaign}-${new Date().toISOString().slice(0, 10)}.xlsx`, points: allSias.length, unresolved: allSias.filter((sia) => !resolveMatrixCollection(snapshot, campaign, sia).entry).length };
+  return { bytes, preview, filename: `matrizes-SIA-C${campaign}-${new Date().toISOString().slice(0, 10)}.xlsx`, points: allSias.length, linkedByDiary: allSias.filter((sia) => resolveMatrixCollection(snapshot, campaign, sia).entry).length, linkedBySheet,
+    unresolved: allSias.filter((sia) => !resolveMatrixCollection(snapshot, campaign, sia).entry).length - linkedBySheet };
 }
