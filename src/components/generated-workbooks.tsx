@@ -66,12 +66,26 @@ export function orderWorkbookVersions<T extends Pick<Artifact, "id" | "campaign"
   return ordered.map((item, index) => ({item, latest: index === 0 || ordered[index - 1].campaign !== item.campaign}));
 }
 
+export function countWorkbookPoints(workbook: import("exceljs").Workbook) {
+  const roster = workbook.getWorksheet("Coletas");
+  if (roster?.getCell("A1").text !== "SIA") throw Error("Rol de pontos indisponível.");
+  const sias = new Set<string>();
+  roster.eachRow((row, index) => {
+    if (index === 1) return;
+    const match = /^(?:SIA-)?(\d+)$/i.exec(row.getCell(1).text.trim());
+    if (!match) throw Error("SIA inválida no rol de pontos.");
+    sias.add(match[1].replace(/^0+(?=\d)/, ""));
+  });
+  return sias.size;
+}
+
 export function GeneratedWorkbookList({owner}:{owner:string}){
   const [items,setItems]=useState<Artifact[]|null>(null);
   const [error,setError]=useState("");
   const [attempt,retry]=useState(0);
   const [opened,open]=useState<{item:Artifact;sheets:{name:string;rows:string[][]}[]}|null>(null);
   const [sheet,select]=useState(0);
+  const [counts, setCounts] = useState<Record<string, number | "loading" | "error">>({});
   useEffect(()=>{
     const controller=new AbortController();
     let generation=0;
@@ -88,33 +102,78 @@ export function GeneratedWorkbookList({owner}:{owner:string}){
     void refresh();window.addEventListener(changed,refresh);
     return ()=>{controller.abort();window.removeEventListener(changed,refresh)};
   },[owner,attempt]);
-  async function useFile(item:Artifact,preview:boolean){
+  async function useFile(item:Artifact,action:"preview" | "download" | "count"){
     try{
-      setError("");
+      if (action === "count") setCounts(prev => ({...prev, [item.id]: "loading"}));
+      else setError("");
       const response=await fetch(endpoint+"?"+new URLSearchParams({id:item.id}),{cache:"no-store",signal:AbortSignal.timeout(60000)});
       await requireSuccess(response);
       const bytes=await response.arrayBuffer();
       if(bytes.byteLength!==item.size||await sha256(bytes)!==item.sha256)throw Error("Os bytes recebidos divergem da versão escolhida.");
-      if(preview){
+      if(action !== "download"){
         const {Workbook}=await import("exceljs");
         const workbook=new Workbook();await workbook.xlsx.load(bytes);
+        if (action === "count") {
+          const count = countWorkbookPoints(workbook);
+          setCounts(prev => ({...prev, [item.id]: count}));
+          return;
+        }
         const sheets=workbook.worksheets.map(s=>({name:s.name,rows:Array.from({length:Math.min(25,s.rowCount)},(_,r)=>Array.from({length:Math.min(12,s.columnCount)},(_,c)=>s.getCell(r+1,c+1).text))}));
         select(0);open({item,sheets});
       }else{
         const url=URL.createObjectURL(new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
         const link=document.createElement("a");link.href=url;link.download=item.filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
       }
-    }catch(error){open(null);setError("Falha ao abrir o XLSX. "+(error instanceof Error?error.message:""))}
+    } catch (error) {
+      if (action === "count") setCounts(prev => ({...prev, [item.id]: "error"}));
+      else {open(null);setError("Falha ao abrir o XLSX. "+(error instanceof Error?error.message:""))}
+    }
   }
-  return <section className="app-card space-y-3"><h2 className="type-section-title">Planilhas geradas</h2>
-    <p>Arquivos compartilhados entre usuários com permissão de importação. A guarda do XLSX confirma sua geração. Consulte a etapa de incorporação para verificar o recibo dos grupos.</p>
-    {error&&<div role="alert">{error} <button type="button" onClick={()=>retry(n=>n+1)}>Consultar novamente</button></div>}
+  const campaigns = new Map<number, Artifact[]>();
+  for (const {item} of orderWorkbookVersions(items ?? [])) {
+    const versions = campaigns.get(item.campaign);
+    if (versions) versions.push(item);
+    else campaigns.set(item.campaign, [item]);
+  }
+
+  function version(item: Artifact, current: boolean) {
+    return <div className="min-w-0 space-y-2 break-words">
+      <p className="type-metadata">{current && "Versão atual · "}<time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString("pt-BR")}</time></p>
+      <p className="type-body">{item.filename}</p>
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" className={current ? "min-h-11 rounded-lg bg-[var(--brand-navy-strong)] px-4 font-semibold text-white" : "min-h-11 underline"} onClick={()=>void useFile(item,"download")}>
+          {current ? "Baixar Excel unificado" : "Baixar esta versão"}
+        </button>
+        <button type="button" className="min-h-11 underline" onClick={()=>void useFile(item,"preview")}>Reabrir</button>
+      </div>
+      <div className="type-metadata">
+        <span role="status">{typeof counts[item.id] === "number" ? `${counts[item.id]} pontos`
+          : counts[item.id] === "loading" ? "Conferindo pontos…"
+          : counts[item.id] === "error" ? "Não foi possível conferir os pontos desta versão."
+          : "Quantidade de pontos ainda não conferida."}</span>
+        {typeof counts[item.id] !== "number" && <button type="button" disabled={counts[item.id] === "loading"}
+          className="ms-2 min-h-11 underline" onClick={()=>void useFile(item,"count")}>Conferir pontos</button>}
+      </div>
+      <details><summary className="cursor-pointer">Recibo de geração</summary>
+        <p className="break-all">SHA-256 {item.version}</p>
+        <p>Conta registrada: {item.createdBy} · Pendências no XLSX: {item.pendingCount}</p>
+        <ul>{item.sourcesDeclared.map(source=><li className="break-all" key={source.filename+source.sha256}>{source.filename} · SHA-256 {source.sha256}</li>)}</ul>
+      </details>
+    </div>;
+  }
+
+  return <div className="min-w-0 space-y-3">
+    {error&&<div role="alert">{error} <button type="button" onClick={()=>{setError("");retry(n=>n+1)}}>Consultar novamente</button></div>}
     {!error&&items===null&&<p role="status">Consultando planilhas…</p>}
-    {!error&&items?.length===0&&<p>Nenhuma planilha guardada.</p>}
-    <ul className="space-y-2">{orderWorkbookVersions(items ?? []).map(({item,latest})=><li className="break-words" key={item.id}>
-      {latest ? <strong className="block text-[var(--brand-navy-strong)]">Mais recente da campanha</strong> : <span className="block type-metadata">Versão anterior · Histórico</span>}
-      <strong>{item.filename}</strong> · C{item.campaign} · Versão SHA-256 <span title={item.version}>{item.version.slice(0,12)}</span> · {new Date(item.createdAt).toLocaleString("pt-BR")} <details><summary>Recibo de geração</summary><p>Conta registrada: {item.createdBy} · Pendências no XLSX: {item.pendingCount}</p><p>Conferência interna da campanha entre as abas. Fontes declaradas no arquivo:</p><ul>{item.sourcesDeclared.map((source,i)=><li key={i}>{source.filename} · SHA-256 {source.sha256}</li>)}</ul></details><button type="button" onClick={()=>void useFile(item,true)}>Reabrir</button> <button type="button" onClick={()=>void useFile(item,false)}>Baixar original</button></li>)}</ul>
+    {!error&&items?.length===0&&<p>Nenhuma planilha unificada guardada. Em Preparar matrizes por SIA, confira as matrizes e gere o Excel para salvar a primeira versão.</p>}
+    <ul className="space-y-4">{Array.from(campaigns, ([campaign, [current, ...history]]) => <li key={campaign} className="min-w-0 space-y-2 border-t border-[var(--line-strong)] pt-3">
+      <h3 className="type-panel-title">Campanha {campaign}</h3>
+      {version(current, true)}
+      {history.length > 0 && <details><summary className="min-h-11 cursor-pointer py-2">Histórico ({history.length})</summary>
+        <ul className="space-y-3">{history.map(item => <li key={item.id}>{version(item, false)}</li>)}</ul>
+      </details>}
+    </li>)}</ul>
     {opened&&<div><h3>{opened.item.filename}</h3><label>Aba da cópia guardada <select value={sheet} onChange={e=>select(Number(e.target.value))}>{opened.sheets.map((s,i)=><option key={s.name} value={i}>{s.name}</option>)}</select></label>
     <p>Prévia das primeiras 25 linhas e 12 colunas de cada aba.</p><div className="max-w-full overflow-auto"><table><tbody>{opened.sheets[sheet]?.rows.map((r,i)=><tr key={i}>{r.map((v,j)=><td key={j}>{v}</td>)}</tr>)}</tbody></table></div></div>}
-  </section>
+  </div>
 }

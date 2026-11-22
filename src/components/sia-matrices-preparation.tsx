@@ -121,7 +121,7 @@ export type ArchiveStage =
   | { kind: "unknown"; reason: string };
 export function ArchiveStatus({ status }: { status: ArchiveStage }) {
   const title = <strong>3. Incorporação ao acervo:</strong>;
-  if (status.kind === "not-sent") return <div className={stage} aria-label="Incorporação ao acervo"><p>{title} o conjunto de pontos e matrizes ainda não foi enviado ao acervo compartilhado. Para incorporá-lo, abra Acervo compartilhado, compare os grupos e confirme. Consulte a guarda do XLSX em Planilhas geradas.</p></div>;
+  if (status.kind === "not-sent") return <div className={stage} aria-label="Incorporação ao acervo"><p>{title} o conjunto de pontos e matrizes ainda não foi enviado ao acervo compartilhado. Para incorporá-lo, abra Acervo compartilhado, compare os grupos e confirme. Consulte a guarda do XLSX em Planilhas unificadas por campanha.</p></div>;
   if (status.kind === "blocked") return <div className={stage} aria-label="Incorporação ao acervo"><p role="alert">{title} <strong>nenhum ponto deste envio foi incorporado.</strong> A operação foi bloqueada antes de gravar. Motivo: {status.reason}</p></div>;
   if (status.kind === "unknown") return <div className={stage} aria-label="Incorporação ao acervo"><p role="alert">{title} <strong>não foi possível verificar.</strong> Isso não quer dizer que não foi incorporado. Motivo: {status.reason}</p></div>;
   if (status.kind === "reviewed") return <div className={stage} aria-label="Incorporação ao acervo"><p>{title} comparado com o acervo, <strong>ainda sem gravar</strong>. De {status.groups} grupos: {status.fresh} novos, {status.changed} alterados e {status.same} já guardados e idênticos. A gravação só acontece ao confirmar.</p></div>;
@@ -148,10 +148,10 @@ function IntegratedSheets({ state, campaigns, busy, onOpen }: { state: "loading"
     return () => { active = false; };
   }, [campaigns]);
   return <section aria-label="Grupos incorporados ao acervo" className="min-w-0 space-y-2 rounded border border-[var(--line-strong)] p-3">
-    <h3 className="type-section-title">Grupos incorporados ao acervo</h3>
+    <h2 className="type-section-title">Grupos incorporados ao acervo</h2>
     {state === "loading" && <p role="status" className="text-sm">Consultando campanhas com grupos incorporados…</p>}
     {state === "error" && <p role="alert" className="text-sm">Consulta dos grupos incorporados indisponível.</p>}
-    {state === "ready" && campaigns.length === 0 && <p className="text-sm"><strong>Nenhum grupo incorporado foi localizado.</strong> Para incorporar grupos, confira as matrizes, compare com o acervo compartilhado e confirme. Os arquivos XLSX guardados aparecem em Planilhas geradas.</p>}
+    {state === "ready" && campaigns.length === 0 && <p className="text-sm"><strong>Nenhum grupo incorporado foi localizado.</strong> Para incorporar grupos, confira as matrizes, compare com o acervo compartilhado e confirme. Os arquivos XLSX guardados aparecem em Planilhas unificadas por campanha.</p>}
     {state === "ready" && campaigns.length > 0 && <ul className="space-y-2">{campaigns.map((campaign) => {
       const summary = summaries[campaign] ?? { status: "loading" as const };
       return <li key={campaign} className="flex flex-wrap items-center justify-between gap-2 rounded border p-2 text-sm">
@@ -275,9 +275,8 @@ export function SiaMatricesPreparation({ canImport }: { canImport: boolean }) {
     catch (reason) { setError(reason instanceof Error ? reason.message : "Acervo indisponível."); }
     finally { setBusy(false); }
   }
-  return <section aria-label="Preparação local de matrizes por SIA" aria-busy={busy} className="min-w-0 space-y-3 border-t border-[var(--line-strong)] pt-5">
+  return <><section aria-label="Preparação local de matrizes por SIA" aria-busy={busy} className="min-w-0 space-y-3 border-t border-[var(--line-strong)] pt-5">
     <h2 className="type-section-title text-[var(--brand-navy-strong)]">Preparar matrizes por SIA</h2>
-    {canImport && <IntegratedSheets state={inventoryState} campaigns={archiveCampaigns} busy={busy || started} onOpen={(number) => void inspectArchive(number)} />}
     <fieldset disabled={!canImport || busy || started} className="flex min-w-0 flex-col items-start gap-3">
       <legend className="sr-only">Selecionar matrizes locais</legend>
       <label className="flex w-full min-w-0 flex-col gap-1 text-sm">Arquivos de matrizes (.zip ou .xlsx)
@@ -332,5 +331,7 @@ export function SiaMatricesPreparation({ canImport }: { canImport: boolean }) {
     </details>}
     <p role="status" aria-live="polite" className="type-metadata break-words">{message}</p>
     {error && <p role="alert" className="break-words text-sm text-red-700">{error}</p>}
-  </section>;
+  </section>
+    {canImport && <IntegratedSheets state={inventoryState} campaigns={archiveCampaigns} busy={busy || started} onOpen={(number) => void inspectArchive(number)} />}
+  </>;
 }

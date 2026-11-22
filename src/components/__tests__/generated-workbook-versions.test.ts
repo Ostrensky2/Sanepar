@@ -1,5 +1,6 @@
 import {expect,it} from "vitest";
-import {orderWorkbookVersions} from "../generated-workbooks";
+import {Workbook} from "exceljs";
+import {countWorkbookPoints,orderWorkbookVersions} from "../generated-workbooks";
 
 it("distingue a mais recente por campanha e preserva IDs de arquivos homônimos",()=>{
   const item={filename:"resultado.xlsx",createdAt:"2026-11-22T09:00:00Z",campaign:1};
@@ -7,4 +8,15 @@ it("distingue a mais recente por campanha e preserva IDs de arquivos homônimos"
   expect(orderWorkbookVersions(rows).map(({item,latest})=>[item.id,latest])).toEqual([
     ["b",true],["a",false],["z",false],["c",true],
   ]);
+});
+
+it("conta somente SIAs distintas do rol Coletas e sinaliza identidades inválidas", () => {
+  const workbook = new Workbook();
+  expect(() => countWorkbookPoints(workbook)).toThrow();
+  const roster = workbook.addWorksheet("Coletas");
+  roster.addRows([["SIA"], ["SIA-0017"], [17], ["SIA-0031"]]);
+  workbook.addWorksheet("Réplicas").addRows([["SIA"], [99]]);
+  expect(countWorkbookPoints(workbook)).toBe(2);
+  roster.addRow(["17/31"]);
+  expect(() => countWorkbookPoints(workbook)).toThrow();
 });

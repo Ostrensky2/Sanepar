@@ -126,9 +126,18 @@ function useSpreadsheetAccess() {
 }
 
 export function SpreadsheetRepository() {
-  const { canImportSpreadsheets } = useSpreadsheetAccess();
-  const owner=useContext(WorkbookOwner);
-  return <><SiaMatricesPreparation key={owner ?? "pending"} canImport={canImportSpreadsheets} />{owner && canImportSpreadsheets && <GeneratedWorkbookList key={owner} owner={owner}/>}</>;
+  const { hasLoaded, canImportSpreadsheets } = useSpreadsheetAccess();
+  const owner = useContext(WorkbookOwner);
+  return <>
+    <section aria-labelledby="unified-workbooks-title" className="app-card min-w-0 space-y-3">
+      <h2 id="unified-workbooks-title" className="type-section-title">Planilhas unificadas por campanha</h2>
+      {!hasLoaded ? <p role="status">Verificando acesso às planilhas…</p>
+        : !canImportSpreadsheets ? <p role="status">Sua categoria não tem permissão para consultar estas planilhas.</p>
+        : owner ? <GeneratedWorkbookList key={owner} owner={owner} />
+        : <p role="status">Aguardando identificação da sessão.</p>}
+    </section>
+    <SiaMatricesPreparation key={owner ?? "pending"} canImport={canImportSpreadsheets} />
+  </>;
 }
 
 export function LegacyPublicationFlow() {
