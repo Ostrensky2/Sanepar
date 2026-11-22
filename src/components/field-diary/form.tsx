@@ -22,6 +22,7 @@ import {
   uniqueSorted,
 } from "@/components/field-diary/helpers";
 import { Checklist, Dialog, Field } from "@/components/field-diary/ui";
+import { draftFingerprint } from "@/components/field-diary/draft-comparison";
 import {
   buildPositionCapture,
   buildTimeCapture,
@@ -98,9 +99,12 @@ export function FieldDiaryForm({
   const [isSaving, setIsSaving] = useState(false);
   const [uploadingPhotoIds, setUploadingPhotoIds] = useState<string[]>([]);
   const [uploadMessage, setUploadMessage] = useState("");
+  const [initialEntryFingerprint] = useState(() => draftFingerprint(entry));
   function requestClose() {
     if (isSaving || uploadingPhotoIds.length > 0) return;
-    if (window.confirm("Fechar este registro? Alterações não salvas serão descartadas.")) onClose();
+    const changed = draftFingerprint(latestEntryRef.current) !== initialEntryFingerprint
+      || entrySamples.hasUnsavedChanges() || entryReadings.hasUnsavedChanges();
+    if (!changed || window.confirm("Fechar este registro? Alterações não salvas serão descartadas.")) onClose();
   }
   const [fieldDiaryPointOptions, setPointOptions] = useState<FieldDiaryPointOption[]>([]);
   const [pointOptionsMessage, setPointOptionsMessage] = useState("Carregando pontos…");

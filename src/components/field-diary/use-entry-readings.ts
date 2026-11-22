@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { draftFingerprint } from "./draft-comparison";
 import type { CollectionDefaultsHandle } from "@/components/field-diary/use-collection-defaults";
 import { MAX_SAMPLE_DEPTH_M, numberToInput, parseSampleNumber } from "@/lib/field-samples";
 import {
@@ -77,6 +78,7 @@ export function useEntryReadings({
   const statusRef = useRef<ReadingsPanelStatus>(pendingAtOpen ? "ready" : "loading");
   const catalogRef = useRef<FieldParameter[]>(catalog);
   const readingsRef = useRef<ReadingDraft[]>(pendingAtOpen?.readings ?? []);
+  const closeBaselineRef = useRef(draftFingerprint(pendingAtOpen?.readings ?? []));
   const removedRef = useRef<ReadingDraft[]>([]);
   const conflictRef = useRef<FieldReading[] | null>(null);
   const dirtyRef = useRef(Boolean(pendingAtOpen?.readings.length));
@@ -139,6 +141,7 @@ export function useEntryReadings({
       const loadedCatalog = result.parameters.length ? result.parameters : baseParameterCatalog();
 
       putCatalog(loadedCatalog);
+      closeBaselineRef.current = draftFingerprint(readingsToDrafts(result.readings));
       put(sortReadings(readingsToDrafts(result.readings), loadedCatalog), { dirty: false });
       putRemoved([]);
       putConflict(null);
@@ -371,6 +374,7 @@ export function useEntryReadings({
     }
 
     if (result.ok) {
+      closeBaselineRef.current = draftFingerprint(readingsToDrafts(result.readings));
       put(sortReadings(readingsToDrafts(result.readings), catalogRef.current), { dirty: false });
       putRemoved([]);
       putConflict(null);
@@ -385,6 +389,7 @@ export function useEntryReadings({
   }
 
   return {
+    hasUnsavedChanges: () => draftFingerprint(readingsRef.current) !== closeBaselineRef.current,
     status,
     catalog,
     readings,

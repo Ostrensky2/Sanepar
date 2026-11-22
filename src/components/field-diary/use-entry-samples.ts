@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { draftFingerprint } from "./draft-comparison";
 import type { SamplesPanelStatus } from "@/components/field-diary/samples-panel";
 import type { CollectionDefaultsHandle } from "@/components/field-diary/use-collection-defaults";
 import {
@@ -79,6 +80,7 @@ export function useEntrySamples({
   // Cópias sempre atuais, para os toques que acontecem antes da próxima renderização.
   const statusRef = useRef<SamplesPanelStatus>(pendingAtOpen ? "ready" : "loading");
   const samplesRef = useRef<SampleDraft[]>(pendingAtOpen ?? []);
+  const closeBaselineRef = useRef(draftFingerprint(pendingAtOpen ?? []));
   const removedRef = useRef<SampleDraft[]>([]);
   const conflictsRef = useRef<SampleCodeConflict[]>([]);
   // O que o app escreveu por último nos dois campos de texto antigos do registro.
@@ -127,6 +129,7 @@ export function useEntrySamples({
         return;
       }
 
+      closeBaselineRef.current = draftFingerprint(samplesToDrafts(result.samples));
       put(samplesToDrafts(result.samples), { dirty: false });
       putRemoved([]);
       putConflicts([]);
@@ -348,6 +351,7 @@ export function useEntrySamples({
     }
 
     if (result.ok) {
+      closeBaselineRef.current = draftFingerprint(samplesToDrafts(result.samples));
       put(samplesToDrafts(result.samples), { dirty: false });
       putRemoved([]);
       putConflicts([]);
@@ -363,6 +367,7 @@ export function useEntrySamples({
   }
 
   return {
+    hasUnsavedChanges: () => draftFingerprint(samplesRef.current) !== closeBaselineRef.current,
     status,
     samples,
     removedCount: removed.length,
