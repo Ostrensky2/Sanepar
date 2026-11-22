@@ -1,23 +1,27 @@
-// Presentation only: these anchors are not risk-class thresholds.
-export const RESULT_PALETTE = [
-  [0, "#1A9850"], [0.2, "#A6D96A"], [0.4, "#FFD43B"],
-  [0.6, "#F46D23"], [0.8, "#D7191C"], [1, "#762A83"],
+// Faixas de leitura do índice de captação (IR-CAPTACAO). São faixas de triagem, fixas entre campanhas, não classes de risco.
+// A faixa mais baixa é cinza de propósito: "sem sinal relevante" não é "bom". O índice só pontua organismo com efeito documentado,
+// então silêncio não demonstra segurança.
+export const RESULT_BANDS = [
+  { from: 0, to: 0.05, label: "Sem sinal relevante", range: "abaixo de 0,05", color: "#9AA5B1" },
+  { from: 0.05, to: 0.15, label: "Sinal fraco", range: "0,05 a 0,15", color: "#F2C94C" },
+  { from: 0.15, to: 0.35, label: "Atenção", range: "0,15 a 0,35", color: "#F2994A" },
+  { from: 0.35, to: 1, label: "Prioridade", range: "0,35 ou mais", color: "#D7263D" },
 ] as const;
 
+/** Âncoras da cor, para quem desenha um intervalo: a cor muda em degraus nos limites das faixas. */
+export const RESULT_PALETTE = [
+  [0, RESULT_BANDS[0].color], [0.05, RESULT_BANDS[1].color], [0.15, RESULT_BANDS[2].color], [0.35, RESULT_BANDS[3].color], [1, RESULT_BANDS[3].color],
+] as const;
+
+export function resultBand(value: number) {
+  const bounded = Math.max(0, Math.min(1, value));
+  return [...RESULT_BANDS].reverse().find((band) => bounded >= band.from) ?? RESULT_BANDS[0];
+}
+
+/** Cor do índice: uma cor por faixa (o nome da função ficou do degradê anterior). */
 export function continuousResultColor(value: number) {
   if (!Number.isFinite(value)) return "#edf4f7";
-  const bounded = Math.max(0, Math.min(1, value));
-  const upper = RESULT_PALETTE.findIndex(([anchor]) => anchor >= bounded);
-  const [high, highColor] = RESULT_PALETTE[upper];
-  const [low, lowColor] = RESULT_PALETTE[Math.max(0, upper - 1)];
-  if (bounded === high || high === low) return highColor;
-  const ratio = (bounded - low) / (high - low);
-  const channels = [1, 3, 5].map((offset) => {
-    const from = parseInt(lowColor.slice(offset, offset + 2), 16);
-    const to = parseInt(highColor.slice(offset, offset + 2), 16);
-    return Math.round(from + (to - from) * ratio);
-  });
-  return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("").toUpperCase()}`;
+  return resultBand(value).color;
 }
 
 export function resultIntervalStops(lower: number, upper: number) {

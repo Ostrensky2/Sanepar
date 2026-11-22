@@ -143,7 +143,7 @@ export function ResultsIndexDashboard({
           Síntese integrada por ponto
         </h2>
         <div className="mt-2 flex items-center gap-1">
-          <p className="type-body text-[var(--ink)]">Índices de 0 a 1 · versão piloto.</p>
+          <p className="type-body text-[var(--ink)]">Índice de triagem de 0 a 1, lido em quatro faixas · versão piloto.</p>
           <ResultsInterpretationHelp title="Como ler a síntese por ponto">
             <p>A cor de cada ponto no mapa é o seu índice, de 0 a 1. O anel mostra quais marcadores foram usados: bactérias (16S), algas pelo cloroplasto e COI.</p>
             <IndexScaleBar />
@@ -232,7 +232,7 @@ export function ResultsIndexDashboard({
               zoomOnSelect={false}
               focusRequest={focusRequest}
               showPointTooltip
-              caption={`${metricLabel(metric)} · escala fixa 0–1 · anel: conjuntos utilizados`}
+              caption={`${metricLabel(metric)} · faixas fixas entre campanhas · anel: marcadores usados`}
             />
           </div>
         </div>
