@@ -166,7 +166,7 @@ export function GeneratedWorkbookList({owner}:{owner:string}){
     {error&&<div role="alert">{error} <button type="button" onClick={()=>{setError("");retry(n=>n+1)}}>Consultar novamente</button></div>}
     {!error&&items===null&&<p role="status">Consultando planilhas…</p>}
     {!error&&items?.length===0&&<p>Nenhuma planilha unificada guardada. Em Preparar matrizes por SIA, confira as matrizes e gere o Excel para salvar a primeira versão.</p>}
-    <ul className="space-y-4">{Array.from(campaigns, ([campaign, [current, ...history]]) => <li key={campaign} className="min-w-0 space-y-2 border-t border-[var(--line-strong)] pt-3">
+    <ul className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,max(21rem,calc((100%_-_3rem)/3))),1fr))] items-start gap-x-6 gap-y-4">{Array.from(campaigns, ([campaign, [current, ...history]]) => <li key={campaign} className="min-w-0 space-y-2 border-t border-[var(--line-strong)] pt-3">
       <h3 className="type-panel-title">Campanha {campaign}</h3>
       {version(current, true)}
       {history.length > 0 && <details><summary className="min-h-11 cursor-pointer py-2">Histórico ({history.length})</summary>
