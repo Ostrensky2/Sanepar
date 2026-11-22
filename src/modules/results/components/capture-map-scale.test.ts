@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { distribution, reading } from "./capture-map-scale";
+import { bands, distribution, reading } from "./capture-map-scale";
 import type { ResultPoint } from "../types";
 
 function point(value: number | null): ResultPoint {
@@ -10,11 +10,15 @@ function point(value: number | null): ResultPoint {
   } as ResultPoint;
 }
 describe("mapa de captação", () => {
-  it("preserva zero, distingue ausência e aplica a faixa roxa a partir de 0,70", () => {
+  it("preserva zero, distingue ausência e aplica a faixa superior a partir de 0,70", () => {
     expect(reading(point(null), "overall").color).toBeNull();
     expect(reading(point(0), "overall").color).not.toBeNull();
     expect(reading(point(0.6999), "overall").color).not.toBe("#762a83");
-    expect(reading(point(0.70), "overall")).toMatchObject({color:"#762a83",grade:"C",domain:"humanHealth"});
+    const lastBand = bands[bands.length - 1];
+    expect(lastBand).toEqual({start:0.70,label:"0,70 a 1",color:"#762a83"});
+    for (const value of [0.70, 0.85, 1]) {
+      expect(reading(point(value), "overall")).toMatchObject({color:lastBand.color,label:lastBand.label,grade:"C",domain:"humanHealth"});
+    }
     expect(reading(point(0.70), "operational").grade).toBe("B");
   });
   it("calcula mediana/P90 no universo medido e mantém empates na mesma faixa", () => {

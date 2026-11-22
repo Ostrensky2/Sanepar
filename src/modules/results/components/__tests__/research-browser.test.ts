@@ -109,7 +109,11 @@ describe("research consultation contract (synthetic fixtures only)", () => {
     expect(source).toContain('value.source.revisionHash === requested.get("revisionHash")');
     expect(source).toContain("identityMismatch");
     expect(source).toContain("controller.abort()");
-    expect(source).toContain("nenhum resultado foi substituído automaticamente");
+    expect(source).toContain("Nenhuma publicação histórica disponível para");
+    expect(source).toContain("não corresponde à publicação vigente.");
+    expect(source).toContain("Consultar a publicação histórica disponível de");
+    expect(source).toContain("Abrir catálogo {item.campaignCode}");
+    expect(source).toContain("Consultar a visão da rede no índice atual");
     expect(source).toContain("detail.provenance.sheet");
   });
   it("keeps fragment preparation in data entry and never labels its preview persisted", () => {

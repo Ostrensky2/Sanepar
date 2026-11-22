@@ -10,6 +10,14 @@ const canonicalCampaigns = [
   { id: "campanha-9", name: "9ª Campanha - Verão 2028" },
 ] as const;
 
+/** Route selectors must match a whole identifier. Only an omitted selector requests the default view. */
+export function campaignFromQuery(value: string | string[] | undefined) {
+  if (value === undefined) return undefined;
+  return canonicalCampaigns.find((item, index) =>
+    value === item.id || value === String(index + 1) || value === `C${index + 1}`
+  ) ?? null;
+}
+
 export type CanonicalCampaign = (typeof canonicalCampaigns)[number];
 
 export function normalizeCampaignKey(value: unknown) {

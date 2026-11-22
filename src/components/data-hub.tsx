@@ -227,13 +227,13 @@ export function DataHub() {
               {rows.map((row) => (
                 <tr key={row.campaign.id} className={cn("border-t border-[var(--line-ghost)]", row.campaign.id === focus.campaign.id && "bg-[var(--brand-blue-soft)]/40")}>
                   <th scope="row" className="px-4 py-3 font-bold text-[var(--brand-navy-strong)]">{row.campaign.selectorLabel}</th>
-                  <td className="px-4 py-3">{row.phase} <span className="text-[var(--ink-soft)]">· {row.progress}%</span></td>
+                  <td className="px-4 py-3">{row.phase} <span className="text-[var(--text-secondary)]">· {row.progress}%</span></td>
                   <td className="px-4 py-3 tabular-nums">{row.summary ? row.summary.total || "—" : "…"}</td>
                   <td className="px-4 py-3">{row.publication ? `${row.publication.counts.total} pontos` : data.inventory === null ? "…" : "—"}</td>
                   <td className="px-4 py-3 text-right">
                     <button
                       type="button"
-                      className="min-h-11 rounded-lg px-3 text-sm font-bold text-[var(--brand-teal)] underline underline-offset-4"
+                      className="min-h-11 rounded-lg px-3 text-sm font-bold text-[var(--text-teal)] underline underline-offset-4"
                       onClick={() => chooseCampaign(row.campaign.id)}
                       aria-label={`Ver checklist da ${row.campaign.selectorLabel}`}
                     >

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { campaignFromQuery } from "@/lib/campaign-identity";
+import { InvalidCampaignNotice } from "@/components/invalid-campaign-notice";
 import { CaptureIndexPanel } from "@/components/capture-index-panel";
 import { effects } from "@/lib/capture-index/effect-catalog";
 import { defaultCampaigns } from "@/lib/campaign-management";
@@ -10,7 +12,12 @@ const campaigns = [1, 2, 3];
 
 export default async function CaptureIndexPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { campaign: value, sia, effect, origem, fromCampaign } = await searchParams;
-  const selected = typeof value === "string" && campaigns.includes(Number(value)) ? Number(value) : undefined;
+  const requested = campaignFromQuery(value);
+  const selected = requested ? defaultCampaigns.findIndex(item => item.id === requested.id) + 1 : undefined;
+  if (requested === null || (selected !== undefined && !campaigns.includes(selected)) || (sia !== undefined && !selected)
+      || (fromCampaign !== undefined && !campaigns.some(number => fromCampaign === String(number)))) {
+    return <InvalidCampaignNotice href="/resultados/indice-captacao" label="Voltar à visão da rede" />;
+  }
   const selectedEffect = effects.find(item => item.id === effect);
   const originNumber = typeof fromCampaign === "string" && campaigns.includes(Number(fromCampaign)) ? Number(fromCampaign) : selected;
   const returnParams = new URLSearchParams({campaign: originNumber ? defaultCampaigns[originNumber - 1].id : ""});

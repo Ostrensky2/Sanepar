@@ -101,7 +101,7 @@ export default function AjudaPage() {
                     <span className="block text-sm font-black text-[var(--brand-navy-strong)]">
                       {module.title}
                     </span>
-                    <span className="mt-0.5 block truncate text-label font-semibold text-[var(--ink-soft)]">
+                    <span className="mt-0.5 block truncate text-label font-semibold text-[var(--text-secondary)]">
                       {module.short}
                     </span>
                   </span>
@@ -162,7 +162,7 @@ export default function AjudaPage() {
                   <ActiveIcon className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-caption font-black text-[var(--brand-teal)]">
+                  <p className="text-caption font-black text-[var(--text-teal)]">
                     Módulo selecionado
                   </p>
                   <h2 className="heading-font mt-1 text-2xl font-black text-[var(--brand-navy-strong)]">

@@ -225,7 +225,7 @@ export function ResultsIndexDashboard({
                 <option value="fixed">Comparar campanhas · escore fixo</option><option value="relative">Dentro da campanha · posição relativa</option>
               </select></label>
               <ul className="flex flex-wrap gap-x-4 gap-y-1 type-caption">{(relative ? relativeBands : bands).map(b => <li key={b.label}><span aria-hidden="true" className="mr-1 inline-block size-3 rounded-full border" style={{backgroundColor:b.color}} />{b.label}</li>)}</ul>
-              <p className="type-metadata mt-2">Vazado: sem medição. Contorno da categoria exibida ou determinante, pela menor cobertura em empate. Contínuo: ≥50% dos reads avaliados; tracejado: 20 a &lt;50%; pontilhado: &lt;20%.</p>
+              <p className="type-metadata mt-2">A cor representa o intervalo numérico do escore. Vazado significa sem medição. O contorno indica a cobertura da categoria exibida ou determinante (menor cobertura em empate). Contínuo: ≥50% dos reads avaliados; tracejado: 20 a &lt;50%; pontilhado: &lt;20%.</p>
               {relative && <p className="type-metadata">Mediana {formatValue(population.median)} · P90 {formatValue(population.p90)} · {population.count} pontos com medição. A posição descreve esta campanha. Uma mudança em toda a rede pode preservar as posições.</p>}
               {selection && <p className="type-metadata" aria-live="polite">{selectedPoint?.siaCode} · {selection.label}{selectedValue !== null && <> · posição {1 + population.sorted.filter(n => n > selectedValue).length} de {population.count}</>}{selection.domain && <> · cobertura {selection.grade} ({domains[selection.domain]})</>}</p>}</div>
           </div>
@@ -270,7 +270,7 @@ export function mapHelpSections(campaign: ResultsCampaign, visiblePoints: Result
   const missing = visiblePoints.filter((point) => !mappedIds.includes(point.key));
   const conditions = [...new Set(campaign.points.map((point) => point.conditionOfUse).filter(Boolean))];
   return [
-    { title: "Índice e cores", text: `${metricLabel(metric)}: escala de 0 a 1, fixa entre campanhas. O índice não representa probabilidade, percentual de dano ou classes de risco. Na escala fixa, roxo indica 0,70 ou mais.` },
+    { title: "Índice e cores", text: `${metricLabel(metric)}: escala de 0 a 1, fixa entre campanhas. O índice não representa probabilidade, percentual de dano ou classes de risco. Na escala fixa, roxo indica escore entre 0,70 e 1.` },
     { title: "Escala relativa", text: "A mediana e o percentil 90 usam todos os pontos medidos da campanha na categoria selecionada, antes dos filtros de busca. Acima do P90 indica posição relativa, não perigo." },
     { title: "Cobertura", text: "O contorno indica a cobertura da curadoria da categoria vista; no geral, a menor cobertura entre as categorias de maior nota. O símbolo vazado indica ausência de medição utilizável." },
     { title: "Localização", text: `${mappedIds.length} de ${visiblePoints.length} resultados filtrados no mapa. ${missing.length} sem coordenada utilizável${missing.length ? ` (${missing.map((point) => point.siaCode).join(", ")})` : ""}. Resultados sem coordenada permanecem nos totais e na tabela de resultados da campanha.` },

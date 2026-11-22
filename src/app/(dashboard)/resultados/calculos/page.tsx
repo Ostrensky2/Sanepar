@@ -50,7 +50,7 @@ export default function CalculationsPage() {
         <li>Protozoários como Cryptosporidium e Giardia.</li>
         <li>Algas cujo cloroplasto não foi classificado. Não há marcador próprio para diatomáceas.</li>
       </ul>
-      <p>Versão piloto, ainda não confrontada com ocorrências reais.</p>
+      <p>Na versão 0.7, diatomáceas e assinatura de esgoto podem contribuir para a nota acima de bases fixadas com C1–C3. A dominância compara cada táxon com as bibliotecas utilizáveis do mesmo componente nas três campanhas e gera apenas alerta. A classificação exploratória do cloroplasto não substitui medição de biomassa nem confirmação do efeito. A comparação é retrospectiva; desempenho para antecipar episódios não foi demonstrado.</p>
     </section>
     <p><Link className="inline-flex min-h-11 items-center rounded-lg bg-[var(--brand-navy-strong)] px-4 text-sm font-bold text-white" href="/resultados/indice-captacao">Ver o índice por ponto e por campanha</Link></p>
   </div>;

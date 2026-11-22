@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ResultsInventoryResponse } from "@/lib/results-publication-contract";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
@@ -17,7 +18,24 @@ vi.mock("@/lib/results-v2-persistence", () => ({
 vi.mock("@/lib/results-publication-store", async original => ({
   ...await original<typeof import("@/lib/results-publication-store")>(),
   readResultsSnapshot: mocks.readRows,
-  resultsInventory: () => ({expectedHeads:{C1:"current-id",C2:null}}),
+  resultsInventory: (): ResultsInventoryResponse => ({
+    campaigns: [{
+      campaignCode: "C1",
+      canonicalId: "campanha-1-verao-2026",
+      canonicalName: "1ª Campanha - Verão 2026",
+      publicationId: "current-id",
+      publishedAt: "2026-11-22T00:00:00Z",
+      format: "v2",
+      source: { sha256: "a".repeat(64), fileName: "vigente.xlsx" },
+      counts: { total: 1, complete: 1, partialWithTwoSets: 0, partialWithOneSet: 0, unavailable: 0 },
+      downloadAvailable: false,
+      sourceAvailability: "missing_source_artifact",
+    }],
+    totalCampaigns: 9,
+    publishedCount: 1,
+    expectedHeads: Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`C${i + 1}`, i === 0 ? "current-id" : null])),
+    historicalPublications: [],
+  }),
 }));
 vi.mock("@/lib/supabase", () => ({ createOptionalSupabaseClient: () => ({}) }));
 

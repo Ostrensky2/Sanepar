@@ -436,12 +436,12 @@ export function DocumentRepository() {
                 onClick={() => setActiveTab(tab)}
                 className={
                   tab === activeTab
-                    ? "rounded-lg border-b-2 border-[var(--brand-blue)] bg-white px-4 py-2 text-xs font-bold text-[var(--brand-navy)] shadow-sm"
-                    : "px-4 py-2 text-xs font-medium text-slate-500 transition-colors hover:text-[var(--brand-navy-strong)]"
+                    ? "min-h-11 rounded-lg border-b-2 border-[var(--brand-blue)] bg-white px-4 py-2 text-xs font-bold text-[var(--brand-navy)] shadow-sm"
+                    : "min-h-11 px-4 py-2 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--brand-navy-strong)]"
                 }
               >
                 {tab}{" "}
-                <span className="font-normal text-slate-400">
+                <span className="font-normal text-[var(--text-secondary)]">
                   {tab === "Todos" ? documents.length : documents.filter((document) => document.type === tab).length}
                 </span>
               </button>
@@ -455,7 +455,7 @@ export function DocumentRepository() {
                 aria-label="Ordenar documentos"
                 value={sortMode}
                 onChange={(event) => setSortMode(event.target.value as DocumentSortMode)}
-                className="type-label w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-8 text-[var(--brand-navy-strong)] focus:ring-2 focus:ring-[var(--brand-navy-strong)]/20"
+                className="type-label min-h-11 w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-8 text-[var(--brand-navy-strong)] focus:ring-2 focus:ring-[var(--brand-navy-strong)]/20"
               >
                 {documentSortOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -472,7 +472,7 @@ export function DocumentRepository() {
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Buscar documentos..."
-                className="type-label w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-4 focus:ring-2 focus:ring-[var(--brand-navy-strong)]/20"
+                className="type-label min-h-11 w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-4 focus:ring-2 focus:ring-[var(--brand-navy-strong)]/20"
               />
             </div>
           </div>
@@ -528,13 +528,15 @@ export function DocumentRepository() {
               <thead className="bg-slate-50/50">
                 <tr>
                   <th className="w-12 px-6 py-4">
-                    <input
-                      type="checkbox"
-                      aria-label="Selecionar todos os documentos visíveis"
-                      checked={allVisibleSelected}
-                      onChange={toggleAllVisibleDocuments}
-                      className="h-4 w-4 rounded border-slate-300 text-[var(--brand-navy-strong)] focus:ring-[var(--brand-blue)]"
-                    />
+                    <label className="inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center">
+                      <input
+                        type="checkbox"
+                        aria-label="Selecionar todos os documentos visíveis"
+                        checked={allVisibleSelected}
+                        onChange={toggleAllVisibleDocuments}
+                        className="h-4 w-4 rounded border-slate-300 text-[var(--brand-navy-strong)] focus:ring-[var(--brand-blue)]"
+                      />
+                    </label>
                   </th>
                   <th className="px-6 py-4 text-caption font-bold text-slate-500">
                     Arquivo
@@ -815,20 +817,22 @@ function DocumentRow({
   return (
     <tr className="group transition-all hover:bg-slate-50">
       <td className="px-6 py-4">
-        <input
-          type="checkbox"
-          aria-label={`Selecionar ${document.title}`}
-          checked={selected}
-          onChange={() => onToggleSelection(document.id)}
-          className="h-4 w-4 rounded border-slate-300 text-[var(--brand-navy-strong)] focus:ring-[var(--brand-blue)]"
-        />
+        <label className="inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center">
+          <input
+            type="checkbox"
+            aria-label={`Selecionar ${document.title}`}
+            checked={selected}
+            onChange={() => onToggleSelection(document.id)}
+            className="h-4 w-4 rounded border-slate-300 text-[var(--brand-navy-strong)] focus:ring-[var(--brand-blue)]"
+          />
+        </label>
       </td>
       <td className="px-6 py-4">
         <div className="flex items-center gap-3">
           <DocumentTypeIcon document={document} />
           <div>
             <button
-              className="cursor-pointer text-left font-bold text-[var(--brand-navy-strong)] group-hover:underline"
+              className="min-h-11 cursor-pointer text-left font-bold text-[var(--brand-navy-strong)] group-hover:underline"
               type="button"
               onClick={() => openDocument(document)}
             >
@@ -861,7 +865,7 @@ function DocumentRow({
         <div className="flex gap-2">
           <button
             aria-label={`Visualizar ${document.title}`}
-            className="rounded p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
             type="button"
             onClick={() => openDocument(document)}
           >
@@ -869,7 +873,7 @@ function DocumentRow({
           </button>
           <button
             aria-label={`Baixar ${document.title}`}
-            className="rounded p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
             type="button"
             onClick={() => downloadDocument(document)}
           >
@@ -877,7 +881,7 @@ function DocumentRow({
           </button>
           <button
             aria-label={`Compartilhar ${document.title}`}
-            className="rounded p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
             type="button"
             onClick={() => onShare(document)}
           >
@@ -885,7 +889,7 @@ function DocumentRow({
           </button>
           <button
             aria-label={`Copiar link de ${document.title}`}
-            className="rounded p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
             type="button"
             onClick={async () => {
               await navigator.clipboard.writeText(documentAccessUrl(document));
@@ -895,7 +899,7 @@ function DocumentRow({
           </button>
           <button
             aria-label={`Apagar ${document.title}`}
-            className="rounded p-1.5 text-[var(--brand-danger)] transition-colors hover:bg-red-50"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded p-1.5 text-[var(--brand-danger)] transition-colors hover:bg-red-50"
             type="button"
             onClick={() => onDelete(document)}
           >

@@ -58,10 +58,16 @@ function CampaignEvidence({campaign, siaCodes}: CampaignEvidenceProps) {
       </form>
       <p className="type-metadata">Os totais descrevem a campanha. Escolha um SIA da campanha ou digite o código. As sugestões incluem os pontos da campanha independentemente do efeito selecionado. Ao voltar, a campanha e o tipo de efeito selecionado são preservados. Uma associação bibliográfica não confirma um efeito observado.</p>
       <p>Contamos uma vez cada ponto por efeito. “No componente determinante” significa que a ficha contribuiu no componente que definiu a nota do domínio, não que foi sua única causa. “Só em outro componente” não aumenta essa nota. Alertas de baixo suporte podem coexistir com outras fichas; não some as colunas.</p>
-      <ul className="space-y-3">{s.effects.filter(e=>!selected||selected===e.id).map(e=><li key={e.id}>
-        <h3 className="font-semibold">{e.title}</h3><p>{e.note}</p>
-        {e.counts?<p>Com contribuição positiva: {e.counts.winning+e.counts.other}/{e.denominator}. No componente determinante: {e.counts.winning}. Só em outro componente: {e.counts.other}. Com alerta de baixo suporte: {e.counts.low}/{e.denominator}. Base: pontos com {e.component} utilizável.</p>
+      <ul className="divide-y divide-[var(--line-strong)]">{s.effects.filter(e=>!selected||selected===e.id).map(e=><li className="py-3" key={e.id}>
+        <h3 className="type-panel-title">{e.title}</h3>
+        {e.counts?<><p className="type-metadata"><strong>{e.counts.winning+e.counts.other} de {e.denominator}</strong> pontos com contribuição positiva · base com {e.component} utilizável.</p>
+          <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-1 type-metadata">
+            <div><dt>No componente determinante</dt><dd className="font-semibold">{e.counts.winning}</dd></div>
+            <div><dt>Só em outro componente</dt><dd className="font-semibold">{e.counts.other}</dd></div>
+            <div><dt>Alerta de baixo suporte</dt><dd className="font-semibold">{e.counts.low}/{e.denominator}</dd></div>
+          </dl></>
         :<p>{e.denominator===null?"Sem avaliação pelo método.":"Sem biblioteca utilizável para este mecanismo."}</p>}
+        <p className="mt-1 type-metadata text-[var(--text-secondary)]">{e.note}</p>
       </li>)}</ul>
       <h3 className="font-semibold">Outras contribuições, por domínio</h3>
       <p>Das {s.positiveContributions} contribuições positivas, {s.unmappedContributions} não têm correspondência na lista de mecanismos deste quadro. O domínio é conhecido; não atribuímos um mecanismo pelo nome do organismo. As notas oficiais já incluem essas contribuições.</p>
