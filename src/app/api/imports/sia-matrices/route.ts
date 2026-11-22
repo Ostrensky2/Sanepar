@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/api-auth";
 import { createOptionalSupabaseClient } from "@/lib/supabase";
-import type { CampaignMapPoint } from "@/lib/imports/campaigns";
 import { readPrivateCampaignPoints } from "@/lib/private-campaign-points";
-import { resolveCanonicalCampaign } from "@/lib/campaign-identity";
-import { normalizeMatrixSia } from "@/lib/imports/sia-matrices";
+import { readFieldReferences, type FieldImportSource } from "@/lib/imports/field-references";
 import { readArchiveRequest, type ArchiveGroup } from "@/lib/imports/sia-matrix-archive";
 
 export const runtime = "nodejs";
@@ -54,25 +52,21 @@ export async function GET(request: Request) {
   }
   if (!Number.isInteger(campaign) || campaign < 1 || campaign > 9) return failure("INVALID_CAMPAIGN");
   if (url.searchParams.get("references") === "1") {
-    const campaignId = resolveCanonicalCampaign(campaign)?.id;
-    const scoped = (points: CampaignMapPoint[]) => points.filter((point) => resolveCanonicalCampaign(point.campaign)?.id === campaignId);
     const client = createOptionalSupabaseClient();
-    let points: CampaignMapPoint[] = [], source = "", sourceStatus = "published";
+    let references = readFieldReferences([], campaign), source = "", sourceStatus = "published";
     if (client) {
-      const { data, error, count } = await client.from("campaign_imports").select("id,file_name,created_at,points,point_count", { count: "exact" }).gt("point_count", 0).order("created_at", { ascending: false }).returns<Array<{ id: string; created_at: string; points: CampaignMapPoint[] }>>();
+      const { data, error, count } = await client.from("campaign_imports").select("id,file_name,created_at,points,point_count,campaign_key", { count: "exact" }).gt("point_count", 0).order("created_at", { ascending: false }).returns<FieldImportSource[]>();
       if (error || !data || count === null || count !== data.length) return json({ error: "Leitura das referências publicadas falhou ou está incompleta. Não foi usada uma fonte alternativa silenciosamente.", status: "unavailable" }, 503);
-      const selected = data.find((row) => Array.isArray(row.points) && scoped(row.points).length > 0);
-      if (selected) { points = scoped(selected.points); source = `campaign_imports ${selected.id}, publicado em ${selected.created_at}`; }
+      references = readFieldReferences(data, campaign);
+      if (references.length) source = "Planilhas de campo persistidas; evidências conciliáveis por campanha, sem escolher uma visita automaticamente";
     }
-    if (!points.length) {
+    if (!references.length) {
       const privatePoints = readPrivateCampaignPoints();
       if (!privatePoints.length) return json({ error: "Fonte privada de referência ausente ou sem integridade validada.", status: "unavailable" }, 503);
-      points = scoped(privatePoints); source = "Base privada de campanhas, hash validado"; sourceStatus = points.length ? "historical_fallback" : "campaign_absent_in_available_sources";
+      references = readFieldReferences([{ id: "private-campaign-points", file_name: "campaign-map-points.json", created_at: "", points: privatePoints }], campaign, "historical_snapshot");
+      source = "Base privada de campanhas, hash validado"; sourceStatus = references.length ? "historical_fallback" : "campaign_absent_in_available_sources";
     }
-    return json({ status: sourceStatus, source, limitation: sourceStatus === "published" ? null : "Fonte histórica local; não é confirmação de completude atual da nuvem.", references: points.flatMap((point) => {
-      const sia = normalizeMatrixSia(point.code);
-      return sia ? [{ campaign, sia, original: point.original, effective: point.effective, source, sourceDate: point.date, waterBody: point.waterBody || point.point || "", municipality: point.municipality || "" }] : [];
-    }) });
+    return json({ status: sourceStatus, source, limitation: sourceStatus === "published" ? "Datas do dataset persistido, sem endereço de célula original disponível; fontes/visitas divergentes exigem conciliação." : "Fonte histórica local; não é confirmação de completude atual da nuvem.", references });
   }
   let after: unknown = null;
   try {

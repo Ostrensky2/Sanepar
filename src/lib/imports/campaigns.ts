@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import ExcelJS from "exceljs";
+import { fieldCivilDay } from "@/lib/imports/field-references";
 import { parseCoordinate as parseCoordinateText } from "@/lib/coordinates";
 import {
   parsePointExecutionStatus,
@@ -269,7 +270,7 @@ function parseCampaignWorksheet(
       day,
       collectionOrder,
       campaign: campaign || "Campanha",
-      date: formatDateCell(row.getCell(columns.date ?? FALLBACK_COLUMNS.date).value),
+      date: formatDateCell(row.getCell(columns.date ?? FALLBACK_COLUMNS.date).value, rowLabel, rowIssues),
       waterBody:
         readMappedCell(row, columns.waterBody, FALLBACK_COLUMNS.waterBody) ||
         "Ponto de campanha",
@@ -455,33 +456,23 @@ function normalizeCell(value: ExcelJS.CellValue | undefined) {
   return String(value).trim();
 }
 
-function formatDateCell(value: ExcelJS.CellValue | undefined) {
-  const normalized = normalizeCell(value);
-
-  if (!normalized) {
-    return "Data não informada";
+function formatDateCell(value: ExcelJS.CellValue | undefined, rowLabel: string, issues: string[]): string {
+  if (value && typeof value === "object" && "result" in value) {
+    return formatDateCell(value.result, rowLabel, issues);
   }
-
-  // Se já for no formato DD/MM/YYYY, retorna direto para evitar erros de parse regional (Ex: 06/08/2026 ser lido como 8 de junho)
-  const brMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (brMatch) {
-    const day = brMatch[1].padStart(2, "0");
-    const month = brMatch[2].padStart(2, "0");
-    const year = brMatch[3];
-    return `${day}/${month}/${year}`;
+  // ExcelJS decodes Excel's civil serial into UTC Date fields. Local formatting
+  // would move midnight to the previous day in America/Sao_Paulo.
+  const normalized = value instanceof Date
+    ? (Number.isFinite(value.getTime()) ? value.toISOString().slice(0, 10) : "Data inválida")
+    : normalizeCell(value);
+  if (!normalized) return "Data não informada";
+  const br = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(normalized);
+  const civil = fieldCivilDay(br ? `${br[1].padStart(2, "0")}/${br[2].padStart(2, "0")}/${br[3]}` : normalized);
+  if (!civil) {
+    issues.push(`${rowLabel}: data inválida ou sem dia civil inequívoco. A data não foi importada como coleta.`);
+    return "Data inválida";
   }
-
-  const date = new Date(normalized);
-
-  if (Number.isNaN(date.getTime())) {
-    return normalized;
-  }
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
+  return `${civil.slice(8, 10)}/${civil.slice(5, 7)}/${civil.slice(0, 4)}`;
 }
 
 type CoordinateIssueContext = {

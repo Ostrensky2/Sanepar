@@ -9,7 +9,7 @@ channel.onmessage = async ({ data }) => {
   try {
     const result = data.kind === "parse"
       ? await readMatrixPackage(data.args[0], progress, data.args[2])
-      : await buildCampaignMatrixWorkbook(data.args[0], data.args[1], data.args[2], progress, data.args[4], data.args[5]);
+      : await buildCampaignMatrixWorkbook(data.args[0], data.args[1], data.args[2], progress, data.args[4], data.args[5], data.args[6], data.args[7]);
     const bytes: unknown = "bytes" in result ? result.bytes : undefined;
     const buffer = bytes instanceof ArrayBuffer ? bytes : ArrayBuffer.isView(bytes) ? bytes.buffer : undefined;
     channel.postMessage({ result }, buffer instanceof ArrayBuffer ? [buffer] : []);

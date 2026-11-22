@@ -12,6 +12,7 @@ import {
 } from "@/lib/field-diary-vocabulary";
 import { resolveCanonicalCampaign } from "@/lib/campaign-identity";
 import type { CampaignMapPoint } from "@/lib/imports/campaigns";
+import { fieldCivilDay } from "@/lib/imports/field-references";
 
 export function campaignPointToFieldDiaryPayload(point: CampaignMapPoint): FieldDiaryPayload | null {
   const coordinates = point.effective;
@@ -21,7 +22,8 @@ export function campaignPointToFieldDiaryPayload(point: CampaignMapPoint): Field
     return null;
   }
 
-  const entryDate = parseImportDate(point.date);
+  const entryDate = fieldCivilDay(point.date);
+  if (!entryDate) return null;
   const canonicalCampaign = resolveCanonicalCampaign(point.campaign);
 
   return {
@@ -112,15 +114,6 @@ function splitWaterVisualConditions(value: string | undefined) {
 function normalizeSia(value: string) {
   const digits = String(value ?? "").match(/\d+/g)?.join("") ?? "";
   return digits ? `SIA-${digits.padStart(4, "0")}` : "";
-}
-
-function parseImportDate(value: string) {
-  const raw = String(value ?? "").trim();
-  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
-  return new Date().toISOString().slice(0, 10);
 }
 
 function normalizeFollowUp(value: string): FieldDiaryPayload["requiresFollowUp"] {

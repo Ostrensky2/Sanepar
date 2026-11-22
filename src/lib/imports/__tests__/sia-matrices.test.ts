@@ -24,6 +24,28 @@ async function file(name = "16S_C1_familias.xlsx", formula = false) {
 }
 
 describe("preparação local das matrizes SIA", () => {
+  it("resolve data, referência e efetiva independentemente, sem misturar campanha, pares ou planejamento", async () => {
+    const pkg=await readMatrixPackage([await file()]);
+    const p={lat:-25,lon:-49}, q={lat:-24,lon:-48};
+    const day:MatrixReferencePoint={campaign:1,sia:"11",source:"original.xlsx",sourceDate:"2026-02-10",sourceKind:"field_workbook",sourceQualification:"original_verified",verificationBasis:"campo identificado",sourceDigest:"b".repeat(64),datePrecision:"civil_day",original:null,effective:null};
+    const ref={...day,source:"referência",sourceDate:"",original:p};
+    const separate={...day,source:"efetiva",sourceDate:"",effective:q};
+    for(const conflict of [false,true]) {
+      const refs=[day,ref,separate,{...ref,original:q,campaign:2},{...ref,original:q,sia:"12"},{...separate,effective:p,executionStatus:"planned"},{...ref,original:q,contextualCampaign:true},...(conflict?[{...ref,original:q,sourcePointId:"Ficha!9"}]:[])];
+      const out=await buildCampaignMatrixWorkbook(pkg,snapshot([]),1,undefined,refs);
+      const book=new ExcelJS.Workbook();await book.xlsx.load(out.bytes);
+      const ws=book.getWorksheet("Coletas")!;
+      expect(ws.getCell("D2").text).toBe(day.sourceDate);
+      expect(["I","J","K","L"].map(col=>ws.getCell(col+"2").text)).toEqual(conflict?["","","-24","-48"]:["-25","-49","-24","-48"]);
+      expect(ws.getCell("M2").text).toBe("efetiva");
+      const warnings=JSON.stringify(book.getWorksheet("Pendências")!.getSheetValues());
+      expect(warnings.includes("Coordenadas de referência conflitantes")).toBe(conflict);
+      if(conflict) {
+        expect(warnings).toContain("(-25, -49) — referência");
+        expect(warnings).toContain("(-24, -48) — referência Ficha!9");
+      }
+    }
+  });
   it("prévia e download partilham abas e valores, com limite apenas na prévia", async () => {
     const pkg = await readMatrixPackage([await file()]);
     const matrix = pkg.sources[0].matrix;
@@ -52,10 +74,10 @@ describe("preparação local das matrizes SIA", () => {
     expect(component).toContain("references, { status, source, limitation }");
     expect(readFileSync(join(process.cwd(), "src/lib/imports/sia-matrices.worker.ts"), "utf8")).toContain("data.args[4], data.args[5]");
   });
-  it("sem coleta no Diário, a data e o vínculo vêm da planilha de campanha; o Diário vale primeiro", async () => {
+  it("preserva visita do Diário; divergência de datas impede conciliá-la ao laboratório", async () => {
     const pkg = await readMatrixPackage([await file()]); // SIAs 11 e 12; o Diário de teste só tem o 11
     const ref = (sia: string, sourceDate: string, extra: Partial<MatrixReferencePoint> = {}): MatrixReferencePoint =>
-      ({ campaign: 1, sia, original: { lat: -25.1, lon: -49.1 }, effective: { lat: -25.2, lon: -49.2 }, source: "campaign_imports teste", sourceDate, waterBody: "Rio de teste", municipality: "Cidade", ...extra });
+      ({ campaign: 1, sia, original: { lat: -25.1, lon: -49.1 }, effective: { lat: -25.2, lon: -49.2 }, source: "campo verificado teste", sourceDate, sourceKind:"field_workbook",sourceQualification:"original_verified",sourceDigest:"a".repeat(64),verificationBasis:"campo identificado",datePrecision:"civil_day", waterBody: "Rio de teste", municipality: "Cidade", ...extra });
     expect(resolveSheetCollection([ref("SIA-0012", "2026-02-03")], 1, "SIA-0012")?.sourceDate).toBe("2026-02-03");
     expect(resolveSheetCollection([ref("SIA-0012", "2026-02-03"), ref("SIA-0012", "2026-02-09")], 1, "SIA-0012")).toBeUndefined(); // duas datas: não escolhe por suposição
     expect(resolveSheetCollection([ref("SIA-0012", "")], 1, "SIA-0012")).toBeUndefined();
@@ -78,23 +100,29 @@ describe("preparação local das matrizes SIA", () => {
   });
   it("a tela separa arquivo gerado, datas vinculadas e incorporação ao acervo (cenário da C1)", () => {
     const component = readFileSync(join(process.cwd(), "src/components/sia-matrices-preparation.tsx"), "utf8");
-    expect(component).toContain('aria-label="Planilhas integradas"');
-    expect(component).toContain("Nenhuma planilha integrada está guardada no aplicativo.");
-    expect(component).toContain("Abrir para conferir e baixar");
+    expect(component).toContain('aria-describedby="field-workbook-help"');
+    expect(component).toContain('id="field-workbook-help"');
+    expect(component).toContain('aria-label="Grupos incorporados ao acervo"');
+    expect(component).toContain("Nenhum grupo incorporado foi localizado.");
+    expect(component).toContain("Abrir grupos da campanha");
     expect(component).toContain("<strong>1. Arquivo gerado:</strong>");
     expect(component).toContain("Baixar {file ? file.filename"); // o nome do .xlsx aparece antes do download
     expect(component).not.toContain("Integração funcionando"); // data vinculada não é incorporação
 
     const sheetSias = Array.from({ length: 72 }, (_, i) => `SIA-${String(i + 1).padStart(4, "0")}`);
     const dates = renderToStaticMarkup(createElement(LinkedDates, { points: 73, byDiary: 0, sheetSias, unresolvedSias: ["SIA-0305"] }));
-    expect(dates).toContain("72 de 73 pontos têm data");
+    expect(dates).toContain("O XLSX gerado pode ser guardado com essa pendência.");
+    expect(dates).toContain("72 de 73 pontos têm dia de visita documentado");
     expect(dates).toContain("72 pela planilha de campanha");
-    expect(dates).toContain("Data encontrada na planilha de campanha não equivale a coleta confirmada no Diário.");
-    expect(dates).toContain("Sem data em nenhuma via (1):</strong> SIA 305");
+    expect(dates).toContain("A planilha de campanha documenta o dia da visita.");
+    expect(dates).toContain("Pontos sem dia de visita documentado (1):</strong> SIA 305");
     expect(dates).not.toContain("Diário de Campo ·");
+    const contextual = renderToStaticMarkup(createElement(LinkedDates, { points: 73, byDiary: 0, sheetSias: [], unresolvedSias: [...sheetSias, "SIA-0305"], referenceOnlySias: sheetSias }));
+    expect(contextual).toContain("0 de 73 pontos têm dia de visita documentado");
+    expect(contextual).toContain("Pontos com data apenas de referência: <strong>72</strong>");
     const allDiary = renderToStaticMarkup(createElement(LinkedDates, { points: 76, byDiary: 76, sheetSias: [], unresolvedSias: [] }));
-    expect(allDiary).toContain("76 de 76 pontos têm data · 76 pelo Diário de Campo");
-    expect(allDiary).not.toContain("não equivale");
+    expect(allDiary).toContain("76 de 76 pontos têm dia de visita documentado · 76 pelo Diário de Campo");
+    expect(allDiary).not.toContain("precisa de confirmação no Diário");
 
     const render = (status: ArchiveStage) => renderToStaticMarkup(createElement(ArchiveStatus, { status }));
     expect(render({ kind: "not-sent" })).toContain("ainda não foi enviado ao acervo");

@@ -3,6 +3,7 @@ import type { JSZipObject, JSZipStreamHelper } from "jszip";
 import { resolveCanonicalCampaign } from "@/lib/campaign-identity";
 import { effectiveExecutionStatus, type FieldDiaryEntry } from "@/lib/field-diary";
 import { parseInternalStorageUrl } from "./media-policy";
+import { addFinalResults, civilDay, collectionDay, fieldWorkbookRows, type FieldFile, type IntegratedIndex } from "./sia-integrated-results";
 
 type Scalar = string | number;
 type Table = { headers: string[]; rows: Array<{ sia: string; values: Array<number | null> }> };
@@ -27,15 +28,37 @@ export async function matrixInputNames(files: Array<{ name: string; size: number
   if (new Set(names).size !== names.length) throw new Error("Nomes de arquivos duplicados; selecione fontes inequívocas.");
   return names;
 }
-export type MatrixReferencePoint = { campaign: number; sia: string; original: { lat: number; lon: number } | null; effective: { lat: number; lon: number } | null; source: string; sourceDate: string; waterBody?: string; municipality?: string };
+export type MatrixReferencePoint = { campaign: number; sia: string; original: { lat: number; lon: number } | null; effective: { lat: number; lon: number } | null; source: string; sourceDate: string; waterBody?: string; municipality?: string;
+  sourceId?:string; sourceFileName?:string; sourcePointId?:string; sourceKind?:"field_workbook"|"historical_snapshot"; sourceDateRaw?:string; datePrecision?:"civil_day"|"unknown"; originalSia?:string; identityStatus?:"exact"|"ambiguous"; samplesReplicasEdna?:string; zooplanktonId?:string; collectionTime?:string; executionStatus?:string; fieldSampleId?:string; contextualCampaign?:boolean;
+  sourceQualification?:"persisted_unverified"|"original_verified"|"historical_context"; verificationBasis?:string; sourceDigest?:string };
 /** A coleta pode ter entrado por duas vias: o Diário de Campo (registro feito na coleta) ou a planilha de campanha (upload do Excel).
  * O Diário vale primeiro. Sem coleta real no Diário, vale a planilha, desde que traga UMA data para aquele SIA na campanha. */
 export const SHEET_LINK = "PLANILHA_DE_CAMPANHA";
 export function resolveSheetCollection(references: MatrixReferencePoint[], campaign: number, sia: string) {
-  const matches = references.filter((point) => point.campaign === campaign && normalizeMatrixSia(point.sia) === sia && Boolean(point.sourceDate?.trim()));
+  const matches = references.filter((point) => point.campaign === campaign && normalizeMatrixSia(point.sia) === sia && collectionDay(point));
   return new Set(matches.map((point) => point.sourceDate.trim())).size === 1 ? matches[0] : undefined;
 }
 export type DiarySnapshot = { entries: FieldDiaryEntry[]; persistence: string; complete?: boolean; totalCount?: number | null };
+// A fonte do dia pode não fornecer coordenadas. Resolva cada tipo de par
+// separadamente; duas metades de fontes distintas nunca formam um par.
+function coordinateEvidence(matches: MatrixReferencePoint[], kind: "original" | "effective", entry?: FieldDiaryEntry) {
+  const candidates = matches.flatMap((r) => {
+    const p = r[kind];
+    if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon) || Math.abs(p.lat)>90 || Math.abs(p.lon)>180 ||
+        (kind === "effective" && ["planned","not_realized","blocked"].includes(r.executionStatus ?? ""))) return [];
+    return [{...p, source:r.source, locator:r.sourcePointId || r.sourceId || "", date:r.sourceDate, diary:false, verified:r.sourceQualification === "original_verified"}];
+  });
+  const diaryKind = entry?.coordinateSource;
+  if (entry && (kind === "original" ? diaryKind === "planned" : diaryKind === "gps" || diaryKind === "manual") &&
+      String(entry.latitude ?? "").trim() && String(entry.longitude ?? "").trim()) {
+    const lat = Number(entry.latitude), lon = Number(entry.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat)<=90 && Math.abs(lon)<=180)
+      candidates.push({lat,lon,source:kind === "original" ? "Diário: coordenada planejada registrada" : String(diaryKind),locator:entry.id,date:entry.entryDate,diary:true,verified:false});
+  }
+  const conflict = new Set(candidates.map(p => JSON.stringify([p.lat,p.lon]))).size > 1;
+  const alternatives = conflict ? [...new Set(candidates.map(p=>`(${p.lat}, ${p.lon}) — ${p.source} ${p.locator}`.trim()))].join("; ") : "";
+  return {pair:conflict ? undefined : candidates.find(p=>p.verified) ?? candidates[0], conflict, alternatives, diary:candidates.some(p=>p.diary)};
+}
 export const matrixLimits = { inputBytes: 32 * 1024 * 1024, expandedBytes: 128 * 1024 * 1024, entries: 256, rows: 1000, columns: 5000 };
 const pause = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 function meaningful(value: unknown) {
@@ -245,11 +268,19 @@ export function matrixText(value: unknown): string {
   return text;
 }
 
-export async function buildCampaignMatrixWorkbook(pkg: MatrixPackage, snapshot: DiarySnapshot, campaign: number, progress: (message: string) => void = () => {}, references: MatrixReferencePoint[] = [], referenceContext?: { status?: string; source?: string; limitation?: string | null }) {
+export async function buildCampaignMatrixWorkbook(pkg: MatrixPackage, snapshot: DiarySnapshot, campaign: number, progress: (message: string) => void = () => {}, references: MatrixReferencePoint[] = [], referenceContext?: { status?: string; source?: string; limitation?: string | null }, index?: IntegratedIndex, fieldFile?: FieldFile) {
   const sources = pkg.sources.filter((source) => source.campaign === campaign);
   if (!sources.length) throw new Error(`C${campaign}: nenhum dataset fornecido.`);
   if (snapshot.complete !== true || snapshot.persistence !== "cloud" || snapshot.totalCount !== snapshot.entries.length) throw new Error("Diário incompleto ou sem confirmação da contagem. Recarregue após disponibilização da leitura completa; nenhum vínculo foi presumido.");
   const { default: Excel } = await import("exceljs");
+  if (fieldFile) {
+    if (!/\.xlsx$/i.test(fieldFile.name) || fieldFile.size > matrixLimits.inputBytes) throw Error("Esperada planilha de campo XLSX de até 32 MiB.");
+    const declared = /campanha[\s_-]*([1-9])(?!\d)/i.exec(fieldFile.name);
+    if (declared && Number(declared[1]) !== campaign) throw Error("Campanha no nome da planilha de campo diverge da seleção.");
+    const buffer = await fieldFile.arrayBuffer();
+    const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",buffer)),b=>b.toString(16).padStart(2,"0")).join("");
+    references = [...references,...fieldWorkbookRows(await loadMatrixWorkbook(new Uint8Array(buffer),{bytes:0}),fieldFile.name,hash,campaign)];
+  }
   const workbook = new Excel.Workbook(); workbook.creator = "Yva’e";
   const add = (name: string, headers: string[]) => {
     const sheet = workbook.addWorksheet(name, { views: [{ state: "frozen", xSplit: 1, ySplit: 1 }] });
@@ -266,7 +297,7 @@ export async function buildCampaignMatrixWorkbook(pkg: MatrixPackage, snapshot: 
   summary.addRows([
     ["Campanha", resolveCanonicalCampaign(campaign)?.name ?? `C${campaign}`],
     ["Uso", "Preparação local. Não é publicação nem workbook oficial de índices."],
-    ["Chave", "Campanha + SIA. Data nunca usada como chave. Coletas múltiplas não são resolvidas por suposição."],
+    ["Chave", "Resultado final: campanha + SIA. Visitas e réplicas: data civil, identificador de coleta e identificadores literais da fonte; data isolada não comprova vínculo da biblioteca com visita ou réplica."],
     ["Reads", "Contagens preservadas. Família/gênero e plataformas/runs não são somados. Zero com biblioteca presente não é ausência de biblioteca."],
     ["Associações", "Categorias de risco se sobrepõem. Rótulos de exóticas/candidatas/status pendente mantidos integralmente, sem inferir espécie, sexo ou índice."],
     ["Coordenadas", "Planejadas separadas das efetivas. Origem desconhecida não é GPS nem coordenada efetiva confirmada."],
@@ -280,8 +311,53 @@ export async function buildCampaignMatrixWorkbook(pkg: MatrixPackage, snapshot: 
     (resolveCanonicalCampaign(entry.campaignId)?.id === campaignId || resolveCanonicalCampaign(entry.campaignName)?.id === campaignId),
   ).flatMap((entry) => { const sia = normalizeMatrixSia(entry.sia); return sia ? [sia] : []; });
   const allSias = [...new Set(matrixSias)].sort();
-  const sheetSias: string[] = [];
+  const visits = add("Evidências de campo", ["Campanha","SIA original","SIA exato","Origem","Identificador da fonte","Linha ou visita","Situação registrada","Data na fonte","Dia documentado na fonte (não data da biblioteca)","Precisão da data registrada","Amostra de campo","Réplicas eDNA (literal)","ID zooplâncton","Hora registrada","Escopo da campanha"]);
+  const fieldRefs = references.filter(r=>r.campaign===campaign);
+  // Flag a legacy concatenation only when the original composite is actually present.
+  // This is a negative check, never a way to manufacture either component SIA.
+  const suspectConcatenations=new Set(fieldRefs.flatMap(r=>{
+    const m=/^(\d+)\s*\/\s*(\d+)\*?$/.exec((r.originalSia??r.sia).trim());
+    return m?[normalizeMatrixSia(m[1]+m[2])]:[];
+  }));
+  for (const r of fieldRefs) visits.addRow([campaign,r.originalSia??r.sia,r.identityStatus==="ambiguous"?"":normalizeMatrixSia(r.sia)??"",r.source,r.sourceId??"",r.sourcePointId??"",r.executionStatus??"",r.sourceDateRaw??r.sourceDate,collectionDay(r),r.datePrecision==="civil_day"?"dia civil":"não comprovada",r.fieldSampleId??"",r.samplesReplicasEdna??"",r.zooplanktonId??"",r.collectionTime??"",r.verificationBasis || "Contextual; não estabelece visita"]);
+  const diaryForCampaign = snapshot.entries.filter(e=>resolveCanonicalCampaign(e.campaignId || e.campaignName)?.id===campaignId);
+  for (const e of diaryForCampaign) {
+    const state=matrixExecutionStatus(e), day=e.executionStatus && ["realized","relocated"].includes(e.executionStatus)?civilDay(e.entryDate):"";
+    const suspect=suspectConcatenations.has(normalizeMatrixSia(e.sia));
+    visits.addRow([campaign,e.sia,suspect?"":normalizeMatrixSia(e.sia)??"","Diário de Campo","",e.id,state,e.entryDate,suspect?"":day,day?"dia civil":"","",e.samplesReplicasEdna??"",e.zooplanktonId??"",e.collectionTime??"",suspect?"Possível concatenação legada de código composto; não atribuir ponto.":""]);
+  }
+  const link = (sia:string) => {
+    const resolution=resolveMatrixCollection(snapshot,campaign,sia), entry=resolution.entry;
+    const rr=fieldRefs.filter(r=>normalizeMatrixSia(r.sia)===sia && collectionDay(r));
+    const diaryDay=entry && (entry.executionStatus==="realized" || entry.executionStatus==="relocated")?civilDay(entry.entryDate):"";
+    const days=new Set(rr.map(collectionDay));
+    const negative=diaryForCampaign.some(e=>normalizeMatrixSia(e.sia)===sia && ["not_realized","blocked"].includes(matrixExecutionStatus(e)) && days.has(civilDay(e.entryDate)));
+    const suspect=suspectConcatenations.has(sia);
+    const invalid=suspect || resolution.status==="COLETA_AMBÍGUA" || resolution.status==="IDENTIDADE_CONFLITANTE";
+    const day=invalid?"":diaryDay || (days.size===1&&!negative?[...days][0]:"");
+    const status=suspect?"IDENTIDADE COMPOSTA NÃO RESOLVIDA":invalid?resolution.status:diaryDay?"VISITA REALIZADA NO DIÁRIO":day?"DIA DOCUMENTADO NO CAMPO; NÃO CONFIRMA EXECUÇÃO NO DIÁRIO":days.size>1 || negative?"VISITA CONFLITANTE":"SEM DIA DE VISITA COMPROVADO";
+    const primaryConflict=Boolean(diaryDay && [...days].some(d=>d!==diaryDay)) || days.size>1 || negative;
+    const contextual=fieldRefs.filter(r=>r.identityStatus!=="ambiguous" && normalizeMatrixSia(r.sia)===sia&&!collectionDay(r) && r.datePrecision==="civil_day");
+    const referenceDays=[...new Set(contextual.map(r=>civilDay(r.sourceDate)).filter(Boolean))].sort().join("; ");
+    const detail=primaryConflict?[...rr.map(r=>`${r.source} · ${r.sourcePointId??""}: ${collectionDay(r)}`),...diaryForCampaign.filter(e=>normalizeMatrixSia(e.sia)===sia && e.executionStatus).map(e=>`Diário ${e.id}: ${e.entryDate} (${e.executionStatus})`)]:[];
+    const warning=[primaryConflict?`Divergência de fonte/visita: ${[...new Set(detail)].join("; ")}. Não identifica a amostra molecular.`:"",contextual.some(r=>civilDay(r.sourceDate) && civilDay(r.sourceDate)!==day)?"Datas de referência conservadas em Resultados finais e Evidências de campo; não estabelecem nem invalidam visita.":""].filter(Boolean).join(" ");
+    return {day,status,warning,referenceDays,diaryDay,source:day?(diaryDay?`Diário de Campo: ${entry!.id}`:[...new Set(rr.map(r=>`${r.source} · ${r.sourcePointId??""}`))].join("; ")):""};
+  };
+  const finalSheet=add("Resultados finais",["Campanha","SIA","Estado 0.7","Índice geral (como exibido)","Faixa de incerteza","Cobertura","Faixa","Posição","Ambiental","Operacional","Saúde humana","Versão","SHA-256 das linhas","Dia da visita documentada no ponto (não é data laboratorial)","Precisão","Fonte do dia de campo","Situação da visita documental","Vínculo do índice a visita/réplica","Geral integral","Ambiental integral","Operacional integral","Saúde humana integral"]);
+  finalSheet.getCell("W1").value="Dia(s) de referência declarados (não comprovam visita)";
+  finalSheet.getCell("X1").value="Ressalva das fontes";
+  const finalResultCount=addFinalResults(finalSheet,index,campaign,allSias,normalizeMatrixSia,link);
+  summary.addRow(["Resultados finais da saída versionada (linhas)",index?finalResultCount:"Fonte não consultada"]);
+  const sheetSias=allSias.filter(sia=>link(sia).day && !link(sia).diaryDay);
   const diagnostics = add("Pendências", ["SIA / dataset", "Condição"]);
+  for (const r of fieldRefs.filter(r=>r.identityStatus==="ambiguous" || !normalizeMatrixSia(r.sia))) {
+    diagnostics.addRow([r.originalSia??r.sia,"Identidade de campo ambígua; registro literal em Evidências de campo, sem desmembrar nem atribuir biblioteca."]);
+  }
+  const trace=add("Vínculos laboratoriais",["Campanha","SIA","Marcador","Corrida","Nível taxonômico","Matriz de origem","SHA-256 da matriz","Situação da visita no ponto","Dia da visita (contexto, não atribuição à biblioteca)","Precisão","Fonte do dia de campo","Vínculo biblioteca → visita/réplica"]);
+  for(const s of sources) for(const row of s.matrix.rows){
+    const l=link(row.sia);
+    trace.addRow([campaign,row.sia,s.marker,s.run,s.rank,s.name,s.hash,l.status,l.day,l.day?"dia civil":"",l.source,"Não identificada na matriz por SIA; sem atribuição individual"]);
+  }
   if (referenceContext && (referenceContext.limitation || referenceContext.status !== "published")) {
     diagnostics.addRow(["Referências de coordenadas", matrixText(`Estado: ${referenceContext.status ?? "não informado"}. Fonte: ${referenceContext.source ?? "não informada"}. ${referenceContext.limitation ?? "Completude não comprovada."} Referências retornadas: ${references.length}; lista vazia não comprova ausência de coordenadas.`)]);
   }
@@ -295,28 +371,37 @@ export async function buildCampaignMatrixWorkbook(pkg: MatrixPackage, snapshot: 
     if (!matrixSias.includes(sia)) diagnostics.addRow([sia, "Coleta registrada no Diário sem biblioteca em nenhuma matriz fornecida"]);
   }
   for (const sia of allSias) {
-    const resolution = resolveMatrixCollection(snapshot, campaign, sia), e = resolution.entry;
+    const resolution = resolveMatrixCollection(snapshot, campaign, sia);
+    const e = resolution.entry?.executionStatus && ["realized","relocated"].includes(resolution.entry.executionStatus) ? resolution.entry : undefined;
+    const l=link(sia);
+    if(!l.day) diagnostics.addRow([sia,l.status]);
+    if(l.warning) diagnostics.addRow([sia,l.warning]);
+    const matches = suspectConcatenations.has(sia) ? [] : references.filter(p => !p.contextualCampaign && p.identityStatus !== "ambiguous" && p.campaign === campaign && normalizeMatrixSia(p.sia) === sia);
+    const original = coordinateEvidence(matches, "original", e);
+    const effectiveRef = coordinateEvidence(matches, "effective", e);
+    if (original.conflict) diagnostics.addRow([sia, "Coordenadas de referência conflitantes: " + original.alternatives]);
+    if (effectiveRef.conflict) diagnostics.addRow([sia, "Coordenadas efetivas conflitantes: " + effectiveRef.alternatives]);
     if (!e) {
-      const sheetRef = resolution.status === "SEM_COLETA_REAL_CONFIRMADA" ? resolveSheetCollection(references, campaign, sia) : undefined;
-      if (sheetRef) {
+      const sheetRef = l.day ? resolveSheetCollection(references, campaign, sia) : undefined;
+      if (sheetRef && l.day) {
         fields.addRow([sia, SHEET_LINK, "", sheetRef.sourceDate, "", sheetRef.waterBody ?? "", sheetRef.municipality ?? "", "planilha de campanha",
-          sheetRef.original?.lat ?? "", sheetRef.original?.lon ?? "", sheetRef.effective?.lat ?? "", sheetRef.effective?.lon ?? "", matrixText(`Planilha de campanha: ${sheetRef.source}`)]);
+          original.pair?.lat ?? "", original.pair?.lon ?? "", effectiveRef.pair?.lat ?? "", effectiveRef.pair?.lon ?? "", effectiveRef.pair ? matrixText(effectiveRef.pair.source) : "",
+          ...Array(13).fill(""), matrixText(original.pair?.source ?? ""), matrixText(original.pair?.date ?? "")]);
         diagnostics.addRow([sia, "Coleta vinculada pela planilha de campanha; sem registro no Diário"]);
-        sheetSias.push(sia); continue;
+        continue;
       }
-      fields.addRow([sia, resolution.status]); diagnostics.addRow([sia, resolution.status]); continue;
+      const reason=resolution.entry?"SEM EXECUÇÃO EXPLÍCITA NO DIÁRIO":resolution.status;
+      fields.addRow([sia, reason]); diagnostics.addRow([sia, reason]); continue;
     }
-    const matches = references.filter((point) => point.campaign === campaign && normalizeMatrixSia(point.sia) === sia);
-    const refKeys = new Set(matches.map((point) => JSON.stringify([point.original, point.effective])));
-    const ref = refKeys.size === 1 ? matches[0] : undefined;
-    if (!ref?.original) diagnostics.addRow([sia, refKeys.size > 1 ? "Coordenadas de referência conflitantes" : "Coordenada de referência não fornecida"]);
+    if (!original.pair && !original.conflict) diagnostics.addRow([sia, "Coordenada de referência não fornecida"]);
     const planned = e.coordinateSource === "planned";
-    const legacyEffective = !e.coordinateSource && Boolean(e.latitude && e.longitude && ref?.effective && Number(e.latitude) === ref.effective.lat && Number(e.longitude) === ref.effective.lon);
-    const effective = e.coordinateSource === "gps" || e.coordinateSource === "manual" || legacyEffective;
+    const legacyEffective = !e.coordinateSource && Boolean(String(e.latitude ?? "").trim() && String(e.longitude ?? "").trim() && effectiveRef.pair && Number(e.latitude) === effectiveRef.pair.lat && Number(e.longitude) === effectiveRef.pair.lon);
+    const effective = effectiveRef.pair && (effectiveRef.diary || legacyEffective);
+    const fieldEffective = effectiveRef.pair?.verified ? effectiveRef.pair : undefined;
     fields.addRow([sia, resolution.status, e.id, e.entryDate, e.collectionTime, e.locationName, e.municipality, matrixExecutionStatus(e),
-      ref?.original?.lat ?? (planned ? e.latitude : ""), ref?.original?.lon ?? (planned ? e.longitude : ""), effective ? e.latitude : "", effective ? e.longitude : "", legacyEffective ? "Diário legado: par efetivo conferido na fonte de campo" : e.coordinateSource,
+      original.pair?.diary ? e.latitude : original.pair?.lat ?? "", original.pair?.diary ? e.longitude : original.pair?.lon ?? "", effective ? e.latitude : fieldEffective?.lat ?? "", effective ? e.longitude : fieldEffective?.lon ?? "", legacyEffective ? "Diário legado: par efetivo conferido na fonte de campo" : !effective && fieldEffective ? fieldEffective.source : e.coordinateSource,
       !planned && !effective ? e.latitude : "", !planned && !effective ? e.longitude : "", e.gpsAccuracyM ?? "", e.samplesReplicasEdna, e.zooplanktonId,
-      matrixText(e.activities), e.pointAccessibility, e.occurrenceType, e.occurrenceDescription, e.requiresFollowUp, e.followUpNotes, e.dailySummary, legitimateMatrixPhotos(e), ref?.original ? ref.source : planned ? "Diário: coordenada planejada registrada" : "", ref?.original ? ref.sourceDate : planned ? e.entryDate : "", e.executionStatus ? "Situação explícita do Diário" : "Regra legada effectiveExecutionStatus: dados operacionais do Diário"].map((v) => typeof v === "number" ? v : matrixText(v)));
+      matrixText(e.activities), e.pointAccessibility, e.occurrenceType, e.occurrenceDescription, e.requiresFollowUp, e.followUpNotes, e.dailySummary, legitimateMatrixPhotos(e), original.pair?.source ?? "", original.pair?.date ?? "", e.executionStatus ? "Situação explícita do Diário" : "Regra legada effectiveExecutionStatus: dados operacionais do Diário"].map((v) => typeof v === "number" ? v : matrixText(v)));
   }
   for (const marker of ["16S", "COI"] as const) {
     for (const rank of ["familias", "generos"] as const) {
@@ -353,8 +438,8 @@ export async function buildCampaignMatrixWorkbook(pkg: MatrixPackage, snapshot: 
     rows: Array.from({ length: Math.min(21, sheet.rowCount) }, (_, r) =>
       Array.from({ length: Math.min(12, sheet.columnCount) }, (_, c) => sheet.getRow(r + 1).getCell(c + 1).text)),
   }));
-  return { bytes, preview, filename: `matrizes-SIA-C${campaign}-${new Date().toISOString().slice(0, 10)}.xlsx`, points: allSias.length, linkedByDiary: allSias.filter((sia) => resolveMatrixCollection(snapshot, campaign, sia).entry).length, linkedBySheet: sheetSias.length,
+  return { bytes, preview, finalResultCount, filename: `matrizes-SIA-C${campaign}-${new Date().toISOString().slice(0, 10)}.xlsx`, points: allSias.length, linkedByDiary: allSias.filter((sia) => link(sia).day && link(sia).diaryDay).length, linkedBySheet: sheetSias.length, referenceOnlySias:allSias.filter(sia=>!link(sia).day && link(sia).referenceDays),
     // Pontos cuja data veio só da planilha de campanha (não confirmam coleta no Diário) e pontos sem data em nenhuma via.
-    sheetSias, unresolvedSias: allSias.filter((sia) => !resolveMatrixCollection(snapshot, campaign, sia).entry && !sheetSias.includes(sia)),
-    unresolved: allSias.filter((sia) => !resolveMatrixCollection(snapshot, campaign, sia).entry).length - sheetSias.length };
+    sheetSias, unresolvedSias: allSias.filter((sia) => !link(sia).day),
+    unresolved: allSias.filter((sia) => !link(sia).day).length };
 }

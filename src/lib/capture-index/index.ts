@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import document from "./indice-captacao.json";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { formatCaptureIndex, formatCaptureShare } from "./format";
 
 /** Saída imutável do índice de triagem de risco da biota na captação (IR-CAPTACAO-0.7-piloto).
@@ -27,7 +28,9 @@ type CaptureIndexDocument = { schema: string; version: string; status: string; p
   fichasTotal: number; blindSpots: { tema: string; caso: string; situacao: string }[]; maturity: Record<Domain, { nivel: string; texto: string }>; campaigns: Record<string, CampaignSummary>; fichas: Record<string, Ficha>;
   rowsSha256: string; rows: CaptureIndexRow[] };
 
-const data = document as unknown as CaptureIndexDocument;
+// Read the canonical decimal literals directly: the dev bundler's JSON module
+// can change the last IEEE-754 bit before either the API or Excel sees a score.
+const data = JSON.parse(readFileSync(join(process.cwd(), "src/lib/capture-index/indice-captacao.json"), "utf8")) as CaptureIndexDocument;
 if (data.schema !== "yvae-capture-index/4") throw new Error(`Esquema de índice não suportado: ${data.schema}`);
 export const captureIndexMeta = { schema: data.schema, version: data.version, status: data.status, parameters: data.parameters, inputs: data.inputs,
   fichasTotal: data.fichasTotal, rowsSha256: data.rowsSha256, blindSpots: data.blindSpots,
@@ -59,6 +62,8 @@ export function captureIndexView(row: CaptureIndexRow) {
     : coi.status === "disponível" ? `só COI (16S ${s16.status})` : "sem medição";
   return {
     campaign: `C${row.campaign}`, sia: row.sia, measured,
+    // Numeric source values for workbook consumers; no display rounding or recalculation.
+    exact: { general: row.general, domains: Object.fromEntries(captureDomains.map(domain => [domain, row.scores[domain]?.score ?? null])) },
     general: formatCaptureIndex(row.general),
     range: measured ? `${formatCaptureIndex(row.generalFloor)} a ${formatCaptureIndex(row.generalCeiling)}` : "",
     position: measured && row.rank ? `${row.rank}º de ${row.ranked}` : "",

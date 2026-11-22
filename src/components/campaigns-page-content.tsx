@@ -1,5 +1,6 @@
 "use client";
 
+import { collectedPhysicalPoints, molecularAvailability } from "@/lib/campaign-header-summary";
 import {
   Download,
   FileSpreadsheet,
@@ -272,6 +273,26 @@ export function CampaignsPageContent({
     return () => controller.abort();
   }, []);
 
+  const [molecular, setMolecular] = useState<{ version: string; counts: Map<number,number> } | null>();
+  useEffect(() => {
+    if (view !== "resultados") return;
+    const controller = new AbortController();
+    async function loadCoverage() {
+      const response = await fetch("/api/results/capture-index", {cache:"no-store", signal:controller.signal});
+      if (!response.ok) throw new Error();
+      const payload = await response.json();
+      if (typeof payload.meta?.version !== "string" || !Array.isArray(payload.campaigns)) throw new Error();
+      const counts = new Map<number,number>();
+      for (const item of payload.campaigns) {
+        if (!Number.isSafeInteger(item.number) || !Number.isSafeInteger(item.measured) || item.measured < 0 || counts.has(item.number)) throw new Error();
+        counts.set(item.number, item.measured);
+      }
+      if (!controller.signal.aborted) setMolecular({version:payload.meta.version, counts});
+    }
+    void loadCoverage().catch(() => { if (!controller.signal.aborted) setMolecular(null); });
+    return () => controller.abort();
+  }, [view]);
+
   const selectedCampaign = useMemo(() => {
     const candidate = campaigns.find((campaign) => campaign.id === selectedCampaignId);
 
@@ -479,14 +500,14 @@ export function CampaignsPageContent({
   );
 
   const fieldRowCount = selectedDiaryEntries.length;
-  const collectedPointCount = campaignFieldMapPoints.filter((point) => point.effective).length;
+  const collection = collectedPhysicalPoints(selectedDiaryEntries, selectedCampaign.id, fieldSourcePoints.map(point => point.code), selectedFieldCampaignPoints.map(point => point.code));
   const inventoryResult = resultsInventory?.find((item) => item.canonicalId === selectedCampaign.id) ?? null;
   const resultPointCount = v2Campaign
     ? v2Campaign.counts.total
     : isPublishedLegacyResponse(publishedResults)
       ? publishedResults.viewModel.meta.linhas
       : inventoryResult?.counts.total ?? 0;
-  const hasPublishedResults = Boolean(v2Campaign || isPublishedLegacyResponse(publishedResults) || inventoryResult);
+  const hasPublishedResults = Boolean(isPublishedV2Response(publishedResults) || isPublishedLegacyResponse(publishedResults) || inventoryResult);
   const mapEmptyTitle = isPreparation ? "Aguardando importação da planilha" : emptyMapTitle;
   const mapEmptyDescription = isPreparation
     ? "Importe a planilha com os pontos previstos na aba Dados para visualizá-los no mapa."
@@ -720,9 +741,12 @@ export function CampaignsPageContent({
           <CampaignSummaryStrip
             phase={campaignPhaseLabel(selectedManagement.status)}
             currentStage={getCurrentCampaignStage(selectedStages)?.label}
-            collected={`${collectedPointCount}/${selectedManagement.plannedPoints}`}
+            collected={`${collection.identified}/${selectedManagement.plannedPoints}`}
+            pendingSia={collection.pending}
             fieldRows={fieldRowCount}
             resultPoints={hasPublishedResults ? resultPointCount : null}
+            molecularLabel={view !== "resultados" ? undefined : molecular === undefined ? "Consultando resultado molecular…" : molecularAvailability(molecular ? molecular.counts.get(Number(selectedCampaign.id.match(/campanha-(\d+)/)?.[1])) ?? 0 : null, molecular?.version ?? "")}
+            publicationKnown={publishedResults?.status === "empty" || resultsInventory !== null}
             stages={selectedStages}
           >
             <MetabarcodingStagesIndicator
@@ -1318,25 +1342,33 @@ function CampaignSummaryStrip({
   phase,
   currentStage,
   collected,
+  pendingSia,
   fieldRows,
   resultPoints,
+  molecularLabel,
+  publicationKnown,
   stages,
   children,
 }: {
   phase: string;
   currentStage?: string;
   collected: string;
+  pendingSia: number;
   fieldRows: number;
   resultPoints: number | null;
+  molecularLabel?: string;
+  publicationKnown: boolean;
   stages: MetabarcodingStage[];
   children: ReactNode;
 }) {
   const done = stages.filter((stage) => stage.status === "done").length;
   const items = [
     phase === "Concluída" || !currentStage ? null : currentStage,
-    <><strong className="tabular-nums">{collected}</strong> coletados</>,
+    <><strong className="tabular-nums">{collected}</strong> pontos com coleta confirmada no Diário</>,
+    pendingSia ? `${pendingSia} ${pendingSia === 1 ? "registro de visita com SIA pendente" : "registros de visita com SIA pendente"}` : null,
     <><strong className="tabular-nums">{fieldRows.toLocaleString("pt-BR")}</strong> registros de campo</>,
-    resultPoints === null ? "resultados ainda não publicados" : <><strong className="tabular-nums">{resultPoints.toLocaleString("pt-BR")}</strong> com resultado</>,
+    molecularLabel,
+    resultPoints === null ? (publicationKnown ? "Publicação no acervo: não localizada" : "Publicação no acervo: consulta indisponível") : <>Publicação no acervo: <strong className="tabular-nums">{resultPoints.toLocaleString("pt-BR")}</strong> pontos</>,
   ].filter(Boolean);
 
   return (

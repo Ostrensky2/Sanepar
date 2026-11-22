@@ -63,4 +63,18 @@ describe("acervo privado de matrizes API", () => {
     expect(mocks.privatePoints).not.toHaveBeenCalled();
     expect((await GET(new Request("http://local/api/imports/sia-matrices?campaign=1&references=1"))).status).toBe(503);
   });
+  it("references usa union das fontes de campo sem fonte técnica, RPC ou escrita", async () => {
+    mocks.references.mockResolvedValue({ data: [
+      { id: "technical", file_name: "__lab_risk_results__", points: [{ campaign: "1", code: "106", date: "01/01/2026" }] },
+      { id: "a", file_name: "campo.xlsx", points: [{ campaign: "1", code: "106", date: "07/03/2026" }] },
+      { id: "b", file_name: "sintese.xlsx", points: [{ campaign: "1", code: "146", date: "03/03/2026" }] },
+    ], error: null, count: 3 });
+    const response = await GET(new Request("http://local/api/imports/sia-matrices?campaign=1&references=1"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    const result = await response.json();
+    expect(result.references.map((p: { sourceId: string }) => p.sourceId)).toEqual(["a", "b"]);
+    expect(mocks.privatePoints).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
 });
