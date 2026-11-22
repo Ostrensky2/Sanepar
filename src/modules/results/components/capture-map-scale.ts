@@ -11,6 +11,10 @@ export const bands = [
   { start: 0.35, label: "0,35 a <0,70", color: "#ce673f" },
   { start: 0.70, label: "0,70 a 1", color: "#762a83" },
 ];
+export function fixedBandIndex(value: number | null) {
+  if (value === null || !Number.isFinite(value) || value < 0 || value > 1) return -1;
+  return bands.reduce((found, band, index) => value >= band.start ? index : found, -1);
+}
 export const relativeBands = [
   { label: "Até a mediana", color: "#c1d8e5" },
   { label: "Acima da mediana até P90", color: "#6dabc3" },
@@ -27,6 +31,6 @@ export function reading(point: ResultPoint, metric: Metric, relative?: ReturnTyp
   const grade = coverage == null ? "?" : coverage >= 0.5 ? "A" : coverage >= 0.2 ? "B" : "C";
   const band = relative && relative.median !== null && relative.p90 !== null
     ? relativeBands[value !== null && value > relative.p90 ? 2 : value !== null && value > relative.median ? 1 : 0]
-    : bands.filter(b => value !== null && value >= b.start).at(-1);
+    : bands[fixedBandIndex(value)];
   return {color: value === null ? null : band?.color ?? null, label: value === null ? "Sem medição" : band?.label, grade, domain, coverage, winners};
 }

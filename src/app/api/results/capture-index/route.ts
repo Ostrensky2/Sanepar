@@ -1,3 +1,4 @@
+import { captureResultViews } from "@/lib/capture-index/views";
 import { requireApiSession } from "@/lib/api-auth";
 import { captureIndexAuditCsv, captureIndexCampaigns, captureIndexCsv, captureIndexExportName, captureIndexMeta, captureIndexRows, captureIndexView, sha256Hex } from "@/lib/capture-index";
 
@@ -9,13 +10,16 @@ export async function GET(request: Request) {
   const auth = await requireApiSession(request, "data.view");
   if (!auth.ok) return auth.response;
   const query = new URL(request.url).searchParams;
-  const allowed = new Set(["campaign", "format"]);
+  const allowed = new Set(["campaign", "format", "sia"]);
   const campaignText = query.get("campaign"), format = query.get("format") ?? "json";
   if ([...query.keys()].some(key => !allowed.has(key) || query.getAll(key).length > 1)
-    || (campaignText !== null && !/^[1-9]$/.test(campaignText)) || !["json", "csv", "audit"].includes(format)) {
+    || (campaignText !== null && !/^[1-9]$/.test(campaignText)) || !["json", "csv", "audit", "views"].includes(format)
+    || (format === "views" && campaignText !== null && !/^[123]$/.test(campaignText))
+    || (query.has("sia") && (format !== "views" || !campaignText || !/^\d{1,9}$/.test(query.get("sia") ?? "")))) {
     return Response.json({ error: "Opção inválida." }, { status: 422, headers: noStore });
   }
   const campaign = campaignText === null ? undefined : Number(campaignText);
+  if (format === "views") return Response.json(captureResultViews(captureIndexRows(), campaign, query.get("sia") ?? undefined), { headers: noStore });
   const rows = captureIndexRows(campaign);
   if (format !== "json") {
     const body = format === "csv" ? captureIndexCsv(rows) : captureIndexAuditCsv(rows);

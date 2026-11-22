@@ -146,36 +146,7 @@ export function CaptureIndexPanel({ campaign, initialSia = "", effectId, returnH
             {row.measured && <> · {row.position} · determinado por: {row.predominant}</>}
           </summary>
           {openSia === normalizedSia(row.sia) && <section ref={destination} tabIndex={-1} aria-label={`Efeitos da amostra · ${row.campaign} · SIA ${row.sia}`} className="mt-2 min-w-0 scroll-mt-24 space-y-3">
-            <h3 className="type-panel-title">Efeitos da amostra</h3>
-            <p className="type-metadata">{row.campaign} · SIA {row.sia} · Curadoria {meta.version}. Associação documentada, efeito não medido. Uma ficha ausente não demonstra ausência do efeito.</p>
-            <p className="type-metadata"><strong>Índice geral: {row.general}</strong> · Marcadores: {row.coverage}.</p>
-            <dl className="flex flex-wrap gap-x-5 gap-y-1 type-metadata">{row.domains.map(domain => <div key={domain.key}><dt>{domain.label}</dt><dd className="font-bold tabular-nums">{domain.score}</dd></div>)}</dl>
-            {row.measured && <p className="type-metadata"><strong>O que mais contribuiu:</strong> {row.predominant}. {row.domains.find(domain => domain.label === row.predominant)?.main}</p>}
-            <p className="type-metadata">Escala de 0 a 1. O índice não mede probabilidade de dano.</p>
-            {sameSia(row.sia)}
-            {back}
-            <SampleEffects row={row} effectId={effectId} />
-            <details><summary className="min-h-11 cursor-pointer py-2 font-semibold">Bases da nota, cobertura e referências</summary>
-            {row.measured ? <>
-              <p className="type-metadata">Cenários das fichas cadastradas, do piso (só evidência plena) ao teto (fichas ainda indeterminadas com peso cheio): {row.range}. O teto não inclui efeitos que o cadastro ainda não conhece. Medição: {row.coverage}. Há {row.elevated}.</p>
-              <ul className="space-y-3">{row.domains.map(domain => {
-                const evidence = domainEvidenceRoles(domain);
-                return <li key={domain.key}>
-                <strong>{domain.label}: {domain.score}</strong>{domain.maturity !== "com base de comparação" && <span className="type-metadata"> [{domain.maturity}]</span>} <span className="type-metadata">(piso a teto {domain.range}; cobertura da curadoria {domain.confidence}: {domain.evaluated})</span>
-                <p className="type-metadata">{evidence.status}</p><span className="type-metadata">{domain.component ? `Determinado por ${domain.component}. ` : ""}{domain.main}{domain.evaluatedBy ? `. Reads avaliados por marcador: ${domain.evaluatedBy}` : ""}</span>
-                {domain.contributions.length > 0 && <details className="ml-3"><summary className="cursor-pointer type-metadata">Fichas que formam esta nota ({domain.contributions.length})</summary>
-                  <ul className="space-y-1">{evidence.contributions.map(item => <li key={item.ficha + item.taxon} className="type-metadata break-words">
-                    {item.role} · {item.taxon} · {item.reads} reads em {item.component} · gravidade {item.severity} · aplicabilidade {item.applicability} · ficha {item.reference.id ?? "não informada"}
-                    {item.reference.source && /^https?:\/\//i.test(item.reference.source) ? <> · <a className="underline" href={item.reference.source} target="_blank" rel="noreferrer">Fonte da ficha {item.reference.id ?? "não informada"}</a></> : <> · Fonte: {item.reference.source ?? "não informada"}</>}
-                    {item.rationale && <><br />{item.rationale}</>}</li>)}</ul></details>}
-              </li>;})}</ul>
-            </> : <p>Sem medição: nenhuma biblioteca utilizável neste ponto e campanha. Não é um zero.</p>}
-            <PointLibraries row={row} />
-            <p className="type-metadata">No 16S: cloroplasto de algas {row.chloroplast} · diatomáceas {row.diatoms} · cianobactérias {row.cyanobacteria}. As algas são vistas só pelo cloroplasto, com classificação exploratória.{row.coiExcluded ? ` ${row.coiExcluded}.` : ""}</p>
-            {row.exotics && <p className="type-metadata break-words">Espécies exóticas presentes (informativo, não entra na nota): {row.exotics}.</p>}
-            {row.alerts.length > 0 && <div><p className="font-semibold">Atenção ({row.alerts.length})</p>
-              <ul>{row.alerts.map((alert, index) => <li key={index} className="type-metadata break-words">{[alert.taxon, `${alert.reads} reads`, alert.domain, alert.reason].filter(Boolean).join(" · ")}</li>)}</ul></div>}
-            </details>
+            <CapturePointEvidence row={row} version={meta.version} effectId={effectId}>{sameSia(row.sia)}{back}</CapturePointEvidence>
           </section>}
         </details>
       </li>)}</ul>
@@ -201,4 +172,38 @@ export function CaptureIndexPanel({ campaign, initialSia = "", effectId, returnH
       </div>
     </details>
   </div>;
+}
+
+export function CapturePointEvidence({row, version, effectId, children}: {row: CaptureIndexView; version: string; effectId?: string; children?: React.ReactNode}) {
+  return <>
+            <h3 className="type-panel-title">Efeitos da amostra</h3>
+            <p className="type-metadata">{row.campaign} · SIA {row.sia} · Curadoria {version}. Associação documentada, efeito não medido. Uma ficha ausente não demonstra ausência do efeito.</p>
+            <p className="type-metadata"><strong>Índice geral: {row.general}</strong> · Marcadores: {row.coverage}.</p>
+            <dl className="flex flex-wrap gap-x-5 gap-y-1 type-metadata">{row.domains.map(domain => <div key={domain.key}><dt>{domain.label}</dt><dd className="font-bold tabular-nums">{domain.score}</dd></div>)}</dl>
+            {row.measured && <p className="type-metadata"><strong>O que mais contribuiu:</strong> {row.predominant}. {row.domains.find(domain => domain.label === row.predominant)?.main}</p>}
+            <p className="type-metadata">Escala de 0 a 1. O índice não mede probabilidade de dano.</p>
+            {children}
+            <SampleEffects row={row} effectId={effectId} />
+            <details><summary className="min-h-11 cursor-pointer py-2 font-semibold">Bases da nota, cobertura e referências</summary>
+            {row.measured ? <>
+              <p className="type-metadata">Cenários das fichas cadastradas, do piso (só evidência plena) ao teto (fichas ainda indeterminadas com peso cheio): {row.range}. O teto não inclui efeitos que o cadastro ainda não conhece. Medição: {row.coverage}. Há {row.elevated}.</p>
+              <ul className="space-y-3">{row.domains.map(domain => {
+                const evidence = domainEvidenceRoles(domain);
+                return <li key={domain.key}>
+                <strong>{domain.label}: {domain.score}</strong>{domain.maturity !== "com base de comparação" && <span className="type-metadata"> [{domain.maturity}]</span>} <span className="type-metadata">(piso a teto {domain.range}; cobertura da curadoria {domain.confidence}: {domain.evaluated})</span>
+                <p className="type-metadata">{evidence.status}</p><span className="type-metadata">{domain.component ? `Determinado por ${domain.component}. ` : ""}{domain.main}{domain.evaluatedBy ? `. Reads avaliados por marcador: ${domain.evaluatedBy}` : ""}</span>
+                {domain.contributions.length > 0 && <details className="ml-3"><summary className="cursor-pointer type-metadata">Fichas que formam esta nota ({domain.contributions.length})</summary>
+                  <ul className="space-y-1">{evidence.contributions.map(item => <li key={item.ficha + item.taxon} className="type-metadata break-words">
+                    {item.role} · {item.taxon} · {item.reads} reads em {item.component} · gravidade {item.severity} · aplicabilidade {item.applicability} · ficha {item.reference.id ?? "não informada"}
+                    {item.reference.source && /^https?:\/\//i.test(item.reference.source) ? <> · <a className="underline" href={item.reference.source} target="_blank" rel="noreferrer">Fonte da ficha {item.reference.id ?? "não informada"}</a></> : <> · Fonte: {item.reference.source ?? "não informada"}</>}
+                    {item.rationale && <><br />{item.rationale}</>}</li>)}</ul></details>}
+              </li>;})}</ul>
+            </> : <p>Sem medição: nenhuma biblioteca utilizável neste ponto e campanha. Não é um zero.</p>}
+            <PointLibraries row={row} />
+            <p className="type-metadata">No 16S: cloroplasto de algas {row.chloroplast} · diatomáceas {row.diatoms} · cianobactérias {row.cyanobacteria}. As algas são vistas só pelo cloroplasto, com classificação exploratória.{row.coiExcluded ? ` ${row.coiExcluded}.` : ""}</p>
+            {row.exotics && <p className="type-metadata break-words">Espécies exóticas presentes (informativo, não entra na nota): {row.exotics}.</p>}
+            {row.alerts.length > 0 && <div><p className="font-semibold">Atenção ({row.alerts.length})</p>
+              <ul>{row.alerts.map((alert, index) => <li key={index} className="type-metadata break-words">{[alert.taxon, `${alert.reads} reads`, alert.domain, alert.reason].filter(Boolean).join(" · ")}</li>)}</ul></div>}
+            </details>
+  </>;
 }
