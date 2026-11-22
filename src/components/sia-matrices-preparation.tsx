@@ -1,5 +1,6 @@
 "use client";
 
+import { GeneratedFileStatus } from "./generated-workbooks";
 import { useEffect, useRef, useState } from "react";
 import { matrixIdentityFromName, matrixInputNames, type MatrixIdentity, type DiarySnapshot, type MatrixPackage } from "@/lib/imports/sia-matrices";
 import { archivePackage, prepareArchiveSheets, previewArchiveBatches, applyArchiveBatches, selectArchiveGroups, readArchiveCampaign, ArchiveRequestError, type ArchiveBatch, type ArchivePlan, type ArchiveSheet, type MatrixScope } from "@/lib/imports/sia-matrix-archive";
@@ -34,9 +35,10 @@ async function diary(signal?: AbortSignal) {
   return snapshot;
 }
 
-type WorkFile = Omit<Awaited<ReturnType<typeof import("@/lib/imports/sia-matrices").buildCampaignMatrixWorkbook>>, "bytes"> & { bytes: ArrayBuffer };
+type WorkFile = Omit<Awaited<ReturnType<typeof import("@/lib/imports/sia-matrices").buildCampaignMatrixWorkbook>>, "bytes"> & { bytes: ArrayBuffer; referenceOnlySias?: string[] };
 
 function CampaignWorkbook({ data, campaign }: { data: MatrixPackage; campaign: number }) {
+  const [fieldWorkbook,setFieldWorkbook] = useState<File | undefined>();
   const [file, setFile] = useState<WorkFile | null>(null);
   const [index, setIndex] = useState(0);
   const [attempt, setAttempt] = useState(0);
@@ -48,12 +50,15 @@ function CampaignWorkbook({ data, campaign }: { data: MatrixPackage; campaign: n
       const response = await fetch(`/api/imports/sia-matrices?campaign=${campaign}&references=1`, { cache: "no-store", signal: AbortSignal.any([signal, AbortSignal.timeout(30000)]) });
       if (!response.ok) throw new Error("Referências de coordenadas indisponíveis.");
       const { references, status, source, limitation } = await response.json();
-      const result = await processMatrices<WorkFile>("export", [data, snapshot, campaign, undefined, references, { status, source, limitation }], () => {}, signal);
+      const indexResponse = await fetch(`/api/results/capture-index?campaign=${campaign}`, {cache:"no-store", signal:AbortSignal.any([signal, AbortSignal.timeout(30000)])});
+      if (!indexResponse.ok) throw new Error("Resultados finais indisponíveis. A geração não foi concluída.");
+      const captureIndex = await indexResponse.json();
+      const result = await processMatrices<WorkFile>("export", [data, snapshot, campaign, undefined, references, { status, source, limitation }, captureIndex, fieldWorkbook], () => {}, signal);
       if (!signal.aborted) setFile(result);
     }
     void build().catch((reason) => { if (!signal.aborted) setError(reason instanceof Error ? reason.message : "Planilha indisponível."); });
     return () => controller.abort();
-  }, [data, campaign, attempt]);
+  }, [data, campaign, attempt, fieldWorkbook]);
   function download() {
     if (!file) return;
     const url = URL.createObjectURL(new Blob([new Uint8Array(file.bytes)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
@@ -62,12 +67,22 @@ function CampaignWorkbook({ data, campaign }: { data: MatrixPackage; campaign: n
   }
   const sheet = file?.preview[index];
   return <div className="min-w-0 space-y-3">
+    <label className="block">Planilha de campo desta campanha (.xlsx, opcional)
+      <input type="file" accept=".xlsx" aria-describedby="field-workbook-help" onChange={event=>{
+        setFile(null);
+        setError("");
+        setIndex(0);
+        setFieldWorkbook(event.currentTarget.files?.[0]);
+      }}/>
+    </label>
+    <p id="field-workbook-help" className="type-metadata">Preencha Campanha, SIA e dia da visita na mesma linha da planilha. A linha pode documentar a visita sem registrar uma coleta como realizada no Diário. Se não for possível identificar a campanha pela linha ou por um original reconhecido pelo SHA-256, a data fica apenas como referência.</p>
     <div className={stage} aria-label="Arquivo gerado">
       <p><strong>1. Arquivo gerado:</strong> {file ? <span className="break-all font-mono">{file.filename}</span> : "em preparação…"}</p>
       <p>Confira as abas na prévia abaixo antes de baixar. O download traz todas as abas, linhas e colunas.</p>
       <button type="button" className={control} disabled={!file} onClick={download}>Baixar {file ? file.filename : "planilha (.xlsx)"}</button>
     </div>
-    {file && <LinkedDates points={file.points} byDiary={file.linkedByDiary} sheetSias={file.sheetSias} unresolvedSias={file.unresolvedSias} />}
+    {file && <GeneratedFileStatus campaign={campaign} file={file}/>}
+    {file && <LinkedDates points={file.points} byDiary={file.linkedByDiary} sheetSias={file.sheetSias} unresolvedSias={file.unresolvedSias} referenceOnlySias={file.referenceOnlySias} />}
     {error ? <div role="alert">{error} <button className={control} type="button" onClick={() => { setError(""); setAttempt(attempt + 1); }}>Tentar novamente</button></div> : !file && <p role="status">Montando a planilha da C{campaign}…</p>}
     {sheet && file && <>
       <label className="flex flex-col gap-1 text-sm">Aba da prévia<select aria-label="Aba da prévia" className={control} value={index} onChange={(e) => setIndex(Number(e.target.value))}>{file.preview.map((s, i) => <option key={s.name} value={i}>{s.name}</option>)}</select></label>
@@ -85,14 +100,15 @@ function CampaignWorkbook({ data, campaign }: { data: MatrixPackage; campaign: n
 const shortSia = (sia: string) => sia.replace(/^SIA-0*/, "SIA ");
 const stage = "rounded border p-3 text-sm";
 
-/** Etapa 2 de 3. Diz só o que é: quantos pontos têm data e por qual via. Data achada na planilha de campanha
+/** Etapa 2 de 3. Diz só o que é: quantos pontos têm dia de visita documentado e por qual via. Data achada na planilha de campanha
  * não é coleta confirmada no Diário, e nada aqui informa se o arquivo foi guardado (isso é a etapa 3). */
-export function LinkedDates({ points, byDiary, sheetSias, unresolvedSias }: { points: number; byDiary: number; sheetSias: string[]; unresolvedSias: string[] }) {
+export function LinkedDates({ points, byDiary, sheetSias, unresolvedSias, referenceOnlySias = [] }: { points: number; byDiary: number; sheetSias: string[]; unresolvedSias: string[]; referenceOnlySias?: string[] }) {
   const linked = byDiary + sheetSias.length;
-  return <div className={stage} aria-label="Datas vinculadas">
-    <p><strong>2. Datas vinculadas:</strong> {linked} de {points} pontos têm data{byDiary ? ` · ${byDiary} pelo Diário de Campo` : ""}{sheetSias.length ? ` · ${sheetSias.length} pela planilha de campanha` : ""}.</p>
-    {sheetSias.length > 0 && <p>Data encontrada na planilha de campanha não equivale a coleta confirmada no Diário. Esses {sheetSias.length} pontos entram no Excel com a data, mas não podem ser guardados no acervo enquanto a coleta não estiver confirmada no Diário.</p>}
-    {unresolvedSias.length > 0 && <p role="alert"><strong>Sem data em nenhuma via ({unresolvedSias.length}):</strong> {unresolvedSias.map(shortSia).join(", ")}. O motivo de cada um está na aba Pendências.</p>}
+  return <div className={stage} aria-label="Dias de visita documentados">
+    <p><strong>2. Dias de visita documentados:</strong> {linked} de {points} pontos têm dia de visita documentado{byDiary ? ` · ${byDiary} pelo Diário de Campo` : ""}{sheetSias.length ? ` · ${sheetSias.length} pela planilha de campanha` : ""}.</p>
+    {sheetSias.length > 0 && <p>A planilha de campanha documenta o dia da visita. Para incorporar os grupos desses pontos ao acervo compartilhado, a coleta ainda precisa de confirmação no Diário. O XLSX gerado pode ser guardado com essa pendência.</p>}
+    {referenceOnlySias.length > 0 && <p>Pontos com data apenas de referência: <strong>{referenceOnlySias.length}</strong>. Para conferir o vínculo com a visita, anexe o original reconhecido ou informe a campanha na linha com o SIA e o dia da visita.</p>}
+    {unresolvedSias.length > 0 && <p role="alert"><strong>Pontos sem dia de visita documentado ({unresolvedSias.length}):</strong> {unresolvedSias.map(shortSia).join(", ")}. Consulte o motivo de cada ponto na aba Pendências e os registros das visitas nas abas Coletas e Evidências de campo.</p>}
   </div>;
 }
 
@@ -105,7 +121,7 @@ export type ArchiveStage =
   | { kind: "unknown"; reason: string };
 export function ArchiveStatus({ status }: { status: ArchiveStage }) {
   const title = <strong>3. Incorporação ao acervo:</strong>;
-  if (status.kind === "not-sent") return <div className={stage} aria-label="Incorporação ao acervo"><p>{title} este arquivo ainda não foi enviado ao acervo. Ele existe só nesta tela e no download. Para guardar, abra Acervo compartilhado, compare com o acervo e confirme.</p></div>;
+  if (status.kind === "not-sent") return <div className={stage} aria-label="Incorporação ao acervo"><p>{title} o conjunto de pontos e matrizes ainda não foi enviado ao acervo compartilhado. Para incorporá-lo, abra Acervo compartilhado, compare os grupos e confirme. Consulte a guarda do XLSX em Planilhas geradas.</p></div>;
   if (status.kind === "blocked") return <div className={stage} aria-label="Incorporação ao acervo"><p role="alert">{title} <strong>nenhum ponto deste envio foi incorporado.</strong> A operação foi bloqueada antes de gravar. Motivo: {status.reason}</p></div>;
   if (status.kind === "unknown") return <div className={stage} aria-label="Incorporação ao acervo"><p role="alert">{title} <strong>não foi possível verificar.</strong> Isso não quer dizer que não foi incorporado. Motivo: {status.reason}</p></div>;
   if (status.kind === "reviewed") return <div className={stage} aria-label="Incorporação ao acervo"><p>{title} comparado com o acervo, <strong>ainda sem gravar</strong>. De {status.groups} grupos: {status.fresh} novos, {status.changed} alterados e {status.same} já guardados e idênticos. A gravação só acontece ao confirmar.</p></div>;
@@ -131,21 +147,21 @@ function IntegratedSheets({ state, campaigns, busy, onOpen }: { state: "loading"
     }
     return () => { active = false; };
   }, [campaigns]);
-  return <section aria-label="Planilhas integradas" className="min-w-0 space-y-2 rounded border border-[var(--line-strong)] p-3">
-    <h3 className="type-section-title">Planilhas integradas</h3>
-    {state === "loading" && <p role="status" className="text-sm">Consultando o que já foi integrado…</p>}
-    {state === "error" && <p role="alert" className="text-sm">Não foi possível consultar as planilhas integradas agora. Isso é uma falha de consulta, não quer dizer que não haja nada guardado.</p>}
-    {state === "ready" && campaigns.length === 0 && <p className="text-sm"><strong>Nenhuma planilha integrada está guardada no aplicativo.</strong> Baixar a planilha não a guarda: o arquivo fica só no computador de quem baixou. Para guardar, confira as matrizes abaixo, abra Acervo compartilhado, compare com o acervo e confirme.</p>}
+  return <section aria-label="Grupos incorporados ao acervo" className="min-w-0 space-y-2 rounded border border-[var(--line-strong)] p-3">
+    <h3 className="type-section-title">Grupos incorporados ao acervo</h3>
+    {state === "loading" && <p role="status" className="text-sm">Consultando campanhas com grupos incorporados…</p>}
+    {state === "error" && <p role="alert" className="text-sm">Consulta dos grupos incorporados indisponível.</p>}
+    {state === "ready" && campaigns.length === 0 && <p className="text-sm"><strong>Nenhum grupo incorporado foi localizado.</strong> Para incorporar grupos, confira as matrizes, compare com o acervo compartilhado e confirme. Os arquivos XLSX guardados aparecem em Planilhas geradas.</p>}
     {state === "ready" && campaigns.length > 0 && <ul className="space-y-2">{campaigns.map((campaign) => {
       const summary = summaries[campaign] ?? { status: "loading" as const };
       return <li key={campaign} className="flex flex-wrap items-center justify-between gap-2 rounded border p-2 text-sm">
         <div className="min-w-0">
           <p className="font-semibold">{resolveCanonicalCampaign(campaign)?.name ?? `C${campaign}`}</p>
-          {summary.status === "loading" && <p role="status">Lendo o que está guardado…</p>}
-          {summary.status === "error" && <p role="alert">Não foi possível ler: {summary.message}</p>}
-          {summary.status === "ready" && <p className="break-words">{summary.points} pontos · {summary.datasets.length} conjuntos guardados: {summary.datasets.join("; ")}</p>}
+          {summary.status === "loading" && <p role="status">Consultando grupos da campanha…</p>}
+          {summary.status === "error" && <p role="alert">Falha ao consultar os grupos da campanha: {summary.message}</p>}
+          {summary.status === "ready" && <p className="break-words">{summary.groups} grupos incorporados · {summary.points} pontos · {summary.datasets.length} conjuntos: {summary.datasets.join("; ")}</p>}
         </div>
-        <button type="button" className={control} disabled={busy} onClick={() => onOpen(campaign)}>Abrir para conferir e baixar</button>
+        <button type="button" className={control} disabled={busy} onClick={() => onOpen(campaign)}>Abrir grupos da campanha</button>
       </li>;
     })}</ul>}
   </section>;

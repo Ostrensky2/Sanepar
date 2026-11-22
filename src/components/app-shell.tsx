@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { WorkbookOwner } from "./generated-workbooks";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRight, LogOut, Menu, UserRound, X } from "lucide-react";
@@ -220,7 +221,7 @@ export function AppShell({ children }: AppShellProps) {
             <LocalModeNotice />
             {hasRouteAccess ? (
               <ErrorBoundary title={`Falha ao carregar ${currentItem.headerTitle}`}>
-                {children}
+                <WorkbookOwner.Provider value={session?.userId ?? null}>{children}</WorkbookOwner.Provider>
               </ErrorBoundary>
             ) : (
               <AccessDeniedPanel title={currentItem.headerTitle} />

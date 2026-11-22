@@ -7,7 +7,7 @@ import {
   Search,
   UploadCloud,
 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   ACCESS_CATEGORY_STORAGE_KEY,
   hasPrivilege,
@@ -32,6 +32,7 @@ import type { ResultsWorkbookPreviewResponse } from "@/lib/imports/results";
 import type { ResultsInventoryResponse } from "@/lib/results-publication-contract";
 import { planCampaignPublicationScope, RESULTS_CONTRACT_VERSION } from "@/modules/results";
 import { ResultsPreparationPanel } from "@/modules/results/components/results-preparation-panel";
+import { GeneratedWorkbookList, WorkbookOwner } from "./generated-workbooks";
 import { SiaMatricesPreparation } from "@/components/sia-matrices-preparation";
 import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
 
@@ -126,7 +127,8 @@ function useSpreadsheetAccess() {
 
 export function SpreadsheetRepository() {
   const { canImportSpreadsheets } = useSpreadsheetAccess();
-  return <SiaMatricesPreparation canImport={canImportSpreadsheets} />;
+  const owner=useContext(WorkbookOwner);
+  return <><SiaMatricesPreparation key={owner ?? "pending"} canImport={canImportSpreadsheets} />{owner && canImportSpreadsheets && <GeneratedWorkbookList key={owner} owner={owner}/>}</>;
 }
 
 export function LegacyPublicationFlow() {
