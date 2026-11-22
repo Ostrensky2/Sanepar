@@ -58,6 +58,7 @@ export function CaptureCampaignResults({ campaign, fieldPhotos }: { campaign: nu
     };
   }, [campaign]);
   const code = `C${campaign}`;
+  const campaignPoints = state.status === "ready" ? state.campaigns.find(item => item.campaignCode === code)?.points : undefined;
   const labels = Object.fromEntries(defaultCampaigns.map((item, index) => [`C${index + 1}`, item.title]));
   return <div ref={content} className="space-y-6">
     <nav aria-label="Navegação nos resultados da campanha" className="flex flex-wrap gap-x-5 gap-y-1">
@@ -65,10 +66,10 @@ export function CaptureCampaignResults({ campaign, fieldPhotos }: { campaign: nu
     </nav>
     {state.status === "loading" && <section className="app-card h-40 animate-pulse bg-[var(--surface-soft)]" aria-label="Carregando resultados da campanha" />}
     {state.status === "error" && <section className="app-card p-4" role="alert">Não foi possível carregar o mapa e o ranking agora. O detalhe por ponto segue abaixo.</section>}
-    {state.status === "ready" && state.campaigns.some(item => item.campaignCode === code) &&
+    {state.status === "ready" && campaignPoints &&
       <ResultsIndexDashboard key={code} campaigns={state.campaigns} initialCampaignCode={code} campaignLabels={labels} fieldPhotos={fieldPhotos} />}
     <div id="consulta-por-sia" tabIndex={-1} aria-label="Consulta por SIA" className={anchorOffset}><section id={`detalhe-sia-c${campaign}`} tabIndex={-1} aria-label="Consulta individual por SIA" className={`app-card p-4 ${anchorOffset}`}><CaptureIndexPanel key={campaign} campaign={campaign} /></section></div>
-    <div id="tipos-de-efeito" tabIndex={-1} aria-label="Tipos de efeito" className={anchorOffset}><CaptureEffectsSummary key={`effects-${campaign}`} campaign={campaign} /></div>
+    <div id="tipos-de-efeito" tabIndex={-1} aria-label="Tipos de efeito" className={anchorOffset}><CaptureEffectsSummary key={`effects-${campaign}`} campaign={campaign} siaCodes={campaignPoints?.map(point => point.siaCode)} /></div>
     <div id="exoticas" tabIndex={-1} aria-label="Exóticas" className={anchorOffset}><CaptureExoticsReconciliation campaign={campaign} /></div>
   </div>;
 }

@@ -3,11 +3,16 @@ import React, { useEffect, useState } from "react";
 import type { EffectSummary } from "@/lib/capture-index/effect-summary";
 
 type ResponseData = {version:string;summary:EffectSummary};
-export function CaptureEffectsSummary({campaign}:{campaign:number}) {
-  // Reset data, failure and selection before the first render of another campaign.
-  return <CampaignEvidence key={campaign} campaign={campaign} />;
+export function orderedCampaignSias(siaCodes?: readonly string[]) {
+  return Array.from(new Set(siaCodes)).sort((a, b) => a.localeCompare(b, "pt-BR", {numeric:true}));
 }
-function CampaignEvidence({campaign}:{campaign:number}) {
+
+type CampaignEvidenceProps = {campaign: number; siaCodes?: string[]};
+export function CaptureEffectsSummary({campaign, siaCodes}: CampaignEvidenceProps) {
+  // Reset data, failure and selection before the first render of another campaign.
+  return <CampaignEvidence key={campaign} campaign={campaign} siaCodes={siaCodes} />;
+}
+function CampaignEvidence({campaign, siaCodes}: CampaignEvidenceProps) {
   const [data,setData]=useState<ResponseData|null>(null),[error,setError]=useState(false);
   const [selected,select]=useState("");
   useEffect(()=>{
@@ -43,12 +48,15 @@ function CampaignEvidence({campaign}:{campaign:number}) {
         <input type="hidden" name="campaign" value={campaign} />
         <input type="hidden" name="origem" value="efeitos" />
         {selected && <input type="hidden" name="effect" value={selected} />}
-        <label className="type-label">Consultar uma amostra por SIA conhecido
-          <input name="sia" required pattern={String.raw`([Ss][Ii][Aa][\s\-]*)?[0-9]+`} placeholder="Ex.: SIA-0011" className="mt-1 block min-h-11 w-full rounded border px-3" />
+        <label className="type-label">SIA da amostra
+          <input name="sia" list={`sias-campanha-${campaign}`} required pattern={String.raw`([Ss][Ii][Aa][\s\-]*)?[0-9]+`} placeholder="Ex.: SIA-0011" className="mt-1 block min-h-11 w-full rounded border px-3" />
         </label>
+        <datalist id={`sias-campanha-${campaign}`}>
+          {orderedCampaignSias(siaCodes).map(sia => <option key={sia} value={sia} />)}
+        </datalist>
         <button className="min-h-11 rounded bg-[var(--brand-navy-strong)] px-4 type-label text-white">Abrir ficha</button>
       </form>
-      <p className="type-metadata">Os totais descrevem a campanha. Para consultar uma amostra individual, informe um SIA conhecido. Ao voltar, a campanha e o tipo de efeito selecionado são preservados. Uma associação bibliográfica não confirma um efeito observado.</p>
+      <p className="type-metadata">Os totais descrevem a campanha. Escolha um SIA da campanha ou digite o código. As sugestões incluem os pontos da campanha independentemente do efeito selecionado. Ao voltar, a campanha e o tipo de efeito selecionado são preservados. Uma associação bibliográfica não confirma um efeito observado.</p>
       <p>Contamos uma vez cada ponto por efeito. “No componente determinante” significa que a ficha contribuiu no componente que definiu a nota do domínio, não que foi sua única causa. “Só em outro componente” não aumenta essa nota. Alertas de baixo suporte podem coexistir com outras fichas; não some as colunas.</p>
       <ul className="space-y-3">{s.effects.filter(e=>!selected||selected===e.id).map(e=><li key={e.id}>
         <h3 className="font-semibold">{e.title}</h3><p>{e.note}</p>
