@@ -86,6 +86,17 @@ export function CaptureIndexPanel({ campaign }: { campaign?: number }) {
             <p className="type-metadata break-words">Bibliotecas: {row.components.map(item => `${item.name}: ${item.status}, ${item.run}, ${item.observedReads} reads observados`).join(" · ")}</p>
             <p className="type-metadata">No 16S: cloroplasto de algas {row.chloroplast} · diatomáceas {row.diatoms} · cianobactérias {row.cyanobacteria}. As algas são vistas só pelo cloroplasto, com classificação exploratória.{row.coiExcluded ? ` ${row.coiExcluded}.` : ""}</p>
             {row.exotics && <p className="type-metadata break-words">Espécies exóticas presentes (informativo, não entra na nota): {row.exotics}.</p>}
+            {row.kinshipTotal > 0 && <details>
+              <summary className="cursor-pointer font-semibold">Vale investigar: parentes de organismos com efeito documentado ({row.kinshipTotal})</summary>
+              <p className="type-metadata">O organismo detectado pertence a um grupo em que só parte das espécies tem o efeito descrito. É um aviso do que verificar, não entra na nota e não confirma o efeito. Em cada categoria aparecem as cinco maiores participações nos reads, que não são os maiores riscos.</p>
+              <ul className="space-y-2">{row.kinship.filter(group => group.total > 0).map(group => <li key={group.key}>
+                <p className="type-metadata"><strong>{group.label}</strong> · {group.total} {group.total === 1 ? "organismo" : "organismos"}</p>
+                <ul>{group.top.map(item => <li key={item.ficha + item.taxon} className="type-metadata break-words">{item.taxon} · {item.share} dos reads de {item.component} ({item.reads} reads)
+                  {item.source.startsWith("http") && <> · <a className="underline" href={item.source} target="_blank" rel="noreferrer">fonte</a></>}</li>)}</ul>
+                {group.rest.length > 0 && <details className="ml-3"><summary className="cursor-pointer type-metadata">Ver os outros {group.rest.length}</summary>
+                  <ul>{group.rest.map(item => <li key={item.ficha + item.taxon} className="type-metadata break-words">{item.taxon} · {item.share} dos reads de {item.component} ({item.reads} reads)</li>)}</ul></details>}
+              </li>)}</ul>
+            </details>}
             {row.alerts.length > 0 && <div><p className="font-semibold">Atenção ({row.alerts.length})</p>
               <ul>{row.alerts.map((alert, index) => <li key={index} className="type-metadata break-words">{[alert.taxon, `${alert.reads} reads`, alert.domain, alert.reason].filter(Boolean).join(" · ")}</li>)}</ul></div>}
           </div>
@@ -105,6 +116,7 @@ export function CaptureIndexPanel({ campaign }: { campaign?: number }) {
         <p>Cada organismo detectado contribui com a sua participação nos reads válidos da biblioteca × a gravidade do efeito (1 a 3) × a aplicabilidade registrada na ficha (1, 0,5, 0,1 ou 0). A soma passa por uma curva logarítmica e vira a nota da categoria, de 0 a 1.</p>
         <p>A nota de cada categoria é a maior entre os marcadores utilizáveis. O índice geral do ponto é a maior das três notas: o sinal que mais merece atenção ali. O número da rede é a média dos pontos, com um voto por ponto.</p>
         <p>Organismo ainda sem ficha decidida contribui com zero e reduz a cobertura da curadoria, não a nota. A cobertura diz quanto dos reads já foi avaliado; não diz se a nota está certa. Ocorrência com menos de 10 reads ou menos de 0,01% da biblioteca vira alerta, sem elevar a nota. Zero significa nenhuma contribuição pontuada, não ausência demonstrada de risco.</p>
+        <p>Alerta de parentesco: quando o organismo detectado pertence a um grupo em que só parte das espécies tem efeito descrito, o ponto recebe um aviso do que vale investigar. O aviso exige o mesmo suporte mínimo da nota (10 reads e 0,01% da biblioteca) e não entra na nota.</p>
         <p>Diatomáceas: não há marcador próprio. Elas entram na nota de riscos operacionais só onde há resultado delas, que hoje é a leitura do cloroplasto no 16S, com classificação exploratória feita fora do pipeline do laboratório. Por entupirem filtros pela quantidade, somam como um grupo, e só pontua o que passa da base da rede (2,1% do 16S).</p>
         <p>Assinatura de esgoto: Bacteroides, Bifidobacterium e a família Prevotellaceae, bactérias de intestino, somam como um grupo na categoria de saúde, e só pontua o que passa da base da rede (1,0% do 16S). Indica contaminação fecal, não identifica o patógeno. Escherichia-Shigella alta sem essas bactérias não caracteriza esgoto e aparece em Atenção como possível problema na amostra.</p>
         <p>Todo organismo marinho identificado no COI (raia, tubarão, salmão, ostra, anêmonas, águas-vivas, caranguejos e copépodes de mar, 25 grupos ao todo) foi retirado da leitura e do denominador, porque não tem como ocorrer nas captações. Os reads atribuídos ao mexilhão marinho Perna são tratados como mexilhão-dourado. As contagens retiradas ficam na exportação.</p>

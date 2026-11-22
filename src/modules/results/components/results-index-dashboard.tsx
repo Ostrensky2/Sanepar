@@ -288,7 +288,7 @@ function CompletenessSummary({ campaign, metric }: { campaign: ResultsCampaign; 
   const items = [
     ["Com índice calculado", String(campaign.counts.complete), "pontos medidos"],
     ["Com um só marcador", String(campaign.points.filter((point) => point.completeness !== "unavailable" && (!point.components.coi.included || !point.components.bacteria.included)).length), "índice calculado sem o COI ou sem o 16S"],
-    ["Cobertura limitada", String(campaign.points.filter((point) => point.completeness !== "unavailable" && hasLimitedCoverage(pointCoverage(point))).length), "menos de 20% dos reads avaliados, em qualquer nota"],
+    ["Cobertura limitada", String(campaign.points.filter((point) => point.completeness !== "unavailable" && hasLimitedCoverage(pointCoverage(point, metric))).length), "menos de 20% dos reads avaliados na categoria exibida ou na que deu a nota"],
     ["Sem medição", String(campaign.counts.unavailable), "sem biblioteca utilizável"],
     ["Total", String(campaign.counts.total), "pontos"],
     ["Índice médio — pontos completos", formatValue(mean), `${completeValues.length} pontos completos`],
@@ -458,17 +458,23 @@ export function buildResultMapPoints(
       resultUpper: range.upper,
       resultCompleteness: point.completeness,
       resultIncluded: [point.components.bacteria.included, point.components.cyanobacteria.included, point.components.coi.included] as const,
-      resultLimitedCoverage: hasLimitedCoverage(pointCoverage(point)),
-      resultCoverage: pointCoverage(point),
+      resultLimitedCoverage: hasLimitedCoverage(pointCoverage(point, metric)),
+      resultCoverage: pointCoverage(point, metric),
       resultMetricLabel: metricLabel(metric),
     } satisfies CampaignHydroMapPoint];
   });
 }
 
-/** Fração dos reads do ponto que pertence a organismos já avaliados: a maior entre as três categorias. */
-export function pointCoverage(point: ResultPoint) {
-  const values = Object.values(point.bibliographicCoverage).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
-  return values.length ? Math.max(...values) : null;
+/** Fração dos reads avaliados que qualifica a nota exibida. Em uma categoria, é a cobertura dela. Na visão geral, é a da categoria
+ * que determinou a nota (a maior das três); se houver empate na nota, vale a menor cobertura entre as empatadas. */
+export function pointCoverage(point: ResultPoint, metric: ResultMetric = "overall") {
+  const finite = (value: number | null | undefined): value is number => typeof value === "number" && Number.isFinite(value);
+  if (metric !== "overall") { const value = point.bibliographicCoverage[metric]; return finite(value) ? value : null; }
+  const domains = (Object.keys(point.domains) as Array<keyof ResultPoint["domains"]>).filter((domain) => finite(point.domains[domain].value));
+  if (!domains.length) return null;
+  const top = Math.max(...domains.map((domain) => point.domains[domain].value as number));
+  const values = domains.filter((domain) => point.domains[domain].value === top).map((domain) => point.bibliographicCoverage[domain]).filter(finite);
+  return values.length ? Math.min(...values) : null;
 }
 
 function metricLabel(metric: ResultMetric) {

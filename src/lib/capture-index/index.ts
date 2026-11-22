@@ -39,6 +39,8 @@ export function captureIndexRows(campaign?: number): CaptureIndexRow[] {
 
 const runLabel = (run: string) => run ? run.replace(/^C\d_/, "") : "sem biblioteca";
 const confidenceLabel = { A: "A, metade ou mais dos reads avaliados", B: "B, de 20% a 50% dos reads avaliados", C: "C, menos de 20% dos reads avaliados" } as const;
+const KINSHIP = "alerta de parentesco";
+export const KINSHIP_TOP = 5;
 const alertReason = (alert: Alert) => alert.motivo === "baixo suporte" ? "ocorrência de baixo suporte: atenção, sem elevar a nota"
   : alert.motivo === "dominância anômala" ? `dominância fora do padrão: ${formatCaptureShare(alert.participacao)} dos reads de ${componentLabels[alert.componente] ?? alert.componente}, ${Math.round(alert.vezes ?? 0).toLocaleString("pt-BR")} vezes a referência do próprio organismo na rede (${formatCaptureShare(alert.referencia)}); proporção de reads não mede quantidade, por isso não entra na nota`
   : alert.motivo === "qualidade da amostra" ? `possível problema na amostra: ${formatCaptureShare(alert.participacao)} de Escherichia-Shigella sem as bactérias de intestino que acompanham esgoto (${formatCaptureShare(alert.referencia)}); pode ser crescimento no transporte ou armazenamento; conferir com o laboratório`
@@ -87,8 +89,17 @@ export function captureIndexView(row: CaptureIndexRow) {
     coiExcluded: row.descriptors.coiExcludedReads ? `${row.descriptors.coiExcludedReads.toLocaleString("pt-BR")} reads de organismos marinhos retirados do COI` : "",
     exotics: row.descriptors.exotics.map(item => `${item.species} (${item.reads.toLocaleString("pt-BR")} reads)`).join(", "),
     dominance: row.alerts.filter(alert => alert.motivo === "dominância anômala").map(alert => `${alert.taxon} ${formatCaptureShare(alert.participacao)}`).join(", "),
-    alerts: row.alerts.map(alert => ({ domain: alert.dominio ? captureDomainLabels[alert.dominio] : "", taxon: alert.taxon, reads: alert.reads.toLocaleString("pt-BR"),
+    alerts: row.alerts.filter(alert => alert.motivo !== KINSHIP).map(alert => ({ domain: alert.dominio ? captureDomainLabels[alert.dominio] : "", taxon: alert.taxon, reads: alert.reads.toLocaleString("pt-BR"),
       reason: alertReason(alert), ficha: alert.ficha })),
+    // Alertas de parentesco: o organismo detectado tem efeito documentado só em parte dele. Avisam o que vale investigar e NÃO entram na nota.
+    // Ordenados pela participação nos reads ("maiores participações", não "maiores riscos"); a lista completa segue disponível.
+    kinship: captureDomains.map(domain => {
+      const items = row.alerts.filter(alert => alert.motivo === KINSHIP && alert.dominio === domain).sort((a, b) => (b.participacao ?? 0) - (a.participacao ?? 0) || a.taxon.localeCompare(b.taxon, "pt-BR"))
+        .map(alert => ({ taxon: alert.taxon, reads: alert.reads.toLocaleString("pt-BR"), share: formatCaptureShare(alert.participacao), component: componentLabels[alert.componente] ?? alert.componente,
+          ficha: alert.ficha, source: data.fichas[alert.ficha]?.source ?? "" }));
+      return { key: domain, label: captureDomainLabels[domain], total: items.length, top: items.slice(0, KINSHIP_TOP), rest: items.slice(KINSHIP_TOP) };
+    }),
+    kinshipTotal: row.alerts.filter(alert => alert.motivo === KINSHIP).length,
   };
 }
 
@@ -111,10 +122,10 @@ const raw = (value: number | null | undefined) => value === null || value === un
 export function captureIndexCsv(rows: CaptureIndexRow[]): string {
   const header = ["versao", "campanha", "SIA", "indice_geral", "piso_a_teto", "posicao_na_campanha", "predominante", "categorias_na_faixa", "cobertura",
     ...captureDomains.flatMap(domain => [`${domain}_nota`, `${domain}_piso_a_teto`, `${domain}_confianca`, `${domain}_reads_avaliados`, `${domain}_principal`]),
-    "corrida_16S", "corrida_COI", "COI_situacao", "cloroplasto_no_16S", "cianobacterias_no_16S", "diatomaceas_no_16S", "COI_reads_marinhos_retirados", "alertas", "dominancia_fora_do_padrao", "exoticas_presentes"];
+    "corrida_16S", "corrida_COI", "COI_situacao", "cloroplasto_no_16S", "cianobacterias_no_16S", "diatomaceas_no_16S", "COI_reads_marinhos_retirados", "alertas", "dominancia_fora_do_padrao", "exoticas_presentes", "alertas_de_parentesco"];
   return csv([header, ...rows.map(captureIndexView).map(view => [captureIndexMeta.version, view.campaign, view.sia, view.general, view.range, view.position, view.predominant, view.elevated, view.coverage,
     ...view.domains.flatMap(domain => [domain.score, domain.range, domain.confidenceGrade, domain.evaluated, domain.main]),
-    view.components[0].run, view.components[2].run, view.components[2].status, view.chloroplast, view.cyanobacteria, view.diatoms, String(row_excluded(view)), String(view.alerts.length), view.dominance, view.exotics])]);
+    view.components[0].run, view.components[2].run, view.components[2].status, view.chloroplast, view.cyanobacteria, view.diatoms, String(row_excluded(view)), String(view.alerts.length), view.dominance, view.exotics, String(view.kinshipTotal)])]);
 }
 
 /** CSV de auditoria: valores sem arredondar e uma linha por contribuição (ponto, domínio, táxon, ficha), para refazer cada nota. */

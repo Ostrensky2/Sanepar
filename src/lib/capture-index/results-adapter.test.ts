@@ -52,14 +52,22 @@ describe("ponte do índice de captação para as telas de resultados", () => {
     expect(mapped[0]).toMatchObject({ code: "220", effective: { lat: -25.4, lon: -49.2 }, resultValue: campaigns[2].points.find(point => point.siaCode === "220")!.overall.value });
   });
 
-  it("a cobertura limitada é medida em todos os pontos, com qualquer nota", () => {
+  it("a cobertura limitada segue a categoria que deu a nota, em qualquer nota", () => {
     const count = (code: string) => {
       const points = campaigns.find(item => item.campaignCode === code)!.points;
       const limited = points.filter(point => hasLimitedCoverage(pointCoverage(point)));
       return [limited.length, limited.filter(point => point.overall.value! >= 0.05).length, points.length];
     };
     // [com cobertura limitada, desses com algum sinal, pontos da campanha]
-    expect([count("C1"), count("C2"), count("C3")]).toEqual([[19, 6, 73], [66, 40, 76], [47, 9, 76]]);
+    expect([count("C1"), count("C2"), count("C3")]).toEqual([[19, 6, 73], [66, 40, 76], [48, 9, 76]]);
+    // na visão de uma categoria, vale a cobertura dela; na geral, a da categoria que determinou a nota; em empate, a menor
+    const point = campaigns[2].points.find(item => item.siaCode === "220")!;
+    expect(pointCoverage(point, "humanHealth")).toBe(point.bibliographicCoverage.humanHealth);
+    expect(pointCoverage(point)).toBe(point.bibliographicCoverage.humanHealth); // SIA 220: a nota geral vem da saúde
+    const tie = { ...point, domains: { environmental: { value: 0.2, lower: 0, upper: 0 }, operational: { value: 0.2, lower: 0, upper: 0 }, humanHealth: { value: 0.1, lower: 0, upper: 0 } },
+      bibliographicCoverage: { environmental: 0.5, operational: 0.1, humanHealth: 0.9 } };
+    expect(pointCoverage(tie)).toBe(0.1);
+    expect(buildResultMapPoints([point], "operational")[0].resultCoverage).toBe(point.bibliographicCoverage.operational);
     expect(buildResultMapPoints(campaigns[2].points)[0]).toMatchObject({ resultLimitedCoverage: expect.any(Boolean), resultCoverage: expect.any(Number) });
   });
 
