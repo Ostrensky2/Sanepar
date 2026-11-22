@@ -1,3 +1,4 @@
+import { componentLabels as catalogComponentLabels } from "./effect-catalog";
 import "server-only";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -11,7 +12,8 @@ export const captureDomains = ["Ambiental", "Operacional", "Saúde humana"] as c
 export const captureDomainLabels: Record<Domain, string> = {
   Ambiental: "Danos físicos e ambientais", Operacional: "Riscos operacionais", "Saúde humana": "Perigo potencial à saúde, na captação" };
 export const captureComponents = ["16S", "ALGAS", "COI"] as const;
-const componentLabels: Record<string, string> = { "16S": "16S (bactérias)", ALGAS: "16S (cloroplasto de algas)", COI: "COI" };
+
+const componentLabels: Record<string,string> = catalogComponentLabels;
 type Domain = (typeof captureDomains)[number];
 type ComponentName = (typeof captureComponents)[number];
 type Contribution = { taxon: string; rank: string; reads: number; gravidade: number; aplicabilidade: number; ficha: string; fonte: string; q: number; component: string; base?: number };
@@ -80,9 +82,9 @@ export function captureIndexView(row: CaptureIndexRow) {
         score: formatCaptureIndex(score?.score), range: score ? `${formatCaptureIndex(score.floor)} a ${formatCaptureIndex(score.ceiling)}` : "",
         confidence: score ? confidenceLabel[score.confidence] : "", confidenceGrade: score?.confidence ?? "", evaluated: score ? formatCaptureShare(score.evaluated) : "",
         evaluatedBy: score?.evaluatedByComponent ? Object.entries(score.evaluatedByComponent).map(([name, value]) => `${componentLabels[name] ?? name} ${formatCaptureShare(value)}`).join(" · ") : "",
-        component: score?.component ? componentLabels[score.component] : "",
+        componentCode: score?.component ?? null, component: score?.component ? componentLabels[score.component] : "",
         main: main ? `${main.taxon}: ${main.reads.toLocaleString("pt-BR")} reads, gravidade ${main.gravidade}, aplicabilidade ${applicabilityLabel(main.aplicabilidade)}` : score ? "nenhum organismo com ficha pontuada" : "",
-        contributions: (score?.contributions ?? []).map(item => ({ taxon: item.taxon, reads: item.reads.toLocaleString("pt-BR"), component: componentLabels[item.component] ?? item.component,
+        contributions: (score?.contributions ?? []).map(item => ({ positive: item.q > 0, componentCode: item.component, taxon: item.taxon, reads: item.reads.toLocaleString("pt-BR"), component: componentLabels[item.component] ?? item.component,
           severity: String(item.gravidade), applicability: applicabilityLabel(item.aplicabilidade), ficha: item.ficha, source: item.fonte, rationale: data.fichas[item.ficha]?.rationale ?? "" })),
       };
     }),
@@ -93,7 +95,7 @@ export function captureIndexView(row: CaptureIndexRow) {
     exotics: row.descriptors.exotics.map(item => `${item.species} (${item.reads.toLocaleString("pt-BR")} reads)`).join(", "),
     dominance: row.alerts.filter(alert => alert.motivo === "dominância anômala").map(alert => `${alert.taxon} ${formatCaptureShare(alert.participacao)}`).join(", "),
     alerts: row.alerts.map(alert => ({ domain: alert.dominio ? captureDomainLabels[alert.dominio] : "", taxon: alert.taxon, reads: alert.reads.toLocaleString("pt-BR"),
-      reason: alertReason(alert), ficha: alert.ficha })),
+      domainCode: alert.dominio, componentCode: alert.componente, lowSupport: alert.motivo === "baixo suporte", reason: alertReason(alert), ficha: alert.ficha })),
   };
 }
 

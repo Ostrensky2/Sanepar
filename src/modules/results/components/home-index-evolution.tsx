@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { formatResultIndex } from "../format-index";
+import { formatCaptureIndex } from "@/lib/capture-index/format";
 import Link from "next/link";
 import { ResultsReviewDialog } from "@/components/results-review-dialog";
 import { defaultCampaigns } from "@/lib/campaign-management";
 import type { ResultRange, ResultsCampaign } from "@/modules/results";
 import { resultDetailHref } from "./results-index-dashboard";
-import { CompleteVsPartialSketch } from "./help-visuals";
+import { distribution } from "./capture-map-scale";
 import { ResultsInterpretationHelp } from "./results-interpretation-help";
 import { continuousResultColor, resultIntervalStops } from "./result-visual";
 
@@ -16,9 +16,9 @@ export const EVOLUTION_SERIES = [
 ] as const;
 
 export const EVOLUTION_HELP = [
-  "Cada coluna é uma campanha. A altura é a média do índice (0 a 1) nos pontos medidos, com um voto por ponto.",
+  "Cada ponto representa uma campanha. Na visão de rede, a altura é a média do índice (0 a 1) nos pontos medidos, com um voto por ponto.",
   "As campanhas não são diretamente comparáveis: a C1 usou outra região do 16S, e a C3 usou outro aparelho de sequenciamento. Uma diferença entre colunas não é, sozinha, uma tendência da água.",
-  "Ao escolher um ponto, as colunas mostram o valor desse ponto em cada campanha. Ponto sem medição na campanha não aparece.",
+  "Ao escolher um ponto, os pontos mostram o valor desse ponto em cada campanha. Ponto sem medição na campanha não aparece.",
   "Ponto sem medição fica fora da média. Cada coluna informa quantos pontos entraram.",
 ];
 
@@ -104,8 +104,11 @@ export function HomeIndexEvolution({ campaigns }: { campaigns: ResultsCampaign[]
   const [explanation, setExplanation] = useState<{ title: string; paragraphs: string[] } | null>(null);
   const suggestions = evolutionPointOptions(campaigns, query);
   const applied = evolutionPointOptions(campaigns).find((option) => option.key === selectedSia)?.label;
-  // Todas as campanhas previstas aparecem, com ou sem resultado publicado.
-  const visibleCampaigns = defaultCampaigns;
+  const [commonOnly, setCommonOnly] = useState(false);
+  const visibleCampaigns = campaigns.filter(c => c.points.some(p => p.overall.value !== null))
+    .sort((a,b) => a.campaignCode.localeCompare(b.campaignCode, "pt-BR", {numeric:true}));
+  const measuredKeys = visibleCampaigns.map(c => new Set(c.points.filter(p => p.overall.value !== null).map(p => evolutionSiaKey(p.siaCode)).filter(key => key !== null)));
+  const common = new Set([...(measuredKeys[0] ?? [])].filter(key => measuredKeys.every(keys => keys.has(key))));
   function clear() { setQuery(""); setSelectedSia(null); setOpen(false); setActive(-1); }
   function apply(option: { key: string; label: string }) { setSelectedSia(option.key); setQuery(option.label); setOpen(false); setActive(-1); }
 
@@ -113,7 +116,7 @@ export function HomeIndexEvolution({ campaigns }: { campaigns: ResultsCampaign[]
     <header className="border-b border-[var(--line-soft)] px-4 py-3 sm:px-5">
       <div className="flex items-center gap-1">
         <h2 id="home-evolution-title" className="heading-font type-section-title text-[var(--brand-navy-strong)]">Evolução do índice geral</h2>
-        <ResultsInterpretationHelp title="Como ler a evolução">{EVOLUTION_HELP.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}<CompleteVsPartialSketch /></ResultsInterpretationHelp>
+        <ResultsInterpretationHelp title="Como ler a evolução">{EVOLUTION_HELP.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</ResultsInterpretationHelp>
       </div>
       <p className="type-metadata mt-1 text-[var(--ink-soft)]">{selectedSia === null ? "Média dos resultados completos por campanha." : "Resultados do ponto selecionado por campanha."}</p>
       <div className="relative mt-3 max-w-xl" onBlurCapture={(event) => {
@@ -148,33 +151,39 @@ export function HomeIndexEvolution({ campaigns }: { campaigns: ResultsCampaign[]
           {!suggestions.length && <li role="presentation"><span role="status" className="block p-3 text-sm">Nenhum ponto encontrado.</span></li>}
         </ul>}
       </div>
+      <label className="mt-2 flex min-h-11 items-center gap-2 type-label"><input type="checkbox" checked={commonOnly} disabled={selectedSia !== null} onChange={e => setCommonOnly(e.target.checked)} />Comparar somente SIAs medidos em todas as campanhas ({common.size})</label>
       <p id="evolution-applied" className="type-caption mt-2 text-[var(--ink)]" aria-live="polite">Aplicado: {selectedSia === null ? "médias dos resultados completos" : applied ?? `SIA ${selectedSia}`}.{query && query !== applied ? " Selecione uma sugestão para aplicar a busca." : ""}</p>
     </header>
     <div className="p-4 sm:px-5" role="region" aria-label="Índice geral por campanha">
+      <p className="type-caption">Índice geral · escala fixa de 0 a 1</p>
       <div className="overflow-x-auto pb-1">
-      <div className="grid min-w-[42rem] gap-2" style={{ gridTemplateColumns: `repeat(${visibleCampaigns.length}, minmax(4.5rem, 1fr))` }}>
-        {visibleCampaigns.map((definition, index) => {
-          const code = `C${index + 1}`;
-          const campaign = campaigns.find((item) => item.campaignCode === code);
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(1,visibleCampaigns.length)}, minmax(0, 1fr))` }}>
+        {visibleCampaigns.map(source => {
+          const code = source.campaignCode;
+          const definition = defaultCampaigns[Number(code.slice(1)) - 1];
+          const campaign = commonOnly && selectedSia === null ? {...source, points:source.points.filter(p => common.has(evolutionSiaKey(p.siaCode) ?? ""))} : source;
           const series = evolutionSeries(campaign, selectedSia);
-          const label = definition.title.split(" - ")[1]?.replace(/20(\d{2})/, "$1") ?? code;
+          const stats = distribution(campaign.points.map(p => p.overall.value));
+          const label = definition?.title.split(" - ")[1]?.replace(/20(\d{2})/, "$1") ?? code;
           return <div key={code} className="min-w-0 text-center" data-evolution-campaign={code}>
             <Link href={resultDetailHref(code, selectedSia === null ? undefined : `SIA-${selectedSia.padStart(4, "0")}`)} className="mb-2 inline-flex min-h-11 flex-col items-center justify-center text-sm font-bold leading-tight text-[var(--brand-navy-strong)]">
               <span>{label}</span>
               <span className="mt-0.5 text-xs font-semibold text-[var(--ink-soft)]" data-evolution-code={code}>{code}</span>
             </Link>
-            <div className="mx-auto max-w-16">
+            <div className="mx-auto max-w-48">
               {series.map((item) => {
                 const text = item.range === null ? "Sem resultado" : item.range.value === null ? `${format(item.range.lower)}–${format(item.range.upper)}` : format(item.range.value);
-                return <div key={item.key} data-evolution-series={item.key} aria-label={`${definition.title}, ${item.label}: ${text}${selectedSia === null ? `; média, ${item.included} incluídos, ${item.excluded} excluídos` : item.range?.value === null ? "; faixa possível, sem valor único" : ""}`}>
+                return <div key={item.key} data-evolution-series={item.key} aria-label={`${definition?.title ?? code}, ${item.label}: ${text}${selectedSia === null ? `; média, ${item.included} incluídos, ${item.excluded} excluídos` : item.range?.value === null ? "; faixa possível, sem valor único" : ""}`}>
                   <div className="relative h-32 bg-[var(--surface-soft)]" aria-hidden="true">
                     <span className="pointer-events-none absolute inset-x-0 top-0 border-t border-[var(--line-strong)]" />
                     <span className="pointer-events-none absolute inset-x-0 bottom-0 border-t border-[var(--line-strong)]" />
-                    {item.range && <div className="absolute inset-x-1 border-y border-[var(--ink)]" style={evolutionBarStyle(item.range)} />}
+                    {item.range?.value != null ? <span className="absolute left-1/2 size-3 -translate-x-1/2 translate-y-1/2 rounded-full border bg-[var(--brand-navy-strong)]" style={{bottom:`${100 * item.range.value}%`}} /> : item.range && <div className="absolute inset-x-1 border-y border-[var(--ink)]" style={evolutionBarStyle(item.range)} />}
                   </div>
                   <p className="mt-1 min-h-9 text-xs font-bold tabular-nums text-[var(--ink)]">{item.range?.value === null ? <>{format(item.range.lower)}<br />–{format(item.range.upper)}</> : text}</p>
                   {selectedSia === null && campaign && <div className="text-xs text-[var(--ink-soft)]">
-                    {item.included > 0 && <p>{item.included} completos</p>}
+                    <p>Média dos {item.included} pontos: {text}</p>
+                    <p>P90: {formatCaptureIndex(stats.p90)}</p>
+                    <p>Maior índice de um ponto: {formatCaptureIndex(stats.max)}</p>
                     {item.excluded > 0 && <button type="button" className="min-h-11 underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]" onClick={() => setExplanation({ title: `${label}: fora da média`, paragraphs: [evolutionExclusions(campaign, item.included).detail] })}>{evolutionExclusions(campaign, item.included).label}</button>}
                   </div>}
                 </div>;
@@ -189,4 +198,4 @@ export function HomeIndexEvolution({ campaigns }: { campaigns: ResultsCampaign[]
   </section>;
 }
 
-function format(value: number) { return formatResultIndex(value); }
+function format(value: number) { return formatCaptureIndex(value); }

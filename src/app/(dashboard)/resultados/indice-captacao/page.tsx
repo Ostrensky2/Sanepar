@@ -7,7 +7,7 @@ import { ResultsInterpretationHelp } from "@/modules/results/components/results-
 const campaigns = [1, 2, 3];
 
 export default async function CaptureIndexPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const value = (await searchParams).campaign;
+  const { campaign: value, sia } = await searchParams;
   const selected = typeof value === "string" && campaigns.includes(Number(value)) ? Number(value) : undefined;
   const tab = (active: boolean) => `inline-flex min-h-11 items-center rounded-lg border px-4 text-sm font-bold ${active ? "bg-[var(--brand-navy-strong)] text-white" : "text-[var(--brand-navy-strong)]"}`;
   return <div className="app-container min-w-0 space-y-5">
@@ -27,6 +27,6 @@ export default async function CaptureIndexPage({ searchParams }: { searchParams:
       <Link className={tab(selected === undefined)} href="/resultados/indice-captacao">Visão da rede</Link>
       {campaigns.map(campaign => <Link key={campaign} className={tab(selected === campaign)} href={`/resultados/indice-captacao?campaign=${campaign}`}>Campanha {campaign}</Link>)}
     </nav>
-    <section className="app-card p-4"><CaptureIndexPanel key={selected ?? "rede"} campaign={selected} /></section>
+    <section className="app-card p-4"><CaptureIndexPanel key={JSON.stringify([selected,sia])} campaign={selected} initialSia={selected && typeof sia === "string" ? sia : ""} /></section>
   </div>;
 }

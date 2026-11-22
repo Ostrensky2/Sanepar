@@ -18,15 +18,13 @@ describe("results index dashboard v2 contract", () => {
     campaign.points[0].conditionOfUse = "Provisório; qualidade não informada";
     const sections = mapHelpSections(campaign, campaign.points, [campaign.points[0].key], "operational");
     const text = sections.map((section) => section.text).join(" ");
-    for (const copy of ["Operacional", "1 de 3", "2 sem coordenada utilizável", "SIA-0559", "Provisório; qualidade não informada", "não sequenciamento ou aprovação", "não índice zero", "não representa probabilidade", "inferior à esquerda", "superior à direita", "sem valor central", "sem zoom"]) expect(text).toContain(copy);
+    for (const copy of ["Operacional", "1 de 3", "2 sem coordenada utilizável", "SIA-0559", "Provisório; qualidade não informada", "O contorno indica a cobertura", "ausência de medição utilizável", "não representa probabilidade", "posição relativa", "antes dos filtros", "sem zoom"]) expect(text).toContain(copy);
     const source = readFileSync(new URL("../results-index-dashboard.tsx", import.meta.url), "utf8");
     expect(source).toContain('<ResultsReviewDialog title="Como ler o mapa"');
     expect(text).not.toContain("SANEPAR-INDICE");
     expect(source).toContain("{mapPoints.length} de {visiblePoints.length} resultados no mapa.");
-    const legend = readFileSync(new URL("../result-marker-legend.tsx", import.meta.url), "utf8");
-    for (const label of ["3/3", "2/3", "1/3", "0/3"]) expect(legend).toContain(label);
-    expect(legend).not.toContain("<p>");
-    expect(legend).toContain("RESULT_PALETTE");
+    expect(source).toContain('value="relative"');
+    expect(source).toContain('value="fixed"');
   });
   it("summarizes only complete overall indices and preserves campaign and point in detail links", () => {
     expect(completeOverallSummary(fixtureCampaign())).toEqual({ count: 1, mean: 0.62 });
@@ -104,7 +102,7 @@ describe("results index dashboard v2 contract", () => {
     );
     expect(source).toContain("? v2Campaign.counts.total");
     expect(source).toContain("resultPoints={hasPublishedResults ? resultPointCount : null}");
-    expect(source).toContain("> com resultado</>");
+    expect(source).toContain("Publicação no acervo:");
   });
 
   it("maps every localizable completeness state and keeps points without coordinates out of the map only", () => {

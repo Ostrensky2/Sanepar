@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatResultIndex } from "../format-index";
+import { formatCaptureIndex } from "@/lib/capture-index/format";
 import { defaultCampaigns, readCampaignManagement, type CampaignManagementById } from "@/lib/campaign-management";
 import { CircleDot, FlaskConical, CheckCircle2 } from "lucide-react";
 import { HomeIndexEvolution } from "./home-index-evolution";
@@ -108,7 +108,7 @@ export function completeOverallSummary(campaign?: ResultsCampaign) {
 }
 
 function formatMean(value: number | null) {
-  return formatResultIndex(value, "Indisponível");
+  return formatCaptureIndex(value);
 }
 
 export function orderPublishedResultsForHome(

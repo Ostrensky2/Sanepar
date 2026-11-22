@@ -4,16 +4,16 @@ import { Camera, CircleHelp, FlaskConical, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { defaultCampaigns } from "@/lib/campaign-management";
-import { formatResultIndex } from "../format-index";
+import { formatCaptureIndex } from "@/lib/capture-index/format";
 import { RiskPhotoModal } from "@/components/home-risk-map-section";
 import { ResultsReviewDialog } from "@/components/results-review-dialog";
 import {
   CampaignHydroMap,
   type CampaignHydroMapPoint,
 } from "@/components/campaign-hydro-map";
-import { ResultMarkerLegend } from "./result-marker-legend";
+import { bands, relativeBands, distribution, reading, domains } from "./capture-map-scale";
 import { analyticalStatusText } from "../presentation";
-import { CompleteVsPartialSketch, IndexScaleBar } from "./help-visuals";
+
 import { ResultsInterpretationHelp } from "./results-interpretation-help";
 import type {
   ResultCompleteness,
@@ -43,8 +43,6 @@ const metricOptions: Array<{ value: ResultMetric; label: string }> = [
 const completenessOptions: Array<{ value: "all" | ResultCompleteness; label: string }> = [
   { value: "all", label: "Todos os resultados" },
   { value: "complete", label: "Com índice calculado" },
-  { value: "partial_2", label: "Parciais (2/3)" },
-  { value: "partial_1", label: "Parciais (1/3)" },
   { value: "unavailable", label: "Sem medição" },
 ];
 
@@ -58,6 +56,7 @@ export function ResultsIndexDashboard({
 }: ResultsIndexDashboardProps) {
   const firstCampaignCode = initialCampaignCode ?? campaigns[0]?.campaignCode ?? "";
   const [campaignCode, setCampaignCode] = useState(firstCampaignCode);
+  const [relative, setRelative] = useState(false);
   const [metric, setMetric] = useState<ResultMetric>("overall");
   const [completeness, setCompleteness] = useState<"all" | ResultCompleteness>("all");
   const [query, setQuery] = useState("");
@@ -84,7 +83,7 @@ export function ResultsIndexDashboard({
     if (summary) return;
     const params = new URLSearchParams(window.location.search);
     const point = campaigns.find((item) => item.campaignCode === firstCampaignCode)?.points
-      .find((item) => item.siaCode === params.get("sia"));
+      .find((item) => params.get("sia") !== null && normalizeSia(item.siaCode) === normalizeSia(params.get("sia")!));
     let active = true;
     queueMicrotask(() => { if (active && point) setSelectedPointKey(point.key); });
     return () => { active = false; };
@@ -104,9 +103,12 @@ export function ResultsIndexDashboard({
   }, [campaign, completeness, query]);
   const selectedPoint =
     visiblePoints.find((point) => point.key === selectedPointKey) ?? visiblePoints[0] ?? null;
+  const population = useMemo(() => distribution((campaign?.points ?? []).map(point => metricRange(point, metric).value)), [campaign, metric]);
+  const selection = selectedPoint ? reading(selectedPoint, metric, relative ? population : undefined) : null;
+  const selectedValue = selectedPoint ? metricRange(selectedPoint, metric).value : null;
   const mapPoints = useMemo(
-    () => buildResultMapPoints(visiblePoints, metric, campaignLabels, fieldPhotos),
-    [campaignLabels, fieldPhotos, metric, visiblePoints],
+    () => buildResultMapPoints(visiblePoints, metric, campaignLabels, fieldPhotos, relative ? population : undefined),
+    [campaignLabels, fieldPhotos, metric, visiblePoints, relative, population],
   );
   const municipalityRows = useMemo(() => summarizeMunicipalities(visiblePoints), [visiblePoints]);
   const completeRanking = useMemo(
@@ -145,17 +147,17 @@ export function ResultsIndexDashboard({
         <div className="mt-2 flex items-center gap-1">
           <p className="type-body text-[var(--ink)]">Índices de 0 a 1 · versão piloto.</p>
           <ResultsInterpretationHelp title="Como ler a síntese por ponto">
-            <p>A cor de cada ponto no mapa é o seu índice, de 0 a 1. O anel mostra quais marcadores foram usados: bactérias (16S), algas pelo cloroplasto e COI.</p>
-            <IndexScaleBar />
+            <p>Compare o escore entre campanhas pela escala fixa ou consulte sua posição dentro da campanha.</p>
+
             <p>Ponto completo tem um número. Ponto parcial tem uma faixa.</p>
-            <CompleteVsPartialSketch />
+
             <p><strong>Piloto:</strong> o índice de captação ainda não foi confrontado com ocorrências reais. Zero significa nenhuma contribuição pontuada, não ausência demonstrada de risco.</p>
           </ResultsInterpretationHelp>
         </div>
       </header>
 
       <div className="app-card grid gap-3 border-[var(--line-ghost)] bg-[var(--surface-panel)] p-4 md:grid-cols-4">
-        <Control label="Campanha">
+        {summary && <Control label="Campanha">
           <select
             value={campaign.campaignCode}
             onChange={(event) => {
@@ -173,7 +175,7 @@ export function ResultsIndexDashboard({
               </option>
             ))}
           </select>
-        </Control>
+        </Control>}
         <Control label="Índice exibido">
           <select
             value={metric}
@@ -220,7 +222,14 @@ export function ResultsIndexDashboard({
             </p>
             {mapPoints.length < visiblePoints.length && <button type="button" className="min-h-11 text-xs text-[var(--ink-soft)] underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]" onClick={() => setMapHelpOpen(true)}>{visiblePoints.length - mapPoints.length} sem localização no mapa — detalhes</button>}
             <button type="button" aria-expanded={mobileMapOpen} className="mt-2 min-h-11 rounded-lg border border-[var(--line-strong)] bg-white px-4 text-sm font-bold text-[var(--brand-navy-strong)] sm:hidden" onClick={() => setMobileMapOpen((open) => !open)}>{mobileMapOpen ? "Ocultar mapa" : "Ver mapa"}</button>
-            <div className={mobileMapOpen ? "" : "max-sm:hidden"}><ResultMarkerLegend /></div>
+            <div className={mobileMapOpen ? "" : "max-sm:hidden"}><label className="my-2 grid max-w-sm gap-1 type-label">Escala do mapa
+              <select className="min-h-11 rounded border bg-white px-2" value={relative ? "relative" : "fixed"} onChange={e => setRelative(e.target.value === "relative")}>
+                <option value="fixed">Comparar campanhas · escore fixo</option><option value="relative">Dentro da campanha · posição relativa</option>
+              </select></label>
+              <ul className="flex flex-wrap gap-x-4 gap-y-1 type-caption">{(relative ? relativeBands : bands).map(b => <li key={b.label}><span aria-hidden="true" className="mr-1 inline-block size-3 rounded-full border" style={{backgroundColor:b.color}} />{b.label}</li>)}</ul>
+              <p className="type-metadata mt-2">Vazado: sem medição. Contorno da categoria exibida ou determinante, pela menor cobertura em empate. Contínuo: ≥50% dos reads avaliados; tracejado: 20 a &lt;50%; pontilhado: &lt;20%.</p>
+              {relative && <p className="type-metadata">Mediana {formatValue(population.median)} · P90 {formatValue(population.p90)} · {population.count} pontos com medição. A posição descreve esta campanha. Uma mudança em toda a rede pode preservar as posições.</p>}
+              {selection && <p className="type-metadata" aria-live="polite">{selectedPoint?.siaCode} · {selection.label}{selectedValue !== null && <> · posição {1 + population.sorted.filter(n => n > selectedValue).length} de {population.count}</>}{selection.domain && <> · cobertura {selection.grade} ({domains[selection.domain]})</>}</p>}</div>
           </div>
           <div className={`relative h-[480px] bg-[var(--surface-soft)] max-sm:h-[400px] ${mobileMapOpen ? "" : "max-sm:hidden"}`}>
             <CampaignHydroMap
@@ -232,7 +241,7 @@ export function ResultsIndexDashboard({
               zoomOnSelect={false}
               focusRequest={focusRequest}
               showPointTooltip
-              caption={`${metricLabel(metric)} · escala fixa 0–1 · anel: conjuntos utilizados`}
+              caption={`${metricLabel(metric)} · ${relative ? "posição na campanha" : "escala fixa 0–1"}`}
             />
           </div>
         </div>
@@ -263,9 +272,9 @@ export function mapHelpSections(campaign: ResultsCampaign, visiblePoints: Result
   const missing = visiblePoints.filter((point) => !mappedIds.includes(point.key));
   const conditions = [...new Set(campaign.points.map((point) => point.conditionOfUse).filter(Boolean))];
   return [
-    { title: "Índice e cores", text: `${metricLabel(metric)}: escala de 0 a 1, fixa entre campanhas. O índice não representa probabilidade, percentual de dano ou classes de risco. Cor uniforme indica valor completo.` },
-    { title: "Faixas", text: "Ponto parcial aparece como faixa em gradiente: do menor valor possível (limite inferior à esquerda) ao maior (limite superior à direita), sem valor central." },
-    { title: "Anel e selo", text: "Topo: Bactérias (16S). Inferior direito: Algas, pelo cloroplasto no 16S. Inferior esquerdo: COI. Segmento escuro indica conjunto utilizado; vazado, não utilizado. O selo k/3 informa uso no cálculo, não sequenciamento ou aprovação analítica. 0/3 significa indisponível, não índice zero." },
+    { title: "Índice e cores", text: `${metricLabel(metric)}: escala de 0 a 1, fixa entre campanhas. O índice não representa probabilidade, percentual de dano ou classes de risco. Na escala fixa, roxo indica 0,70 ou mais.` },
+    { title: "Escala relativa", text: "A mediana e o percentil 90 usam todos os pontos medidos da campanha na categoria selecionada, antes dos filtros de busca. Acima do P90 indica posição relativa, não perigo." },
+    { title: "Cobertura", text: "O contorno indica a cobertura da curadoria da categoria vista; no geral, a menor cobertura entre as categorias de maior nota. O símbolo vazado indica ausência de medição utilizável." },
     { title: "Localização", text: `${mappedIds.length} de ${visiblePoints.length} resultados filtrados no mapa. ${missing.length} sem coordenada utilizável${missing.length ? ` (${missing.map((point) => point.siaCode).join(", ")})` : ""}. Resultados sem coordenada permanecem nos totais e na tabela de resultados da campanha.` },
     { title: "Navegação", text: "Clique simples seleciona o cartão, sem zoom. Duplo clique amplia e centra o ponto no zoom máximo; repetir no mesmo ponto retorna ao enquadramento geral da campanha. Em outro ponto, amplia o novo alvo. Os botões de zoom, enquadramento e Ir para o ponto também estão disponíveis por teclado." },
     ...(conditions.length ? [{ title: "Condição de uso", text: `Condição de uso informada: ${conditions.join("; ")}.` }] : []),
@@ -273,7 +282,7 @@ export function mapHelpSections(campaign: ResultsCampaign, visiblePoints: Result
 }
 
 function Control({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label><span className="type-label text-[var(--ink)]">{label}</span><span className="mt-1 block">{children}</span></label>;
+  return <label className="min-w-0"><span className="type-label text-[var(--ink)]">{label}</span><span className="mt-1 block">{children}</span></label>;
 }
 
 function CompletenessSummary({ campaign, metric }: { campaign: ResultsCampaign; metric: ResultMetric }) {
@@ -324,7 +333,7 @@ function PointDetail({ points, onSelect, point, metric, photoUrl, onFocus }: { p
       <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 type-metadata">
         <dt className="font-bold text-[var(--ink-soft)]">Completude</dt><dd className="font-bold text-[var(--ink)]">{completenessLabel(point.completeness)}</dd>
         <dt className="font-bold text-[var(--ink-soft)]">{metricLabel(metric)}</dt><dd className="font-bold tabular-nums text-[var(--brand-navy-strong)]">{point.completeness === "unavailable" ? "Indisponível" : formatRange(range)}</dd>
-        <dt className="font-bold text-[var(--ink-soft)]">Conjuntos utilizados</dt><dd>{point.usedSetCount}/3</dd>
+        <dt className="font-bold text-[var(--ink-soft)]">Leituras utilizadas</dt><dd>{[point.components.bacteria.included && "16S", point.components.cyanobacteria.included && "cloroplasto (16S)", point.components.coi.included && "COI"].filter(Boolean).join(", ") || "Nenhuma"}</dd>
         {metricOptions.filter((option) => option.value !== "overall").map((option) => <div key={option.value} className="contents"><dt className="font-bold text-[var(--ink-soft)]">{option.label}</dt><dd className="tabular-nums">{point.completeness === "unavailable" ? "Indisponível" : formatRange(metricRange(point, option.value))}</dd></div>)}
       </dl>
       <p className="type-caption mt-3 text-[var(--ink-soft)]">{point.coordinates ? `${point.coordinates.latitude.toFixed(5)}, ${point.coordinates.longitude.toFixed(5)}` : "Sem coordenadas — incluído nas contagens e resultados."}</p>
@@ -338,7 +347,7 @@ function PointDetail({ points, onSelect, point, metric, photoUrl, onFocus }: { p
       </details>
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="button" disabled={!point.coordinates} onClick={onFocus} className="min-h-11 rounded-lg border border-[var(--line-strong)] px-3 type-label text-[var(--brand-navy-strong)] disabled:opacity-50">Ir para o ponto</button>
-        <Link href={resultDetailHref(point.campaignCode, point.siaCode)} className="inline-flex min-h-11 items-center rounded-lg bg-[var(--brand-navy-strong)] px-3 type-label text-white">Ver resultado completo</Link>
+        <Link href={`/resultados/indice-captacao?${new URLSearchParams({campaign:point.campaignCode.slice(1), sia:point.siaCode})}`} className="inline-flex min-h-11 items-center rounded-lg bg-[var(--brand-navy-strong)] px-3 type-label text-white">Ver resultado completo</Link>
       </div>
       {point.conditionOfUse ? <ConditionOfUseNote text={point.conditionOfUse} /> : null}
       {point.observations ? <p className="type-metadata mt-3 text-[var(--ink-soft)]">{point.observations}</p> : null}
@@ -371,7 +380,7 @@ export function resultDetailHref(campaignCode: string, siaCode?: string) {
 function ResultsTable({ points, metric, onSelect }: { points: ResultPoint[]; metric: ResultMetric; onSelect: (key: string) => void }) {
   return <TablePanel title="Pontos e faixas possíveis" description={`${points.length} resultados, inclusive sem localização.`}>
     <table className="type-table w-full min-w-[620px] text-left"><thead><tr className="bg-[var(--surface-soft)]"><th className="px-3 py-2">SIA</th><th className="px-3 py-2">Município</th><th className="px-3 py-2">Completude</th><th className="px-3 py-2 text-right">{metricLabel(metric)}</th></tr></thead>
-      <tbody>{points.map((point) => <tr key={point.key} className="border-t border-[var(--line-ghost)] hover:bg-[var(--surface-soft)]"><td className="p-0"><button className="min-h-11 w-full px-3 py-2 text-left font-bold text-[var(--brand-navy-strong)] focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]" onClick={() => onSelect(point.key)}>{point.siaCode}</button></td><td className="px-3 py-2">{point.municipality || "—"}</td><td className="px-3 py-2">{completenessLabel(point.completeness)}</td><td className="px-3 py-2 text-right font-bold tabular-nums">{formatRange(metricRange(point, metric))}</td></tr>)}</tbody>
+      <tbody>{points.map((point) => <tr key={point.key} className="border-t border-[var(--line-ghost)] hover:bg-[var(--surface-soft)]"><td className="p-0"><button className="min-h-11 w-full px-3 py-2 text-left font-bold text-[var(--brand-navy-strong)] focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]" onClick={() => onSelect(point.key)}>{point.siaCode}</button></td><td className="px-3 py-2">{point.municipality || "—"}</td><td className="px-3 py-2">{completenessLabel(point.completeness)}</td><td className="px-3 py-2 text-right font-bold tabular-nums">{point.completeness === "unavailable" ? "Sem medição" : formatRange(metricRange(point, metric))}</td></tr>)}</tbody>
     </table>
   </TablePanel>;
 }
@@ -433,6 +442,7 @@ export function buildResultMapPoints(
   metric: ResultMetric = "overall",
   campaignLabels: Record<string, string> = {},
   fieldPhotos: Record<string, string> = {},
+  relative?: ReturnType<typeof distribution>,
 ): CampaignHydroMapPoint[] {
   return points.flatMap((point) => {
     if (!point.coordinates) return [];
@@ -451,6 +461,7 @@ export function buildResultMapPoints(
       weatherConditions: "",
       problems: "",
       photoUrl: fieldPhotos[photoKey(point.campaignCode, point.siaCode)] ?? "",
+      captureReading: reading(point, metric, relative),
       resultValue: range.value,
       resultLower: range.lower,
       resultUpper: range.upper,
@@ -475,11 +486,15 @@ function formatRange(range: { value: number | null; lower: number; upper: number
 }
 
 function formatValue(value: number | null) {
-  return formatResultIndex(value, "Sem resultado");
+  return formatCaptureIndex(value);
 }
 
 function photoKey(campaignCode: string, siaCode: string) {
   return `${campaignCode}|${siaCode}`;
+}
+
+function normalizeSia(value: string) {
+  return value.trim().replace(/^(?:SIA[-\s]*)?0*(\d+)$/i, "$1");
 }
 
 function normalizeText(value: string) {

@@ -41,19 +41,19 @@ describe("Home evolution: general index only and independent point search", () =
     expect(evolutionPointOptions([campaign], "0559").map((item) => item.key)).toEqual(["559"]);
     expect(evolutionPointOptions([campaign], "missing")).toEqual([]);
   });
-  it("renders every planned campaign with its code and preserves explicit keyboard selection and clearing", () => {
+  it("renders only measured campaigns with its code and preserves explicit keyboard selection and clearing", () => {
     const markup = renderToStaticMarkup(createElement(HomeIndexEvolution, { campaigns: [campaign] }));
-    // Todas as campanhas previstas aparecem, mesmo sem resultado, com o código C1…C9 abaixo do nome.
-    expect(markup.match(/data-evolution-series="overall"/g)).toHaveLength(9);
-    for (const code of ["C1", "C2", "C3", "C9"]) expect(markup).toContain(`data-evolution-code="${code}">${code}<`);
-    expect(markup).toContain("Verão 28");
+    // A única campanha medida desta amostra é C2.
+    expect(markup.match(/data-evolution-series="overall"/g)).toHaveLength(1);
+    expect(markup).toContain('data-evolution-code="C2"');
+    expect(markup).not.toContain("Verão 28");
     expect(markup).not.toContain("campanhas previstas até");
     expect(markup).not.toContain("Ambiental");
     expect(markup).not.toContain("SANEPAR-INDICE-0.3");
     // Ajuda como ícone "?" ao lado do título, acionável por clique, toque ou teclado.
     expect(markup).toContain('aria-label="Como ler a evolução"');
     expect(markup).toContain('aria-haspopup="dialog"');
-    expect(markup).toContain("Sem resultado");
+    expect(markup).toContain("P90: 0,56");
     expect(markup).toContain('role="combobox"');
     expect(markup).toContain("Limpar");
     const source = readFileSync(new URL("../home-index-evolution.tsx", import.meta.url), "utf8");
@@ -64,7 +64,7 @@ describe("Home evolution: general index only and independent point search", () =
     const mixed = { ...campaign, points: [...campaign.points, { ...complete("SIA-42", 0), completeness: "unavailable" } as ResultPoint] };
     expect(evolutionExclusions(mixed, 2)).toEqual({ label: "2 fora da média", detail: "1 parciais; 1 indisponíveis" });
     const markup = renderToStaticMarkup(createElement(HomeIndexEvolution, { campaigns: [campaign] }));
-    expect(markup).toContain("2 completos");
+    expect(markup).toContain("Média dos 2 pontos: 0,40");
     expect(markup).not.toContain(">n=");
     expect(markup).not.toContain("0 excl.");
     expect(markup).toContain("Média dos resultados completos por campanha.");

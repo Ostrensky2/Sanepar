@@ -142,10 +142,10 @@ export function PointActionsPageContent() {
           ) : null}
         </div>
 
-        <label className="type-label grid gap-1 text-[var(--ink-soft)] lg:min-w-96">
+        <label className="type-label grid w-full min-w-0 gap-1 text-[var(--ink-soft)] lg:max-w-sm">
           Atividade exibida
           <select
-            className="rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-sm font-bold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none transition focus:border-[var(--brand-blue)] focus:ring-2 focus:ring-[var(--brand-blue)]/20"
+            className="w-full min-w-0 max-w-full rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 text-sm font-bold normal-case tracking-normal text-[var(--brand-navy-strong)] outline-none transition focus:border-[var(--brand-blue)] focus:ring-2 focus:ring-[var(--brand-blue)]/20"
             value={selectedAction.id}
             onChange={(event) => {
               const nextAction = actions.find((action) => action.id === event.target.value);

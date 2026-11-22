@@ -1,5 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
+import { domainEvidenceRoles, pointLibraryEvidence } from "@/lib/capture-index/point-library-evidence";
+import { sampleEffects } from "@/lib/capture-index/sample-effects";
+import { formatCaptureIndex } from "@/lib/capture-index/format";
 import type { CaptureIndexView } from "@/lib/capture-index";
 
 type Campaign = { campaign: string; number: number; points: number; measured: number; mean: string; median: string; p90: string;
@@ -11,12 +14,46 @@ type Payload = {
 type State = { key: string; status: "loading" } | { key: string; status: "denied"; code: number } | { key: string; status: "error"; code: number } | { key: string; status: "ready"; payload: Payload };
 const PAGE = 15;
 
+function normalizedSia(sia: string) {
+  return sia.trim().toLowerCase().replace(/^sia[-\s]*/, "").replace(/^0+(?=\d)/, "");
+}
+
+function SampleEffects({row}: {row: CaptureIndexView}) {
+  return <ul aria-label="Tipos metodológicos da amostra" className="divide-y divide-[var(--line-strong)]">
+    {sampleEffects(row).map(({effect, marker, status, contributions, alerts}) => <li key={effect.id} className="py-2">
+      <details>
+        <summary className="min-h-11 cursor-pointer py-2"><strong>{effect.title}</strong> · {status}{alerts.length > 0 && " · alerta de baixo suporte"}</summary>
+        <div className="space-y-1 break-words type-metadata">
+          <p>{marker && <>Marcador: {marker}. </>}{effect.note}</p>
+          {contributions.map(({item, determining}, i) => <p key={i}>{item.taxon} · {item.reads} reads · {determining ? "No componente determinante do domínio" : "Em outro componente observado"} · ficha {item.ficha}.
+            {" "}{/^https?:\/\//i.test(item.source) ? <a className="underline" href={item.source} target="_blank" rel="noreferrer">Fonte da ficha {item.ficha}</a> : (item.source || "Fonte não informada.")}</p>)}
+          {alerts.map((alert,i) => <p key={i}>Alerta de baixo suporte · {alert.taxon} · {alert.reads} reads · componente registrado: {alert.componentCode} · ficha {alert.ficha}. Sem contribuição do alerta para a nota.</p>)}
+        </div>
+      </details>
+    </li>)}
+  </ul>;
+}
+
+function PointLibraries({row}: {row: CaptureIndexView}) {
+  const {campaign, sia, libraries} = pointLibraryEvidence(row);
+  return <section aria-label={`Bibliotecas de ${campaign} · SIA ${sia}`} className="min-w-0 space-y-2 border-t border-[var(--line-strong)] pt-3">
+    <h4 className="type-panel-title">Bibliotecas de {campaign} · SIA {sia}</h4>
+    <ul className="space-y-2">{libraries.map(library => <li key={library.name} className="break-words type-metadata">
+      <strong>{library.name}</strong> · {library.status} · {library.run}
+      <p>Reads observados: {library.observedReads}. Denominador válido: {library.validDenominator ?? "indisponível"}.</p>
+      <p>{library.interpretation}</p>
+    </li>)}</ul>
+    <p className="type-metadata">O cloroplasto é uma leitura da biblioteca 16S. As duas contagens não devem ser somadas.</p>
+  </section>;
+}
+
 /** Índice de triagem de risco da biota na captação. Os textos chegam prontos da API, os mesmos das exportações.
  * Quatro estados distintos: carregando, sem acesso, falha, e resultado (com ou sem dados na campanha). */
-export function CaptureIndexPanel({ campaign }: { campaign?: number }) {
+export function CaptureIndexPanel({ campaign, initialSia = "" }: { campaign?: number; initialSia?: string }) {
   const key = campaign ? `?campaign=${campaign}` : "";
   const [state, setState] = useState<State>({ key, status: "loading" });
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSia);
+  const [openSia, setOpenSia] = useState(normalizedSia(initialSia));
   const [page, setPage] = useState(0);
   useEffect(() => {
     let active = true;
@@ -36,8 +73,8 @@ export function CaptureIndexPanel({ campaign }: { campaign?: number }) {
   const { meta, campaigns, rows } = current.payload;
   const summary = campaigns.find(item => item.number === campaign);
   const exportLink = (format: "csv" | "audit") => `/api/results/capture-index?${new URLSearchParams({ ...(campaign ? { campaign: String(campaign) } : {}), format })}`;
-  const wanted = search.trim().toLowerCase();
-  const filtered = rows.filter(row => !wanted || row.sia.toLowerCase().includes(wanted));
+  const wanted = normalizedSia(search);
+  const filtered = rows.filter(row => row.campaign === `C${campaign}` && (search === initialSia && initialSia ? normalizedSia(row.sia) === wanted : !wanted || normalizedSia(row.sia).includes(wanted)));
   const visible = filtered.slice(page * PAGE, page * PAGE + PAGE);
 
   return <div className="space-y-3">
@@ -57,45 +94,55 @@ export function CaptureIndexPanel({ campaign }: { campaign?: number }) {
         <div><dt className="type-metadata">Percentil 90</dt><dd className="type-kpi">{item.p90}</dd></div>
         <div><dt className="type-metadata">Mediana</dt><dd className="type-kpi">{item.median}</dd></div>
       </dl>
+      {campaign && <p className="type-metadata">Média dos {item.measured} pontos: {item.mean} · Maior índice de um ponto: {formatCaptureIndex(rows.find(row => row.measured)?.exact.general)}</p>}
       <p className="type-metadata">Média por categoria: {item.domains.map(domain => `${domain.label} ${domain.mean}`).join(" · ")}</p>
       <p className="type-metadata">Pontos por intervalo de escore: {item.bands.map(band => `${band.band}: ${band.count}`).join(" · ")}. São intervalos, não classes de risco.</p>
       {!campaign && <p className="type-metadata"><a className="underline" href={`/resultados/indice-captacao?campaign=${item.number}`}>Ver os pontos da {item.campaign}</a></p>}
     </section>)}
 
     {campaign && summary && <>
-      <label className="block">Buscar ponto SIA <input type="search" value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} /></label>
+      <label className="block">Buscar ponto SIA <input className="mt-1 block min-h-11 w-full max-w-md rounded-lg border border-[var(--line-strong)] px-3" type="search" value={search} onChange={event => { setSearch(event.target.value); setOpenSia(""); setPage(0); }} /></label>
+      <p role="status" className="type-metadata">{filtered.length ? `${filtered.length} pontos · página ${page + 1} de ${Math.ceil(filtered.length / PAGE)}` : "Nenhum ponto corresponde à busca."}</p>
       <ul className="space-y-2">{visible.map(row => <li key={row.sia} className="rounded border p-3">
-        <details>
-          <summary className="cursor-pointer">
+        <details open={openSia === normalizedSia(row.sia)}>
+          <summary className="min-h-11 cursor-pointer py-2" onClick={event => {
+            event.preventDefault();
+            const sia = normalizedSia(row.sia);
+            setOpenSia(current => current === sia ? "" : sia);
+          }}>
             <span className="font-semibold">SIA {row.sia}</span> · índice geral <strong>{row.general}</strong>
             {row.measured && <> · {row.position} · determinado por: {row.predominant}</>}
           </summary>
-          <div className="mt-2 space-y-2">
+          {openSia === normalizedSia(row.sia) && <section aria-label={`Efeitos da amostra · ${row.campaign} · SIA ${row.sia}`} className="mt-2 min-w-0 space-y-3">
+            <h3 className="type-panel-title">Efeitos da amostra</h3>
+            <p className="type-metadata">{row.campaign} · SIA {row.sia} · Curadoria {meta.version}. Associação documentada, efeito não medido. Uma ficha ausente não demonstra ausência do efeito.</p>
+            <SampleEffects row={row} />
             {row.measured ? <>
               <p className="type-metadata">Cenários das fichas cadastradas, do piso (só evidência plena) ao teto (fichas ainda indeterminadas com peso cheio): {row.range}. O teto não inclui efeitos que o cadastro ainda não conhece. Medição: {row.coverage}. Há {row.elevated}.</p>
-              <ul className="space-y-1">{row.domains.map(domain => <li key={domain.key}>
+              <ul className="space-y-3">{row.domains.map(domain => {
+                const evidence = domainEvidenceRoles(domain);
+                return <li key={domain.key}>
                 <strong>{domain.label}: {domain.score}</strong>{domain.maturity !== "com base de comparação" && <span className="type-metadata"> [{domain.maturity}]</span>} <span className="type-metadata">(piso a teto {domain.range}; cobertura da curadoria {domain.confidence}: {domain.evaluated})</span>
-                <br /><span className="type-metadata">{domain.component ? `Determinado por ${domain.component}. ` : ""}{domain.main}{domain.evaluatedBy ? `. Reads avaliados por marcador: ${domain.evaluatedBy}` : ""}</span>
+                <p className="type-metadata">{evidence.status}</p><span className="type-metadata">{domain.component ? `Determinado por ${domain.component}. ` : ""}{domain.main}{domain.evaluatedBy ? `. Reads avaliados por marcador: ${domain.evaluatedBy}` : ""}</span>
                 {domain.contributions.length > 0 && <details className="ml-3"><summary className="cursor-pointer type-metadata">Fichas que formam esta nota ({domain.contributions.length})</summary>
-                  <ul className="space-y-1">{domain.contributions.map(item => <li key={item.ficha + item.taxon} className="type-metadata break-words">
-                    {item.taxon} · {item.reads} reads em {item.component} · gravidade {item.severity} · aplicabilidade {item.applicability} · ficha {item.ficha}
-                    {item.source.startsWith("http") && <> · <a className="underline" href={item.source} target="_blank" rel="noreferrer">fonte</a></>}
+                  <ul className="space-y-1">{evidence.contributions.map(item => <li key={item.ficha + item.taxon} className="type-metadata break-words">
+                    {item.role} · {item.taxon} · {item.reads} reads em {item.component} · gravidade {item.severity} · aplicabilidade {item.applicability} · ficha {item.reference.id ?? "não informada"}
+                    {item.reference.source && /^https?:\/\//i.test(item.reference.source) ? <> · <a className="underline" href={item.reference.source} target="_blank" rel="noreferrer">Fonte da ficha {item.reference.id ?? "não informada"}</a></> : <> · Fonte: {item.reference.source ?? "não informada"}</>}
                     {item.rationale && <><br />{item.rationale}</>}</li>)}</ul></details>}
-              </li>)}</ul>
+              </li>;})}</ul>
             </> : <p>Sem medição: nenhuma biblioteca utilizável neste ponto e campanha. Não é um zero.</p>}
-            <p className="type-metadata break-words">Bibliotecas: {row.components.map(item => `${item.name}: ${item.status}, ${item.run}, ${item.observedReads} reads observados`).join(" · ")}</p>
+            <PointLibraries row={row} />
             <p className="type-metadata">No 16S: cloroplasto de algas {row.chloroplast} · diatomáceas {row.diatoms} · cianobactérias {row.cyanobacteria}. As algas são vistas só pelo cloroplasto, com classificação exploratória.{row.coiExcluded ? ` ${row.coiExcluded}.` : ""}</p>
             {row.exotics && <p className="type-metadata break-words">Espécies exóticas presentes (informativo, não entra na nota): {row.exotics}.</p>}
             {row.alerts.length > 0 && <div><p className="font-semibold">Atenção ({row.alerts.length})</p>
               <ul>{row.alerts.map((alert, index) => <li key={index} className="type-metadata break-words">{[alert.taxon, `${alert.reads} reads`, alert.domain, alert.reason].filter(Boolean).join(" · ")}</li>)}</ul></div>}
-          </div>
+          </section>}
         </details>
       </li>)}</ul>
-      {filtered.length === 0 && <p>Nenhum ponto corresponde à busca.</p>}
-      <div><button disabled={!page} onClick={() => setPage(page - 1)}>Anterior</button> · página {page + 1} de {Math.max(1, Math.ceil(filtered.length / PAGE))} · <button disabled={(page + 1) * PAGE >= filtered.length} onClick={() => setPage(page + 1)}>Próxima</button></div>
+      <nav aria-label="Páginas de pontos" className="flex flex-wrap items-center gap-3"><button className="min-h-11 rounded border px-3 disabled:opacity-50" disabled={!page} onClick={() => setPage(page - 1)}>Anterior</button> · página {page + 1} de {Math.max(1, Math.ceil(filtered.length / PAGE))} · <button className="min-h-11 rounded border px-3 disabled:opacity-50" disabled={(page + 1) * PAGE >= filtered.length} onClick={() => setPage(page + 1)}>Próxima</button></nav>
     </>}
 
-    <p className="break-words"><a className="underline" href={exportLink("csv")}>Exportar para leitura (igual à tela)</a> · <a className="underline" href={exportLink("audit")}>Exportar para auditoria (valores sem arredondar e fichas)</a></p>
+    <p className="break-words"><a className="inline-flex min-h-11 items-center underline" href={exportLink("csv")}>Exportar para leitura (igual à tela)</a> · <a className="inline-flex min-h-11 items-center underline" href={exportLink("audit")}>Exportar para auditoria (valores sem arredondar e fichas)</a></p>
 
     <details><summary className="cursor-pointer">O que este índice não enxerga</summary>
       <ul className="space-y-1">{meta.blindSpots.map(item => <li key={item.tema} className="break-words"><strong>{item.tema}.</strong> {item.caso}. {item.situacao}</li>)}</ul>

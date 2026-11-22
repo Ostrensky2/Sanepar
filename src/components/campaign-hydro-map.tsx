@@ -4,7 +4,7 @@ import { Calendar, Minimize2, Minus, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { normalizeCampaignKey } from "@/lib/campaign-points";
 import { drawResultMarker } from "@/modules/results/components/result-visual";
-import { formatResultIndex } from "@/modules/results/format-index";
+import { formatCaptureIndex } from "@/lib/capture-index/format";
 export { continuousResultColor } from "@/modules/results/components/result-visual";
 import {
   laboratoryRiskColor,
@@ -45,6 +45,7 @@ export type CampaignHydroMapPoint = {
   }>;
   riskLevel?: LaboratoryRiskLevel;
   score?: number | null;
+  captureReading?: ReturnType<typeof import("@/modules/results/components/capture-map-scale").reading>;
   resultValue?: number | null;
   resultLower?: number;
   resultUpper?: number;
@@ -953,7 +954,7 @@ function PointTooltip({
           <>
             <dt className="font-bold text-slate-400">Score integrado</dt>
             <dd className="font-black text-[var(--brand-navy-strong)]">
-              {formatResultIndex(point.score)}
+              {formatCaptureIndex(point.score)}
             </dd>
           </>
         ) : null}
@@ -966,8 +967,8 @@ function PointTooltip({
             <dt className="font-bold text-slate-400">{point.resultMetricLabel || "Índice"}</dt>
             <dd className="font-black text-[var(--brand-navy-strong)]">
               {typeof point.resultValue === "number"
-                ? formatResultIndex(point.resultValue)
-                : `${formatResultBound(point.resultLower)}–${formatResultBound(point.resultUpper)}`}
+                ? formatCaptureIndex(point.resultValue)
+                : point.resultCompleteness === "unavailable" ? "Sem medição" : `${formatResultBound(point.resultLower)}–${formatResultBound(point.resultUpper)}`}
             </dd>
           </>
         ) : null}
@@ -991,7 +992,7 @@ function resultCompletenessLabel(
   value: NonNullable<CampaignHydroMapPoint["resultCompleteness"]>,
 ) {
   return {
-    complete: "Completo (3/3)",
+    complete: "Índice calculado",
     partial_2: "Parcial (2/3)",
     partial_1: "Parcial (1/3)",
     unavailable: "Indisponível (0/3)",
@@ -999,7 +1000,7 @@ function resultCompletenessLabel(
 }
 
 function formatResultBound(value: number | undefined) {
-  return formatResultIndex(value, "—");
+  return formatCaptureIndex(value);
 }
 
 // Data de coleta em DD/MM/AAAA, aceitando ISO "AAAA-MM-DD" ou já em BR.
@@ -2139,6 +2140,19 @@ function drawResultIndexMarker(
   point: CampaignHydroMapPoint,
   selected: boolean,
 ) {
+  if (point.captureReading) {
+    const { color, grade } = point.captureReading;
+    context.save();
+    if (selected) {
+      context.beginPath(); context.arc(x, y, 13, 0, 2 * Math.PI);
+      context.strokeStyle = "#17354c"; context.lineWidth = 2; context.stroke();
+    }
+    context.beginPath(); context.arc(x, y, 9, 0, 2 * Math.PI);
+    if (color) { context.fillStyle = color; context.fill(); }
+    context.strokeStyle = "#17354c"; context.lineWidth = 2;
+    context.setLineDash(grade === "A" || !color ? [] : grade === "B" ? [5, 3] : [1, 2]);
+    context.stroke(); context.restore(); return;
+  }
   drawResultMarker(context, x, y, {
     value: point.resultValue ?? null,
     lower: point.resultLower ?? 0,

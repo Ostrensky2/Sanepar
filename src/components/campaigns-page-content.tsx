@@ -688,6 +688,12 @@ export function CampaignsPageContent({
                 value={selectedCampaign.id}
                 onChange={(event) => {
                   setSelectedCampaignId(event.target.value);
+                  if (view === "resultados") {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set("campaign", event.target.value);
+                    url.searchParams.delete("sia");
+                    window.history.replaceState(window.history.state, "", url);
+                  }
                   setExportMessage("");
                 }}
               >

@@ -30,23 +30,18 @@ vi.mock("@/lib/supabase", () => ({
 import { countCampaignsWithEffectiveCollection } from "@/lib/dashboard-data";
 
 describe("home risk evolution", () => {
-  it("opens the review dialog from one removable flag and removes the static notice", () => {
+  it("opens Home directly and keeps the contextual dialog accessible", () => {
     const source = readFileSync(
       new URL("../../app/(dashboard)/page.tsx", import.meta.url),
       "utf8",
     );
-    const noticeStart = source.indexOf("{SHOW_RESULTS_REVIEW_NOTICE ?");
-    const resultsStart = source.indexOf("<HomeResultsV2");
     const markup = renderToStaticMarkup(createElement(ResultsReviewDialog));
     const dialogSource = readFileSync(
       new URL("../results-review-dialog.tsx", import.meta.url),
       "utf8",
     );
 
-    expect(source.match(/const SHOW_RESULTS_REVIEW_NOTICE = true;/g)).toHaveLength(1);
-    expect(noticeStart).toBeGreaterThan(source.indexOf("Painel de Monitoramento"));
-    expect(noticeStart).toBeLessThan(resultsStart);
-    expect(source).toContain("<ResultsReviewDialog />");
+    expect(source).not.toContain("<ResultsReviewDialog");
     expect(source).toContain("<HomeResultsV2");
     expect(source).not.toContain("Resultados da 2ª Campanha em revisão");
     expect(markup).toContain("<dialog");
