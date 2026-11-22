@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { formatCaptureIndex } from "@/lib/capture-index/format";
 import { defaultCampaigns, readCampaignManagement, type CampaignManagementById } from "@/lib/campaign-management";
@@ -83,6 +84,13 @@ export function HomeResultsV2({ operationalKpis, projectSummary }: { operational
             <CanonicalKpi icon={FlaskConical} label="Índice médio da rede" value={formatMean(stats.mean)} detail={`${campaign.campaignCode} · média de ${stats.count} pontos medidos, um voto por ponto`} accentColor={stats.mean === null ? undefined : continuousResultColor(stats.mean)} />
             <CanonicalKpi icon={CircleDot} label="Campanhas ativas" value={activeCampaigns === null ? "—" : String(activeCampaigns)} detail="em campo, laboratório ou análise" />
             {operationalKpis}
+          </section>
+          <section className="app-card space-y-2 p-4" aria-labelledby="campaign-reading">
+            <h2 id="campaign-reading" className="type-section-title text-[var(--brand-navy-strong)]">O que olhar nesta campanha</h2>
+            <p><strong>{labels[campaign.campaignCode]}</strong> · {stats.count} de {campaign.counts.total} pontos com índice calculado.</p>
+            <p className="type-metadata text-[var(--text-secondary)]">Bibliotecas utilizáveis: 16S em {campaign.points.filter(point => point.components.bacteria.included).length} pontos e COI em {campaign.points.filter(point => point.components.coi.included).length}. Um marcador ausente limita a interpretação.</p>
+            <p className="type-metadata">{campaigns.filter(item => item.points.some(point => Number.isFinite(point.overall.value))).length} campanhas com medição, de {defaultCampaigns.length} previstas no planejamento.</p>
+            <Link className="inline-flex min-h-11 items-center font-semibold underline" href={`/campanhas/resultados?campaign=${defaultCampaigns[campaignNumber(campaign.campaignCode)-1]?.id ?? campaign.campaignCode}#results-index-dashboard`}>Consultar mapa e pontos</Link>
           </section>
           <HomeIndexEvolution campaigns={campaigns} />
         </>;

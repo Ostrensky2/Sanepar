@@ -39,6 +39,11 @@ describe("Home evolution: general index only and independent point search", () =
     expect(evolutionPointOptions([campaign], "irai")).toHaveLength(3);
     expect(evolutionPointOptions([campaign], "curitiba")).toHaveLength(3);
     expect(evolutionPointOptions([campaign], "0559").map((item) => item.key)).toEqual(["559"]);
+    for (const query of ["559", "0559", "SIA-0559"]) {
+      const [option] = evolutionPointOptions([campaign, campaign], query);
+      expect(option.key).toBe("559");
+      expect(option.label.match(/SIA-0559/g)).toHaveLength(1);
+    }
     expect(evolutionPointOptions([campaign], "missing")).toEqual([]);
   });
   it("renders only measured campaigns with its code and preserves explicit keyboard selection and clearing", () => {
@@ -64,7 +69,8 @@ describe("Home evolution: general index only and independent point search", () =
     const mixed = { ...campaign, points: [...campaign.points, { ...complete("SIA-42", 0), completeness: "unavailable" } as ResultPoint] };
     expect(evolutionExclusions(mixed, 2)).toEqual({ label: "2 fora da média", detail: "1 parciais; 1 indisponíveis" });
     const markup = renderToStaticMarkup(createElement(HomeIndexEvolution, { campaigns: [campaign] }));
-    expect(markup).toContain("Média dos 2 pontos: 0,40");
+    expect(markup).toContain("2 pontos medidos");
+    expect(markup).not.toContain("Média dos 2 pontos: 0,40");
     expect(markup).not.toContain(">n=");
     expect(markup).not.toContain("0 excl.");
     expect(markup).toContain("Média dos resultados completos por campanha.");

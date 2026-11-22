@@ -41,16 +41,20 @@ export function evolutionSiaKey(sia: string) {
 }
 
 export function evolutionPointOptions(campaigns: ResultsCampaign[], query = "") {
-  const options = new Map<string, { key: string; label: string }>();
+  const names = new Map<string, Set<string>>();
   for (const campaign of campaigns) for (const point of campaign.points) {
     const key = evolutionSiaKey(point.siaCode);
     if (!key) continue;
-    const label = [point.siaCode, point.waterBody, point.municipality].filter(Boolean).join(" · ");
-    const previous = options.get(key);
-    options.set(key, { key, label: previous && previous.label !== label ? `${previous.label} / ${label}` : label });
+    const places = names.get(key) ?? new Set<string>();
+    for (const place of [point.waterBody, point.municipality]) {
+      if (place?.trim() && evolutionSiaKey(place) !== key) places.add(place.trim());
+    }
+    names.set(key, places);
   }
   const normalized = normalizeSearch(query);
-  return [...options.values()].filter((option) => normalizeSearch(option.label).includes(normalized))
+  const exact = evolutionSiaKey(query);
+  return [...names].map(([key, places]) => ({key, label: [`SIA-${key.padStart(4, "0")}`, ...places].join(" · ")}))
+    .filter(option => exact !== null ? option.key === exact : normalizeSearch(option.label).includes(normalized))
     .sort((a, b) => a.key.localeCompare(b.key, "pt-BR", { numeric: true }));
 }
 
@@ -168,7 +172,7 @@ export function HomeIndexEvolution({ campaigns }: { campaigns: ResultsCampaign[]
           return <div key={code} className="min-w-0 text-center" data-evolution-campaign={code}>
             <Link href={resultDetailHref(code, selectedSia === null ? undefined : `SIA-${selectedSia.padStart(4, "0")}`)} className="mb-2 inline-flex min-h-11 flex-col items-center justify-center text-sm font-bold leading-tight text-[var(--brand-navy-strong)]">
               <span>{label}</span>
-              <span className="mt-0.5 text-xs font-semibold text-[var(--ink-soft)]" data-evolution-code={code}>{code}</span>
+              <span className="mt-0.5 text-xs font-semibold text-[var(--text-secondary)]" data-evolution-code={code}>{code}</span>
             </Link>
             <div className="mx-auto max-w-48">
               {series.map((item) => {
@@ -180,8 +184,8 @@ export function HomeIndexEvolution({ campaigns }: { campaigns: ResultsCampaign[]
                     {item.range?.value != null ? <span className="absolute left-1/2 size-3 -translate-x-1/2 translate-y-1/2 rounded-full border bg-[var(--brand-navy-strong)]" style={{bottom:`${100 * item.range.value}%`}} /> : item.range && <div className="absolute inset-x-1 border-y border-[var(--ink)]" style={evolutionBarStyle(item.range)} />}
                   </div>
                   <p className="mt-1 min-h-9 text-xs font-bold tabular-nums text-[var(--ink)]">{item.range?.value === null ? <>{format(item.range.lower)}<br />–{format(item.range.upper)}</> : text}</p>
-                  {selectedSia === null && campaign && <div className="text-xs text-[var(--ink-soft)]">
-                    <p>Média dos {item.included} pontos: {text}</p>
+                  {selectedSia === null && campaign && <div className="text-xs text-[var(--text-secondary)]">
+                    <p>{item.included} {item.included === 1 ? "ponto medido" : "pontos medidos"}</p>
                     <p>P90: {formatCaptureIndex(stats.p90)} · {commonOnly ? "SIAs comuns" : "Rede da campanha"} (N={stats.count})</p>
                     <p>Maior índice de um ponto: {formatCaptureIndex(stats.max)}</p>
                     {item.excluded > 0 && <button type="button" className="min-h-11 underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]" onClick={() => setExplanation({ title: `${label}: fora da média`, paragraphs: [evolutionExclusions(campaign, item.included).detail] })}>{evolutionExclusions(campaign, item.included).label}</button>}

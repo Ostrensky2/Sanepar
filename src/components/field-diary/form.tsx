@@ -98,6 +98,10 @@ export function FieldDiaryForm({
   const [isSaving, setIsSaving] = useState(false);
   const [uploadingPhotoIds, setUploadingPhotoIds] = useState<string[]>([]);
   const [uploadMessage, setUploadMessage] = useState("");
+  function requestClose() {
+    if (isSaving || uploadingPhotoIds.length > 0) return;
+    if (window.confirm("Fechar este registro? Alterações não salvas serão descartadas.")) onClose();
+  }
   const [fieldDiaryPointOptions, setPointOptions] = useState<FieldDiaryPointOption[]>([]);
   const [pointOptionsMessage, setPointOptionsMessage] = useState("Carregando pontos…");
   const [isLocating, setIsLocating] = useState(false);
@@ -522,7 +526,7 @@ export function FieldDiaryForm({
   }
 
   return (
-    <Dialog title={entry.id ? "Editar registro" : "Novo registro"} onClose={onClose}>
+    <Dialog title={entry.id ? "Editar registro" : "Novo registro"} onClose={requestClose}>
       <form
         className="space-y-5"
         onSubmit={async (event) => {
@@ -1098,7 +1102,7 @@ export function FieldDiaryForm({
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="rounded-xl border border-[var(--line-ghost)] bg-white px-4 py-3 text-sm font-bold text-[var(--ink-soft)]"
           >
             Cancelar

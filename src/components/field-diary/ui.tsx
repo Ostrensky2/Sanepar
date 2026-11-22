@@ -1,7 +1,7 @@
 "use client";
 
 import { ClipboardList, Eye, FileText, Plus, Sheet, X } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import {
   operationalStageClassNames,
   operationalStageLabels,
@@ -51,31 +51,49 @@ export function Dialog({
   onClose,
 }: {
   title: string;
-  children: ReactNode;
+  children?: ReactNode;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (dialog && !dialog.open) dialog.showModal();
+    return () => {
+      dialog?.close();
+      if (opener?.isConnected) opener.focus();
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/55 p-4 backdrop-blur-sm">
-      <div className="my-6 w-full max-w-5xl radius-panel bg-white p-5 shadow-[0_28px_90px_-24px_rgba(0,0,0,0.45)]">
+    <dialog
+      ref={dialogRef}
+      aria-labelledby={titleId}
+      aria-modal="true"
+      onCancel={(event) => { event.preventDefault(); onClose(); }}
+      className="fixed inset-0 m-0 h-full max-h-none w-full max-w-none overflow-y-auto border-0 bg-slate-950/55 p-4 backdrop-blur-sm"
+    >
+      <div className="mx-auto my-6 w-full max-w-5xl radius-panel bg-white p-5 shadow-[0_28px_90px_-24px_rgba(0,0,0,0.45)]">
         <div className="mb-5 flex items-center justify-between gap-4 border-b border-[var(--line-ghost)] pb-4">
           <div className="flex items-center gap-3">
             <span className="rounded-2xl bg-[var(--brand-blue-soft)] p-3 text-[var(--brand-navy-strong)]">
               <ClipboardList className="h-5 w-5" />
             </span>
-            <h2 className="heading-font type-section-title text-[var(--brand-navy-strong)]">{title}</h2>
+            <h2 id={titleId} className="heading-font type-section-title text-[var(--brand-navy-strong)]">{title}</h2>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Fechar"
-            className="rounded-xl p-2 text-slate-500 transition hover:bg-[var(--surface-soft)]"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-2 text-slate-500 transition hover:bg-[var(--surface-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-navy-strong)]"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
         {children}
       </div>
-    </div>
+    </dialog>
   );
 }
 

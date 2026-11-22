@@ -8,6 +8,8 @@
   --surface-muted-strong: #cadbe5;
   --ink: #17354c;
   --ink-soft: #60768b;
+  --text-secondary: #415b70;
+  --text-teal: #006571;
   --line-ghost: rgba(0, 66, 98, 0.14);
   --line-strong: rgba(0, 66, 98, 0.24);
   --brand-navy: #00579f;
@@ -105,6 +107,10 @@ body {
     line-height: 1.5;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+  }
+
+  .type-eyebrow[class~="text-[var(--brand-teal)]"] {
+    color: var(--text-teal);
   }
 
   .type-page-title {
