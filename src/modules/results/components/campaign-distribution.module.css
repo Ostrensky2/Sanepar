@@ -8,8 +8,17 @@
 .segmented button:focus-visible { outline:2px solid var(--brand-teal); outline-offset:1px; }
 
 /* Uma barra por faixa: nome, barra e contagem na mesma linha. */
-.bands { display:grid; gap:.55rem; }
-.bands li { display:grid; grid-template-columns:minmax(0,8.6rem) minmax(0,1fr) auto; align-items:center; gap:.6rem; font-size:.8125rem; }
+.bands { display:grid; gap:.15rem; font-size:.8125rem; }
+.bandRow { display:grid; grid-template-columns:minmax(0,8.6rem) minmax(0,1fr) auto; align-items:center; gap:.6rem; width:calc(100% + .5rem); margin:0 -.25rem; padding:.22rem .25rem; border-radius:.45rem; text-align:left; font:inherit; color:inherit; }
+/* Barra ou número com lista de SIAs: o mouse mostra, o clique fixa. */
+button.bandRow, button.statPeek, button.cellPeek, button.inlinePeek { cursor:pointer; }
+button.bandRow:hover, button.bandRow[aria-expanded=true], button.statPeek:hover, button.statPeek[aria-expanded=true], button.cellPeek:hover, button.cellPeek[aria-expanded=true], button.inlinePeek:hover, button.inlinePeek[aria-expanded=true] { background:var(--surface-soft,#eef3f6); }
+button.bandRow:hover .track, button.bandRow[aria-expanded=true] .track { background:white; }
+button.bandRow:focus-visible, button.statPeek:focus-visible, button.cellPeek:focus-visible, button.inlinePeek:focus-visible { outline:2px solid var(--brand-teal); outline-offset:1px; }
+.statPeek, .inlinePeek, .cellPeek { font:inherit; color:inherit; border-radius:.4rem; }
+button.statPeek, button.cellPeek, button.inlinePeek { text-decoration:underline dotted; text-decoration-thickness:1.5px; text-underline-offset:.22em; text-decoration-color:color-mix(in srgb, currentColor 40%, transparent); }
+.statPeek { margin:0 -.2rem; padding:0 .2rem; }
+.cellPeek { display:inline-flex; min-width:2.5rem; min-height:2rem; align-items:center; justify-content:center; padding:0 .5rem; }
 .bandName { display:inline-flex; align-items:center; gap:.4rem; min-width:0; font-weight:650; color:var(--ink); }
 .bandName i { flex:none; width:.65rem; height:.65rem; border-radius:999px; }
 .track { display:block; height:.65rem; border-radius:999px; background:var(--surface-soft,#eef3f6); overflow:hidden; }
@@ -20,7 +29,7 @@
 .disclosure > summary::-webkit-details-marker { display:none; }
 .disclosure > summary svg { transition:transform .15s; }
 .disclosure[open] > summary svg { transform:rotate(90deg); }
-@media (max-width:420px) { .bands li { grid-template-columns:minmax(0,8.4rem) minmax(0,1fr) auto; gap:.45rem; } .segmented { width:100%; } .segmented button { flex:1 1 40%; } }
+@media (max-width:420px) { .bandRow { grid-template-columns:minmax(0,8.4rem) minmax(0,1fr) auto; gap:.45rem; } .segmented { width:100%; } .segmented button { flex:1 1 40%; } }
 
 .table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; font-size:.875rem; }
 .table th, .table td { padding:.45rem .5rem; border-bottom:1px solid var(--line-ghost); text-align:center; }
