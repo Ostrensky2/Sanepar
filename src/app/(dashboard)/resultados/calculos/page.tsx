@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/page-header";
 import { SectionTabs } from "@/components/section-tabs";
 import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
 
-/** Metodologia do índice de captação (IR-CAPTACAO). O texto completo e versionado fica em docs/contracts/INDICE_CAPTACAO_0.7.md.
+/** Metodologia do índice de captação (IR-CAPTACAO-0.8). A leitura completa fica em /resultados/calculos/0-8.
  * O passo a passo do índice anterior (SANEPAR-INDICE-0.3) saiu desta página: a metodologia mudou e os resultados também. */
 export default function CalculationsPage() {
   const card = "app-card space-y-2 p-4";
@@ -12,7 +12,7 @@ export default function CalculationsPage() {
     <PageHeader
       eyebrow="Ciência e método"
       title="Como o índice é calculado"
-      description="Do organismo detectado ao índice de 0 a 1: fórmula, regras de evidência e limites do método."
+      description="Todo o aplicativo usa a metodologia 0.8: mapa, ficha, tabela, planilha e agregados mostram a mesma nota de cada campanha e ponto."
       help={<ResultsInterpretationHelp title="Como ler o cálculo">
         <p>O índice ordena a atenção entre os pontos de captação. Não é porcentagem, não é probabilidade de dano e não descreve a água tratada.</p>
         <p>Os números de cada ponto, com as fichas que formam cada nota, estão em <strong>Índice de risco na captação</strong>.</p>
@@ -20,9 +20,14 @@ export default function CalculationsPage() {
       tabs={<SectionTabs />}
     />
     <section className={card}>
+      <h2 className={title}>Método 0.8 · versão em uso</h2>
+      <p>Cada campanha é calculada só com os seus próprios dados, ponto a ponto (SIA). Zero é nota calculada; “sem estimativa” e “sem medição” não são zero. A média pode esconder picos; o máximo descreve o maior índice observado. A capacidade preditiva ainda exige validação independente.</p>
+      <Link className="underline" href="/resultados/calculos/0-8">Consultar a versão 0.8 para leitura ou impressão</Link>
+    </section>
+    <section className={card}>
       <h2 className={title}>Fórmula</h2>
       <p>Cada organismo detectado contribui com a sua participação nos reads válidos da biblioteca × a gravidade do efeito (1 a 3, dividida por 3) × a aplicabilidade registrada na ficha (1, 0,5, 0,1 ou 0). A soma passa por uma curva logarítmica e vira a nota da categoria, de 0 a 1.</p>
-      <p>São três categorias: danos físicos e ambientais, riscos operacionais e perigo potencial à saúde, identificado na captação. A nota de cada categoria é a maior entre os marcadores utilizáveis, e o índice geral do ponto é a maior das três notas. O número da rede é a média dos pontos, com um voto por ponto.</p>
+      <p>São três categorias: danos físicos e ambientais, riscos operacionais e perigo potencial à saúde, identificado na captação. A nota de cada categoria é a do marcador de maior nota entre os utilizáveis. A maior das três notas é o piso do índice geral. Um dano distinto e documentado em outra categoria pode reforçar esse piso; repetir o mesmo dano não reforça. O índice geral não é a média das três categorias. O número da rede é a média dos pontos da campanha, com um voto por ponto.</p>
       <p>A escala é fixa e tem folga: uma nota de 0,15 corresponde a cerca de 1% de participação ponderada, 0,35 a 4% e 0,60 a 15%.</p>
     </section>
     <section className={card}>
@@ -50,8 +55,8 @@ export default function CalculationsPage() {
         <li>Protozoários como Cryptosporidium e Giardia.</li>
         <li>Algas cujo cloroplasto não foi classificado. Não há marcador próprio para diatomáceas.</li>
       </ul>
-      <p>Na versão 0.7, diatomáceas e assinatura de esgoto podem contribuir para a nota acima de bases fixadas com C1–C3. A dominância compara cada táxon com as bibliotecas utilizáveis do mesmo componente nas três campanhas e gera apenas alerta. A classificação exploratória do cloroplasto não substitui medição de biomassa nem confirmação do efeito. A comparação é retrospectiva; desempenho para antecipar episódios não foi demonstrado.</p>
+      <p>Diatomáceas e assinatura de esgoto podem contribuir para a nota acima de bases fixadas com C1–C3. A dominância compara cada táxon com as bibliotecas utilizáveis do mesmo componente nas três campanhas e gera apenas alerta. A classificação exploratória do cloroplasto não substitui medição de biomassa nem confirmação do efeito. A comparação é retrospectiva; desempenho para antecipar episódios não foi demonstrado.</p>
     </section>
-    <p><Link className="inline-flex min-h-11 items-center rounded-lg bg-[var(--brand-navy-strong)] px-4 text-sm font-bold text-white" href="/resultados/indice-captacao">Ver o índice por ponto e por campanha</Link></p>
+    <p><Link className="inline-flex min-h-11 items-center rounded-lg bg-[var(--brand-navy-strong)] px-4 text-sm font-bold text-white" href="/resultados/indice-captacao">Consultar resultados por campanha e ponto</Link></p>
   </div>;
 }

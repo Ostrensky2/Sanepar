@@ -1,3 +1,4 @@
+import { CampaignDistribution } from "@/modules/results/components/campaign-distribution";
 import { HomeResultsV2 } from "@/modules/results/components/home-results-v2";
 import { cache, Suspense } from "react";
 import { HomeOperationalKpis } from "@/components/home-canonical-kpis";
@@ -25,6 +26,7 @@ export default function DashboardPage() {
       <h1 className="heading-font type-page-title text-[var(--brand-navy-strong)]">
         Painel de Monitoramento
       </h1>
+      <CampaignDistribution />
       <HomeResultsV2
         operationalKpis={<Suspense fallback={<div className="app-card min-h-32 animate-pulse" aria-label="Carregando pontos amostrados" />}><OperationalKpis /></Suspense>}
         projectSummary={<Suspense fallback={<p role="status">Carregando síntese operacional…</p>}><OperationalSummary /></Suspense>}

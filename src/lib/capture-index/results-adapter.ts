@@ -39,11 +39,12 @@ function toPoint(row: CaptureIndexRow, place?: CapturePointPlace): ResultPoint {
     // Todo ponto com biblioteca utilizável tem as três notas e o índice geral; a falta do COI aparece nos conjuntos e na condição de uso.
     completeness: measured ? "complete" : "unavailable",
     availableSetCount: used.length, usedSetCount: used.length, unavailableSets: (["bacteria", "cyanobacteria", "coi"] as const).filter(set => !used.includes(set)),
-    conditionOfUse: measured ? `Medição: ${view.coverage}. ${view.elevated}.` : "Sem medição: nenhuma biblioteca utilizável.",
+    conditionOfUse: measured ? `Medição: ${view.coverage}. ${view.elevated}.` : view.state === "sem estimativa" ? `Sem estimativa: há leitura, ${view.coverage}; a nota 0.8 não pode ser afirmada. Não é zero.` : "Sem medição: nenhuma biblioteca utilizável.",
+    estimateState: view.state, riskProfiles: view.profiles,
     impactedRecordCount: Object.values(row.scores).reduce((sum, score) => sum + (score?.contributions.length ?? 0), 0),
     observations: row.alerts.length ? `${row.alerts.length} ponto(s) de atenção, sem efeito na nota.` : null,
-    domains: perDomain(domain => { const score = row.scores[domainOf[domain]]; return { value: score?.score ?? null, lower: score?.floor ?? 0, upper: score?.ceiling ?? 0 }; }),
-    overall: { value: row.general, lower: row.generalFloor ?? 0, upper: row.generalCeiling ?? 0, rank: row.rank },
+    domains: perDomain(domain => { const score = row.scores[domainOf[domain]]; return { value: score?.score ?? null, lower: score?.score ?? 0, upper: score?.score ?? 0 }; }),
+    overall: { value: row.general, lower: row.general ?? 0, upper: row.general ?? 0, rank: row.rank },
     bibliographicCoverage: perDomain(domain => row.scores[domainOf[domain]]?.evaluated ?? null),
     components: { bacteria: component("bacteria"), cyanobacteria: component("cyanobacteria"), coi: component("coi") },
   };

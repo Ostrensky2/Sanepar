@@ -1,8 +1,8 @@
-// Curated entries from INDICE_CAPTACAO_0.7.md. Never infer an effect from a taxon name,
+// Curated effect entries of the capture index. Never infer an effect from a taxon name,
 // a narrative substring or a domain code: one domain can contain unrelated mechanisms.
 export const effects = [
   { id: "cyanotoxins", title: "Potencial de cianotoxinas", component: "16S", note: "Saúde humana. As fichas descrevem potencial na literatura. O sinal de 16S não mede toxina, concentração, exposição ou intoxicação.", cards: ["CUR-Cuspidothrix-S", "CUR-Dolichospermum-S", "CUR-Microcystis-S", "CUR-Raphidiopsis-S"] },
-  { id: "animal-toxicity", title: "Potencial de toxicidade para animais", component: "16S", note: "Ambiental. A ficha 0.7 associa esse efeito à fração de genótipos potencialmente produtores. Não houve medição de toxina nem comprovação de dano à fauna. Fonte da ficha: doi:10.3389/fmicb.2021.793544.", cards: ["CUR-Raphidiopsis-A"] },
+  { id: "animal-toxicity", title: "Potencial de toxicidade para animais", component: "16S", note: "Ambiental. A ficha associa esse efeito à fração de genótipos potencialmente produtores. Não houve medição de toxina nem comprovação de dano à fauna. Fonte da ficha: doi:10.3389/fmicb.2021.793544.", cards: ["CUR-Raphidiopsis-A"] },
   { id: "diatom", title: "Obstrução associada a diatomáceas", component: "ALGAS", note: "Leitura exploratória de cloroplastos no 16S; não confirma obstrução.", cards: ["CUR-Diatomaceas-Bacillariophyceae-O", "CUR-Diatomaceas-Coscinodiscophyceae-O"] },
   { id: "fouling", title: "Incrustação biológica", component: "COI", note: "Diferente de obstrução por diatomáceas e da ocorrência de larvas.", cards: ["CUR-Limnoperna-O", "CUR-Cordylophora-O"] },
   { id: "larvae", title: "Larvas de quironomídeos", component: "COI", note: "A ficha não representa o mosquito-fantasma.", cards: ["CUR-Chironomidae-O"] },

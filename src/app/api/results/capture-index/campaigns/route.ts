@@ -4,13 +4,17 @@ import { captureIndexResultsCampaigns, placeKey, type CapturePointPlace } from "
 import { loadDashboardData } from "@/lib/dashboard-data";
 
 export const runtime = "nodejs";
-const noStore = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" };
+const noStore = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "X-Results-Version": "0.8" };
 
 /** Índice de captação no formato das telas de resultados (mapa, ranking, municípios, evolução).
  * As coordenadas e os nomes vêm dos pontos de campo, só leitura; sem eles o ponto aparece nas tabelas e fica fora do mapa. */
 export async function GET(request: Request) {
   const auth = await requireApiSession(request, "data.view");
   if (!auth.ok) return auth.response;
+  // Só existe a metodologia 0.8; pedir outra edição é erro de consulta, nunca um cálculo alternativo.
+  const query = new URL(request.url).searchParams;
+  if ([...query.keys()].some(key => key !== "version") || query.getAll("version").some(value => value !== "0.8") || query.getAll("version").length > 1)
+    return Response.json({ error: "Opção inválida." }, { status: 422, headers: noStore });
   const places = new Map<string, CapturePointPlace>();
   try {
     for (const point of (await loadDashboardData()).campaignPoints) {

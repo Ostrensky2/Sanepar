@@ -143,7 +143,7 @@ export function CaptureIndexPanel({ campaign, initialSia = "", effectId, returnH
             setOpenSia(current => current === sia ? "" : sia);
           }}>
             <span className="font-semibold">SIA {row.sia}</span> · índice geral <strong>{row.general}</strong>
-            {row.measured && <> · {row.position} · determinado por: {row.predominant}</>}
+            {row.measured && <> · {row.position} · maior categoria: {row.predominant}</>}
           </summary>
           {openSia === normalizedSia(row.sia) && <section ref={destination} tabIndex={-1} aria-label={`Efeitos da amostra · ${row.campaign} · SIA ${row.sia}`} className="mt-2 min-w-0 scroll-mt-24 space-y-3">
             <CapturePointEvidence row={row} version={meta.version} effectId={effectId}>{sameSia(row.sia)}{back}</CapturePointEvidence>
@@ -161,7 +161,8 @@ export function CaptureIndexPanel({ campaign, initialSia = "", effectId, returnH
     <details><summary className="cursor-pointer">Como é calculado</summary>
       <div className="space-y-1 type-metadata">
         <p>Cada organismo detectado contribui com a sua participação nos reads válidos da biblioteca × a gravidade do efeito (1 a 3) × a aplicabilidade registrada na ficha (1, 0,5, 0,1 ou 0). A soma passa por uma curva logarítmica e vira a nota da categoria, de 0 a 1.</p>
-        <p>A nota de cada categoria é a maior entre os marcadores utilizáveis. O índice geral do ponto é a maior das três notas: o sinal que mais merece atenção ali. O número da rede é a média dos pontos, com um voto por ponto.</p>
+        <p>Metodologia 0.8. A nota de cada categoria é a do marcador de maior nota entre os utilizáveis. A maior das três notas é o piso do índice geral. Um dano distinto e documentado em outra categoria pode reforçar esse piso; repetir o mesmo dano não reforça. Por isso o índice geral pode ficar acima da maior categoria, e não é a média das três. O número da rede é a média dos pontos da campanha, com um voto por ponto.</p>
+        <p>Três estados não se confundem: zero é nota calculada; “sem estimativa” indica que há leitura, mas a nota não pode ser afirmada; “sem medição” indica que não há biblioteca utilizável. Cada campanha é calculada só com os seus próprios dados.</p>
         <p>Organismo ainda sem ficha decidida contribui com zero e reduz a cobertura da curadoria, não a nota. A cobertura diz quanto dos reads já foi avaliado; não diz se a nota está certa. Ocorrência com menos de 10 reads ou menos de 0,01% da biblioteca vira alerta, sem elevar a nota. Zero significa nenhuma contribuição pontuada, não ausência demonstrada de risco.</p>
         <p>Diatomáceas: não há marcador próprio. Elas entram na nota de riscos operacionais só onde há resultado delas, que hoje é a leitura do cloroplasto no 16S, com classificação exploratória feita fora do pipeline do laboratório. Por entupirem filtros pela quantidade, somam como um grupo, e só pontua o que passa da base da rede (2,1% do 16S).</p>
         <p>Assinatura de esgoto: Bacteroides, Bifidobacterium e a família Prevotellaceae, bactérias de intestino, somam como um grupo na categoria de saúde, e só pontua o que passa da base da rede (1,0% do 16S). Indica contaminação fecal, não identifica o patógeno. Escherichia-Shigella alta sem essas bactérias não caracteriza esgoto e aparece em Atenção como possível problema na amostra.</p>
@@ -182,17 +183,23 @@ export function CapturePointEvidence({row, version, effectId, children, compact}
             <p className="type-metadata"><strong>Índice geral: {row.general}</strong> · Marcadores: {row.coverage}.</p>
             <dl className="flex flex-wrap gap-x-5 gap-y-1 type-metadata">{row.domains.map(domain => <div key={domain.key}><dt>{domain.label}</dt><dd className="font-bold tabular-nums">{domain.score}</dd></div>)}</dl>
             </>}
-            {row.measured && <p className="type-metadata"><strong>O que mais contribuiu:</strong> {row.predominant}. {row.domains.find(domain => domain.label === row.predominant)?.main}</p>}
+            {row.measured && row.predominant !== "nenhuma contribuição pontuada" && <p className="type-metadata"><strong>Categoria de maior nota:</strong> {row.predominant}. {row.domains.find(domain => domain.label === row.predominant)?.main}</p>}
             <p className="type-metadata">Escala de 0 a 1. O índice não mede probabilidade de dano.</p>
+            <section aria-label={`Perfis de risco biológico · ${row.campaign} · SIA ${row.sia}`} className="space-y-1 border-t border-[var(--line-strong)] pt-3">
+              <h4 className="type-panel-title">Perfis de risco biológico da captação</h4>
+              <ul className="space-y-2 type-metadata">{row.profiles.map(profile => <li key={profile.key} data-profile={profile.key}><strong>{profile.label}: {profile.score}</strong>
+                <span className="block">{profile.value === null ? (profile.state === "sem medição" ? "Sem biblioteca utilizável neste ponto e campanha." : "Há leitura, mas a nota não pode ser afirmada. Não é zero.") : profile.effects.length || profile.otherContributions ? <>{profile.effects.map(effect => `${effect.title}${effect.determining ? " (no marcador que definiu a nota)" : ""}`).concat(profile.otherContributions ? [`${profile.otherContributions} outra(s) contribuição(ões) documentada(s)`] : []).join("; ")}.</> : "Nenhum tipo de efeito com contribuição documentada nesta amostra."}</span></li>)}</ul>
+              <p className="type-metadata">Perfil desta campanha e deste SIA. Associação documentada nas fichas; o efeito não foi medido.</p>
+            </section>
             {children}
             <SampleEffects row={row} effectId={effectId} />
             <details><summary className="min-h-11 cursor-pointer py-2 font-semibold">Bases da nota, cobertura e referências</summary>
             {row.measured ? <>
-              <p className="type-metadata">Cenários das fichas cadastradas, do piso (só evidência plena) ao teto (fichas ainda indeterminadas com peso cheio): {row.range}. O teto não inclui efeitos que o cadastro ainda não conhece. Medição: {row.coverage}. Há {row.elevated}.</p>
+              <p className="type-metadata">Medição: {row.coverage}. Há {row.elevated}.</p>
               <ul className="space-y-3">{row.domains.map(domain => {
                 const evidence = domainEvidenceRoles(domain);
                 return <li key={domain.key}>
-                <strong>{domain.label}: {domain.score}</strong>{domain.maturity !== "com base de comparação" && <span className="type-metadata"> [{domain.maturity}]</span>} <span className="type-metadata">(piso a teto {domain.range}; cobertura da curadoria {domain.confidence}: {domain.evaluated})</span>
+                <strong>{domain.label}: {domain.score}</strong>{domain.maturity !== "com base de comparação" && <span className="type-metadata"> [{domain.maturity}]</span>} <span className="type-metadata">(cobertura da curadoria {domain.confidence}: {domain.evaluated})</span>
                 <p className="type-metadata">{evidence.status}</p><span className="type-metadata">{domain.component ? `Determinado por ${domain.component}. ` : ""}{domain.main}{domain.evaluatedBy ? `. Reads avaliados por marcador: ${domain.evaluatedBy}` : ""}</span>
                 {domain.contributions.length > 0 && <details className="ml-3"><summary className="cursor-pointer type-metadata">Fichas que formam esta nota ({domain.contributions.length})</summary>
                   <ul className="space-y-1">{evidence.contributions.map(item => <li key={item.ficha + item.taxon} className="type-metadata break-words">
@@ -200,7 +207,7 @@ export function CapturePointEvidence({row, version, effectId, children, compact}
                     {item.reference.source && /^https?:\/\//i.test(item.reference.source) ? <> · <a className="underline" href={item.reference.source} target="_blank" rel="noreferrer">Fonte da ficha {item.reference.id ?? "não informada"}</a></> : <> · Fonte: {item.reference.source ?? "não informada"}</>}
                     {item.rationale && <><br />{item.rationale}</>}</li>)}</ul></details>}
               </li>;})}</ul>
-            </> : <p>Sem medição: nenhuma biblioteca utilizável neste ponto e campanha. Não é um zero.</p>}
+            </> : row.state === "sem estimativa" ? <p>Sem estimativa: há leitura neste ponto e campanha, {row.coverage}; a nota 0.8 não pode ser afirmada. Não é um zero.</p> : <p>Sem medição: nenhuma biblioteca utilizável neste ponto e campanha. Não é um zero.</p>}
             <PointLibraries row={row} />
             <p className="type-metadata">No 16S: cloroplasto de algas {row.chloroplast} · diatomáceas {row.diatoms} · cianobactérias {row.cyanobacteria}. As algas são vistas só pelo cloroplasto, com classificação exploratória.{row.coiExcluded ? ` ${row.coiExcluded}.` : ""}</p>
             {row.exotics && <p className="type-metadata break-words">Espécies exóticas presentes (informativo, não entra na nota): {row.exotics}.</p>}

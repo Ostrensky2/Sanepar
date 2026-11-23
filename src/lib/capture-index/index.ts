@@ -5,9 +5,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { formatCaptureIndex, formatCaptureShare } from "./format";
 import { distribution } from "./distribution";
+import { captureRiskProfiles } from "./risk-profiles";
 
-/** Saída imutável do índice de triagem de risco da biota na captação (IR-CAPTACAO-0.7-piloto).
- * O cálculo é feito fora do aplicativo (audit/.../indice_v07) e materializado em `indice-captacao.json`.
+/** Índice de triagem de risco da biota na captação, metodologia 0.8 (IR-CAPTACAO-0.8).
+ * As leituras e fichas vêm de `indice-captacao.json`; as notas, de `pontos-0.8.json`.
  * Painel e exportações consomem a MESMA visão: os textos são formatados uma única vez, aqui. */
 export const captureDomains = ["Ambiental", "Operacional", "Saúde humana"] as const;
 export const captureDomainLabels: Record<Domain, string> = {
@@ -23,7 +24,7 @@ type Alert = { dominio: Domain | ""; taxon: string; reads: number; gravidade: nu
   participacao?: number; referencia?: number; vezes?: number };
 type ComponentState = { status: string; run: string; observedReads: number; validReads: number; identifiedReads: number };
 export type CaptureIndexRow = { campaign: number; sia: string; general: number | null; generalFloor: number | null; generalCeiling: number | null;
-  predominant: Domain | null; elevated: number; generalRms: number | null; rank: number | null; ranked: number; band: string | null; components: Record<ComponentName, ComponentState>;
+  estimate?: "estimado" | "sem estimativa" | "sem medição"; predominant: Domain | null; elevated: number; generalRms: number | null; rank: number | null; ranked: number; band: string | null; components: Record<ComponentName, ComponentState>;
   scores: Record<Domain, Score | null>; alerts: Alert[]; descriptors: { run16S: string; chloroplastShare: number | null; cyanobacteriaShare: number | null; diatomShare: number | null; chloroplastNamedShare: number | null; coiExcludedReads: number; coiReassignedReads: number; exotics: { species: string; reads: number }[] } };
 type CampaignSummary = { pontos: number; medidos: number; media: number | null; mediana: number | null; p90: number | null; faixas: Record<string, number>; dominios?: Record<Domain, number> };
 type Ficha = { taxon: string; level: string; domain: string; code: string; severity: number | null; applicability: number | null; contested: boolean; source: string; rationale: string };
@@ -33,8 +34,68 @@ type CaptureIndexDocument = { schema: string; version: string; status: string; p
 
 // Read the canonical decimal literals directly: the dev bundler's JSON module
 // can change the last IEEE-754 bit before either the API or Excel sees a score.
-const data = JSON.parse(readFileSync(join(process.cwd(), "src/lib/capture-index/indice-captacao.json"), "utf8")) as CaptureIndexDocument;
+const read = (name: string) => readFileSync(join(process.cwd(), "src/lib/capture-index", name), "utf8");
+const data = JSON.parse(read("indice-captacao.json")) as CaptureIndexDocument;
 if (data.schema !== "yvae-capture-index/4") throw new Error(`Esquema de índice não suportado: ${data.schema}`);
+
+/** Metodologia 0.8: as notas por campanha + SIA vêm de `pontos-0.8.json` (scripts/indice-08/gerar_pontos_08.py),
+ * calculadas pelo núcleo `results-08-core.ts` e conferidas contra a fonte agregada oficial. O arquivo-base fornece
+ * apenas as leituras, fichas e alertas de cada observação; nenhuma nota 0.7 é exibida, exportada ou usada em reserva. */
+type Point08 = { campaign: number; sia: string; geral: number | null; ambiental: number | null; operacional: number | null; saude: number | null };
+const pointsText = read("pontos-0.8.json");
+const points08 = JSON.parse(pointsText) as { schema: string; version: string; policy: string; rows: Point08[] };
+if (points08.schema !== "yvae-capture-index-08/1" || points08.version !== "0.8") throw new Error("Notas 0.8 por ponto incompatíveis.");
+const unit = (value: unknown): value is number | null => value === null || (typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1);
+const pointKey = (campaign: number, sia: string) => `${campaign}|${sia}`;
+const byPoint = new Map<string, Point08>();
+for (const point of points08.rows) {
+  const key = pointKey(point.campaign, point.sia);
+  if (byPoint.has(key) || ![point.geral, point.ambiental, point.operacional, point.saude].every(unit)) throw new Error("Nota 0.8 duplicada ou inválida.");
+  byPoint.set(key, point);
+}
+if (byPoint.size !== data.rows.length) throw new Error("Notas 0.8 não cobrem exatamente as observações do índice.");
+const field08 = { Ambiental: "ambiental", Operacional: "operacional", "Saúde humana": "saude" } as const;
+export const CAPTURE_BANDS = ["< 0,05", "0,05 a 0,15", "0,15 a 0,35", "0,35 a 0,70", ">= 0,70"] as const;
+const bandOf = (value: number) => CAPTURE_BANDS[[0.05, 0.15, 0.35, 0.7].filter(limit => value >= limit).length];
+for (const row of data.rows) {
+  // Campanha e SIA formam a chave: uma nota nunca é emprestada de outra campanha.
+  const point = byPoint.get(pointKey(row.campaign, row.sia));
+  if (!point) throw new Error(`Observação C${row.campaign} · SIA ${row.sia} sem nota 0.8.`);
+  const libraries = captureComponents.some(name => row.components[name]?.status === "disponível");
+  for (const domain of captureDomains) {
+    const value = point[field08[domain]], score = row.scores[domain];
+    if (value === null) row.scores[domain] = null;
+    else if (score) score.score = value;
+    else throw new Error(`Categoria sem leitura de origem em C${row.campaign} · SIA ${row.sia}.`);
+  }
+  row.general = point.geral;
+  row.estimate = point.geral !== null ? "estimado" : libraries ? "sem estimativa" : "sem medição";
+  // Piso, teto e média quadrática pertenciam ao índice anterior e não são publicados na 0.8.
+  row.generalFloor = row.generalCeiling = row.generalRms = null;
+  const scored = captureDomains.map(domain => ({ domain, value: row.scores[domain]?.score ?? null })).filter((item): item is { domain: Domain; value: number } => item.value !== null);
+  const top = scored.reduce<{ domain: Domain; value: number } | null>((best, item) => !best || item.value > best.value ? item : best, null);
+  row.predominant = point.geral !== null && top && top.value > 0 ? top.domain : null;
+  row.elevated = scored.filter(item => item.value >= 0.15).length;
+  row.band = point.geral === null ? null : bandOf(point.geral);
+}
+const mean = (values: number[]) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+for (const code of Object.keys(data.campaigns)) {
+  // Cada campanha é ordenada e resumida somente com as suas próprias observações.
+  const rows = data.rows.filter(row => row.campaign === Number(code));
+  const estimated = rows.filter(row => row.general !== null).sort((a, b) => b.general! - a.general! || Number(a.sia) - Number(b.sia));
+  for (const row of rows) { row.rank = null; row.ranked = estimated.length; }
+  estimated.forEach((row, index) => { row.rank = index + 1; });
+  const values = estimated.map(row => row.general!).sort((a, b) => a - b);
+  data.campaigns[code] = { pontos: rows.length, medidos: estimated.length, media: mean(values),
+    mediana: values[Math.ceil(0.5 * values.length) - 1] ?? null, p90: values[Math.ceil(0.9 * values.length) - 1] ?? null,
+    faixas: Object.fromEntries(CAPTURE_BANDS.map(band => [band, estimated.filter(row => row.band === band).length])),
+    dominios: Object.fromEntries(captureDomains.map(domain => [domain, mean(rows.flatMap(row => row.scores[domain] ? [row.scores[domain]!.score] : []))])) as Record<Domain, number> };
+}
+data.version = "IR-CAPTACAO-0.8";
+data.status = "metodologia 0.8 (sinal documentado); notas por campanha e SIA, sem mistura entre campanhas";
+data.parameters = { ...data.parameters, bands: [0.05, 0.15, 0.35, 0.7],
+  aggregation: "índice geral 0.8 = maior das três notas, reforçada por dano distinto e documentado das outras categorias; nota da categoria = marcador vencedor" };
+data.rowsSha256 = createHash("sha256").update(pointsText, "utf8").digest("hex");
 export const captureIndexMeta = { schema: data.schema, version: data.version, status: data.status, parameters: data.parameters, inputs: data.inputs,
   fichasTotal: data.fichasTotal, rowsSha256: data.rowsSha256, blindSpots: data.blindSpots,
   maturity: captureDomains.map(domain => ({ label: captureDomainLabels[domain], level: data.maturity[domain].nivel, text: data.maturity[domain].texto })) };
@@ -56,19 +117,24 @@ export type CaptureIndexView = ReturnType<typeof captureIndexView>;
 /** Visão única por ponto e campanha. Zero só aparece como "0,00" quando é zero calculado; sem biblioteca, "sem medição". */
 export function captureIndexView(row: CaptureIndexRow) {
   const measured = row.general !== null;
+  // Três estados distintos: nota (inclusive zero), sem estimativa (há biblioteca, a nota não pode ser afirmada) e sem medição.
+  const state = measured ? "estimado" : row.estimate === "sem estimativa" ? "sem estimativa" : "sem medição";
+  const noEstimate = state === "sem estimativa";
   const coi = row.components.COI;
   const s16 = row.components["16S"];
   // Diz o que foi efetivamente medido: os dois marcadores, só um deles, ou nenhum.
-  const coverage = !measured ? "sem medição"
+  const coverage = !measured && !noEstimate ? "sem medição"
     : s16.status === "disponível" && coi.status === "disponível" ? "16S e COI"
     : s16.status === "disponível" ? `só 16S (COI ${coi.status})`
     : coi.status === "disponível" ? `só COI (16S ${s16.status})` : "sem medição";
   return {
-    campaign: `C${row.campaign}`, sia: row.sia, measured,
+    campaign: `C${row.campaign}`, sia: row.sia, measured, state,
+    // Perfis de risco biológico da captação (operacional e sanitário), desta campanha e deste SIA.
+    profiles: captureRiskProfiles(row),
     // Numeric source values for workbook consumers; no display rounding or recalculation.
     exact: { general: row.general, domains: Object.fromEntries(captureDomains.map(domain => [domain, row.scores[domain]?.score ?? null])) },
-    general: formatCaptureIndex(row.general),
-    range: measured ? `${formatCaptureIndex(row.generalFloor)} a ${formatCaptureIndex(row.generalCeiling)}` : "",
+    general: noEstimate ? "sem estimativa" : formatCaptureIndex(row.general),
+    range: measured && row.generalFloor !== null && row.generalCeiling !== null ? `${formatCaptureIndex(row.generalFloor)} a ${formatCaptureIndex(row.generalCeiling)}` : "",
     position: measured && row.rank ? `${row.rank}º de ${row.ranked}` : "",
     band: row.band ?? "",
     predominant: row.predominant ? captureDomainLabels[row.predominant] : measured ? "nenhuma contribuição pontuada" : "",
@@ -80,7 +146,7 @@ export function captureIndexView(row: CaptureIndexRow) {
       const main = score?.contributions.find(item => item.component === score.component) ?? score?.contributions[0];
       return {
         key: domain, label: captureDomainLabels[domain], maturity: data.maturity[domain].nivel,
-        score: formatCaptureIndex(score?.score), range: score ? `${formatCaptureIndex(score.floor)} a ${formatCaptureIndex(score.ceiling)}` : "",
+        score: !score && state !== "sem medição" ? "sem estimativa" : formatCaptureIndex(score?.score), range: score ? `${formatCaptureIndex(score.floor)} a ${formatCaptureIndex(score.ceiling)}` : "",
         confidence: score ? confidenceLabel[score.confidence] : "", confidenceGrade: score?.confidence ?? "", evaluated: score ? formatCaptureShare(score.evaluated) : "",
         evaluatedBy: score?.evaluatedByComponent ? Object.entries(score.evaluatedByComponent).map(([name, value]) => `${componentLabels[name] ?? name} ${formatCaptureShare(value)}`).join(" · ") : "",
         componentCode: score?.component ?? null, component: score?.component ? componentLabels[score.component] : "",
@@ -111,31 +177,32 @@ export function captureIndexCampaigns() {
     };
   });
 }
-const bandOrder = (band: string) => band.startsWith("<") ? 0 : band.startsWith(">=") ? 9 : Number(band.slice(0, 4).replace(",", "."));
+const bandOrder = (band: string) => CAPTURE_BANDS.indexOf(band as typeof CAPTURE_BANDS[number]);
 
 const row_excluded = (view: CaptureIndexView) => data.rows.find(row => `C${row.campaign}` === view.campaign && row.sia === view.sia)?.descriptors.coiExcludedReads ?? 0;
 const text = (value: string) => /[";\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
 const csv = (lines: string[][]) => "﻿" + lines.map(line => line.map(text).join(";")).join("\r\n") + "\r\n";
 const raw = (value: number | null | undefined) => value === null || value === undefined ? "" : String(value);
 
-/** CSV de leitura: exatamente os textos do painel, uma linha por ponto. */
+/** CSV de leitura: exatamente os textos do painel, uma linha por campanha e ponto. Nota ausente não vira zero: a coluna `estado` diz por quê. */
 export function captureIndexCsv(rows: CaptureIndexRow[]): string {
-  const header = ["versao", "campanha", "SIA", "indice_geral", "piso_a_teto", "posicao_na_campanha", "predominante", "categorias_na_faixa", "cobertura",
+  const header = ["versao", "campanha", "SIA", "estado", "indice_geral", "posicao_na_campanha", "predominante", "categorias_na_faixa", "cobertura",
     ...captureDomains.flatMap(domain => [`${domain}_nota`, `${domain}_piso_a_teto`, `${domain}_confianca`, `${domain}_reads_avaliados`, `${domain}_principal`]),
-    "corrida_16S", "corrida_COI", "COI_situacao", "cloroplasto_no_16S", "cianobacterias_no_16S", "diatomaceas_no_16S", "COI_reads_marinhos_retirados", "alertas", "dominancia_fora_do_padrao", "exoticas_presentes"];
-  return csv([header, ...rows.map(captureIndexView).map(view => [captureIndexMeta.version, view.campaign, view.sia, view.general, view.range, view.position, view.predominant, view.elevated, view.coverage,
+    "corrida_16S", "corrida_COI", "COI_situacao", "cloroplasto_no_16S", "cianobacterias_no_16S", "diatomaceas_no_16S", "COI_reads_marinhos_retirados", "alertas", "dominancia_fora_do_padrao", "exoticas_presentes",
+    "perfil_risco_operacional", "perfil_risco_sanitario"];
+  return csv([header, ...rows.map(captureIndexView).map(view => [captureIndexMeta.version, view.campaign, view.sia, view.state, view.general, view.position, view.predominant, view.elevated, view.coverage,
     ...view.domains.flatMap(domain => [domain.score, domain.range, domain.confidenceGrade, domain.evaluated, domain.main]),
-    view.components[0].run, view.components[2].run, view.components[2].status, view.chloroplast, view.cyanobacteria, view.diatoms, String(row_excluded(view)), String(view.alerts.length), view.dominance, view.exotics])]);
+    view.components[0].run, view.components[2].run, view.components[2].status, view.chloroplast, view.cyanobacteria, view.diatoms, String(row_excluded(view)), String(view.alerts.length), view.dominance, view.exotics, ...view.profiles.map(profile => profile.summary)])]);
 }
 
 /** CSV de auditoria: valores sem arredondar e uma linha por contribuição (ponto, domínio, táxon, ficha), para refazer cada nota. */
 export function captureIndexAuditCsv(rows: CaptureIndexRow[]): string {
   const header = ["versao", "linhas_sha256", "campanha", "SIA", "tipo", "dominio", "componente", "corrida", "taxon", "reads", "reads_validos_componente", "gravidade", "aplicabilidade",
-    "ficha", "fonte", "q", "nota_dominio", "piso_dominio", "teto_dominio", "fracao_avaliada", "confianca", "geral", "geral_piso", "geral_teto", "media_quadratica_das_tres_notas", "posicao", "situacao", "reads_observados", "base_do_grupo", "participacao", "referencia_na_rede"];
+    "ficha", "fonte", "q", "nota_dominio", "piso_dominio", "teto_dominio", "fracao_avaliada", "confianca", "geral", "estado_da_nota", "posicao", "situacao", "reads_observados", "base_do_grupo", "participacao", "referencia_na_rede"];
   const lines: string[][] = [];
   for (const row of rows) {
     const base = [captureIndexMeta.version, captureIndexMeta.rowsSha256, `C${row.campaign}`, row.sia];
-    const tail = [raw(row.general), raw(row.generalFloor), raw(row.generalCeiling), raw(row.generalRms), raw(row.rank)];
+    const tail = [raw(row.general), row.estimate ?? "", raw(row.rank)];
     for (const name of captureComponents) {
       const component = row.components[name];
       lines.push([...base, "biblioteca", "", name, component.run, "", "", raw(component.validReads), "", "", "", "", "", "", "", "", "", "", ...tail, component.status, raw(component.observedReads), "", "", ""]);

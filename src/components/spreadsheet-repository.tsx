@@ -30,7 +30,8 @@ import { appendResultsWorkbooks, stageResultsWorkbook } from "@/lib/imports/resu
 import type { StagedResultsUpload } from "@/lib/imports/results-upload-contract";
 import type { ResultsWorkbookPreviewResponse } from "@/lib/imports/results";
 import type { ResultsInventoryResponse } from "@/lib/results-publication-contract";
-import { planCampaignPublicationScope, RESULTS_CONTRACT_VERSION } from "@/modules/results";
+import { planCampaignPublicationScope } from "@/modules/results/publication-scope";
+import { RESULTS_CONTRACT_VERSION } from "@/modules/results/types";
 import { ResultsPreparationPanel } from "@/modules/results/components/results-preparation-panel";
 import { GeneratedWorkbookList, WorkbookOwner } from "./generated-workbooks";
 import { SiaMatricesPreparation } from "@/components/sia-matrices-preparation";

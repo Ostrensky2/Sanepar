@@ -7,17 +7,20 @@ export function isMethodologyPdfAvailable(response: Pick<Response, "status" | "h
   return response.status === 200 && response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() === "application/pdf";
 }
 
-export function MethodologyPdfLink() {
+export function MethodologyPdfLink({ href = "/api/results/methodology-pdf?historical=1" }: { href?: "/api/results/methodology-pdf?historical=1" } = {}) {
   const [available, setAvailable] = useState<boolean | null>(null);
+  const [requested, setRequested] = useState(false);
   useEffect(() => {
+    if (!requested) return;
     const controller = new AbortController();
-    void fetch("/api/results/methodology-pdf", { cache: "no-store", signal: controller.signal }).then(async (response) => {
+    void fetch(href, { cache: "no-store", signal: controller.signal }).then(async (response) => {
       const valid = isMethodologyPdfAvailable(response);
       await response.body?.cancel();
       if (!controller.signal.aborted) setAvailable(valid);
     }).catch(() => { if (!controller.signal.aborted) setAvailable(false); });
     return () => controller.abort();
-  }, []);
-  if (available !== true) return <p role="status" className="type-metadata">{available === null ? "Verificando disponibilidade da metodologia…" : "PDF da metodologia indisponível neste ambiente."}</p>;
-  return <a href="/api/results/methodology-pdf" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--line-strong)] bg-[var(--surface-panel)] px-4 text-sm font-bold text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)] focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]"><FileText aria-hidden="true" className="h-4 w-4" />Metodologia completa (PDF)<span className="sr-only"> — abre em nova aba</span></a>;
+  }, [href, requested]);
+  if (!requested) return <button className="min-h-11 font-semibold underline" type="button" onClick={() => setRequested(true)}>Consultar documento de metodologia arquivado (PDF)</button>;
+  if (available !== true) return <p role="status" className="type-metadata">{available === null ? "Verificando disponibilidade da metodologia…" : "PDF arquivado indisponível neste ambiente."}</p>;
+  return <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--line-strong)] bg-[var(--surface-panel)] px-4 text-sm font-bold text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)] focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]"><FileText aria-hidden="true" className="h-4 w-4" />Metodologia histórica (PDF)<span className="sr-only"> — abre em nova aba</span></a>;
 }

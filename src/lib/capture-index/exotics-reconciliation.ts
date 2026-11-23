@@ -11,8 +11,8 @@ export const sourceHashes: Readonly<Partial<Record<number, string>>> = {
 export const categories = {
   "nominal-listed": "Identificação nominal do laboratório, listada",
   "candidate-listed": "Candidata listada, espécie não resolvida",
-  "candidate-omitted": "Candidata não listada no detalhe 0.7",
-  "regional-omitted": "Status regional pendente, não listado no detalhe 0.7",
+  "candidate-omitted": "Candidata não listada no detalhe do índice",
+  "regional-omitted": "Status regional pendente, não listado no detalhe do índice",
   "reassigned-added": "Reatribuição sem positivo nominal, adicionada à lista",
   "reassigned-mixed": "Reatribuição com positivo nominal já listado",
 } as const;

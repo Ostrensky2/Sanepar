@@ -28,7 +28,7 @@ describe("results index dashboard v2 contract", () => {
     campaign.points[0].conditionOfUse = "Provisório; qualidade não informada";
     const sections = mapHelpSections(campaign, campaign.points, [campaign.points[0].key], "operational");
     const text = sections.map((section) => section.text).join(" ");
-    for (const copy of ["Operacional", "1 de 3", "2 sem coordenada utilizável", "SIA-0559", "Provisório; qualidade não informada", "O contorno indica a cobertura", "ausência de medição utilizável", "não representa probabilidade", "posição relativa", "antes dos filtros", "sem zoom"]) expect(text).toContain(copy);
+    for (const copy of ["Operacional", "1 de 3", "2 sem coordenada utilizável", "SIA-0559", "Provisório; qualidade não informada", "O contorno indica a cobertura", "sem estimativa ou sem medição utilizável", "não representa probabilidade", "posição relativa", "antes dos filtros", "sem zoom"]) expect(text).toContain(copy);
     const source = readFileSync(new URL("../results-index-dashboard.tsx", import.meta.url), "utf8");
     expect(source).toContain('<ResultsReviewDialog title="Como ler o mapa"');
     expect(text).not.toContain("SANEPAR-INDICE");
@@ -68,7 +68,9 @@ describe("results index dashboard v2 contract", () => {
     expect(source).toContain("Com índice calculado"); // rótulos do índice de captação
     expect(source).toContain("Parcial — 2/3");
     expect(source).toContain('unavailable: "Sem medição"');
-    expect(source).toContain("Ponto parcial tem uma faixa.");
+    expect(source).toContain("“Sem estimativa” e “sem medição” não têm número e não são zero.");
+    expect(source).toContain("Mapa do índice · metodologia 0.8");
+    expect(source).not.toMatch(/histórico 0\.7|método 0\.7/);
     expect(source).toContain("Resultados parciais e indisponíveis ficam fora do ranking");
     expect(source).not.toMatch(/risco (baixo|moderado|alto|crítico)/i);
   });
