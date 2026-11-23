@@ -79,27 +79,28 @@ export const helpModules: HelpModule[] = [
     title: "Início",
     short: "Distribuição por campanha, indicadores e mapa de navegação",
     icon: BookOpen,
-    purpose: "A régua compara a distribuição de cada campanha, uma ao lado da outra. O índice médio aparece campanha a campanha; não há média entre campanhas. O mapa serve à navegação cartográfica.",
+    purpose: "Cada cartão mostra uma campanha: média, maior índice e quantos pontos estão em cada faixa. As campanhas ficam lado a lado só para consulta; não há média entre campanhas. O mapa serve à navegação cartográfica.",
     whenToUse: ["Compare campanhas no mesmo domínio e confira quantas captações foram medidas."],
     primaryTasks: [
       { title: "Comparar distribuições", steps: [
-        "Selecione o domínio na régua e leia as frequências nas mesmas faixas.",
+        "Escolha a categoria no seletor do quadro e leia as barras de cada campanha nas mesmas faixas.",
         "A média considera as observações com estimativa numérica. O máximo é o maior valor observado e pode refletir um pico.",
-        "Consulte os intervalos para distinguir uma faixa com zero observações de uma campanha sem medição.",
+        "Abra Ver as contagens em tabela para distinguir uma faixa com zero pontos de uma campanha sem medição.",
       ] },
     ],
     controls: [
-      { label: "Domínio", detail: "Alterna a categoria exibida na distribuição de cada campanha." },
+      { label: "Categoria", detail: "Alterna a categoria exibida nos cartões das campanhas: índice geral, ambiental, operacional ou saúde." },
+      { label: "Abrir a campanha", detail: "Leva aos resultados daquela campanha, ponto a ponto." },
       { label: "Mapa de navegação", detail: "Abra o mapa para consultar a base cartográfica." },
     ],
     notes: ["A leitura orienta investigação. A capacidade preditiva depende de validação independente."],
     troubleshooting: [
       {
         issue: "Onde consultar a distribuição por campanha?",
-        action: "Na régua acima do mapa, selecione o domínio e consulte as frequências da campanha.",
+        action: "No quadro Índice de captação por campanha, escolha a categoria e leia as barras da campanha.",
       },
       {
-        issue: "Campanha sem coluna na evolução",
+        issue: "Campanha sem barras no quadro",
         action: "Verifique se há medições publicadas para o domínio. Uma campanha sem medição não recebe valor zero.",
       },
     ],

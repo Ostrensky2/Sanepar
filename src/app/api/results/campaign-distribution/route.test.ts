@@ -45,7 +45,7 @@ it.each([401,403])("preserva negativa %i sem conteúdo", async status => {
 
 it("mantém o percentual da campanha inclusive nos intervalos vazios e a interpretação editorial", () => {
   const component = readFileSync("src/modules/results/components/campaign-distribution.tsx", "utf8");
-  expect(component).toContain("100 * count / row.n");
+  expect(component).toContain("share = count / row.n");
   for (const domains of Object.values(values.campanhas)) {
     for (const distribution of Object.values(domains)) {
       const percentages = distribution.colunas.map(count => 100 * count / distribution.n);
@@ -53,7 +53,7 @@ it("mantém o percentual da campanha inclusive nos intervalos vazios e a interpr
       expect(percentages).toContain(0);
     }
   }
-  expect(component).toContain("A média pode esconder picos. O máximo é a maior nota observada, não a condição de toda a campanha. As faixas orientam investigação; não confirmam dano.");
+  expect(component).toContain("A média resume as notas da campanha e pode esconder uma captação com índice alto. O maior índice é o de uma captação; não representa toda a campanha. As faixas orientam investigação, não confirmam dano.");
 });
 
 it("mantém mapa, KPIs e contexto na Home com uma única comparação de campanhas", () => {
@@ -65,5 +65,5 @@ it("mantém mapa, KPIs e contexto na Home com uma única comparação de campanh
   expect(home).toContain("<CanonicalKpi");
   expect(home).toContain("<ProjectStatusPanel");
   expect(dashboard).toContain("<CampaignHydroMap");
-  expect(page.match(/<CampaignDistribution\s*\/>/g)).toHaveLength(1);
+  expect((page + home).match(/<CampaignDistribution\s*\/>/g)).toHaveLength(1);
 });

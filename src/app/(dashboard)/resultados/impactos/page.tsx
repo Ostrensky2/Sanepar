@@ -30,10 +30,12 @@ export default async function ImpactsPage({ searchParams }: { searchParams: Prom
       </ResultsInterpretationHelp>}
       tabs={<SectionTabs />}
     />
-    <section className="app-card p-4">
-      <h2 className="type-section-title">Índice de captação · metodologia 0.8</h2>
-      <p>Consulte a nota, os marcadores, os perfis de risco e a evidência da amostra de cada campanha e ponto.</p>
-      <Link className="inline-flex min-h-11 items-center font-semibold underline" href={number ? `/resultados/indice-captacao?campaign=${number}` : "/resultados/indice-captacao"}>Abrir índice de captação</Link>
+    <section className="app-card flex flex-wrap items-center justify-between gap-3 p-4">
+      <div className="min-w-0">
+        <h2 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">Índice de captação · metodologia 0.8</h2>
+        <p className="type-metadata text-[var(--ink-soft)]">Nota, marcadores, perfis de risco e evidência de cada campanha e ponto.</p>
+      </div>
+      <Link className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--brand-navy-strong)] px-4 text-sm font-bold text-white" href={number ? `/resultados/indice-captacao?campaign=${number}` : "/resultados/indice-captacao"}>Abrir índice de captação</Link>
     </section>
     <h2 className="type-section-title">Catálogo de impactos potenciais</h2>
     <ResearchBrowser key={query.toString()} module="impacts" initialQuery={query.toString()} />

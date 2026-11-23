@@ -70,13 +70,13 @@ export function CaptureCampaignResults({ campaign, fieldPhotos }: { campaign: nu
     {state.status === "error" && <section className="app-card p-4" role="alert">Não foi possível carregar o mapa e o ranking agora. O detalhe por ponto segue abaixo.</section>}
     {state.status === "ready" && campaignPoints &&
       <ResultsIndexDashboard key={code} campaigns={state.campaigns} initialCampaignCode={code} campaignLabels={labels} fieldPhotos={fieldPhotos} />}
-    <details className="app-card p-4"><summary className="min-h-11 cursor-pointer py-2 type-panel-title">Consultar ficha individual por SIA</summary>
+    <details className="disclosure app-card p-4"><summary className="min-h-11 cursor-pointer py-2 type-panel-title">Consultar ficha individual por SIA</summary>
     <div id="consulta-por-sia" tabIndex={-1} aria-label="Consulta por SIA" className={anchorOffset}><section id={`detalhe-sia-c${campaign}`} tabIndex={-1} aria-label="Consulta individual por SIA" className={`app-card p-4 ${anchorOffset}`}><CaptureIndexPanel key={campaign} campaign={campaign} /></section></div>
     </details>
-    <details className="app-card p-4"><summary className="min-h-11 cursor-pointer py-2 type-panel-title">Evidência por tipo de efeito</summary>
+    <details className="disclosure app-card p-4"><summary className="min-h-11 cursor-pointer py-2 type-panel-title">Evidência por tipo de efeito</summary>
     <div id="tipos-de-efeito" tabIndex={-1} aria-label="Tipos de efeito" className={anchorOffset}><CaptureEffectsSummary key={`effects-${campaign}`} campaign={campaign} siaCodes={campaignPoints?.map(point => point.siaCode)} /></div>
     </details>
-    <details className="app-card p-4"><summary className="min-h-11 cursor-pointer py-2 type-panel-title">Espécies exóticas</summary>
+    <details className="disclosure app-card p-4"><summary className="min-h-11 cursor-pointer py-2 type-panel-title">Espécies exóticas</summary>
     <div id="exoticas" tabIndex={-1} aria-label="Exóticas" className={anchorOffset}><CaptureExoticsReconciliation campaign={campaign} /></div>
     </details>
   </div>;

@@ -24,6 +24,7 @@ import { CapturePointEvidence } from "./capture-index-panel";
 import { CaptureEffectsSummary } from "./capture-effects-summary";
 import { CaptureExoticsReconciliation } from "./capture-exotics-reconciliation";
 import { PointMediaGallery } from "@/modules/results/components/point-media-gallery";
+import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
 
 import { captureViews, type CaptureView } from "@/lib/capture-index/result-tabs";
 export type { CaptureView };
@@ -101,19 +102,20 @@ function Legend() {
   );
 }
 
-/** Barra 100% empilhada; cada segmento tem número quando cabe. */
+/** Barra 100% empilhada; cada segmento tem número quando cabe e nome ao passar o mouse. */
 function StackedBar({ bins, missing, tall }: { bins: number[]; missing: number; tall?: boolean }) {
   const counts = [...bins, missing];
   const n = counts.reduce((s, x) => s + x, 0);
   return (
-    <div aria-hidden className={`flex overflow-hidden rounded-md ${tall ? "h-9" : "h-6"} bg-[var(--surface-muted)]`}>
+    <div aria-hidden className={`flex gap-0.5 ${tall ? "h-9" : "h-6"}`}>
       {counts.map((count, i) =>
         count ? (
           <span
             key={i}
-            className="flex items-center justify-center text-xs font-bold"
+            title={`${i < bands.length ? bandNames[i] : "Sem estimativa ou sem medição"}: ${count} ${count === 1 ? "ponto" : "pontos"}`}
+            className="flex min-w-1.5 items-center justify-center rounded-[3px] text-xs font-bold first:rounded-l-md last:rounded-r-md"
             style={{
-              width: `${(100 * count) / n}%`,
+              flex: `${count} 1 0%`,
               backgroundColor: i < bands.length ? bands[i].color : "transparent",
               color: i >= 3 && i < bands.length ? "#fff" : "var(--ink)",
               border: i === bands.length ? "2px dashed var(--ink-soft)" : undefined,
@@ -139,11 +141,12 @@ function Kpi({ label, value, note, accent }: { label: string; value: string; not
   );
 }
 
+/** Título do bloco. A explicação não ocupa a página: abre no "?" ao lado do título. */
 function SectionHead({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
-    <header className="mb-4 space-y-1">
+    <header className="mb-4 flex items-center gap-1">
       <h2 className="text-xl font-bold text-[var(--brand-navy-strong)]">{title}</h2>
-      {children && <p className="max-w-3xl text-[var(--text-secondary)]">{children}</p>}
+      {children && <ResultsInterpretationHelp title={title}>{children}</ResultsInterpretationHelp>}
     </header>
   );
 }
@@ -190,7 +193,9 @@ function Network({ data, href }: { data: CaptureResultViews; href: (view: Captur
 
       <section className={card}>
         <SectionHead title="Quantos pontos em cada faixa">
-          Índice geral por ponto, escala fixa de 0 a 1. Cada campanha é lida separadamente; as barras só ficam lado a lado para consulta.
+          <p>Cada barra é uma campanha. Os segmentos contam quantos pontos têm o índice geral em cada faixa da escala fixa de 0 a 1.</p>
+          <p>Cada campanha é lida separadamente; as barras só ficam lado a lado para consulta. Não há total nem média juntando campanhas.</p>
+          <p>O segmento tracejado, quando aparece, são pontos sem estimativa ou sem medição. Eles não são zero.</p>
         </SectionHead>
         <div className="space-y-4">
           {data.network.map((row) => (
@@ -203,7 +208,7 @@ function Network({ data, href }: { data: CaptureResultViews; href: (view: Captur
         <div className="mt-5 border-t border-[var(--line-ghost)] pt-4">
           <Legend />
         </div>
-        <details className="mt-4">
+        <details className="disclosure mt-4">
           <summary className="min-h-11 cursor-pointer py-2 font-semibold">Ver a contagem em tabela</summary>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -228,7 +233,9 @@ function Network({ data, href }: { data: CaptureResultViews; href: (view: Captur
 
       <section className={card}>
         <SectionHead title="Os mesmos pontos nas três campanhas">
-          Só os SIAs com índice nas três campanhas, para comparar sem efeito da troca de pontos. Cada ponto pesa igual.
+          <p>A tabela usa só os SIAs que têm índice nas três campanhas, para comparar sem o efeito da troca de pontos. Cada ponto pesa igual.</p>
+          <p>O P90 usa a posição arredondada para cima, sem interpolação.</p>
+          <p>Zero é nota calculada. Ponto sem estimativa ou sem medição fica fora da média e do P90.</p>
         </SectionHead>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[32rem] text-sm">
@@ -249,9 +256,6 @@ function Network({ data, href }: { data: CaptureResultViews; href: (view: Captur
             </tbody>
           </table>
         </div>
-        <p className="mt-3 text-sm text-[var(--text-secondary)]">
-          O P90 usa a posição arredondada para cima, sem interpolação. Zero é nota calculada; ponto sem estimativa ou sem medição fica fora da média e do P90.
-        </p>
       </section>
     </div>
   );
@@ -302,9 +306,9 @@ function Campaign({ data, number, href }: { data: CaptureResultViews; number: nu
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_1fr]">
         {overall && (
-          <section className={card}>
-            <SectionHead title="Pontos por faixa do índice geral">Quantos pontos da C{number} caem em cada faixa da escala fixa.</SectionHead>
-            <ul className="space-y-3">
+          <section className={card + " flex flex-col"}>
+            <SectionHead title="Pontos por faixa do índice geral"><p>Quantos pontos da C{number} têm o índice geral em cada faixa da escala fixa de 0 a 1. A porcentagem é sobre os pontos registrados na campanha.</p><p>As faixas orientam a investigação; não são classes de risco comprovado.</p></SectionHead>
+            <ul className="flex flex-1 flex-col justify-around gap-3">
               {[...bandNames, "Sem estimativa ou sem medição"].map((name, i) => {
                 const count = i < bands.length ? overall.bins[i] : overall.missing;
                 const pct = s.total ? (100 * count) / s.total : 0;
@@ -326,7 +330,7 @@ function Campaign({ data, number, href }: { data: CaptureResultViews; number: nu
         )}
 
         <section className={card}>
-          <SectionHead title="As três categorias">A maior das três é o piso do índice geral; um dano distinto e documentado em outra categoria pode elevá-lo. A barra mostra a distribuição dos pontos em cada categoria.</SectionHead>
+          <SectionHead title="As três categorias"><p>A maior das três é o piso do índice geral; um dano distinto e documentado em outra categoria pode elevá-lo. O índice geral não é a média das três.</p><p>Cada barra mostra a distribuição dos pontos da campanha naquela categoria, com a média ao lado.</p></SectionHead>
           <div className="space-y-5">
             {data.categories.map((category, i) => (
               <div key={category.name} className="space-y-2">
@@ -345,7 +349,9 @@ function Campaign({ data, number, href }: { data: CaptureResultViews; number: nu
       <section className={card}>
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <SectionHead title={term ? `${matches.length} ponto(s) encontrado(s)` : all ? `Todos os ${data.ranking.length} pontos medidos` : "Os 10 pontos com maior índice"}>
-            Ordem de atenção dentro da C{number}. Posição não é probabilidade de dano.
+            <p>Os pontos estão em ordem de atenção dentro da C{number}: do maior para o menor índice geral.</p>
+            <p>A posição compara pontos da mesma campanha. Não é probabilidade de dano.</p>
+            <p>As três colunas à direita mostram a nota de cada categoria. Abra a ficha para ver o que formou a nota.</p>
           </SectionHead>
           <div className="flex flex-wrap items-end gap-2">
             <label className="block text-sm font-semibold">
@@ -420,8 +426,8 @@ function Campaign({ data, number, href }: { data: CaptureResultViews; number: nu
       </section>
 
       <section className={card}>
-        <SectionHead title="O que foi medido">Biblioteca utilizável por marcador. O cloroplasto (algas) é uma leitura do próprio 16S, não um terceiro marcador.</SectionHead>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <SectionHead title="O que foi medido"><p>Quantos pontos da campanha têm biblioteca utilizável em cada marcador.</p><p>O cloroplasto (algas) é uma leitura do próprio 16S, não um terceiro marcador.</p><p>Ponto com um só marcador pode ter nota em algumas categorias e ficar sem estimativa em outras.</p></SectionHead>
+        <div className="grid gap-x-10 gap-y-4 sm:grid-cols-2">
           {data.markers.map((m) => (
             <div key={m.name}>
               <div className="flex justify-between text-sm"><strong>{m.name}</strong><span className="tabular-nums">{m.usable} de {s.total} pontos</span></div>
@@ -514,13 +520,13 @@ function Point({ data, campaign, sia, effect, href }: { data: CaptureResultViews
                 </div>
                 <div>
                   <h3 className="mb-2 font-bold">O mesmo ponto em cada campanha</h3>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     {data.history.map((h) => (
                       <Link
                         key={h.campaign}
                         href={href("ponto", h.campaign, sia)}
                         aria-current={h.campaign === campaign ? "page" : undefined}
-                        className={`rounded-xl border p-3 transition hover:bg-[var(--surface-soft)] ${h.campaign === campaign ? "border-[var(--brand-navy)] ring-2 ring-[var(--brand-blue-soft)]" : "border-[var(--line-ghost)]"}`}
+                        className={`flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border p-3 transition hover:bg-[var(--surface-soft)] sm:block ${h.campaign === campaign ? "border-[var(--brand-navy)] ring-2 ring-[var(--brand-blue-soft)]" : "border-[var(--line-ghost)]"}`}
                       >
                         <span className="block text-sm font-semibold text-[var(--text-secondary)]">C{h.campaign} · {seasons[h.campaign - 1].split(" ")[0]}</span>
                         <span className="block text-2xl font-extrabold tabular-nums">{!h.present ? "—" : h.state === "sem estimativa" ? "sem estimativa" : formatCaptureIndex(h.score)}</span>

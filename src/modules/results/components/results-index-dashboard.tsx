@@ -11,7 +11,7 @@ import {
   CampaignHydroMap,
   type CampaignHydroMapPoint,
 } from "@/components/campaign-hydro-map";
-import { bands, bandNames, relativeBands, distribution, reading, domains } from "./capture-map-scale";
+import { bands, bandNames, fixedBandIndex, relativeBands, distribution, reading, domains } from "./capture-map-scale";
 import { analyticalStatusText } from "../presentation";
 
 import { ResultsInterpretationHelp } from "./results-interpretation-help";
@@ -212,27 +212,31 @@ export function ResultsIndexDashboard({
       {!summary && <CompletenessSummary campaign={campaign} metric={metric} />}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,0.7fr)]">
-        <div className="app-card min-w-0 overflow-hidden border-[var(--line-ghost)] bg-[var(--surface-panel)] p-0">
-          <div className="border-b border-[var(--line-soft)] p-4">
-            <div className="flex items-center gap-1">
-              <h3 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">Mapa do índice · metodologia 0.8</h3>
-              <button type="button" aria-label="Como ler o mapa" title="Como ler o mapa" aria-haspopup="dialog" className="-my-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--brand-teal)] transition hover:bg-[var(--surface-soft)] hover:text-[var(--brand-navy-strong)] focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]" onClick={() => setMapHelpOpen(true)}><CircleHelp aria-hidden="true" className="h-5 w-5" /></button>
+        <div className="app-card flex min-w-0 flex-col overflow-hidden border-[var(--line-ghost)] bg-[var(--surface-panel)] p-0">
+          <div className="space-y-2 border-b border-[var(--line-soft)] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <div className="flex items-center gap-1">
+                <h3 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">Mapa do índice · metodologia 0.8</h3>
+                <button type="button" aria-label="Como ler o mapa" title="Como ler o mapa" aria-haspopup="dialog" className="-my-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--brand-teal)] transition hover:bg-[var(--surface-soft)] hover:text-[var(--brand-navy-strong)] focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]" onClick={() => setMapHelpOpen(true)}><CircleHelp aria-hidden="true" className="h-5 w-5" /></button>
+              </div>
+              <label className={`flex flex-wrap items-center gap-2 type-label ${mobileMapOpen ? "" : "max-sm:hidden"}`}>Escala do mapa
+                <select className="min-h-11 rounded-lg border border-[var(--line-strong)] bg-white px-2 text-sm font-semibold text-[var(--ink)]" value={relative ? "relative" : "fixed"} onChange={e => setRelative(e.target.value === "relative")}>
+                  <option value="fixed">Comparar campanhas · escore fixo</option><option value="relative">Dentro da campanha · posição relativa</option>
+                </select></label>
             </div>
-            <p role="status" className="type-metadata mt-1 text-[var(--ink-soft)]">
+            <p role="status" className="type-metadata text-[var(--ink-soft)]">
               {visiblePoints.length ? <>{mapPoints.length} de {visiblePoints.length} resultados no mapa.</> : "Nenhum ponto corresponde à busca e aos filtros desta campanha."}
             </p>
             {mapPoints.length < visiblePoints.length && <button type="button" className="min-h-11 text-xs text-[var(--ink-soft)] underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]" onClick={() => setMapHelpOpen(true)}>{visiblePoints.length - mapPoints.length} sem localização no mapa — detalhes</button>}
-            <button type="button" aria-expanded={mobileMapOpen} className="mt-2 min-h-11 rounded-lg border border-[var(--line-strong)] bg-white px-4 text-sm font-bold text-[var(--brand-navy-strong)] sm:hidden" onClick={() => setMobileMapOpen((open) => !open)}>{mobileMapOpen ? "Ocultar mapa" : "Ver mapa"}</button>
-            <div className={mobileMapOpen ? "" : "max-sm:hidden"}><label className="my-2 grid max-w-sm gap-1 type-label">Escala do mapa
-              <select className="min-h-11 rounded border bg-white px-2" value={relative ? "relative" : "fixed"} onChange={e => setRelative(e.target.value === "relative")}>
-                <option value="fixed">Comparar campanhas · escore fixo</option><option value="relative">Dentro da campanha · posição relativa</option>
-              </select></label>
-              <ul className="flex flex-wrap gap-x-4 gap-y-1 type-caption">{(relative ? relativeBands : bands).map(b => <li key={b.label}><span aria-hidden="true" className="mr-1 inline-block size-3 rounded-full border" style={{backgroundColor:b.color}} />{!relative && <strong>{bandNames[bands.findIndex(x => x.label === b.label)]} </strong>}{b.label}</li>)}</ul>
-              <p className="type-metadata mt-2">A cor representa o intervalo numérico do escore. Vazado significa sem estimativa ou sem medição. O contorno indica a cobertura da categoria exibida ou determinante (menor cobertura em empate). Contínuo: ≥50% dos reads avaliados; tracejado: 20 a &lt;50%; pontilhado: &lt;20%.</p>
-              {relative && <p className="type-metadata">Mediana {formatValue(population.median)} · P90 {formatValue(population.p90)} · {population.count} pontos com medição. A posição descreve esta campanha. Uma mudança em toda a rede pode preservar as posições.</p>}
-              {selection && <p className="type-metadata" aria-live="polite">{selectedPoint?.siaCode} · {selection.label}{selectedValue !== null && <> · posição {1 + population.sorted.filter(n => n > selectedValue).length} de {population.count}</>}{selection.domain && <> · cobertura {selection.grade} ({domains[selection.domain]})</>}</p>}</div>
+            <button type="button" aria-expanded={mobileMapOpen} className="min-h-11 rounded-lg border border-[var(--line-strong)] bg-white px-4 text-sm font-bold text-[var(--brand-navy-strong)] sm:hidden" onClick={() => setMobileMapOpen((open) => !open)}>{mobileMapOpen ? "Ocultar mapa" : "Ver mapa"}</button>
+            <div className={mobileMapOpen ? "space-y-2" : "space-y-2 max-sm:hidden"}>
+              <ul className="flex flex-wrap gap-x-4 gap-y-1 type-caption">{(relative ? relativeBands : bands).map(b => <li key={b.label}><span aria-hidden="true" className="mr-1 inline-block size-3 rounded-full border" style={{backgroundColor:b.color}} />{!relative && <strong>{bandNames[bands.findIndex(x => x.label === b.label)]} </strong>}{b.label}</li>)}
+                <li><span aria-hidden="true" className="mr-1 inline-block size-3 rounded-full border-2 border-[var(--ink-soft)] bg-white" /><strong>Vazado</strong> sem estimativa ou sem medição</li></ul>
+              {relative && <p className="type-metadata">Mediana {formatValue(population.median)} · P90 {formatValue(population.p90)} · {population.count} pontos com medição.</p>}
+              {selection && <p className="w-fit rounded-full border border-[var(--line-ghost)] bg-white px-3 py-1 type-metadata font-semibold text-[var(--ink)]" title="Ponto selecionado no mapa" aria-live="polite">{selectedPoint?.siaCode} · {selection.label}{selectedValue !== null && <> · posição {1 + population.sorted.filter(n => n > selectedValue).length} de {population.count}</>}{selection.domain && <> · cobertura {selection.grade} ({domains[selection.domain]})</>}</p>}
+            </div>
           </div>
-          <div className={`relative h-[480px] bg-[var(--surface-soft)] max-sm:h-[400px] ${mobileMapOpen ? "" : "max-sm:hidden"}`}>
+          <div className={`relative min-h-[480px] flex-1 bg-[var(--surface-soft)] max-sm:min-h-[400px] ${mobileMapOpen ? "" : "max-sm:hidden"}`}>
             <CampaignHydroMap
               points={mapPoints}
               selectedPointId={selectedPoint?.key}
@@ -274,9 +278,9 @@ export function mapHelpSections(campaign: ResultsCampaign, visiblePoints: Result
   const missing = visiblePoints.filter((point) => !mappedIds.includes(point.key));
   const conditions = [...new Set(campaign.points.map((point) => point.conditionOfUse).filter(Boolean))];
   return [
-    { title: "Índice e cores", text: `${metricLabel(metric)}: escala de 0 a 1, fixa entre campanhas. O índice não representa probabilidade, percentual de dano ou classes de risco. Na escala fixa, roxo indica escore entre 0,70 e 1.` },
-    { title: "Escala relativa", text: "A mediana e o percentil 90 usam todos os pontos medidos da campanha na categoria selecionada, antes dos filtros de busca. Acima do P90 indica posição relativa, não perigo." },
-    { title: "Cobertura", text: "O contorno indica a cobertura da curadoria da categoria vista; no geral, a menor cobertura entre as categorias de maior nota. O símbolo vazado indica ponto sem estimativa ou sem medição utilizável." },
+    { title: "Índice e cores", text: `${metricLabel(metric)}: escala de 0 a 1, fixa entre campanhas. O índice não representa probabilidade, percentual de dano ou classes de risco. A cor representa o intervalo numérico do escore. Na escala fixa, roxo indica escore entre 0,70 e 1.` },
+    { title: "Escala relativa", text: "A mediana e o percentil 90 usam todos os pontos medidos da campanha na categoria selecionada, antes dos filtros de busca. Acima do P90 indica posição relativa, não perigo. A posição descreve esta campanha; uma mudança em toda a rede pode preservar as posições." },
+    { title: "Cobertura", text: "O contorno indica a cobertura da curadoria da categoria vista; no geral, a menor cobertura entre as categorias de maior nota. Contorno contínuo: 50% ou mais dos reads avaliados; tracejado: de 20% a menos de 50%; pontilhado: menos de 20%. O símbolo vazado indica ponto sem estimativa ou sem medição utilizável." },
     { title: "Localização", text: `${mappedIds.length} de ${visiblePoints.length} resultados filtrados no mapa. ${missing.length} sem coordenada utilizável${missing.length ? ` (${missing.map((point) => point.siaCode).join(", ")})` : ""}. Resultados sem coordenada permanecem nos totais e na tabela de resultados da campanha.` },
     { title: "Navegação", text: "Clique simples seleciona o cartão, sem zoom. Duplo clique amplia e centra o ponto no zoom máximo; repetir no mesmo ponto retorna ao enquadramento geral da campanha. Em outro ponto, amplia o novo alvo. Os botões de zoom, enquadramento e Ir para o ponto também estão disponíveis por teclado." },
     ...(conditions.length ? [{ title: "Condição de uso", text: `Condição de uso informada: ${conditions.join("; ")}.` }] : []),
@@ -295,23 +299,31 @@ function CompletenessSummary({ campaign, metric }: { campaign: ResultsCampaign; 
   const mean = completeValues.length
     ? completeValues.reduce((sum, value) => sum + value, 0) / completeValues.length
     : null;
-  const items = [
-    ["Com índice calculado", String(campaign.counts.complete), "pontos com nota 0.8"],
-    ["Com 16S utilizável", String(campaign.points.filter(p => p.components.bacteria.included).length), "pontos na campanha"],
-    ["Com COI utilizável", String(campaign.points.filter(p => p.components.coi.included).length), "pontos na campanha"],
-    ["Com um só marcador", String(campaign.points.filter((point) => point.completeness !== "unavailable" && (!point.components.coi.included || !point.components.bacteria.included)).length), "índice calculado sem o COI ou sem o 16S"],
-    ["Sem estimativa", String(campaign.points.filter((point) => point.estimateState === "sem estimativa").length), "há leitura; a nota não pode ser afirmada"],
-    ["Sem medição", String(campaign.points.filter((point) => point.completeness === "unavailable" && point.estimateState !== "sem estimativa").length), "sem biblioteca utilizável"],
-    ["Total", String(campaign.counts.total), "pontos"],
+  const count = (test: (point: ResultPoint) => boolean) => campaign.points.filter(test).length;
+  const tiles = [
+    ["Com índice calculado", String(campaign.counts.complete), `de ${campaign.counts.total} pontos da campanha`],
     ["Índice médio", formatValue(mean), `${completeValues.length} pontos com índice calculado`],
+    ["Sem estimativa", String(count((point) => point.estimateState === "sem estimativa")), "há leitura; a nota não pode ser afirmada"],
+    ["Sem medição", String(count((point) => point.completeness === "unavailable" && point.estimateState !== "sem estimativa")), "sem biblioteca utilizável"],
   ];
-  return <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Estado das notas da campanha">
-    {items.map(([label, value, suffix]) => <article key={label} className="app-card p-4">
-      <p className="type-label text-[var(--ink-soft)]">{label}</p>
-      <p className="heading-font type-kpi text-[var(--brand-navy-strong)]">{value}</p>
-      <p className="type-caption text-[var(--ink-soft)]">{suffix}</p>
-    </article>)}
-  </div>;
+  const markers = [
+    ["16S utilizável", count((point) => point.components.bacteria.included)],
+    ["COI utilizável", count((point) => point.components.coi.included)],
+    ["um só marcador", count((point) => point.completeness !== "unavailable" && (!point.components.coi.included || !point.components.bacteria.included))],
+  ] as const;
+  return <section className="space-y-3" aria-label="Estado das notas da campanha">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {tiles.map(([label, value, suffix]) => <article key={label} className="app-card p-4">
+        <p className="type-label text-[var(--ink-soft)]">{label}</p>
+        <p className="heading-font type-kpi text-[var(--brand-navy-strong)]">{value}</p>
+        <p className="type-caption text-[var(--ink-soft)]">{suffix}</p>
+      </article>)}
+    </div>
+    <ul className="flex flex-wrap items-center gap-2 type-caption text-[var(--ink-soft)]" aria-label="Marcadores utilizáveis na campanha">
+      <li className="font-semibold">Pontos com</li>
+      {markers.map(([label, value]) => <li key={label} className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line-ghost)] bg-white px-3 py-1"><strong className="tabular-nums text-[var(--brand-navy-strong)]">{value}</strong>{label}</li>)}
+    </ul>
+  </section>;
 }
 
 function PointDetail({ points, onSelect, point, metric, photoUrl, onFocus }: { points: ResultPoint[]; onSelect: (key: string) => void; point: ResultPoint | null; metric: ResultMetric; photoUrl?: string; onFocus: () => void }) {
@@ -329,37 +341,58 @@ function PointDetail({ points, onSelect, point, metric, photoUrl, onFocus }: { p
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={photoUrl} onError={() => setFailedPhoto(photoUrl)} alt={`Foto de campo de ${point.siaCode}`} className="h-full w-full object-cover" />
       <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded bg-black/70 px-2 py-1 text-xs font-bold text-white"><Camera className="h-3.5 w-3.5" />Foto de campo</span>
-    </button> : <div className="flex h-32 items-center justify-center gap-2 bg-[var(--surface-soft)] text-[var(--ink-soft)] type-metadata"><Camera aria-hidden="true" className="h-5 w-5" />Foto de campo indisponível</div>}
+    </button> : <div className="flex h-11 items-center justify-center gap-2 bg-[var(--surface-soft)] text-[var(--ink-soft)] type-caption"><Camera aria-hidden="true" className="h-4 w-4" />Foto de campo indisponível</div>}
     {photoOpen && photoUrl && <RiskPhotoModal point={{ code: point.siaCode, municipality: point.municipality ?? "", photoUrl }} onClose={() => setPhotoOpen(false)} />}
-    <div className="p-5">
-      <p className="type-eyebrow text-[var(--brand-navy-strong)]">{point.siaCode}</p>
-      <h3 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">{point.waterBody || "Ponto sem manancial informado"}</h3>
-      <p className="type-metadata text-[var(--ink-soft)]">{point.municipality || "Município não informado"}</p>
-      <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 type-metadata">
-        <dt className="font-bold text-[var(--ink-soft)]">Estado</dt><dd className="font-bold text-[var(--ink)]">{pointStateLabel(point)}</dd>
-        <dt className="font-bold text-[var(--ink-soft)]">{metricLabel(metric)}</dt><dd className="font-bold tabular-nums text-[var(--brand-navy-strong)]">{formatPointValue(point, range)}</dd>
-        <dt className="font-bold text-[var(--ink-soft)]">Leituras utilizadas</dt><dd>{[point.components.bacteria.included && "16S", point.components.cyanobacteria.included && "cloroplasto (16S)", point.components.coi.included && "COI"].filter(Boolean).join(", ") || "Nenhuma"}</dd>
-        {metricOptions.filter((option) => option.value !== "overall").map((option) => <div key={option.value} className="contents"><dt className="font-bold text-[var(--ink-soft)]">{option.label}</dt><dd className="tabular-nums">{formatPointValue(point, metricRange(point, option.value))}</dd></div>)}
+    <div className="space-y-4 p-5">
+      <div>
+        <p className="type-eyebrow text-[var(--brand-navy-strong)]">SIA {point.siaCode} · {point.campaignCode}</p>
+        <h3 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">{point.waterBody || "Ponto sem manancial informado"}</h3>
+        <p className="type-metadata text-[var(--ink-soft)]">{point.municipality || "Município não informado"}</p>
+      </div>
+      <div className="flex flex-wrap items-end justify-between gap-2 rounded-xl border border-[var(--line-ghost)] bg-white p-3">
+        <dl>
+          <dt className="type-caption font-semibold text-[var(--ink-soft)]">{metricLabel(metric)}</dt>
+          <dd className={`heading-font font-extrabold tabular-nums leading-tight text-[var(--brand-navy-strong)] ${range.value === null ? "text-xl" : "text-3xl"}`}>{formatPointValue(point, range)}</dd>
+        </dl>
+        {range.value !== null && <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line-ghost)] px-2.5 py-0.5 type-caption font-semibold text-[var(--ink)]"><span aria-hidden className="size-2.5 rounded-full" style={{ backgroundColor: bands[fixedBandIndex(range.value)].color }} />{bandNames[fixedBandIndex(range.value)]}</span>}
+      </div>
+      <dl className="grid grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)] items-center gap-x-3 gap-y-2 type-metadata">
+        {metricOptions.filter((option) => option.value !== "overall").map((option) => {
+          const item = metricRange(point, option.value);
+          return <div key={option.value} className="contents"><dt className="font-semibold text-[var(--ink-soft)]">{option.label}</dt>
+            <dd className="flex items-center gap-2 tabular-nums">{item.value !== null && <span aria-hidden className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[var(--surface-soft)]"><span className="block h-full rounded-full" style={{ width: `${Math.max(item.value * 100, item.value ? 3 : 0)}%`, backgroundColor: bands[fixedBandIndex(item.value)].color }} /></span>}<span className="ml-auto font-bold">{formatPointValue(point, item)}</span></dd></div>;
+        })}
+        <dt className="font-semibold text-[var(--ink-soft)]">Estado</dt><dd className="text-right font-semibold text-[var(--ink)]">{pointStateLabel(point)}</dd>
+        <dt className="font-semibold text-[var(--ink-soft)]">Leituras utilizadas</dt><dd className="text-right">{[point.components.bacteria.included && "16S", point.components.cyanobacteria.included && "cloroplasto (16S)", point.components.coi.included && "COI"].filter(Boolean).join(", ") || "Nenhuma"}</dd>
       </dl>
-      {point.riskProfiles?.length ? <section aria-label="Perfis de risco biológico da captação" className="mt-4 border-t border-[var(--line-ghost)] pt-3">
+      {point.riskProfiles?.length ? <section aria-label="Perfis de risco biológico da captação" className="border-t border-[var(--line-ghost)] pt-3">
         <h4 className="type-label font-bold text-[var(--brand-navy-strong)]">Perfis de risco biológico · {point.campaignCode} · SIA {point.siaCode}</h4>
-        <ul className="mt-1 space-y-2 type-metadata">{point.riskProfiles.map((profile) => <li key={profile.key} data-profile={profile.key}><strong>{profile.label}: {profile.score}</strong>
-          <span className="block">{profile.value === null ? (profile.state === "sem medição" ? "Sem biblioteca utilizável." : "Há leitura, mas a nota não pode ser afirmada. Não é zero.") : profile.effects.length || profile.otherContributions ? [...profile.effects.map((effect) => effect.title), ...(profile.otherContributions ? [`${profile.otherContributions} outra(s) contribuição(ões) documentada(s)`] : [])].join("; ") : "Nenhum tipo de efeito com contribuição documentada nesta amostra."}</span></li>)}</ul>
+        <ul className="mt-2 space-y-3 type-metadata">{point.riskProfiles.map((profile) => <li key={profile.key} data-profile={profile.key} className="space-y-1.5">
+          <p className="flex items-center gap-2">{profile.value !== null && <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: bands[fixedBandIndex(profile.value)].color }} />}<strong>{profile.label}: {profile.score}</strong></p>
+          {profile.value === null
+            ? <span className="block">{profile.state === "sem medição" ? "Sem biblioteca utilizável." : "Há leitura, mas a nota não pode ser afirmada. Não é zero."}</span>
+            : profile.effects.length || profile.otherContributions
+              ? <ul className="flex flex-wrap gap-1.5" aria-label="Tipos de efeito com contribuição documentada">
+                  {profile.effects.map((effect) => <li key={effect.title} className="rounded-full bg-[var(--surface-soft)] px-2.5 py-0.5 type-caption text-[var(--ink)]">{effect.title}</li>)}
+                  {profile.otherContributions > 0 && <li className="rounded-full border border-[var(--line-ghost)] px-2.5 py-0.5 type-caption text-[var(--ink-soft)]">+ {profile.otherContributions} {profile.otherContributions === 1 ? "outra contribuição" : "outras contribuições"}</li>}
+                </ul>
+              : <span className="block">Nenhum tipo de efeito com contribuição documentada nesta amostra.</span>}
+        </li>)}</ul>
       </section> : null}
-      <p className="type-caption mt-3 text-[var(--ink-soft)]">{point.coordinates ? `${point.coordinates.latitude.toFixed(5)}, ${point.coordinates.longitude.toFixed(5)}` : "Sem coordenadas — incluído nas contagens e resultados."}</p>
-      <details className="mt-3 border-t border-[var(--line-ghost)] pt-2 type-metadata text-[var(--ink)]">
+      <div className="grid gap-2">
+        <Link href={`/resultados/indice-captacao?${new URLSearchParams({campaign:point.campaignCode.slice(1), sia:point.siaCode, origem:"mapa"})}`} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--brand-navy-strong)] px-3 type-label text-white">Ver resultado completo</Link>
+        <button type="button" disabled={!point.coordinates} onClick={onFocus} className="min-h-11 rounded-lg border border-[var(--line-strong)] bg-white px-3 type-label text-[var(--brand-navy-strong)] disabled:opacity-50">Ir para o ponto</button>
+      </div>
+      {point.conditionOfUse ? <ConditionOfUseNote text={point.conditionOfUse} /> : null}
+      {point.observations ? <p className="type-metadata text-[var(--ink-soft)]">{point.observations}</p> : null}
+      <details className="disclosure border-t border-[var(--line-ghost)] pt-2 type-metadata text-[var(--ink)]">
         <summary className="flex min-h-11 cursor-pointer items-center font-semibold">Situação dos conjuntos utilizados</summary>
         <ul className="space-y-2">{([['bacteria', 'Bactérias (16S)'], ['cyanobacteria', 'Algas (cloroplasto)'], ['coi', 'COI']] as const).map(([key, label]) => {
           const component = point.components[key];
           return <li key={key}><strong>{label}: {component.included ? "utilizado" : "não utilizado"}</strong><p>{analyticalStatusText(component)}</p>{component.reason && <p>Motivo informado: {component.reason}</p>}</li>;
         })}</ul>
+        <p className="type-caption mt-3 text-[var(--ink-soft)]">{point.coordinates ? `Coordenadas: ${point.coordinates.latitude.toFixed(5)}, ${point.coordinates.longitude.toFixed(5)}` : "Sem coordenadas. O ponto continua nas contagens e nos resultados."}</p>
       </details>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button type="button" disabled={!point.coordinates} onClick={onFocus} className="min-h-11 rounded-lg border border-[var(--line-strong)] px-3 type-label text-[var(--brand-navy-strong)] disabled:opacity-50">Ir para o ponto</button>
-        <Link href={`/resultados/indice-captacao?${new URLSearchParams({campaign:point.campaignCode.slice(1), sia:point.siaCode, origem:"mapa"})}`} className="inline-flex min-h-11 items-center rounded-lg bg-[var(--brand-navy-strong)] px-3 type-label text-white">Ver resultado completo</Link>
-      </div>
-      {point.conditionOfUse ? <ConditionOfUseNote text={point.conditionOfUse} /> : null}
-      {point.observations ? <p className="type-metadata mt-3 text-[var(--ink-soft)]">{point.observations}</p> : null}
     </div>
   </aside>;
 }
@@ -373,7 +406,7 @@ export function conditionOfUseParts(text: string) {
 
 function ConditionOfUseNote({ text }: { text: string }) {
   const { label, detail } = conditionOfUseParts(text);
-  return <p className="type-metadata mt-4 flex flex-wrap items-center gap-2 text-[var(--ink-soft)]">
+  return <p className="type-metadata flex flex-wrap items-center gap-2 text-[var(--ink-soft)]">
     <span className="rounded-full bg-[var(--status-warning-soft)] px-2.5 py-0.5 text-xs font-bold text-[var(--status-warning-strong)]">{label}</span>
     {detail ? <span>{detail}</span> : null}
   </p>;
@@ -425,8 +458,8 @@ function ResultsHistory({ campaigns, metric, campaignLabels }: { campaigns: Resu
 }
 
 function TablePanel({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
-  return <details name="result-tables" className="app-card min-w-0 overflow-hidden p-0">
-    <summary className="cursor-pointer p-4 type-panel-title text-[var(--brand-navy-strong)]">{title}</summary>
+  return <details name="result-tables" className="disclosure app-card min-w-0 overflow-hidden p-0">
+    <summary className="ml-4 cursor-pointer py-4 pr-4 type-panel-title text-[var(--brand-navy-strong)]">{title}</summary>
     <p className="px-4 pb-2 type-metadata text-[var(--ink-soft)]">{description}</p>
     <div className="overflow-x-auto">{children}</div>
   </details>;

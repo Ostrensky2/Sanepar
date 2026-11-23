@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { domainEvidenceRoles, pointLibraryEvidence } from "@/lib/capture-index/point-library-evidence";
 import { sampleEffects } from "@/lib/capture-index/sample-effects";
+import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
+import { bandNames, bands, fixedBandIndex } from "@/modules/results/components/capture-map-scale";
 import { formatCaptureIndex } from "@/lib/capture-index/format";
 import type { CaptureIndexView } from "@/lib/capture-index";
 
@@ -26,10 +28,10 @@ function SampleEffects({row, effectId}: {row: CaptureIndexView; effectId?: strin
     {label: "Sem contribuição documentada ou sem avaliação", items: items.filter(item => !item.contributions.length && !item.alerts.length)},
   ];
   return <div aria-label="Tipos metodológicos da amostra" className="divide-y divide-[var(--line-strong)]">
-    {groups.map(group => <details key={group.label} open={group.items.some(item => item.effect.id === effectId) || undefined}>
+    {groups.map(group => <details className="disclosure" key={group.label} open={group.items.some(item => item.effect.id === effectId) || undefined}>
       <summary className="min-h-11 cursor-pointer py-2 font-semibold">{group.label} ({group.items.length})</summary>
       <ul>{group.items.map(({effect, marker, status, contributions, alerts}) => <li key={effect.id} className="py-2">
-      <details open={effect.id === effectId || undefined}>
+      <details className="disclosure" open={effect.id === effectId || undefined}>
         <summary data-requested={effect.id === effectId || undefined} id={`sample-${row.campaign}-${row.sia}-${effect.id}`} className="scroll-mt-24 min-h-11 cursor-pointer py-2"><strong>{effect.title}</strong> · {status}{alerts.length > 0 && " · alerta de baixo suporte"}</summary>
         <div className="space-y-1 break-words type-metadata">
           <p>{marker && <>Marcador: {marker}. </>}{effect.note}</p>
@@ -112,7 +114,7 @@ export function CaptureIndexPanel({ campaign, initialSia = "", effectId, returnH
     {(!openSia || !filtered.length) && back}
     <p className="type-metadata">Escore de 0 a 1 que ordena a atenção entre os pontos. Não é porcentagem, não é probabilidade de dano e não descreve a água tratada. Versão {meta.version} · {meta.status}.</p>
 
-    <details open={!campaign}><summary className="cursor-pointer">Situação de cada categoria: {meta.maturity.map(item => `${item.label}, ${item.level}`).join(" · ")}</summary>
+    <details className="disclosure" open={!campaign}><summary className="cursor-pointer">Situação de cada categoria: {meta.maturity.map(item => `${item.label}, ${item.level}`).join(" · ")}</summary>
       <ul className="space-y-1">{meta.maturity.map(item => <li key={item.label} className="type-metadata break-words"><strong>{item.label} ({item.level}).</strong> {item.text}</li>)}</ul>
     </details>
 
@@ -136,7 +138,7 @@ export function CaptureIndexPanel({ campaign, initialSia = "", effectId, returnH
       <p role="status" className="type-metadata">{filtered.length ? `${filtered.length} ${filtered.length === 1 ? "ponto" : "pontos"} · página ${page + 1} de ${Math.ceil(filtered.length / PAGE)}` : "Nenhum ponto corresponde à busca."}</p>
       {!filtered.length && initialSia && search === initialSia && <div ref={node => { destination.current = node; }} tabIndex={-1} className="scroll-mt-24"><p>SIA {normalizedSia(initialSia)} sem registro nesta campanha.</p>{sameSia(normalizedSia(initialSia))}</div>}
       <ul className="space-y-2">{visible.map(row => <li key={row.sia} className="rounded border p-3">
-        <details open={openSia === normalizedSia(row.sia)}>
+        <details className="disclosure" open={openSia === normalizedSia(row.sia)}>
           <summary className="min-h-11 cursor-pointer py-2" onClick={event => {
             event.preventDefault();
             const sia = normalizedSia(row.sia);
@@ -155,10 +157,10 @@ export function CaptureIndexPanel({ campaign, initialSia = "", effectId, returnH
 
     <p className="break-words"><a className="inline-flex min-h-11 items-center underline" href={exportLink("csv")}>Exportar para leitura (igual à tela)</a> · <a className="inline-flex min-h-11 items-center underline" href={exportLink("audit")}>Exportar para auditoria (valores sem arredondar e fichas)</a></p>
 
-    <details><summary className="cursor-pointer">O que este índice não enxerga</summary>
+    <details className="disclosure"><summary className="cursor-pointer">O que este índice não enxerga</summary>
       <ul className="space-y-1">{meta.blindSpots.map(item => <li key={item.tema} className="break-words"><strong>{item.tema}.</strong> {item.caso}. {item.situacao}</li>)}</ul>
     </details>
-    <details><summary className="cursor-pointer">Como é calculado</summary>
+    <details className="disclosure"><summary className="cursor-pointer">Como é calculado</summary>
       <div className="space-y-1 type-metadata">
         <p>Cada organismo detectado contribui com a sua participação nos reads válidos da biblioteca × a gravidade do efeito (1 a 3) × a aplicabilidade registrada na ficha (1, 0,5, 0,1 ou 0). A soma passa por uma curva logarítmica e vira a nota da categoria, de 0 a 1.</p>
         <p>Metodologia 0.8. A nota de cada categoria é a do marcador de maior nota entre os utilizáveis. A maior das três notas é o piso do índice geral. Um dano distinto e documentado em outra categoria pode reforçar esse piso; repetir o mesmo dano não reforça. Por isso o índice geral pode ficar acima da maior categoria, e não é a média das três. O número da rede é a média dos pontos da campanha, com um voto por ponto.</p>
@@ -177,23 +179,48 @@ export function CaptureIndexPanel({ campaign, initialSia = "", effectId, returnH
 
 export function CapturePointEvidence({row, version, effectId, children, compact}: {row: CaptureIndexView; version: string; effectId?: string; children?: React.ReactNode; compact?: boolean}) {
   return <>
-            <h3 className="type-panel-title">Efeitos da amostra</h3>
-            <p className="type-metadata">{row.campaign} · SIA {row.sia} · Curadoria {version}. Associação documentada, efeito não medido. Uma ficha ausente não demonstra ausência do efeito.</p>
+            <section aria-label={`Perfis de risco biológico · ${row.campaign} · SIA ${row.sia}`} className="space-y-3">
+              <div className="flex items-center gap-1"><h3 className="type-panel-title">Perfis de risco biológico da captação</h3>
+                <ResultsInterpretationHelp title="Perfis de risco biológico da captação">
+                  <p>Cada captação tem dois perfis nesta campanha: o operacional (gosto e odor, obstrução por diatomáceas, incrustação biológica, larvas) e o sanitário (potencial de cianotoxinas, assinatura fecal).</p>
+                  <p>O número é a nota 0.8 da categoria, na escala fixa de 0 a 1. As etiquetas são os tipos de efeito com contribuição documentada nesta amostra. “Define a nota” indica o efeito que está no marcador que definiu a nota da categoria.</p>
+                  <p>O perfil vale para esta campanha e este SIA. É associação documentada nas fichas; o efeito não foi medido, e o índice não mede probabilidade de dano.</p>
+                  <p>Zero é nota calculada. “Sem estimativa” indica que há leitura, mas a nota não pode ser afirmada. “Sem medição” indica que não há biblioteca utilizável. Nenhum dos dois é zero.</p>
+                </ResultsInterpretationHelp></div>
+              <ul className="grid gap-3 sm:grid-cols-2">{row.profiles.map(profile => {
+                const band = profile.value === null ? -1 : fixedBandIndex(profile.value);
+                return <li key={profile.key} data-profile={profile.key} className="min-w-0 space-y-2 rounded-xl border border-[var(--line-ghost)] bg-white p-4">
+                  <p className="type-caption font-semibold text-[var(--ink-soft)]">{profile.label}</p>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <strong className="heading-font text-3xl font-extrabold tabular-nums text-[var(--brand-navy-strong)]">{profile.score}</strong>
+                    {band >= 0 && <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line-ghost)] px-2.5 py-0.5 type-caption font-semibold text-[var(--ink)]"><span aria-hidden className="size-2.5 rounded-full" style={{ backgroundColor: bands[band].color }} />{bandNames[band]}</span>}
+                  </div>
+                  {band >= 0 && <span aria-hidden className="block h-2 overflow-hidden rounded-full bg-[var(--surface-soft)]"><span className="block h-full rounded-full" style={{ width: `${Math.max(profile.value! * 100, profile.value ? 2 : 0)}%`, backgroundColor: bands[band].color }} /></span>}
+                  {profile.value === null
+                    ? <p className="type-metadata text-[var(--ink-soft)]">{profile.state === "sem medição" ? "Sem biblioteca utilizável neste ponto e campanha." : "Há leitura, mas a nota não pode ser afirmada. Não é zero."}</p>
+                    : profile.effects.length || profile.otherContributions
+                      ? <ul className="flex flex-wrap gap-1.5" aria-label="Tipos de efeito com contribuição documentada">
+                          {profile.effects.map(effect => <li key={effect.id} className="rounded-full bg-[var(--surface-soft)] px-2.5 py-1 type-caption font-semibold text-[var(--ink)]">{effect.title}{effect.determining && <span className="font-normal text-[var(--ink-soft)]"> · define a nota</span>}</li>)}
+                          {profile.otherContributions > 0 && <li className="rounded-full border border-[var(--line-ghost)] px-2.5 py-1 type-caption text-[var(--ink-soft)]">+ {profile.otherContributions} {profile.otherContributions === 1 ? "outra contribuição" : "outras contribuições"}</li>}
+                        </ul>
+                      : <p className="type-metadata text-[var(--ink-soft)]">Nenhum tipo de efeito com contribuição documentada.</p>}
+                </li>;
+              })}</ul>
+            </section>
+            <div className="flex items-center gap-1 border-t border-[var(--line-ghost)] pt-4"><h3 className="type-panel-title">Efeitos da amostra</h3>
+              <ResultsInterpretationHelp title="Efeitos da amostra">
+                <p>{row.campaign} · SIA {row.sia} · Curadoria {version}.</p>
+                <p>A lista reúne os tipos de efeito do catálogo e diz, para esta amostra, se há contribuição documentada, só alerta ou nada. É associação documentada: o efeito não foi medido.</p>
+                <p>Uma ficha ausente não demonstra ausência do efeito. A escala vai de 0 a 1 e o índice não mede probabilidade de dano.</p>
+              </ResultsInterpretationHelp></div>
             {!compact && <>
             <p className="type-metadata"><strong>Índice geral: {row.general}</strong> · Marcadores: {row.coverage}.</p>
             <dl className="flex flex-wrap gap-x-5 gap-y-1 type-metadata">{row.domains.map(domain => <div key={domain.key}><dt>{domain.label}</dt><dd className="font-bold tabular-nums">{domain.score}</dd></div>)}</dl>
             </>}
             {row.measured && row.predominant !== "nenhuma contribuição pontuada" && <p className="type-metadata"><strong>Categoria de maior nota:</strong> {row.predominant}. {row.domains.find(domain => domain.label === row.predominant)?.main}</p>}
-            <p className="type-metadata">Escala de 0 a 1. O índice não mede probabilidade de dano.</p>
-            <section aria-label={`Perfis de risco biológico · ${row.campaign} · SIA ${row.sia}`} className="space-y-1 border-t border-[var(--line-strong)] pt-3">
-              <h4 className="type-panel-title">Perfis de risco biológico da captação</h4>
-              <ul className="space-y-2 type-metadata">{row.profiles.map(profile => <li key={profile.key} data-profile={profile.key}><strong>{profile.label}: {profile.score}</strong>
-                <span className="block">{profile.value === null ? (profile.state === "sem medição" ? "Sem biblioteca utilizável neste ponto e campanha." : "Há leitura, mas a nota não pode ser afirmada. Não é zero.") : profile.effects.length || profile.otherContributions ? <>{profile.effects.map(effect => `${effect.title}${effect.determining ? " (no marcador que definiu a nota)" : ""}`).concat(profile.otherContributions ? [`${profile.otherContributions} outra(s) contribuição(ões) documentada(s)`] : []).join("; ")}.</> : "Nenhum tipo de efeito com contribuição documentada nesta amostra."}</span></li>)}</ul>
-              <p className="type-metadata">Perfil desta campanha e deste SIA. Associação documentada nas fichas; o efeito não foi medido.</p>
-            </section>
             {children}
             <SampleEffects row={row} effectId={effectId} />
-            <details><summary className="min-h-11 cursor-pointer py-2 font-semibold">Bases da nota, cobertura e referências</summary>
+            <details className="disclosure"><summary className="min-h-11 cursor-pointer py-2 font-semibold">Bases da nota, cobertura e referências</summary>
             {row.measured ? <>
               <p className="type-metadata">Medição: {row.coverage}. Há {row.elevated}.</p>
               <ul className="space-y-3">{row.domains.map(domain => {
@@ -201,7 +228,7 @@ export function CapturePointEvidence({row, version, effectId, children, compact}
                 return <li key={domain.key}>
                 <strong>{domain.label}: {domain.score}</strong>{domain.maturity !== "com base de comparação" && <span className="type-metadata"> [{domain.maturity}]</span>} <span className="type-metadata">(cobertura da curadoria {domain.confidence}: {domain.evaluated})</span>
                 <p className="type-metadata">{evidence.status}</p><span className="type-metadata">{domain.component ? `Determinado por ${domain.component}. ` : ""}{domain.main}{domain.evaluatedBy ? `. Reads avaliados por marcador: ${domain.evaluatedBy}` : ""}</span>
-                {domain.contributions.length > 0 && <details className="ml-3"><summary className="cursor-pointer type-metadata">Fichas que formam esta nota ({domain.contributions.length})</summary>
+                {domain.contributions.length > 0 && <details className="disclosure ml-3"><summary className="cursor-pointer type-metadata">Fichas que formam esta nota ({domain.contributions.length})</summary>
                   <ul className="space-y-1">{evidence.contributions.map(item => <li key={item.ficha + item.taxon} className="type-metadata break-words">
                     {item.role} · {item.taxon} · {item.reads} reads em {item.component} · gravidade {item.severity} · aplicabilidade {item.applicability} · ficha {item.reference.id ?? "não informada"}
                     {item.reference.source && /^https?:\/\//i.test(item.reference.source) ? <> · <a className="underline" href={item.reference.source} target="_blank" rel="noreferrer">Fonte da ficha {item.reference.id ?? "não informada"}</a></> : <> · Fonte: {item.reference.source ?? "não informada"}</>}
