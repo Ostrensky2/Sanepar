@@ -1,7 +1,7 @@
 import {
   CaptureResultViewsPanel,
-  type CaptureView,
 } from "./capture-result-views";
+import { isCaptureView, type CaptureView } from "@/lib/capture-index/result-tabs";
 import { InvalidCampaignNotice } from "./invalid-campaign-notice";
 import { PageHeader } from "./page-header";
 import { SectionTabs } from "./section-tabs";
@@ -34,9 +34,7 @@ export function CaptureResultsEntry({
         typeof sia !== "string" ||
         !/^(?:SIA[- ]*)?\d{1,9}$/i.test(sia))) ||
     (vista !== undefined &&
-      vista !== "rede" &&
-      vista !== "campanha" &&
-      vista !== "ponto") ||
+      !isCaptureView(vista)) ||
     (effect !== undefined && !effects.some((item) => item.id === effect)) ||
     (origem !== undefined && origem !== "efeitos" && origem !== "mapa") ||
     (fromCampaign !== undefined &&

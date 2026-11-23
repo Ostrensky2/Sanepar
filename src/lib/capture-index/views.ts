@@ -53,6 +53,7 @@ export function captureResultViews(
   const network = groups.map((group, i) => ({
     campaign: campaigns[i],
     all: summary(group),
+    max: distribution(group.map((row) => row.general)).max,
     ...histogram(group.map((row) => row.general)),
     cohort: summary(group.filter((row) => common.has(row.sia))),
   }));
@@ -70,10 +71,39 @@ export function captureResultViews(
       (row) => row.components[name].status === "disponível",
     ).length,
   }));
+  const stats = distribution(selected.map((row) => row.general));
+  // Só leitura da saída versionada: posição, notas e categoria determinante já vêm do motor.
+  const ranking = selected
+    .filter((row) => row.general !== null)
+    .sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity))
+    .map((row) => ({
+      sia: row.sia,
+      rank: row.rank,
+      general: row.general,
+      predominant: row.predominant ? captureDomainLabels[row.predominant] : null,
+      domains: captureDomains.map((key) => row.scores[key]?.score ?? null),
+      coi: row.components.COI.status === "disponível",
+      alerts: row.alerts.length,
+    }));
   return {
     version: captureIndexMeta.version,
     network,
     categories,
+    categoryMeans: captureDomains.map((key) => {
+      const values = selected
+        .map((row) => row.scores[key]?.score ?? null)
+        .filter((v): v is number => v !== null);
+      return values.length ? values.reduce((s, n) => s + n, 0) / values.length : null;
+    }),
+    campaignStats: {
+      total: selected.length,
+      measured: stats.count,
+      mean: stats.count ? stats.sorted.reduce((s, n) => s + n, 0) / stats.count : null,
+      median: stats.median,
+      p90: stats.p90,
+      max: stats.max,
+    },
+    ranking,
     markers,
     points: selected
       .map((row) => row.sia)

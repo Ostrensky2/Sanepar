@@ -1,242 +1,497 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { bands } from "@/modules/results/components/capture-map-scale";
+import {
+  Bug,
+  ChartColumnBig,
+  Download,
+  FileText,
+  LayoutDashboard,
+  Map as MapIcon,
+  MapPin,
+  Microscope,
+} from "lucide-react";
+import { bands, bandNames, fixedBandIndex } from "@/modules/results/components/capture-map-scale";
 import { formatCaptureIndex } from "@/lib/capture-index/format";
 import type { CaptureResultViews } from "@/lib/capture-index/views";
+import { defaultCampaigns } from "@/lib/campaign-management";
+import type { ResultsCampaign } from "@/modules/results";
+import { ResultsIndexDashboard } from "@/modules/results/components/results-index-dashboard";
 import { CapturePointEvidence } from "./capture-index-panel";
+import { CaptureEffectsSummary } from "./capture-effects-summary";
+import { CaptureExoticsReconciliation } from "./capture-exotics-reconciliation";
 import { PointMediaGallery } from "@/modules/results/components/point-media-gallery";
 
-const labels = {
-  rede: "Visão geral da rede",
-  campanha: "Por campanha",
-  ponto: "Por ponto",
-} as const;
-export type CaptureView = keyof typeof labels;
-const action =
-  "inline-flex min-h-11 items-center rounded-md px-3 font-semibold text-[var(--brand-navy-strong)] underline focus-visible:outline-2";
-const control =
-  "block min-h-11 w-full rounded-lg border border-[var(--line-strong)] bg-[var(--surface-panel)] px-3";
-const cell = "px-2 py-2 text-left align-top tabular-nums";
-const frame = "app-card min-w-0 space-y-4 p-4 sm:p-6";
+import { captureViews, type CaptureView } from "@/lib/capture-index/result-tabs";
+export type { CaptureView };
 
-function Score({ value }: { value: number | null }) {
+/** Subabas da página de resultados. Cada uma responde a uma pergunta; nenhuma recalcula o índice. */
+const tabs: Record<CaptureView, { label: string; icon: typeof MapIcon }> = {
+  rede: { label: "Visão geral", icon: LayoutDashboard },
+  campanha: { label: "Por campanha", icon: ChartColumnBig },
+  mapa: { label: "Mapa", icon: MapIcon },
+  efeitos: { label: "Tipos de efeito", icon: Microscope },
+  exoticas: { label: "Exóticas", icon: Bug },
+  ponto: { label: "Por ponto", icon: MapPin },
+};
+
+const bandText = (value: number | null) => {
+  const i = fixedBandIndex(value);
+  return i < 0 ? null : { ...bands[i], name: bandNames[i], index: i };
+};
+const seasons = ["Verão 2026", "Outono 2026", "Inverno 2026"];
+
+const link =
+  "inline-flex min-h-11 items-center gap-2 rounded-md px-1 font-semibold text-[var(--brand-navy-strong)] underline underline-offset-4 focus-visible:outline-2";
+const button =
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[var(--line-strong)] bg-white px-4 font-semibold text-[var(--brand-navy-strong)] transition hover:bg-[var(--surface-soft)] focus-visible:outline-2";
+const card = "app-card min-w-0 p-4 sm:p-6";
+const cell = "px-3 py-2.5 text-left align-middle tabular-nums";
+
+function BandChip({ value }: { value: number | null }) {
+  const band = bandText(value);
+  if (!band)
+    return (
+      <span className="inline-flex items-center gap-1.5 text-sm text-[var(--text-secondary)]">
+        <span aria-hidden className="size-3 rounded-full border-2 border-[var(--ink-soft)] bg-transparent" />
+        Sem medição
+      </span>
+    );
   return (
-    <span className="block tabular-nums">
-      <strong>{formatCaptureIndex(value)}</strong>
-      {value !== null && (
-        <span
-          aria-hidden="true"
-          className="mt-1 block h-1.5 max-w-40 overflow-hidden rounded bg-[var(--surface-soft)]"
-        >
-          <span
-            className="block h-full bg-[var(--brand-navy)]"
-            style={{ width: `${value * 100}%` }}
-          />
-        </span>
-      )}
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-[var(--line-ghost)] bg-white px-2.5 py-0.5 text-sm font-semibold text-[var(--ink)]">
+      <span aria-hidden className="size-3 rounded-full" style={{ backgroundColor: band.color }} />
+      {band.name}
     </span>
   );
 }
 
-function DistributionChart({
-  rows,
-  title,
-}: {
-  rows: { name: string; bins: number[]; missing: number }[];
-  title: string;
-}) {
-  const legend = [
-    ...bands,
-    { label: "Sem medição", color: "var(--line-strong)" },
-  ];
+function Meter({ value, label }: { value: number | null; label?: string }) {
+  const band = bandText(value);
   return (
-    <figure className="space-y-3">
-      <figcaption className="type-panel-title">{title}</figcaption>
-      <p className="type-metadata">
-        Cada barra representa 100% dos pontos registrados na linha. As faixas
-        mostram escores, não classes de risco.
+    <div className="min-w-0">
+      {label && <p className="truncate text-xs font-semibold text-[var(--text-secondary)]">{label}</p>}
+      <div className="flex items-center gap-2">
+        <span aria-hidden className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-[var(--surface-muted)]">
+          <span className="block h-full rounded-full" style={{ width: `${Math.max((value ?? 0) * 100, value ? 2 : 0)}%`, backgroundColor: band?.color }} />
+        </span>
+        <span className="w-12 text-right text-sm font-bold tabular-nums">{formatCaptureIndex(value)}</span>
+      </div>
+    </div>
+  );
+}
+
+function Legend() {
+  return (
+    <ul className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-[var(--text-secondary)]" aria-label="Faixas da escala fixa de 0 a 1">
+      {bands.map((b, i) => (
+        <li key={b.label} className="inline-flex items-center gap-1.5">
+          <span aria-hidden className="size-3 rounded-full" style={{ backgroundColor: b.color }} />
+          <strong className="text-[var(--ink)]">{bandNames[i]}</strong> {b.label}
+        </li>
+      ))}
+      <li className="inline-flex items-center gap-1.5">
+        <span aria-hidden className="size-3 rounded-full border-2 border-[var(--ink-soft)]" />
+        <strong className="text-[var(--ink)]">Sem medição</strong>
+      </li>
+    </ul>
+  );
+}
+
+/** Barra 100% empilhada; cada segmento tem número quando cabe. */
+function StackedBar({ bins, missing, tall }: { bins: number[]; missing: number; tall?: boolean }) {
+  const counts = [...bins, missing];
+  const n = counts.reduce((s, x) => s + x, 0);
+  return (
+    <div aria-hidden className={`flex overflow-hidden rounded-md ${tall ? "h-9" : "h-6"} bg-[var(--surface-muted)]`}>
+      {counts.map((count, i) =>
+        count ? (
+          <span
+            key={i}
+            className="flex items-center justify-center text-xs font-bold"
+            style={{
+              width: `${(100 * count) / n}%`,
+              backgroundColor: i < bands.length ? bands[i].color : "transparent",
+              color: i >= 3 && i < bands.length ? "#fff" : "var(--ink)",
+              border: i === bands.length ? "2px dashed var(--ink-soft)" : undefined,
+            }}
+          >
+            {(100 * count) / n >= 6 ? count : ""}
+          </span>
+        ) : null,
+      )}
+    </div>
+  );
+}
+
+function Kpi({ label, value, note, accent }: { label: string; value: string; note?: string; accent?: string }) {
+  return (
+    <div className="min-w-0 rounded-xl border border-[var(--line-ghost)] bg-white p-4">
+      <p className="text-sm font-semibold text-[var(--text-secondary)]">{label}</p>
+      <p className="mt-1 text-3xl font-extrabold tabular-nums text-[var(--brand-navy-strong)]" style={accent ? { color: accent } : undefined}>
+        {value}
       </p>
-      {rows.map((row) => {
-        const counts = [...row.bins, row.missing],
-          n = counts.reduce((sum, x) => sum + x, 0);
-        return (
-          <div key={row.name}>
-            <p className="type-label">
-              {row.name} · N={n}
-            </p>
-            <div
-              aria-hidden="true"
-              className="flex h-5 overflow-hidden rounded-sm border border-[var(--line-strong)]"
-            >
-              {counts.map((count, i) => (
-                <span
-                  key={i}
-                  style={{
-                    width: `${n ? (100 * count) / n : 0}%`,
-                    backgroundColor: legend[i].color,
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        );
-      })}
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 type-metadata">
-        {legend.map((item) => (
-          <li key={item.label}>
-            <span
-              aria-hidden="true"
-              className="mr-1 inline-block size-3 rounded-sm border border-[var(--line-strong)]"
-              style={{ backgroundColor: item.color }}
-            />
-            {item.label}
-          </li>
-        ))}
-      </ul>
-      <details>
-        <summary className="min-h-11 cursor-pointer py-2 font-semibold">
-          Consultar a distribuição em tabela
-        </summary>
-        <div className="overflow-x-auto">
-          <table className="w-full type-metadata">
-            <caption className="sr-only">{title} · número de pontos</caption>
-            <thead>
-              <tr>
-                <th className={cell} scope="col">
-                  Intervalo
-                </th>
-                {rows.map((row) => (
-                  <th className={cell} scope="col" key={row.name}>
-                    {row.name}
-                  </th>
+      {note && <p className="mt-1 text-sm text-[var(--text-secondary)]">{note}</p>}
+    </div>
+  );
+}
+
+function SectionHead({ title, children }: { title: string; children?: React.ReactNode }) {
+  return (
+    <header className="mb-4 space-y-1">
+      <h2 className="text-xl font-bold text-[var(--brand-navy-strong)]">{title}</h2>
+      {children && <p className="max-w-3xl text-[var(--text-secondary)]">{children}</p>}
+    </header>
+  );
+}
+
+function Network({ data, href }: { data: CaptureResultViews; href: (view: CaptureView, n?: number) => string }) {
+  return (
+    <div className="space-y-6">
+      <section aria-label="Campanhas medidas" className="grid gap-4 md:grid-cols-3">
+        {data.network.map((row) => {
+          const n = row.bins.reduce((s, x) => s + x, 0) + row.missing;
+          const attention = row.bins.slice(2).reduce((s, x) => s + x, 0);
+          return (
+            <article key={row.campaign} className={card + " flex flex-col gap-4"}>
+              <header className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-wide text-[var(--text-teal)]">Campanha {row.campaign}</p>
+                  <h3 className="text-lg font-bold">{seasons[row.campaign - 1]}</h3>
+                </div>
+                <span className="rounded-full bg-[var(--surface-soft)] px-3 py-1 text-sm font-semibold">
+                  {row.all.measured} de {row.all.total} pontos
+                </span>
+              </header>
+              <dl className="grid grid-cols-3 gap-2">
+                {([["Média", row.all.mean], ["P90", row.all.p90], ["Maior", row.max]] as const).map(([label, value]) => (
+                  <div key={label}>
+                    <dt className="text-sm text-[var(--text-secondary)]">{label}</dt>
+                    <dd className="text-2xl font-extrabold tabular-nums text-[var(--brand-navy-strong)]">{formatCaptureIndex(value)}</dd>
+                  </div>
                 ))}
+              </dl>
+              <div className="space-y-2">
+                <StackedBar bins={row.bins} missing={row.missing} tall />
+                <p className="text-sm text-[var(--text-secondary)]">
+                  <strong className="text-[var(--ink)]">{attention}</strong> de {n} pontos na faixa Atenção ou acima.
+                </p>
+              </div>
+              <Link href={href("campanha", row.campaign)} className={button + " mt-auto"}>
+                Abrir a campanha {row.campaign}
+              </Link>
+            </article>
+          );
+        })}
+      </section>
+
+      <section className={card}>
+        <SectionHead title="Quantos pontos em cada faixa">
+          Índice geral por ponto, escala fixa de 0 a 1. Cada campanha é lida separadamente; as barras só ficam lado a lado para consulta.
+        </SectionHead>
+        <div className="space-y-4">
+          {data.network.map((row) => (
+            <div key={row.campaign} className="grid items-center gap-2 sm:grid-cols-[7rem_1fr]">
+              <p className="font-bold">C{row.campaign} · {seasons[row.campaign - 1].split(" ")[0]}</p>
+              <StackedBar bins={row.bins} missing={row.missing} tall />
+            </div>
+          ))}
+        </div>
+        <div className="mt-5 border-t border-[var(--line-ghost)] pt-4">
+          <Legend />
+        </div>
+        <details className="mt-4">
+          <summary className="min-h-11 cursor-pointer py-2 font-semibold">Ver a contagem em tabela</summary>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--line-strong)]">
+                  <th className={cell} scope="col">Faixa</th>
+                  {data.network.map((row) => <th key={row.campaign} className={cell} scope="col">C{row.campaign}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {[...bandNames, "Sem medição"].map((name, i) => (
+                  <tr key={name} className="border-b border-[var(--line-ghost)]">
+                    <th className={cell} scope="row">{name}{i < bands.length ? ` (${bands[i].label})` : ""}</th>
+                    {data.network.map((row) => <td key={row.campaign} className={cell}>{row.bins[i] ?? row.missing}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </section>
+
+      <section className={card}>
+        <SectionHead title="Os mesmos pontos nas três campanhas">
+          Só os SIAs com índice nas três campanhas, para comparar sem efeito da troca de pontos. Cada ponto pesa igual.
+        </SectionHead>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[32rem] text-sm">
+            <thead>
+              <tr className="border-b border-[var(--line-strong)]">
+                {["Campanha", "Pontos", "Média", "P90"].map((h) => <th key={h} scope="col" className={cell}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
-              {legend.map((item, i) => (
-                <tr
-                  key={item.label}
-                  className="border-t border-[var(--line-strong)]"
-                >
-                  <th className={cell} scope="row">
-                    {item.label}
-                  </th>
-                  {rows.map((row) => (
-                    <td className={cell} key={row.name}>
-                      {row.bins[i] ?? row.missing}
-                    </td>
-                  ))}
+              {data.network.map((row) => (
+                <tr key={row.campaign} className="border-b border-[var(--line-ghost)]">
+                  <th scope="row" className={cell}>C{row.campaign} · {seasons[row.campaign - 1]}</th>
+                  <td className={cell}>{row.cohort.measured}</td>
+                  <td className={cell}><Meter value={row.cohort.mean} /></td>
+                  <td className={cell}><Meter value={row.cohort.p90} /></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </details>
-    </figure>
+        <p className="mt-3 text-sm text-[var(--text-secondary)]">
+          O P90 usa a posição arredondada para cima, sem interpolação. Zero é nota calculada; ponto sem medição fica fora da média e do P90.
+        </p>
+      </section>
+    </div>
   );
 }
 
-function Network({ data }: { data: CaptureResultViews }) {
+type Place = { waterBody: string | null; municipality: string | null };
+function usePlaces(campaign?: number) {
+  const [places, setPlaces] = useState<Map<string, Place>>(new Map());
+  useEffect(() => {
+    if (!campaign) return;
+    const controller = new AbortController();
+    fetch("/api/results/capture-index/campaigns", { cache: "no-store", signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body: { campaigns: ResultsCampaign[] } | null) => {
+        if (!body || controller.signal.aborted) return;
+        const points = body.campaigns.find((c) => c.campaignCode === `C${campaign}`)?.points ?? [];
+        setPlaces(new Map(points.map((p) => [p.siaCode, { waterBody: p.waterBody, municipality: p.municipality }])));
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [campaign]);
+  return places;
+}
+const placeName = (p?: Place) => [p?.waterBody, p?.municipality].filter(Boolean).join(" · ");
+
+function Campaign({ data, number, href }: { data: CaptureResultViews; number: number; href: (v: CaptureView, n?: number, sia?: string) => string }) {
+  const places = usePlaces(number);
+  const [all, setAll] = useState(false);
+  const s = data.campaignStats;
+  const overall = data.network.find((row) => row.campaign === number);
+  const shown = all ? data.ranking : data.ranking.slice(0, 10);
   return (
-    <section className={frame}>
-      <h2 className="type-section-title">Comparação da rede</h2>
-      <p>
-        Compare a média e o percentil 90 (P90) do índice geral na escala fixa de
-        0 a 1. Cada ponto medido tem o mesmo peso. O P90 usa a posição
-        arredondada para cima, sem interpolação. Zero é uma nota calculada. Pontos sem medição ficam fora da média e do P90.
-      </p>
-      <DistributionChart
-        title="Distribuição do índice geral por campanha"
-        rows={data.network.map((row) => ({ ...row, name: "C" + row.campaign }))}
-      />
-      {(["all", "cohort"] as const).map((scope) => (
-        <table className="w-full border-collapse type-metadata" key={scope}>
-          <caption className="pb-2 text-left">
-            <strong className="type-panel-title">
-              {scope === "all"
-                ? "Rede medida em cada campanha"
-                : "Mesmos pontos nas três campanhas"}
-            </strong>
-            <span className="block">
-              {scope === "all"
-                ? "N medidos / registrados. A composição pode variar entre campanhas."
-                : "Coorte comum de SIAs com índice medido em C1, C2 e C3. A cobertura dos marcadores pode variar."}
-            </span>
-          </caption>
-          <thead>
-            <tr>
-              {["Campanha", "N", "Média", "P90"].map((label) => (
-                <th scope="col" className={cell} key={label}>
-                  {label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.network.map((row) => (
-              <tr
-                key={row.campaign}
-                className="border-t border-[var(--line-strong)]"
-              >
-                <th scope="row" className={cell}>
-                  C{row.campaign}
-                </th>
-                <td className={cell}>
-                  {row[scope].measured}
-                  {scope === "all" && ` / ${row.all.total}`}
-                </td>
-                <td className={cell}>
-                  <Score value={row[scope].mean} />
-                </td>
-                <td className={cell}>
-                  <Score value={row[scope].p90} />
-                </td>
-              </tr>
+    <div className="space-y-6">
+      <section aria-label="Números da campanha" className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <Kpi label="Pontos medidos" value={`${s.measured}`} note={`de ${s.total} registrados`} />
+        <Kpi label="Índice médio" value={formatCaptureIndex(s.mean)} note="cada ponto pesa igual" />
+        <Kpi label="Mediana" value={formatCaptureIndex(s.median)} note="metade dos pontos abaixo" />
+        <Kpi label="Percentil 90" value={formatCaptureIndex(s.p90)} note="10% dos pontos acima" />
+        <Kpi label="Maior índice" value={formatCaptureIndex(s.max)} note={data.ranking[0] ? `SIA ${data.ranking[0].sia}` : undefined} accent={bandText(s.max)?.color} />
+      </section>
+
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_1fr]">
+        {overall && (
+          <section className={card}>
+            <SectionHead title="Pontos por faixa do índice geral">Quantos pontos da C{number} caem em cada faixa da escala fixa.</SectionHead>
+            <ul className="space-y-3">
+              {[...bandNames, "Sem medição"].map((name, i) => {
+                const count = i < bands.length ? overall.bins[i] : overall.missing;
+                const pct = s.total ? (100 * count) / s.total : 0;
+                return (
+                  <li key={name} className="grid grid-cols-[9.5rem_1fr_4.5rem] items-center gap-3">
+                    <span className="inline-flex items-center gap-2 text-sm font-semibold">
+                      <span aria-hidden className={`size-3 shrink-0 rounded-full ${i === bands.length ? "border-2 border-[var(--ink-soft)]" : ""}`} style={i < bands.length ? { backgroundColor: bands[i].color } : undefined} />
+                      {name}
+                    </span>
+                    <span aria-hidden className="h-4 overflow-hidden rounded bg-[var(--surface-soft)]">
+                      <span className="block h-full rounded" style={{ width: `${pct}%`, backgroundColor: i < bands.length ? bands[i].color : "var(--line-strong)" }} />
+                    </span>
+                    <span className="text-right text-sm tabular-nums"><strong>{count}</strong> · {Math.round(pct)}%</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        <section className={card}>
+          <SectionHead title="As três categorias">O índice geral é o maior dos três. A barra mostra a distribuição dos pontos em cada categoria.</SectionHead>
+          <div className="space-y-5">
+            {data.categories.map((category, i) => (
+              <div key={category.name} className="space-y-2">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h3 className="font-bold">{category.name}</h3>
+                  <span className="text-sm text-[var(--text-secondary)]">média <strong className="text-[var(--ink)]">{formatCaptureIndex(data.categoryMeans[i])}</strong></span>
+                </div>
+                <StackedBar bins={category.bins} missing={category.missing} />
+              </div>
             ))}
-          </tbody>
-        </table>
-      ))}
-    </section>
+          </div>
+          <div className="mt-5 border-t border-[var(--line-ghost)] pt-4"><Legend /></div>
+        </section>
+      </div>
+
+      <section className={card}>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <SectionHead title={all ? `Todos os ${data.ranking.length} pontos medidos` : "Os 10 pontos com maior índice"}>
+            Ordem de atenção dentro da C{number}. Posição não é probabilidade de dano.
+          </SectionHead>
+          <Link href={href("mapa", number)} className={button}><MapIcon className="size-4" aria-hidden />Ver no mapa</Link>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[56rem] text-sm">
+            <thead>
+              <tr className="border-b border-[var(--line-strong)] text-[var(--text-secondary)]">
+                <th scope="col" className={cell}>Posição</th>
+                <th scope="col" className={cell}>Ponto</th>
+                <th scope="col" className={cell}>Índice geral</th>
+                <th scope="col" className={cell + " w-36"}>Danos físicos e ambientais</th>
+                <th scope="col" className={cell + " w-36"}>Riscos operacionais</th>
+                <th scope="col" className={cell + " w-36"}>Perigo à saúde</th>
+                <th scope="col" className={cell}><span className="sr-only">Abrir</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((row) => (
+                <tr key={row.sia} className="border-b border-[var(--line-ghost)] hover:bg-[var(--surface-soft)]">
+                  <td className={cell}><span className="inline-flex size-8 items-center justify-center rounded-full bg-[var(--surface-soft)] font-bold">{row.rank}</span></td>
+                  <th scope="row" className={cell}>
+                    <span className="block font-bold">SIA {row.sia}</span>
+                    <span className="block font-normal text-[var(--text-secondary)]">{placeName(places.get(row.sia)) || (row.coi ? "16S e COI" : "só 16S")}</span>
+                  </th>
+                  <td className={cell}>
+                    <span className="block text-lg font-extrabold">{formatCaptureIndex(row.general)}</span>
+                    <BandChip value={row.general} />
+                  </td>
+                  {row.domains.map((value, i) => (
+                    <td key={i} className={cell}><Meter value={value} /></td>
+                  ))}
+                  <td className={cell}><Link className={link} href={href("ponto", number, row.sia)}>Ficha</Link></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {data.ranking.length > 10 && (
+          <button type="button" className={button + " mt-4"} onClick={() => setAll(!all)}>
+            {all ? "Mostrar só os 10 primeiros" : `Mostrar os ${data.ranking.length} pontos`}
+          </button>
+        )}
+      </section>
+
+      <section className={card}>
+        <SectionHead title="O que foi medido">Biblioteca utilizável por marcador. O cloroplasto (algas) é uma leitura do próprio 16S, não um terceiro marcador.</SectionHead>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {data.markers.map((m) => (
+            <div key={m.name}>
+              <div className="flex justify-between text-sm"><strong>{m.name}</strong><span className="tabular-nums">{m.usable} de {s.total} pontos</span></div>
+              <span aria-hidden className="mt-1 block h-3 overflow-hidden rounded-full bg-[var(--surface-muted)]">
+                <span className="block h-full rounded-full bg-[var(--brand-teal)]" style={{ width: `${s.total ? (100 * m.usable) / s.total : 0}%` }} />
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
   );
 }
 
-function Campaign({
-  data,
-  number,
-}: {
-  data: CaptureResultViews;
-  number: number;
-}) {
+function MapTab({ campaign }: { campaign: number }) {
+  const [state, setState] = useState<ResultsCampaign[] | "error" | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/results/capture-index/campaigns", { cache: "no-store", signal: controller.signal })
+      .then(async (r) => { if (!r.ok) throw new Error(); return ((await r.json()) as { campaigns: ResultsCampaign[] }).campaigns; })
+      .then((c) => { if (!controller.signal.aborted) setState(c); })
+      .catch(() => { if (!controller.signal.aborted) setState("error"); });
+    return () => controller.abort();
+  }, []);
+  const labels = Object.fromEntries(defaultCampaigns.map((item, index) => [`C${index + 1}`, item.title]));
+  if (state === "error") return <p role="alert" className={card}>Não foi possível carregar o mapa agora.</p>;
+  if (!state) return <section className="app-card h-96 animate-pulse bg-[var(--surface-soft)]" aria-label="Carregando o mapa" />;
+  return <ResultsIndexDashboard key={campaign} campaigns={state} initialCampaignCode={`C${campaign}`} campaignLabels={labels} embedded />;
+}
+
+function Point({ data, campaign, sia, effect, href }: { data: CaptureResultViews; campaign: number; sia?: string; effect?: string; href: (v: CaptureView, n?: number, sia?: string) => string }) {
+  const router = useRouter();
+  const places = usePlaces(campaign);
+  const row = sia ? data.ranking.find((r) => r.sia === sia) : undefined;
+  const options = useMemo(() => [...data.points].sort((a, b) => Number(a) - Number(b)), [data.points]);
   return (
-    <section className={frame}>
-      <h2 className="type-section-title">
-        Distribuição dos escores · C{number}
-      </h2>
-      <p>
-        Contagem de pontos por intervalo, na escala de 0 a 1. Cada linha
-        representa uma categoria. A barra usa como denominador os{" "}
-        {data.points.length} pontos registrados.
-      </p>
-      <DistributionChart
-        title="Distribuição por categoria"
-        rows={data.categories}
-      />
-      <h3 className="type-panel-title">Cobertura por marcador</h3>
-      <ul>
-        {data.markers.map((m) => (
-          <li key={m.name}>
-            <strong>{m.name}</strong> · biblioteca utilizável em {m.usable} de{" "}
-            {data.points.length} pontos.
-          </li>
-        ))}
-      </ul>
-      <p className="type-metadata">
-        O cloroplasto é uma leitura do 16S. Zero é uma nota calculada. Sem
-        medição indica ausência de biblioteca utilizável.
-      </p>
-    </section>
+    <div className="space-y-6">
+      <section className={card}>
+        <label className="block max-w-xl text-sm font-semibold">
+          Ponto de monitoramento na C{campaign}
+          <select
+            className="mt-1 block min-h-11 w-full rounded-lg border border-[var(--line-strong)] bg-white px-3 text-base"
+            value={sia && data.points.includes(sia) ? sia : ""}
+            onChange={(e) => router.push(href("ponto", campaign, e.target.value))}
+          >
+            <option value="" disabled>Escolha o SIA</option>
+            {options.map((id) => (
+              <option key={id} value={id}>SIA {id}{placeName(places.get(id)) ? ` · ${placeName(places.get(id))}` : ""}</option>
+            ))}
+          </select>
+        </label>
+        {!sia && <p className="mt-3 text-[var(--text-secondary)]">Escolha um ponto, ou abra a ficha pela tabela da aba Por campanha.</p>}
+      </section>
+
+      {sia && !data.point && <p role="status" className={card}>SIA {sia} sem registro nesta campanha.</p>}
+      {sia && data.point && (
+        <>
+          <section className={card}>
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,18rem)_1fr]">
+              <div className="space-y-2 rounded-xl p-5 text-white" style={{ background: "linear-gradient(160deg, var(--brand-navy-strong), var(--brand-navy))" }}>
+                <p className="text-sm font-semibold uppercase tracking-wide opacity-80">SIA {sia} · C{campaign}</p>
+                <p className="text-lg font-bold leading-snug">{placeName(places.get(sia)) || "Ponto de captação"}</p>
+                <p className="pt-2 text-sm opacity-80">Índice geral</p>
+                <p className="text-5xl font-extrabold tabular-nums">{data.point.general}</p>
+                <div className="pt-1"><BandChip value={row?.general ?? null} /></div>
+                {row?.rank && <p className="pt-2 text-sm">{row.rank}º de {data.ranking.length} pontos medidos na campanha</p>}
+              </div>
+              <div className="min-w-0 space-y-5">
+                <div>
+                  <h2 className="text-xl font-bold text-[var(--brand-navy-strong)]">Categorias</h2>
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    {row?.predominant ? <>Nota determinada por <strong className="text-[var(--ink)]">{row.predominant}</strong>. </> : null}
+                    Marcadores: {data.point.coverage}.
+                  </p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  {data.point.domains.map((d, i) => (
+                    <Meter key={d.key} value={row?.domains[i] ?? null} label={d.label} />
+                  ))}
+                </div>
+                <div>
+                  <h3 className="mb-2 font-bold">O mesmo ponto em cada campanha</h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    {data.history.map((h) => (
+                      <Link
+                        key={h.campaign}
+                        href={href("ponto", h.campaign, sia)}
+                        aria-current={h.campaign === campaign ? "page" : undefined}
+                        className={`rounded-xl border p-3 transition hover:bg-[var(--surface-soft)] ${h.campaign === campaign ? "border-[var(--brand-navy)] ring-2 ring-[var(--brand-blue-soft)]" : "border-[var(--line-ghost)]"}`}
+                      >
+                        <span className="block text-sm font-semibold text-[var(--text-secondary)]">C{h.campaign} · {seasons[h.campaign - 1].split(" ")[0]}</span>
+                        <span className="block text-2xl font-extrabold tabular-nums">{h.present ? formatCaptureIndex(h.score) : "—"}</span>
+                        <span className="block text-sm">{h.present ? <BandChip value={h.score} /> : "Sem registro"}</span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section className={card + " space-y-4"}>
+            <CapturePointEvidence row={data.point} version={data.version} effectId={effect} />
+          </section>
+          <section className={card}>
+            <PointMediaGallery key={campaign + "-" + sia} campaign={campaign} sia={sia} />
+          </section>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -250,63 +505,51 @@ type Props = {
   from?: string;
   back?: string;
 };
-export function CaptureResultViewsPanel({
-  path,
-  view,
-  campaign,
-  sia,
-  effect,
-  origin,
-  from,
-  back,
-}: Props) {
+const legacyHash: Record<string, CaptureView> = {
+  "#results-index-dashboard": "mapa",
+  "#tipos-de-efeito": "efeitos",
+  "#exoticas": "exoticas",
+  "#consulta-por-sia": "ponto",
+};
+export function CaptureResultViewsPanel({ path, view, campaign, sia, effect, origin, from, back }: Props) {
   const router = useRouter();
-  // Older links addressed a map or disclosure by fragment, which the server cannot read.
+  const selectedCampaign = view === "rede" ? campaign : campaign ?? 3;
+  // Links antigos apontavam seções por fragmento; agora cada seção é uma subaba.
   useEffect(() => {
-    if (path !== "/campanhas/resultados") return;
     function restoreFragment() {
       const url = new URL(window.location.href);
-      if (
-        !/^#(?:results-index-dashboard|tipos-de-efeito|exoticas|consulta-por-sia|detalhe-sia-c[1-3])$/.test(
-          url.hash,
-        )
-      )
-        return;
-      url.searchParams.set("painel", "operacional");
-      router.replace(url.pathname + url.search + url.hash);
+      const next = legacyHash[url.hash] ?? (/^#detalhe-sia-c[1-3]$/.test(url.hash) ? "ponto" : undefined);
+      if (!next) return;
+      url.searchParams.set("vista", next);
+      if (next !== "ponto") url.searchParams.delete("sia");
+      router.replace(url.pathname + "?" + url.searchParams.toString());
     }
     restoreFragment();
     window.addEventListener("hashchange", restoreFragment);
     return () => window.removeEventListener("hashchange", restoreFragment);
-  }, [path, router]);
-  function href(next: CaptureView, number = campaign, point?: string) {
+  }, [router]);
+  function href(next: CaptureView, number = selectedCampaign, point?: string) {
     const q = new URLSearchParams({ vista: next });
-    if (number) q.set("campaign", String(number));
+    if (number && next !== "rede") q.set("campaign", String(number));
     if (point && next === "ponto") q.set("sia", point);
-    if (effect) q.set("effect", effect);
+    if (effect && (next === "ponto" || next === "efeitos")) q.set("effect", effect);
     if (origin) q.set("origem", origin);
     if (from) q.set("fromCampaign", from);
     return path + "?" + q;
   }
+  const needsViews = view === "rede" || view === "campanha" || view === "ponto";
   const query = new URLSearchParams({ format: "views" });
-  if (campaign && view !== "rede") query.set("campaign", String(campaign));
+  if (selectedCampaign && view !== "rede") query.set("campaign", String(selectedCampaign));
   if (sia && view === "ponto") query.set("sia", sia);
   const url = "/api/results/capture-index?" + query;
-  const [state, setState] = useState<{
-    url: string;
-    data?: CaptureResultViews;
-    error?: string;
-  }>();
+  const [state, setState] = useState<{ url: string; data?: CaptureResultViews; error?: string }>();
   useEffect(() => {
+    if (!needsViews) return;
     const controller = new AbortController();
     void fetch(url, { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
         if (!response.ok)
-          throw new Error(
-            [401, 403].includes(response.status)
-              ? "Seu perfil não tem acesso a este resultado."
-              : "Não foi possível carregar os resultados.",
-          );
+          throw new Error([401, 403].includes(response.status) ? "Seu perfil não tem acesso a este resultado." : "Não foi possível carregar os resultados.");
         const data: CaptureResultViews = await response.json();
         if (!controller.signal.aborted) setState({ url, data });
       })
@@ -314,204 +557,78 @@ export function CaptureResultViewsPanel({
         if (!controller.signal.aborted) setState({ url, error: error.message });
       });
     return () => controller.abort();
-  }, [url]);
+  }, [url, needsViews]);
   const data = state?.url === url ? state.data : undefined;
+  const exportQuery = selectedCampaign && view !== "rede" ? "&campaign=" + selectedCampaign : "";
+
   return (
-    <div className="min-w-0 space-y-4">
-      <nav
-        aria-label="Vistas de resultados"
-        className="flex flex-wrap gap-1 border-b border-[var(--line-strong)]"
-      >
-        {(Object.keys(labels) as CaptureView[]).map((key) => (
-          <Link
-            key={key}
-            aria-current={view === key ? "page" : undefined}
-            className={
-              action + (view === key ? " bg-[var(--surface-soft)]" : "")
-            }
-            href={href(key, campaign, key === "ponto" ? sia : undefined)}
-          >
-            {labels[key]}
-          </Link>
-        ))}
-      </nav>
-      {back && (
-        <Link href={back} className={action}>
-          Voltar {origin === "efeitos" ? "ao quadro de efeitos" : "ao mapa"} da
-          campanha
-        </Link>
-      )}
-      {view !== "rede" && (
-        <label className="block max-w-md type-label">
-          Campanha
-          <select
-            value={campaign ?? ""}
-            className={control}
-            onChange={(event) =>
-              router.push(
-                href(
-                  view,
-                  Number(event.target.value),
-                  view === "ponto" ? sia : undefined,
-                ),
-              )
-            }
-          >
-            <option value="" disabled>
-              Escolha uma campanha
-            </option>
+    <div className="min-w-0 space-y-6">
+      <div className="space-y-4">
+        <nav aria-label="Subabas de resultados" className="-mx-1 overflow-x-auto px-1 pb-1">
+          <ul className="flex w-max min-w-full gap-1 rounded-xl border border-[var(--line-ghost)] bg-white p-1 shadow-sm">
+            {captureViews.map((key) => {
+              const Icon = tabs[key].icon;
+              const active = view === key;
+              return (
+                <li key={key} className="flex-1">
+                  <Link
+                    aria-current={active ? "page" : undefined}
+                    href={href(key, selectedCampaign ?? 3, key === "ponto" ? sia : undefined)}
+                    className={`flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 text-sm font-semibold transition focus-visible:outline-2 ${active ? "bg-[var(--brand-navy-strong)] text-white shadow" : "text-[var(--text-secondary)] hover:bg-[var(--surface-soft)] hover:text-[var(--brand-navy-strong)]"}`}
+                  >
+                    <Icon className="size-4" aria-hidden />
+                    {tabs[key].label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+        {view !== "rede" && (
+          <div role="group" aria-label="Campanha exibida" className="flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-sm font-semibold text-[var(--text-secondary)]">Campanha</span>
             {[1, 2, 3].map((n) => (
-              <option key={n} value={n}>
-                Campanha {n}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      {state?.url === url && state.error ? (
-        <p role="alert">{state.error}</p>
-      ) : !data ? (
-        <p role="status">Carregando resultados…</p>
-      ) : view === "rede" ? (
-        <Network data={data} />
-      ) : !campaign ? (
-        <p role="status">Escolha a campanha que deseja consultar.</p>
-      ) : (
-        <>
-          {view === "campanha" ? (
-            <>
-              <Campaign data={data} number={campaign} />
-              <Link className={action} href={href("ponto")}>
-                Consultar detalhe por ponto na C{campaign}
+              <Link
+                key={n}
+                href={href(view, n, view === "ponto" ? sia : undefined)}
+                aria-current={selectedCampaign === n ? "true" : undefined}
+                className={`inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition focus-visible:outline-2 ${selectedCampaign === n ? "border-[var(--brand-navy-strong)] bg-[var(--brand-navy-strong)] text-white" : "border-[var(--line-strong)] bg-white text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)]"}`}
+              >
+                C{n} <span className="font-normal opacity-80">{seasons[n - 1]}</span>
               </Link>
-            </>
-          ) : (
-            <>
-              <label className="block max-w-md type-label">
-                Ponto de monitoramento
-                <select
-                  className={control}
-                  value={sia && data.points.includes(sia) ? sia : ""}
-                  onChange={(event) =>
-                    router.push(href("ponto", campaign, event.target.value))
-                  }
-                >
-                  <option value="" disabled>
-                    Selecione o SIA
-                  </option>
-                  {data.points.map((id) => (
-                    <option key={id} value={id}>
-                      SIA {id}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {!sia ? (
-                <p role="status">
-                  Escolha um SIA da campanha para abrir sua ficha.
-                </p>
-              ) : (
-                <>
-                  {data.point ? (
-                    <section className={frame}>
-                      <h2 className="type-section-title">
-                        Ficha do ponto · SIA {sia} · C{campaign}
-                      </h2>
-                      <CapturePointEvidence
-                        row={data.point}
-                        version={data.version}
-                        effectId={effect}
-                      />
-                      <PointMediaGallery
-                        key={campaign + "-" + sia}
-                        campaign={campaign}
-                        sia={sia}
-                      />
-                    </section>
-                  ) : (
-                    <p role="status">SIA {sia} sem registro nesta campanha.</p>
-                  )}
-                  <section className={frame}>
-                    <h2 className="type-section-title">
-                      Histórico do SIA {sia}
-                    </h2>
-                    <p>Índice geral do mesmo ponto na escala de 0 a 1.</p>
-                    <table className="w-full type-metadata">
-                      <thead>
-                        <tr>
-                          <th className={cell}>Campanha</th>
-                          <th className={cell}>Índice geral</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.history.map((row) => (
-                          <tr key={row.campaign}>
-                            <th scope="row" className={cell}>
-                              <Link
-                                className={action}
-                                href={href("ponto", row.campaign, sia)}
-                              >
-                                C{row.campaign}
-                              </Link>
-                            </th>
-                            <td className={cell}>
-                              {row.present ? (
-                                <Score value={row.score} />
-                              ) : (
-                                "Sem registro"
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </section>
-                </>
-              )}
-            </>
-          )}
-        </>
-      )}
-      <div className="flex flex-wrap gap-2">
-        <a
-          className={action}
-          href={
-            "/api/results/capture-index?format=csv" +
-            (campaign ? "&campaign=" + campaign : "")
-          }
-        >
-          Exportar para leitura
-        </a>
-        <a
-          className={action}
-          href={
-            "/api/results/capture-index?format=audit" +
-            (campaign ? "&campaign=" + campaign : "")
-          }
-        >
-          Exportar para auditoria
-        </a>
-        <Link
-          className={action}
-          href={
-            "/campanhas/resultados?painel=operacional" +
-            (campaign ? "&campaign=" + campaign : "")
-          }
-        >
-          Mapa e exportações da campanha
-        </Link>
-        {campaign && (
-          <Link
-            className={action}
-            href={`/campanhas/resultados?painel=operacional&campaign=${campaign}${effect ? "&effect="+encodeURIComponent(effect) : ""}#tipos-de-efeito`}
-          >
-            Indicadores por tipo de efeito · C{campaign}
+            ))}
+          </div>
+        )}
+        {back && (
+          <Link href={back} className={link}>
+            Voltar {origin === "efeitos" ? "ao quadro de efeitos" : "ao mapa"} da campanha
           </Link>
         )}
-        <Link className={action} href="/resultados/calculos">
-          Consultar método e limites
-        </Link>
       </div>
+
+      {view === "mapa" && selectedCampaign ? (
+        <MapTab campaign={selectedCampaign} />
+      ) : view === "efeitos" && selectedCampaign ? (
+        <CaptureEffectsSummary key={`effects-${selectedCampaign}`} campaign={selectedCampaign} />
+      ) : view === "exoticas" && selectedCampaign ? (
+        <CaptureExoticsReconciliation campaign={selectedCampaign} />
+      ) : state?.url === url && state.error ? (
+        <p role="alert" className={card}>{state.error}</p>
+      ) : !data ? (
+        <section className="app-card h-72 animate-pulse bg-[var(--surface-soft)]" role="status" aria-label="Carregando resultados" />
+      ) : view === "rede" ? (
+        <Network data={data} href={href} />
+      ) : view === "campanha" && selectedCampaign ? (
+        <Campaign data={data} number={selectedCampaign} href={href} />
+      ) : selectedCampaign ? (
+        <Point data={data} campaign={selectedCampaign} sia={sia} effect={effect} href={href} />
+      ) : null}
+
+      <footer className="flex flex-wrap items-center gap-2 border-t border-[var(--line-ghost)] pt-4">
+        <a className={button} href={"/api/results/capture-index?format=csv" + exportQuery}><Download className="size-4" aria-hidden />Exportar para leitura</a>
+        <a className={button} href={"/api/results/capture-index?format=audit" + exportQuery}><Download className="size-4" aria-hidden />Exportar para auditoria</a>
+        <Link className={link + " ml-auto"} href="/resultados/calculos"><FileText className="size-4" aria-hidden />Como o índice é calculado</Link>
+      </footer>
     </div>
   );
 }
