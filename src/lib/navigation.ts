@@ -282,7 +282,11 @@ export function getNavigationAccessForPath(pathname: string) {
  * Trilha de navegação. A página atual é o último item; a barra superior mostra
  * só os ancestrais, porque o título da página já aparece no H1.
  */
-export function getBreadcrumbsForPath(pathname: string) {
+const subPages: Record<string, { parent: string; label: string }> = {
+  "/resultados/calculos/0-8": { parent: "/resultados/calculos", label: "Metodologia 0.8" },
+};
+
+export function getBreadcrumbsForPath(pathname: string): Array<{ href: string; label: string }> {
   const normalizedPath = pathname === "" ? "/" : pathname;
   const item = findNavigationItem(normalizedPath);
 
@@ -295,6 +299,10 @@ export function getBreadcrumbsForPath(pathname: string) {
       ...(child && !childIsLanding ? [{ href: child.href, label: child.label }] : []),
     ];
   }
+
+  // Página de leitura dentro de uma aba: herda o caminho da aba e ganha um nome legível.
+  const subPage = subPages[normalizedPath];
+  if (subPage) return [...getBreadcrumbsForPath(subPage.parent), { href: normalizedPath, label: subPage.label }];
 
   const segments = normalizedPath.split("/").filter(Boolean);
   if (segments.length === 0) {

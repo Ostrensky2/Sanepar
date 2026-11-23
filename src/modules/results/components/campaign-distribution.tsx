@@ -1,21 +1,25 @@
 "use client";
 
-import { RESULTS_08_SCHEMA, RESULTS_08_POLICY, RESULTS_08_SOURCE_SHA256, type Results08HomeStatistics } from "@/lib/results-08-contract";
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { CircleHelp } from "lucide-react";
+import { ArrowRight, ChevronRight, CircleHelp, Download, MousePointerClick } from "lucide-react";
 import { ResultsReviewDialog } from "@/components/results-review-dialog";
+import { formatCaptureIndex } from "@/lib/capture-index/format";
+import { defaultCampaigns } from "@/lib/campaign-management";
+import { RESULTS_08_SCHEMA, RESULTS_08_POLICY, RESULTS_08_SOURCE_SHA256, type Results08HomeStatistics } from "@/lib/results-08-contract";
+import { bandNames, bands } from "./capture-map-scale";
+import { SiaPeek, peekMembers, useCampaignPoints, type PeekMetric } from "./sia-peek";
 import styles from "./campaign-distribution.module.css";
 
-
-const domains = { geral: "Geral", ambiental: "Ambiental", operacional: "Operacional", saude: "Saúde" };
+const domains = { geral: "Índice geral", ambiental: "Ambiental", operacional: "Operacional", saude: "Saúde" };
 type Domain = keyof typeof domains;
+const metrics: Record<Domain, PeekMetric> = { geral: "overall", ambiental: "environmental", operacional: "operational", saude: "humanHealth" };
 type Payload = { schema: string; politica: string; sourceSha256: string; campanhas: Record<string, Partial<Record<Domain, Results08HomeStatistics>>> };
-const bounds = [0, 2, 6, 14, 28, 40];
-const colors = ["#687782", "#16804d", "#d5a917", "#c04136", "#72419b"];
-const format = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 4 }).format;
-const markers = [["minimo", "Mínimo", "solid", 1], ["media", "Média", "dashed", 2], ["maximo", "Máximo", "dotted", 4]] as const;
-const bandFor = (bin: number) => bounds.slice(1).findIndex(end => bin < end);
+const decimal = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 }).format;
+const interval = (bin: number) => `${decimal(bin / 40)} a ${bin < 39 ? "<" : ""}${decimal((bin + 1) / 40)}`;
+const season = (code: string) => defaultCampaigns[Number(code.slice(1)) - 1]?.title.split(" - ")[1] ?? "";
 
+/** Índice de captação de cada campanha, lado a lado. Cada campanha é lida à parte: não há total nem média entre campanhas. */
 export function CampaignDistribution() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [domain, setDomain] = useState<Domain>("geral");
@@ -37,70 +41,88 @@ export function CampaignDistribution() {
     void read();
     return () => controller.abort();
   }, []);
-  const [selected, setSelected] = useState<Record<string, number>>({});
   const campaigns = Object.keys(data?.campanhas ?? {}).filter(c => /^C[1-9]$/.test(c)).sort();
-  return <section className={`app-card space-y-4 ${styles.panel}`} aria-labelledby="campaign-distribution-title">
-    <header><div className="flex items-center gap-2"><h2 id="campaign-distribution-title" className="type-section-title">Distribuição do índice por campanha</h2>
-      <button type="button" aria-label="Como ler a distribuição por campanha" aria-haspopup="dialog" onClick={() => setHelpOpen(true)} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--brand-teal)] hover:bg-[var(--surface-soft)] focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]"><CircleHelp aria-hidden="true" className="h-5 w-5" /></button></div>
-      <p className="type-metadata">Método 0.8 · distribuição de cada campanha</p></header>
-    {!data ? <p role="status">{error || "Carregando distribuições…"}</p> : <>
-      <label className="type-label">Domínio <select className={styles.select} value={domain} onChange={e => setDomain(e.target.value as Domain)}>
-        {(Object.keys(domains) as Domain[]).map(key => <option key={key} value={key}>{domains[key]}</option>)}
-      </select></label>
-      <p role="status">Domínio {domains[domain]} · cada campanha é lida à parte; não há total nem média entre campanhas.</p>
-      <p className="type-metadata">A média e os percentuais consideram somente as captações com estimativa numérica no domínio selecionado. As contagens por faixa também excluem os registros sem estimativa.</p>
-      <div className={styles.keys} aria-label="Legenda das linhas">{markers.map(([key,label,style,width]) => <span key={key}><i style={{ borderLeftStyle: style, borderLeftWidth: width }} />{label}</span>)}</div>
-      
-      {campaigns.map(c => {
-        const row = data.campanhas[c][domain];
-        const heading = <h3 className="type-panel-title">{c}</h3>;
-        if (!row) return <article key={c} className={styles.row} aria-label={c}>{heading}<p>Série indisponível para este domínio.</p></article>;
-        const coverage = <p className="type-metadata">Medidos: {row.observados} · Com estimativa: {row.n} · Sem estimativa: {row.nulos}</p>;
-        if (row.n === 0) return <article key={c} className={styles.row} aria-label={c}>{heading}{coverage}<p>Sem estimativas numéricas para calcular estatísticas ou percentuais.</p></article>;
-        const index = selected[c] ?? 0;
-        return <article key={c} className={styles.row} aria-label={c}>
-          {heading}{coverage}
-          <div className={styles.plot}><div className={styles.yAxis} aria-hidden="true"><span>100%</span><span>50%</span><span>0%</span></div>
-          <div className={styles.chart} role="group" aria-label={`Intervalos de ${c}`}>{row.colunas.map((count,i) => {
-            const percentage = 100 * count / row.n;
-            return <button type="button" key={i} tabIndex={index === i ? 0 : -1}
-              aria-pressed={index === i} aria-label={`Intervalo ${i+1}: ${count} de ${row.n}, ${format(percentage)}%`}
-              onClick={() => setSelected(s => ({...s,[c]:i}))}
-              onKeyDown={event => {
-                const positions: Record<string, number> = {ArrowLeft: Math.max(0,i-1), ArrowRight: Math.min(39,i+1), Home: 0, End: 39};
-                const next = positions[event.key];
-                if (next === undefined) return;
-                event.preventDefault();
-                setSelected(s => ({...s,[c]:next}));
-                event.currentTarget.parentElement?.querySelectorAll("button")[next]?.focus();
-              }}>
-              <span style={{ height: `${percentage}%`, backgroundColor: colors[bandFor(i)] }} />
-            </button>;
-          })}
-            {markers.map(([key,,style,width]) => {
-              const value = row[key];
-              if (value === null) return null;
-              const shared = markers.filter(([other]) => row[other] === row[key]);
-              const lane = shared.findIndex(([other]) => other === key);
-              return <i aria-hidden="true" key={key} style={{ left: `${100*value}%`, top: `${100*lane/shared.length}%`, height: `${100/shared.length}%`, borderLeftStyle: style, borderLeftWidth: width }} />;
-            })}
-          </div></div>
-          <p aria-live="polite" className="type-metadata">Intervalo {format(index/40)} a {index<39?"< ":""}{format((index+1)/40)} · {row.colunas[index]} de {row.n} · {format(100*row.colunas[index]/row.n)}%</p>
-          <div className={styles.axis} aria-hidden="true">{["0","0,25","0,50","0,75","1"].map(x=><span key={x}>{x}</span>)}</div>
-          <p className="type-metadata">{markers.map(([key,label]) => label+" "+(row[key] === null ? "indisponível" : format(row[key]))).join(" · ")}</p>
-        </article>;
-      })}
-      <div className={styles.tableFrame}><table className={styles.table}><caption>Frequências por faixa do índice</caption><thead><tr><th scope="col">Faixa</th>{campaigns.map(c=><th scope="col" key={c}>{c}</th>)}</tr></thead>
-        <tbody>{colors.map((color,i)=><tr key={color}><th scope="row"><b style={{backgroundColor:color}} />{format(bounds[i]/40)} a {i<4?"< ":""}{format(bounds[i+1]/40)}</th>{campaigns.map(c=><td key={c}>{data.campanhas[c][domain]?.n ? data.campanhas[c][domain]!.colunas.slice(bounds[i],bounds[i+1]).reduce((a,b)=>a+b,0) : "—"}</td>)}</tr>)}</tbody></table></div>
-      <details><summary className={styles.summary}>Consultar frequências dos 40 intervalos</summary><div className={styles.tableFrame}><table className={styles.table}><caption>Contagens por intervalo · {domains[domain]}</caption><thead><tr><th scope="col">Intervalo</th>{campaigns.map(c=><th scope="col" key={c}>{c}</th>)}</tr></thead><tbody>{Array.from({length:40},(_,i)=><tr key={i}><th scope="row">{format(i/40)} a {i<39?"< ":""}{format((i+1)/40)}</th>{campaigns.map(c=><td key={c}>{data.campanhas[c][domain]?.n ? data.campanhas[c][domain]!.colunas[i] : "—"}</td>)}</tr>)}</tbody></table></div></details>
-      <a className="inline-flex min-h-11 items-center font-semibold underline" href="/api/results/aggregate-export">Baixar resultados 0.8 por campanha (CSV)</a>
-      <footer className="type-metadata">A média pode esconder picos. O máximo é a maior nota observada, não a condição de toda a campanha. As faixas orientam investigação; não confirmam dano.</footer>
+  // Quais SIAs formam cada barra e cada número: as notas por ponto da mesma campanha e categoria.
+  const pointsByCampaign = useCampaignPoints();
+  const members = Object.fromEntries(campaigns.map(c => [c, peekMembers(pointsByCampaign[c], metrics[domain])]));
+  return <section className="app-card min-w-0 space-y-5 p-4 sm:p-6" aria-labelledby="campaign-distribution-title">
+    <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+      <div className="min-w-0">
+        <div className="flex items-center gap-1">
+          <h2 id="campaign-distribution-title" className="heading-font type-section-title text-[var(--brand-navy-strong)]">Índice de captação por campanha</h2>
+          <button type="button" aria-label="Como ler a distribuição por campanha" aria-haspopup="dialog" onClick={() => setHelpOpen(true)} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--brand-teal)] hover:bg-[var(--surface-soft)] focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]"><CircleHelp aria-hidden="true" className="h-5 w-5" /></button>
+        </div>
+        <p className="type-metadata text-[var(--ink-soft)]">Metodologia 0.8 · cada campanha lida à parte</p>
+      </div>
+      {data && <div role="group" aria-label="Categoria exibida" className={styles.segmented}>
+        {(Object.keys(domains) as Domain[]).map(key => <button type="button" key={key} aria-pressed={domain === key} onClick={() => setDomain(key)}>{domains[key]}</button>)}
+      </div>}
+    </header>
+    {!data ? <p role="status" className="type-metadata">{error || "Carregando distribuições…"}</p> : <>
+      <p className="sr-only" role="status">Categoria exibida: {domains[domain]}. Cada campanha é lida à parte; não há total nem média entre campanhas.</p>
+      <p className="flex items-center gap-1.5 type-caption text-[var(--ink-soft)]"><MousePointerClick aria-hidden className="size-4 shrink-0 text-[var(--brand-teal)]" />Passe o mouse ou toque em uma barra ou número para ver os SIAs.</p>
+      <div className="grid gap-4 lg:grid-cols-3">
+        {campaigns.map(code => <CampaignCard key={code} code={code} row={data.campanhas[code][domain]} members={members[code]} domainLabel={domains[domain]} />)}
+      </div>
+      <div className="flex flex-wrap items-start justify-between gap-3 border-t border-[var(--line-ghost)] pt-3">
+      <details className={`${styles.disclosure} min-w-0 max-sm:w-full sm:flex-1`}>
+        <summary className="inline-flex min-h-11 cursor-pointer items-center gap-2 font-semibold text-[var(--brand-navy-strong)]"><ChevronRight aria-hidden className="size-4" />Ver as contagens em tabela</summary>
+        <div className="mt-2 overflow-x-auto"><table className={styles.table}><caption className="sr-only">Pontos por faixa · {domains[domain]}</caption>
+          <thead><tr><th scope="col">Faixa</th>{campaigns.map(c => <th scope="col" key={c}>{c}</th>)}</tr></thead>
+          <tbody>{bands.map((band, i) => <tr key={band.label}><th scope="row"><span aria-hidden className={styles.swatch} style={{ backgroundColor: band.color }} />{bandNames[i]} <span className="font-normal text-[var(--ink-soft)]">{band.label}</span></th>{campaigns.map(c => { const stat = data.campanhas[c][domain]; return <td key={c}>{stat?.n ? <SiaPeek className={styles.cellPeek} title={`${c} · ${bandNames[i]} · ${domains[domain]}`} campaign={Number(c.slice(1))} points={members[c].bands[i]} expected={stat.faixas[i]}>{stat.faixas[i]}</SiaPeek> : "—"}</td>; })}</tr>)}</tbody></table></div>
+        <details className="disclosure mt-2"><summary className="flex min-h-11 cursor-pointer items-center type-metadata font-semibold">Contagens dos 40 intervalos</summary>
+          <div className="overflow-x-auto"><table className={styles.table}><caption className="sr-only">Contagens por intervalo · {domains[domain]}</caption><thead><tr><th scope="col">Intervalo</th>{campaigns.map(c => <th scope="col" key={c}>{c}</th>)}</tr></thead><tbody>{Array.from({ length: 40 }, (_, i) => <tr key={i}><th scope="row">{interval(i)}</th>{campaigns.map(c => { const stat = data.campanhas[c][domain]; return <td key={c}>{stat?.n ? <SiaPeek className={styles.cellPeek} title={`${c} · ${interval(i)} · ${domains[domain]}`} campaign={Number(c.slice(1))} points={members[c].intervals[i]} expected={stat.colunas[i]}>{stat.colunas[i]}</SiaPeek> : "—"}</td>; })}</tr>)}</tbody></table></div>
+        </details>
+      </details>
+        <a className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--line-strong)] bg-white px-4 font-semibold text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)] focus-visible:outline-2" href="/api/results/aggregate-export"><Download aria-hidden className="size-4" />Baixar por campanha (CSV)</a>
+      </div>
     </>}
     {helpOpen && <ResultsReviewDialog title="Como ler a distribuição por campanha" closeLabel="Fechar ajuda da distribuição" onClose={() => setHelpOpen(false)}>
-      <p className="type-metadata">A régua mostra frequências, sem composição nominal das faixas. Escala vertical comum de 0 a 100% das captações com estimativa no domínio em cada campanha. Selecione uma coluna para consultar a frequência. Use as setas para percorrer os intervalos.</p>
-      <p className="type-metadata mt-2">A média resume as estimativas numéricas e pode esconder uma captação com índice alto. O máximo é o maior índice observado em uma captação; não representa toda a campanha. As faixas orientam investigação, não confirmam dano.</p>
-      <p className="type-metadata mt-2">O marcador e o banco de referência limitam a confiança no nome. Parentesco pode motivar investigação; não atribui grau.</p>
+      <p className="type-metadata">Cada cartão mostra uma campanha. As barras contam quantos pontos da campanha estão em cada faixa do índice, na escala fixa de 0 a 1. A porcentagem é sobre os pontos com nota naquela campanha.</p>
+      <ul className="mt-2 space-y-1 type-metadata">{bands.map((band, i) => <li key={band.label} className="flex items-center gap-2"><span aria-hidden className="size-3 rounded-full" style={{ backgroundColor: band.color }} /><strong>{bandNames[i]}</strong> {band.label}</li>)}</ul>
+      <p className="type-metadata mt-2">A média resume as notas da campanha e pode esconder uma captação com índice alto. O maior índice é o de uma captação; não representa toda a campanha. As faixas orientam investigação, não confirmam dano.</p>
+      <p className="type-metadata mt-2">Passe o mouse em uma barra, no maior índice ou em um número da tabela para ver quais SIAs estão ali. Clicar ou tocar fixa a lista, e cada SIA abre a ficha do ponto.</p>
+      <p className="type-metadata mt-2">As campanhas são independentes: não há total nem média juntando campanhas. Ponto sem estimativa fica fora da média e das colunas.</p>
       <p className="mt-2"><a className="underline" href="/resultados/calculos/0-8">Consultar o método 0.8</a></p>
     </ResultsReviewDialog>}
   </section>;
+}
+
+function CampaignCard({ code, row, members, domainLabel }: { code: string; row?: Results08HomeStatistics; members: ReturnType<typeof peekMembers>; domainLabel: string }) {
+  const number = code.slice(1), campaign = Number(number);
+  const head = <div className="flex items-start justify-between gap-3">
+    <div className="min-w-0"><p className="type-eyebrow text-[var(--text-teal)]">Campanha {number}</p><h3 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">{season(code) || code}</h3></div>
+    {row && <span className="shrink-0 rounded-full bg-[var(--surface-soft)] px-3 py-1 type-caption font-semibold text-[var(--ink)]" data-stat="com-nota">{row.n} de {row.observados} pontos</span>}
+  </div>;
+  if (!row || row.n === 0) return <article className={styles.card} data-campaign={code} aria-label={`Campanha ${number}`}>{head}<p className="type-metadata text-[var(--ink-soft)]">{row ? "Sem notas nesta categoria; não é zero." : "Série indisponível para esta categoria."}</p></article>;
+  const attention = row.faixas.slice(2).reduce((sum, count) => sum + count, 0);
+  return <article className={styles.card} data-campaign={code} aria-label={`Campanha ${number}`}>
+    {head}
+    <dl className="grid grid-cols-3 gap-2">
+      {([
+        ["media", "Média", formatCaptureIndex(row.media), [], undefined],
+        // O maior índice é de uma captação: o balão diz qual. Só aparece se a nota do ponto é a mesma do quadro.
+        ["maximo", "Maior", formatCaptureIndex(row.maximo), members.top.filter(point => formatCaptureIndex(point.value) === formatCaptureIndex(row.maximo)), undefined],
+        ["atencao", "Atenção ou acima", String(attention), members.attention, attention],
+      ] as const).map(([key, label, value, points, expected]) => <div key={key} className="min-w-0">
+        <dt className="type-caption text-[var(--ink-soft)]">{label}</dt>
+        <dd className="heading-font text-2xl font-extrabold tabular-nums text-[var(--brand-navy-strong)]" data-stat={key}><SiaPeek className={styles.statPeek} title={`C${number} · ${label} · ${domainLabel}`} campaign={campaign} points={[...points]} expected={expected}>{value}</SiaPeek></dd>
+      </div>)}
+    </dl>
+    {/* Uma barra por faixa: lê-se de relance, sem amontoar colunas perto do zero. */}
+    <ul className={styles.bands} aria-label={`Pontos por faixa na campanha ${number}`}>
+      {bands.map((band, i) => {
+        const count = row.faixas[i], share = count / row.n;
+        return <li key={band.label}>
+          <SiaPeek className={styles.bandRow} title={`C${number} · ${bandNames[i]} · ${domainLabel}`} campaign={campaign} points={members.bands[i]} expected={count}>
+            <span className={styles.bandName}><i aria-hidden style={{ backgroundColor: band.color }} />{bandNames[i]}</span>
+            <span className={styles.track} aria-hidden><b style={{ width: count ? `max(4px, ${100 * share}%)` : 0, backgroundColor: band.color }} /></span>
+            <span className={styles.bandValue}><strong>{count}</strong> · {Math.round(100 * share)}%</span>
+          </SiaPeek>
+        </li>;
+      })}
+    </ul>
+    {row.nulos > 0 && <p className="type-caption text-[var(--ink-soft)]"><SiaPeek className={styles.inlinePeek} title={`C${number} · sem estimativa · ${domainLabel}`} campaign={campaign} points={members.missing} expected={row.nulos}>{row.nulos} ponto{row.nulos > 1 ? "s" : ""} sem estimativa</SiaPeek>, fora da média.</p>}
+    <Link href={`/campanhas/resultados?campaign=${number}&vista=campanha`} className="mt-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[var(--line-strong)] bg-white px-4 font-semibold text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)] focus-visible:outline-2">Abrir a campanha {number}<ArrowRight aria-hidden className="size-4" /></Link>
+  </article>;
 }

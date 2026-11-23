@@ -18,9 +18,12 @@ describe("Adoção do método 0.8 em todo o aplicativo", () => {
     expect(dashboard).toContain("Mapa do índice · metodologia 0.8");
     expect(dashboard).toContain("setMobileMapOpen] = useState(false)");
     const home = source("src/modules/results/components/home-results-v2.tsx");
-    expect(home).toContain("Índice geral médio 0.8 · por campanha");
-    expect(home).toContain("não há média entre campanhas");
+    expect(home).toContain("<CampaignDistribution />");
+    expect(home).toContain("não há total nem média entre campanhas");
     expect(home).not.toMatch(/group=total|grupos\?\.total/);
+    const cards = source("src/modules/results/components/campaign-distribution.tsx");
+    for (const stat of ["data-stat={key}", 'data-stat="com-nota"', "data-campaign={code}", "não há total nem média entre campanhas"]) expect(cards).toContain(stat);
+    expect(cards).not.toMatch(/group=total|grupos\?\.total/);
   });
   it("liga as superfícies ao guia do método 0.8", () => {
     for (const path of [root+"/ajuda/page.tsx", root+"/governanca/page.tsx", root+"/resultados/calculos/page.tsx","src/components/release-notes.tsx"]) {

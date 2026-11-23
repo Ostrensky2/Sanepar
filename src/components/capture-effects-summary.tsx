@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import type { EffectSummary } from "@/lib/capture-index/effect-summary";
+import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
 
 type ResponseData = {version:string;summary:EffectSummary};
 export function orderedCampaignSias(siaCodes?: readonly string[]) {
@@ -38,8 +39,14 @@ function CampaignEvidence({campaign, siaCodes}: CampaignEvidenceProps) {
       <div className="app-card space-y-4 p-4 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-[var(--brand-navy-strong)]">Evidência por tipo de efeito</h2>
-            <p className="text-[var(--text-secondary)]">C{campaign} · {s.observations} pontos · {data?.version}. Em quantos pontos cada mecanismo tem ficha contribuindo.</p>
+            <div className="flex items-center gap-1"><h2 className="text-xl font-bold text-[var(--brand-navy-strong)]">Evidência por tipo de efeito</h2>
+              <ResultsInterpretationHelp title="Como ler o quadro de tipos de efeito">
+                <p>O quadro mostra, para a C{campaign}, em quantos pontos cada mecanismo tem ficha contribuindo para a nota. Cada ponto é contado uma vez por efeito.</p>
+                <p>“No componente determinante” significa que a ficha contribuiu no componente que definiu a nota do domínio, não que foi sua única causa. “Só em outro componente” não aumenta essa nota. Alertas de baixo suporte podem coexistir com outras fichas; não some as colunas.</p>
+                <p>Os totais descrevem a campanha. Para abrir a ficha de um ponto, escolha um SIA da campanha ou digite o código. As sugestões incluem os pontos da campanha independentemente do efeito selecionado. Ao voltar, a campanha e o tipo de efeito selecionado são preservados.</p>
+                <p>Uma associação bibliográfica não confirma um efeito observado. O “?” de cada cartão traz o limite daquele efeito.</p>
+              </ResultsInterpretationHelp></div>
+            <p className="text-sm text-[var(--text-secondary)]">C{campaign} · {s.observations} pontos · {data?.version}</p>
           </div>
           <ul className="flex flex-wrap gap-2" aria-label="Cobertura dos marcadores">
             <li className={chip}><strong>16S</strong> {s.eligible["16S"]}/{s.observations}</li>
@@ -69,18 +76,19 @@ function CampaignEvidence({campaign, siaCodes}: CampaignEvidenceProps) {
             <button className="min-h-11 rounded-lg bg-[var(--brand-navy-strong)] px-4 font-semibold text-white">Abrir ficha</button>
           </form>
         </div>
-        <details>
-          <summary className="min-h-11 cursor-pointer py-2 font-semibold">Como ler este quadro</summary>
-          <div className="space-y-2 text-sm text-[var(--text-secondary)]">
-            <p>Contamos uma vez cada ponto por efeito. “No componente determinante” significa que a ficha contribuiu no componente que definiu a nota do domínio, não que foi sua única causa. “Só em outro componente” não aumenta essa nota. Alertas de baixo suporte podem coexistir com outras fichas; não some as colunas.</p>
-            <p>Os totais descrevem a campanha. Escolha um SIA da campanha ou digite o código. As sugestões incluem os pontos da campanha independentemente do efeito selecionado. Ao voltar, a campanha e o tipo de efeito selecionado são preservados. Uma associação bibliográfica não confirma um efeito observado.</p>
-          </div>
-        </details>
       </div>
       <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{s.effects.filter(e=>!selected||selected===e.id).map(e=>{
         const hits = e.counts ? e.counts.winning+e.counts.other : 0, share = e.counts && e.denominator ? hits/e.denominator : 0;
         return <li className={"app-card flex flex-col gap-3 p-4 sm:p-5 "+(e.counts?"":"opacity-80")} key={e.id}>
-        <h3 className="text-lg font-bold leading-snug">{e.title}</h3>
+        <div className="flex items-start justify-between gap-1"><h3 className="text-lg font-bold leading-snug">{e.title}</h3>
+          <ResultsInterpretationHelp title={e.title}>
+            <p>{e.note}</p>
+            {e.counts
+              ? <><p>Na C{campaign}, {hits} de {e.denominator} pontos com {e.component} utilizável têm ficha deste efeito contribuindo para a nota.</p>
+                <p>No componente determinante: {e.counts.winning}. A ficha está no componente que definiu a nota do domínio, sem ser necessariamente a única causa. Só em outro componente: {e.counts.other}. Contribui, mas não aumenta essa nota. Alerta de baixo suporte: {e.counts.low} de {e.denominator}. Pode coexistir com outras fichas, por isso as colunas não se somam.</p></>
+              : <p>Sem contagem nesta campanha. Isso não demonstra ausência do efeito.</p>}
+            <p>É associação documentada nas fichas; o efeito não foi medido.</p>
+          </ResultsInterpretationHelp></div>
         {e.counts?<>
           <div>
             <p className="flex items-baseline gap-2"><strong className="text-3xl font-extrabold tabular-nums text-[var(--brand-navy-strong)]">{hits}</strong><span className="text-sm text-[var(--text-secondary)]">de {e.denominator} pontos · base com {e.component} utilizável</span></p>
@@ -93,13 +101,15 @@ function CampaignEvidence({campaign, siaCodes}: CampaignEvidenceProps) {
             <div className="rounded-lg bg-[var(--surface-soft)] p-2"><dt className="text-xs leading-tight text-[var(--text-secondary)]">Alerta de baixo suporte</dt><dd className="text-lg font-bold tabular-nums">{e.counts.low}/{e.denominator}</dd></div>
           </dl></>
         :<p className="w-fit rounded-full border border-dashed border-[var(--ink-soft)] px-3 py-1 text-sm font-semibold">{e.denominator===null?"Sem avaliação pelo método.":"Sem biblioteca utilizável para este mecanismo."}</p>}
-        <p className="mt-auto text-sm text-[var(--text-secondary)]">{e.note}</p>
       </li>;})}</ul>
       <div className="app-card space-y-3 p-4 sm:p-6">
-        <h3 className="text-lg font-bold">Outras contribuições, por domínio</h3>
-        <p className="text-[var(--text-secondary)]">Das {s.positiveContributions} contribuições positivas, {s.unmappedContributions} não têm correspondência na lista de mecanismos deste quadro. O domínio é conhecido; não atribuímos um mecanismo pelo nome do organismo. As notas oficiais já incluem essas contribuições.</p>
-        <ul className="grid gap-3 sm:grid-cols-3">{s.residualDomains.map(d=><li key={d.domain} className="rounded-lg bg-[var(--surface-soft)] p-3"><strong className="block">{d.domain}</strong><span className="text-sm">{d.contributions} registros em {d.points} pontos distintos.</span></li>)}</ul>
-        <p className="text-sm text-[var(--text-secondary)]">Um ponto pode aparecer em mais de um domínio. Zero no quadro significa nenhuma ficha listada nesse estado, não ausência de organismo ou de dano.</p>
+        <div className="flex items-center gap-1"><h3 className="text-lg font-bold">Outras contribuições, por domínio</h3>
+          <ResultsInterpretationHelp title="Outras contribuições, por domínio">
+            <p>Das {s.positiveContributions} contribuições positivas, {s.unmappedContributions} não têm correspondência na lista de mecanismos deste quadro. O domínio é conhecido; não atribuímos um mecanismo pelo nome do organismo. As notas oficiais já incluem essas contribuições.</p>
+            <p>Um ponto pode aparecer em mais de um domínio. Zero no quadro significa nenhuma ficha listada nesse estado, não ausência de organismo ou de dano.</p>
+          </ResultsInterpretationHelp></div>
+        <p className="text-sm text-[var(--text-secondary)]">{s.unmappedContributions} de {s.positiveContributions} contribuições positivas sem tipo de efeito listado.</p>
+        <ul className="grid gap-3 sm:grid-cols-3">{s.residualDomains.map(d=><li key={d.domain} className="rounded-lg bg-[var(--surface-soft)] p-3"><span className="block text-sm font-semibold text-[var(--text-secondary)]">{d.domain}</span><strong className="text-2xl font-extrabold tabular-nums text-[var(--brand-navy-strong)]">{d.contributions}</strong><span className="text-sm"> registros · {d.points} pontos</span></li>)}</ul>
       </div>
     </>}
   </section>;

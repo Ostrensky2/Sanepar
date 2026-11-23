@@ -54,7 +54,7 @@ describe("results index dashboard v2 contract", () => {
     const page = readFileSync(new URL("../../../../app/(dashboard)/page.tsx", import.meta.url), "utf8");
     expect(page).toContain("<HomeProjectSummary pointSummary={pointSummary}");
     expect(page).toContain("cache(loadDashboardData)");
-    expect(home.match(/<CanonicalKpi /g)).toHaveLength(3);
+    expect(home.match(/<CanonicalKpi /g)).toHaveLength(2);
     expect(page).toContain("<HomeOperationalKpis monitored={pointSummary.monitored} />");
   });
   it("renders complete, partial and unavailable results without qualitative risk classes", () => {

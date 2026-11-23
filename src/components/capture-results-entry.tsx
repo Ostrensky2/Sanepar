@@ -4,6 +4,7 @@ import {
 import { isCaptureView, type CaptureView } from "@/lib/capture-index/result-tabs";
 import { InvalidCampaignNotice } from "./invalid-campaign-notice";
 import { PageHeader } from "./page-header";
+import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
 import { SectionTabs } from "./section-tabs";
 import { campaignFromQuery } from "@/lib/campaign-identity";
 import { defaultCampaigns } from "@/lib/campaign-management";
@@ -71,7 +72,13 @@ export function CaptureResultsEntry({
       <PageHeader
         eyebrow="Monitoramento"
         title="Resultados na captação"
-        description="Índice de triagem da biota na captação · campanhas C1 a C3. O escore varia de 0 a 1 e não mede probabilidade de dano."
+        description="Índice de captação · metodologia 0.8 · por campanha e por ponto."
+        help={<ResultsInterpretationHelp title="Como ler os resultados na captação">
+          <p>O índice de triagem da biota na captação vai de 0 a 1, em escala fixa. Ele ordena a atenção entre os pontos; não mede probabilidade de dano nem descreve a água tratada.</p>
+          <p>Cada campanha (C1 a C3) é calculada à parte, ponto a ponto (SIA). Nenhuma nota passa de uma campanha para outra.</p>
+          <p>Zero é nota calculada. “Sem estimativa” indica que há leitura, mas a nota não pode ser afirmada. “Sem medição” indica que não há biblioteca utilizável. Nenhum dos dois é zero.</p>
+          <p>Use as subabas: Visão geral, Por campanha, Mapa, Tipos de efeito, Exóticas e Por ponto.</p>
+        </ResultsInterpretationHelp>}
         tabs={<SectionTabs />}
       />
       <CaptureResultViewsPanel

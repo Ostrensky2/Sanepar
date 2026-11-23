@@ -309,3 +309,14 @@ table {
     transform: translateX(220%);
   }
 }
+
+/* Bloco que abre e fecha: a mesma seta em todas as telas de resultado. */
+details.disclosure > summary { position: relative; padding-left: 1.4rem; list-style: none; }
+details.disclosure > summary::-webkit-details-marker { display: none; }
+details.disclosure > summary::before {
+  content: ""; position: absolute; left: 0.15rem; top: 50%; width: 0.5rem; height: 0.5rem; margin-top: -0.3rem;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; opacity: 0.6;
+  transform: rotate(-45deg); transition: transform 0.15s ease;
+}
+details.disclosure[open] > summary::before { transform: translate(1px, -1px) rotate(45deg); }
+@media (prefers-reduced-motion: reduce) { details.disclosure > summary::before { transition: none; } }

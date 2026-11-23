@@ -24,6 +24,8 @@ import { CapturePointEvidence } from "./capture-index-panel";
 import { CaptureEffectsSummary } from "./capture-effects-summary";
 import { CaptureExoticsReconciliation } from "./capture-exotics-reconciliation";
 import { PointMediaGallery } from "@/modules/results/components/point-media-gallery";
+import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
+import { SiaPeek, peekMembers, useCampaignPoints, type PeekPoint } from "@/modules/results/components/sia-peek";
 
 import { captureViews, type CaptureView } from "@/lib/capture-index/result-tabs";
 export type { CaptureView };
@@ -101,60 +103,79 @@ function Legend() {
   );
 }
 
-/** Barra 100% empilhada; cada segmento tem número quando cabe. */
-function StackedBar({ bins, missing, tall }: { bins: number[]; missing: number; tall?: boolean }) {
+type Peek = { title: string; campaign: number; points: PeekPoint[]; expected?: number };
+const peekArea = "rounded-md [&[data-peek]]:cursor-pointer [&[data-peek]:hover]:bg-[var(--surface-soft)] [&[data-peek][aria-expanded=true]]:bg-[var(--surface-soft)] focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]";
+const peekNumber = peekArea + " -mx-1 px-1 [&[data-peek]]:underline [&[data-peek]]:decoration-dotted [&[data-peek]]:underline-offset-4";
+
+/** Barra 100% empilhada; cada segmento tem número quando cabe e, ao passar o mouse, a lista dos SIAs daquela faixa. */
+function StackedBar({ bins, missing, tall, campaign, members, context }: { bins: number[]; missing: number; tall?: boolean; campaign: number; members?: PeekPoint[][]; context: string }) {
   const counts = [...bins, missing];
   const n = counts.reduce((s, x) => s + x, 0);
   return (
-    <div aria-hidden className={`flex overflow-hidden rounded-md ${tall ? "h-9" : "h-6"} bg-[var(--surface-muted)]`}>
-      {counts.map((count, i) =>
-        count ? (
-          <span
+    <div role="group" aria-label={`Pontos por faixa · ${context}`} className={`flex gap-0.5 ${tall ? "h-9" : "h-6"}`}>
+      {counts.map((count, i) => {
+        if (!count) return null;
+        const name = i < bands.length ? bandNames[i] : "Sem estimativa ou sem medição";
+        return (
+          <SiaPeek
             key={i}
-            className="flex items-center justify-center text-xs font-bold"
+            title={`${context} · ${name}`}
+            label={`${name}: ${count} ${count === 1 ? "ponto" : "pontos"}`}
+            campaign={campaign}
+            points={members?.[i] ?? []}
+            expected={count}
+            className="flex min-w-1.5 items-center justify-center rounded-[3px] text-xs font-bold first:rounded-l-md last:rounded-r-md focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--brand-navy-strong)] [&[data-peek]]:cursor-pointer [&[data-peek]:hover]:brightness-95"
             style={{
-              width: `${(100 * count) / n}%`,
+              flex: `${count} 1 0%`,
               backgroundColor: i < bands.length ? bands[i].color : "transparent",
               color: i >= 3 && i < bands.length ? "#fff" : "var(--ink)",
               border: i === bands.length ? "2px dashed var(--ink-soft)" : undefined,
             }}
           >
             {(100 * count) / n >= 6 ? count : ""}
-          </span>
-        ) : null,
-      )}
+          </SiaPeek>
+        );
+      })}
     </div>
   );
 }
 
-function Kpi({ label, value, note, accent }: { label: string; value: string; note?: string; accent?: string }) {
+function Kpi({ label, value, note, accent, peek }: { label: string; value: string; note?: string; accent?: string; peek?: Peek }) {
   return (
     <div className="min-w-0 rounded-xl border border-[var(--line-ghost)] bg-white p-4">
       <p className="text-sm font-semibold text-[var(--text-secondary)]">{label}</p>
       <p className="mt-1 text-3xl font-extrabold tabular-nums text-[var(--brand-navy-strong)]" style={accent ? { color: accent } : undefined}>
-        {value}
+        {peek ? <SiaPeek {...peek} className={peekNumber}>{value}</SiaPeek> : value}
       </p>
       {note && <p className="mt-1 text-sm text-[var(--text-secondary)]">{note}</p>}
     </div>
   );
 }
 
+/** Título do bloco. A explicação não ocupa a página: abre no "?" ao lado do título. */
 function SectionHead({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
-    <header className="mb-4 space-y-1">
+    <header className="mb-4 flex items-center gap-1">
       <h2 className="text-xl font-bold text-[var(--brand-navy-strong)]">{title}</h2>
-      {children && <p className="max-w-3xl text-[var(--text-secondary)]">{children}</p>}
+      {children && <ResultsInterpretationHelp title={title}>{children}</ResultsInterpretationHelp>}
     </header>
   );
 }
 
 function Network({ data, href }: { data: CaptureResultViews; href: (view: CaptureView, n?: number) => string }) {
+  // Quais SIAs formam cada segmento e cada número: as notas por ponto da própria campanha.
+  const pointsByCampaign = useCampaignPoints();
+  const members = new Map(data.network.map((row) => {
+    const groups = peekMembers(pointsByCampaign[`C${row.campaign}`]);
+    return [row.campaign, { ...groups, series: [...groups.bands, groups.missing] }];
+  }));
   return (
     <div className="space-y-6">
       <section aria-label="Campanhas medidas" className="grid gap-4 md:grid-cols-3">
         {data.network.map((row) => {
           const n = row.bins.reduce((s, x) => s + x, 0) + row.missing;
           const attention = row.bins.slice(2).reduce((s, x) => s + x, 0);
+          const group = members.get(row.campaign)!;
           return (
             <article key={row.campaign} className={card + " flex flex-col gap-4"}>
               <header className="flex items-start justify-between gap-2">
@@ -170,14 +191,16 @@ function Network({ data, href }: { data: CaptureResultViews; href: (view: Captur
                 {([["Média", row.all.mean], ["P90", row.all.p90], ["Maior", row.max]] as const).map(([label, value]) => (
                   <div key={label}>
                     <dt className="text-sm text-[var(--text-secondary)]">{label}</dt>
-                    <dd className="text-2xl font-extrabold tabular-nums text-[var(--brand-navy-strong)]">{formatCaptureIndex(value)}</dd>
+                    <dd className="text-2xl font-extrabold tabular-nums text-[var(--brand-navy-strong)]">{label === "Maior"
+                      ? <SiaPeek className={peekNumber} title={`C${row.campaign} · maior índice`} campaign={row.campaign} points={group.top.filter((point) => formatCaptureIndex(point.value) === formatCaptureIndex(value))}>{formatCaptureIndex(value)}</SiaPeek>
+                      : formatCaptureIndex(value)}</dd>
                   </div>
                 ))}
               </dl>
               <div className="space-y-2">
-                <StackedBar bins={row.bins} missing={row.missing} tall />
+                <StackedBar bins={row.bins} missing={row.missing} tall campaign={row.campaign} members={group.series} context={`C${row.campaign}`} />
                 <p className="text-sm text-[var(--text-secondary)]">
-                  <strong className="text-[var(--ink)]">{attention}</strong> de {n} pontos na faixa Atenção ou acima.
+                  <SiaPeek className={peekNumber} title={`C${row.campaign} · Atenção ou acima`} campaign={row.campaign} points={group.attention} expected={attention}><strong className="text-[var(--ink)]">{attention}</strong> de {n} pontos</SiaPeek> na faixa Atenção ou acima.
                 </p>
               </div>
               <Link href={href("campanha", row.campaign)} className={button + " mt-auto"}>
@@ -190,20 +213,23 @@ function Network({ data, href }: { data: CaptureResultViews; href: (view: Captur
 
       <section className={card}>
         <SectionHead title="Quantos pontos em cada faixa">
-          Índice geral por ponto, escala fixa de 0 a 1. Cada campanha é lida separadamente; as barras só ficam lado a lado para consulta.
+          <p>Cada barra é uma campanha. Os segmentos contam quantos pontos têm o índice geral em cada faixa da escala fixa de 0 a 1.</p>
+          <p>Cada campanha é lida separadamente; as barras só ficam lado a lado para consulta. Não há total nem média juntando campanhas.</p>
+          <p>O segmento tracejado, quando aparece, são pontos sem estimativa ou sem medição. Eles não são zero.</p>
+          <p>Passe o mouse em um segmento ou em um número da tabela para ver quais SIAs estão ali. Clicar ou tocar fixa a lista, e cada SIA abre a ficha do ponto.</p>
         </SectionHead>
         <div className="space-y-4">
           {data.network.map((row) => (
             <div key={row.campaign} className="grid items-center gap-2 sm:grid-cols-[7rem_1fr]">
               <p className="font-bold">C{row.campaign} · {seasons[row.campaign - 1].split(" ")[0]}</p>
-              <StackedBar bins={row.bins} missing={row.missing} tall />
+              <StackedBar bins={row.bins} missing={row.missing} tall campaign={row.campaign} members={members.get(row.campaign)!.series} context={`C${row.campaign}`} />
             </div>
           ))}
         </div>
         <div className="mt-5 border-t border-[var(--line-ghost)] pt-4">
           <Legend />
         </div>
-        <details className="mt-4">
+        <details className="disclosure mt-4">
           <summary className="min-h-11 cursor-pointer py-2 font-semibold">Ver a contagem em tabela</summary>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -217,7 +243,7 @@ function Network({ data, href }: { data: CaptureResultViews; href: (view: Captur
                 {[...bandNames, "Sem estimativa ou sem medição"].map((name, i) => (
                   <tr key={name} className="border-b border-[var(--line-ghost)]">
                     <th className={cell} scope="row">{name}{i < bands.length ? ` (${bands[i].label})` : ""}</th>
-                    {data.network.map((row) => <td key={row.campaign} className={cell}>{row.bins[i] ?? row.missing}</td>)}
+                    {data.network.map((row) => <td key={row.campaign} className={cell}><SiaPeek className={peekNumber + " inline-flex min-h-8 min-w-8 items-center"} title={`C${row.campaign} · ${name}`} campaign={row.campaign} points={members.get(row.campaign)!.series[i]} expected={row.bins[i] ?? row.missing}>{row.bins[i] ?? row.missing}</SiaPeek></td>)}
                   </tr>
                 ))}
               </tbody>
@@ -228,7 +254,9 @@ function Network({ data, href }: { data: CaptureResultViews; href: (view: Captur
 
       <section className={card}>
         <SectionHead title="Os mesmos pontos nas três campanhas">
-          Só os SIAs com índice nas três campanhas, para comparar sem efeito da troca de pontos. Cada ponto pesa igual.
+          <p>A tabela usa só os SIAs que têm índice nas três campanhas, para comparar sem o efeito da troca de pontos. Cada ponto pesa igual.</p>
+          <p>O P90 usa a posição arredondada para cima, sem interpolação.</p>
+          <p>Zero é nota calculada. Ponto sem estimativa ou sem medição fica fora da média e do P90.</p>
         </SectionHead>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[32rem] text-sm">
@@ -249,9 +277,6 @@ function Network({ data, href }: { data: CaptureResultViews; href: (view: Captur
             </tbody>
           </table>
         </div>
-        <p className="mt-3 text-sm text-[var(--text-secondary)]">
-          O P90 usa a posição arredondada para cima, sem interpolação. Zero é nota calculada; ponto sem estimativa ou sem medição fica fora da média e do P90.
-        </p>
       </section>
     </div>
   );
@@ -278,7 +303,13 @@ function usePlaces(campaign?: number) {
 const placeName = (p?: Place) => [p?.waterBody, p?.municipality].filter(Boolean).join(" · ");
 
 function Campaign({ data, number, href }: { data: CaptureResultViews; number: number; href: (v: CaptureView, n?: number, sia?: string) => string }) {
-  const places = usePlaces(number);
+  const pointsByCampaign = useCampaignPoints();
+  const campaignPoints = pointsByCampaign[`C${number}`];
+  const places = useMemo(() => new Map((campaignPoints ?? []).map((p) => [p.siaCode, { waterBody: p.waterBody, municipality: p.municipality } as Place])), [campaignPoints]);
+  const members = useMemo(() => {
+    const groups = peekMembers(campaignPoints);
+    return { ...groups, series: [...groups.bands, groups.missing], categories: (["environmental", "operational", "humanHealth"] as const).map((metric) => { const g = peekMembers(campaignPoints, metric); return [...g.bands, g.missing]; }) };
+  }, [campaignPoints]);
   const [all, setAll] = useState(false);
   const [search, setSearch] = useState("");
   const s = data.campaignStats;
@@ -296,20 +327,20 @@ function Campaign({ data, number, href }: { data: CaptureResultViews; number: nu
         <Kpi label="Índice médio" value={formatCaptureIndex(s.mean)} note="cada ponto pesa igual" />
         <Kpi label="Mediana" value={formatCaptureIndex(s.median)} note="metade dos pontos abaixo" />
         <Kpi label="Percentil 90" value={formatCaptureIndex(s.p90)} note="10% dos pontos acima" />
-        <Kpi label="Maior índice" value={formatCaptureIndex(s.max)} note={data.ranking[0] ? `SIA ${data.ranking[0].sia}` : undefined} accent={bandText(s.max)?.color} />
-        <Kpi label="Atenção ou acima" value={String(attention)} note={`de ${s.measured} pontos, índice a partir de 0,15`} accent={attention ? bands[2].color : undefined} />
+        <Kpi label="Maior índice" value={formatCaptureIndex(s.max)} note={data.ranking[0] ? `SIA ${data.ranking[0].sia}` : undefined} accent={bandText(s.max)?.color} peek={{ title: `C${number} · maior índice`, campaign: number, points: members.top.filter((point) => formatCaptureIndex(point.value) === formatCaptureIndex(s.max)) }} />
+        <Kpi label="Atenção ou acima" value={String(attention)} note={`de ${s.measured} pontos, índice a partir de 0,15`} accent={attention ? bands[2].color : undefined} peek={{ title: `C${number} · Atenção ou acima`, campaign: number, points: members.attention, expected: attention }} />
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_1fr]">
         {overall && (
-          <section className={card}>
-            <SectionHead title="Pontos por faixa do índice geral">Quantos pontos da C{number} caem em cada faixa da escala fixa.</SectionHead>
-            <ul className="space-y-3">
+          <section className={card + " flex flex-col"}>
+            <SectionHead title="Pontos por faixa do índice geral"><p>Quantos pontos da C{number} têm o índice geral em cada faixa da escala fixa de 0 a 1. A porcentagem é sobre os pontos registrados na campanha.</p><p>Passe o mouse em uma faixa para ver quais SIAs estão nela. Clicar ou tocar fixa a lista, e cada SIA abre a ficha do ponto.</p><p>As faixas orientam a investigação; não são classes de risco comprovado.</p></SectionHead>
+            <ul className="flex flex-1 flex-col justify-around gap-3">
               {[...bandNames, "Sem estimativa ou sem medição"].map((name, i) => {
                 const count = i < bands.length ? overall.bins[i] : overall.missing;
                 const pct = s.total ? (100 * count) / s.total : 0;
                 return (
-                  <li key={name} className="grid grid-cols-[9.5rem_1fr_4.5rem] items-center gap-3">
+                  <li key={name}><SiaPeek className={peekArea + " -mx-1.5 grid w-[calc(100%+0.75rem)] grid-cols-[9.5rem_1fr_4.5rem] items-center gap-3 px-1.5 py-1 text-left"} title={`C${number} · ${name}`} campaign={number} points={members.series[i]} expected={count}>
                     <span className="inline-flex items-center gap-2 text-sm font-semibold">
                       <span aria-hidden className={`size-3 shrink-0 rounded-full ${i === bands.length ? "border-2 border-[var(--ink-soft)]" : ""}`} style={i < bands.length ? { backgroundColor: bands[i].color } : undefined} />
                       {name}
@@ -318,7 +349,7 @@ function Campaign({ data, number, href }: { data: CaptureResultViews; number: nu
                       <span className="block h-full rounded" style={{ width: `${pct}%`, backgroundColor: i < bands.length ? bands[i].color : "var(--line-strong)" }} />
                     </span>
                     <span className="text-right text-sm tabular-nums"><strong>{count}</strong> · {Math.round(pct)}%</span>
-                  </li>
+                  </SiaPeek></li>
                 );
               })}
             </ul>
@@ -326,7 +357,7 @@ function Campaign({ data, number, href }: { data: CaptureResultViews; number: nu
         )}
 
         <section className={card}>
-          <SectionHead title="As três categorias">A maior das três é o piso do índice geral; um dano distinto e documentado em outra categoria pode elevá-lo. A barra mostra a distribuição dos pontos em cada categoria.</SectionHead>
+          <SectionHead title="As três categorias"><p>A maior das três é o piso do índice geral; um dano distinto e documentado em outra categoria pode elevá-lo. O índice geral não é a média das três.</p><p>Cada barra mostra a distribuição dos pontos da campanha naquela categoria, com a média ao lado. Passe o mouse em um segmento para ver os SIAs daquela faixa na categoria.</p></SectionHead>
           <div className="space-y-5">
             {data.categories.map((category, i) => (
               <div key={category.name} className="space-y-2">
@@ -334,7 +365,7 @@ function Campaign({ data, number, href }: { data: CaptureResultViews; number: nu
                   <h3 className="font-bold">{category.name}</h3>
                   <span className="text-sm text-[var(--text-secondary)]">média <strong className="text-[var(--ink)]">{formatCaptureIndex(data.categoryMeans[i])}</strong></span>
                 </div>
-                <StackedBar bins={category.bins} missing={category.missing} />
+                <StackedBar bins={category.bins} missing={category.missing} campaign={number} members={members.categories[i]} context={`C${number} · ${category.name}`} />
               </div>
             ))}
           </div>
@@ -345,7 +376,9 @@ function Campaign({ data, number, href }: { data: CaptureResultViews; number: nu
       <section className={card}>
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <SectionHead title={term ? `${matches.length} ponto(s) encontrado(s)` : all ? `Todos os ${data.ranking.length} pontos medidos` : "Os 10 pontos com maior índice"}>
-            Ordem de atenção dentro da C{number}. Posição não é probabilidade de dano.
+            <p>Os pontos estão em ordem de atenção dentro da C{number}: do maior para o menor índice geral.</p>
+            <p>A posição compara pontos da mesma campanha. Não é probabilidade de dano.</p>
+            <p>As três colunas à direita mostram a nota de cada categoria. Abra a ficha para ver o que formou a nota.</p>
           </SectionHead>
           <div className="flex flex-wrap items-end gap-2">
             <label className="block text-sm font-semibold">
@@ -420,8 +453,8 @@ function Campaign({ data, number, href }: { data: CaptureResultViews; number: nu
       </section>
 
       <section className={card}>
-        <SectionHead title="O que foi medido">Biblioteca utilizável por marcador. O cloroplasto (algas) é uma leitura do próprio 16S, não um terceiro marcador.</SectionHead>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <SectionHead title="O que foi medido"><p>Quantos pontos da campanha têm biblioteca utilizável em cada marcador.</p><p>O cloroplasto (algas) é uma leitura do próprio 16S, não um terceiro marcador.</p><p>Ponto com um só marcador pode ter nota em algumas categorias e ficar sem estimativa em outras.</p></SectionHead>
+        <div className="grid gap-x-10 gap-y-4 sm:grid-cols-2">
           {data.markers.map((m) => (
             <div key={m.name}>
               <div className="flex justify-between text-sm"><strong>{m.name}</strong><span className="tabular-nums">{m.usable} de {s.total} pontos</span></div>
@@ -514,13 +547,13 @@ function Point({ data, campaign, sia, effect, href }: { data: CaptureResultViews
                 </div>
                 <div>
                   <h3 className="mb-2 font-bold">O mesmo ponto em cada campanha</h3>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     {data.history.map((h) => (
                       <Link
                         key={h.campaign}
                         href={href("ponto", h.campaign, sia)}
                         aria-current={h.campaign === campaign ? "page" : undefined}
-                        className={`rounded-xl border p-3 transition hover:bg-[var(--surface-soft)] ${h.campaign === campaign ? "border-[var(--brand-navy)] ring-2 ring-[var(--brand-blue-soft)]" : "border-[var(--line-ghost)]"}`}
+                        className={`flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border p-3 transition hover:bg-[var(--surface-soft)] sm:block ${h.campaign === campaign ? "border-[var(--brand-navy)] ring-2 ring-[var(--brand-blue-soft)]" : "border-[var(--line-ghost)]"}`}
                       >
                         <span className="block text-sm font-semibold text-[var(--text-secondary)]">C{h.campaign} · {seasons[h.campaign - 1].split(" ")[0]}</span>
                         <span className="block text-2xl font-extrabold tabular-nums">{!h.present ? "—" : h.state === "sem estimativa" ? "sem estimativa" : formatCaptureIndex(h.score)}</span>
