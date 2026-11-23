@@ -174,12 +174,14 @@ export function CaptureIndexPanel({ campaign, initialSia = "", effectId, returnH
   </div>;
 }
 
-export function CapturePointEvidence({row, version, effectId, children}: {row: CaptureIndexView; version: string; effectId?: string; children?: React.ReactNode}) {
+export function CapturePointEvidence({row, version, effectId, children, compact}: {row: CaptureIndexView; version: string; effectId?: string; children?: React.ReactNode; compact?: boolean}) {
   return <>
             <h3 className="type-panel-title">Efeitos da amostra</h3>
             <p className="type-metadata">{row.campaign} · SIA {row.sia} · Curadoria {version}. Associação documentada, efeito não medido. Uma ficha ausente não demonstra ausência do efeito.</p>
+            {!compact && <>
             <p className="type-metadata"><strong>Índice geral: {row.general}</strong> · Marcadores: {row.coverage}.</p>
             <dl className="flex flex-wrap gap-x-5 gap-y-1 type-metadata">{row.domains.map(domain => <div key={domain.key}><dt>{domain.label}</dt><dd className="font-bold tabular-nums">{domain.score}</dd></div>)}</dl>
+            </>}
             {row.measured && <p className="type-metadata"><strong>O que mais contribuiu:</strong> {row.predominant}. {row.domains.find(domain => domain.label === row.predominant)?.main}</p>}
             <p className="type-metadata">Escala de 0 a 1. O índice não mede probabilidade de dano.</p>
             {children}
