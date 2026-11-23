@@ -1,4 +1,4 @@
-# Adoção 0.8 — contrato de exportação agregada
+# Adoção 0.8 — contrato da exportação por campanha
 
 Pai de implementação: `2327c803bc050d035c1ff0ea041a85801116140e`.
 Fonte única E8/TypeScript: `FONTE-OFICIAL-08-SINAL-DOCUMENTADO-v2.json`, SHA-256
@@ -12,25 +12,27 @@ Não houve recálculo nesta camada. O hash do JSON canônico incorporado é
 
 `GET /api/results/aggregate-export` requer `data.view`, com `private, no-store`.
 CSV é o padrão; `format=json` e `format=xlsx` são opcionais. `group` admite exclusivamente
-`C1`, `C2`, `C3`, `total`; ausente retorna os quatro. Outros parâmetros e
+`C1`, `C2`, `C3`; ausente retorna as três campanhas, cada uma à parte. As campanhas são
+independentes: não há linha, grupo ou média juntando campanhas (`group=total` devolve 422). Outros parâmetros e
 duplicações são rejeitados. Não aceita seleção nominal, ponto, táxon ou local.
 
 Cada grupo contém apenas `geral08`, `ambiental`, `operacional`, `saude` com
 `observados`, `numericos`, `nulos`, `minimo`, `media`, `maximo`, `colunas`, `faixas`.
 Os números são copiados da fonte congelada,
 sem arredondar ou derivar estatísticas dos bins. Classes: [0,.05), [.05,.15),
-[.15,.35), [.35,.70), [.70,1]. O total não é uma quarta campanha.
+[.15,.35), [.35,.70), [.70,1]. O grupo `total` do arquivo-fonte serve só para
+conferir a integridade da fonte; nunca é exibido nem exportado.
 Nenhuma nota de edição anterior entra nesta exportação.
 O JSON é importado exclusivamente por módulo `server-only`, fora de `public`.
 `results08HomeDistribution()` e o CSV/JSON/XLSX usam a mesma função `results08Aggregate()`.
-O XLSX é um attachment real: aba `Agregados 0.8` com observados, numéricos,
+O XLSX é um attachment real: aba `Por campanha 0.8` com observados, numéricos,
 nulos, mínimo, média e máximo; aba `Fonte` com versão, política, schema e SHA-256.
 A nota por SIA sai na planilha unificada e no CSV de leitura, não aqui. Null é célula vazia e zero permanece número.
 MIME Office Open XML, edição, escopo e hash da fonte constam dos headers;
 falha técnica retorna 503 JSON, nunca um arquivo histórico ou uma planilha vazia.
 A Home recebe `n` como alias de `numericos`, nunca de `observados`.
-Total geral e saúde: 224 numéricos de 225 observados; ambiental/operacional: 225/225.
-C2 geral: 75 numéricos de 76 observados. Cada série conserva seu denominador.
+C2 geral e saúde: 75 numéricos de 76 observados; nas demais séries e campanhas, todos
+numéricos. Cada série conserva seu denominador.
 Os nulos não entram nos 40 bins, cinco faixas, médias ou extremos; se não houver
 numéricos, estatísticas são null (célula vazia no CSV), bins são zero. Zero
 documentado continua numérico, sem significar ausência biológica.
@@ -43,12 +45,11 @@ da entrega; não são reconstruídos de estimativas antigas.
 
 | Caminho | Formato | Condição nesta adoção |
 | --- | --- | --- |
-| `/api/results/aggregate-export` | CSV/JSON/XLSX | 0.8 agregado oficial, leitura autorizada |
+| `/api/results/aggregate-export` | CSV/JSON/XLSX | estatísticas 0.8 por campanha, leitura autorizada |
 | `/api/results/capture-index` | CSV leitura/auditoria, JSON/views | notas 0.8 por campanha + SIA; ver `INDICE_CAPTACAO_0.8_POR_PONTO.md` |
 | `modules/results/report-export.ts` | XLSX/PDF/HTML impressão | relatórios do catálogo de impactos e da bibliografia; não trazem notas do índice |
-| `/api/results/methodology-pdf` | PDF privado | documento arquivado, sem link nas telas; o método em uso está em `/resultados/calculos/0-8` |
-| `/api/imports/results/template` | XLSX fonte completa | planilha do laboratório como recebida; não é fonte de notas do índice |
-| `/api/imports/results`, `/preview`, staging/preparação | entrada e publicação | ingestão da planilha do laboratório (organismos e leituras), como em produção; as notas exibidas vêm só do índice 0.8 |
+| `/api/imports/results/template` | XLSX fonte completa | planilha do laboratório como recebida, para arquivo; não é fonte de notas do índice |
+| `/api/imports/results`, `/preview`, staging/preparação | entrada e publicação | ingestão da planilha do laboratório: organismos, leituras, literatura e situação dos conjuntos. As abas do índice anterior não são lidas, recalculadas, conferidas nem guardadas; a consulta não devolve notas de publicações antigas |
 | modelos de Campo/SIA e exportação Biolog | XLSX | outros domínios, fora da adoção de índice |
 
 A nota por campanha e ponto, os três estados e os perfis de risco estão em

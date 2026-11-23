@@ -110,25 +110,4 @@ describe("campaign results workbook", () => {
       "1-campanha-verao-2026-resultados-2026-08-21.xlsx",
     );
   });
-
-  it("mantém o botão e as três abas no fluxo da campanha selecionada", () => {
-    const page = readFileSync(resolve(process.cwd(), "src/components/campaigns-page-content.tsx"), "utf8");
-    const header = readFileSync(resolve(process.cwd(), "src/components/campaign-results-panels.tsx"), "utf8");
-    const route = readFileSync(
-      resolve(process.cwd(), "src/app/(dashboard)/campanhas/resultados/page.tsx"),
-      "utf8",
-    );
-
-    expect(header).toContain('isDownloading ? "Gerando planilha..." : "Resultados"');
-    expect(header).toContain("Gerando planilha...");
-    expect(header).toContain("sm:flex-row");
-    expect(header).toContain("disabled={!canDownload || isDownloading || !onDownload}");
-    expect(page).toContain('addFieldDiarySummarySheet(workbook, selectedDiaryEntries, selectedCampaign.title, "Resumo")');
-    expect(page).toContain("addCampaignResultsSheet(workbook, selectedResultExportPoints, selectedDiaryEntries)");
-    expect(page).toContain("addFieldDiaryEntriesSheet(workbook, selectedDiaryEntries)");
-    expect(page).toContain("/api/imports/results/template?source=published&campaignCode=");
-    expect(page).toContain("Planilha v2 reimportável exportada");
-    expect(page).not.toContain("addResultsV2Sheet");
-    expect(route).not.toContain("resultExportPoints");
-  });
 });

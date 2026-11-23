@@ -17,9 +17,8 @@ it.skipIf(!process.env.RESULTS_PRIVATE_TEST_SOURCE)("validates the explicitly se
   expect(query("catalogScope=scored").counts.associations).toBe(305);
   expect(query("catalogScope=unscored").counts.associations).toBe(40);
   expect(query("catalogScope=all").counts.organisms).toBe(2543);
-  expect(query("section=calculations").counts.population).toBe(423);
+  expect(() => query("section=calculations")).toThrow();
+  expect(() => query("section=method")).toThrow();
   expect(query("section=occurrences").counts.population).toBe(29460);
-  const example=query("section=method&filter.campaign=C1&filter.sia=SIA-0011&filter.set=Bactérias&filter.domain=Ambiental").method!.example!;
-  expect(example.totalReads).toBe(25425);expect(example.scoredReads).toBe(339);expect(example.index).toBeCloseTo(0.1581732899853036,12);
   console.info(JSON.stringify({sha256:parsed.source.sha256,records:parsed.molecularRecordCount,campaigns:parsed.campaigns.map(c=>({code:c.campaignCode,counts:c.counts})),warnings:parsed.warnings.length}));
 }, 180000);

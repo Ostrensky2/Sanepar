@@ -17,7 +17,10 @@ describe("Adoção do método 0.8 em todo o aplicativo", () => {
     const dashboard = source("src/modules/results/components/results-index-dashboard.tsx");
     expect(dashboard).toContain("Mapa do índice · metodologia 0.8");
     expect(dashboard).toContain("setMobileMapOpen] = useState(false)");
-    expect(source("src/modules/results/components/home-results-v2.tsx")).toContain("Índice geral médio · 0.8");
+    const home = source("src/modules/results/components/home-results-v2.tsx");
+    expect(home).toContain("Índice geral médio 0.8 · por campanha");
+    expect(home).toContain("não há média entre campanhas");
+    expect(home).not.toMatch(/group=total|grupos\?\.total/);
   });
   it("liga as superfícies ao guia do método 0.8", () => {
     for (const path of [root+"/ajuda/page.tsx", root+"/governanca/page.tsx", root+"/resultados/calculos/page.tsx","src/components/release-notes.tsx"]) {
@@ -75,6 +78,5 @@ describe("Adoção do método 0.8 em todo o aplicativo", () => {
     const notes = source("src/components/release-notes.tsx");
     for (const phrase of ["versão do software","mesma consequência","evidência independente","MAJOR_RELEASES.map","identificação não resolvida","Parentesco pode motivar um alerta","em uso em todo o aplicativo"]) expect(notes).toContain(phrase);
     expect(notes).not.toMatch(/homologação|histórico 0\.7/);
-    expect(source("src/modules/results/components/campaign-results-dashboard.tsx")).toContain('href="/resultados/calculos/0-8">Ler a metodologia 0.8');
   });
 });

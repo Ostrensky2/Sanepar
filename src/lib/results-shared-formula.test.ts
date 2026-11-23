@@ -30,11 +30,9 @@ it("rejects absent shared cache", async () => {
 it("rejects shared formula error", async () => {
   await expect(buildResultsWorkbookExportModelV2(await fixture({error:"#DIV/0!"}), ["C1"])).rejects.toThrow(/cache/i);
 });
-it("rejects a numeric parameter cache that diverges from the approved method", async () => {
-  await expect(buildResultsWorkbookExportModelV2(await fixture(0, 2), ["C1"])).rejects.toThrow(/esperado 1, recebido 2/);
-});
-it("rejects a missing mandatory method input", async () => {
-  await expect(buildResultsWorkbookExportModelV2(await fixture(0, null), ["C1"])).rejects.toThrow(/esperado 1/);
+it("does not read or check the old per-set method parameters", async () => {
+  // A aba Metodo_calculo é do cálculo anterior. O aplicativo usa só a metodologia 0.8 e não lê esses parâmetros.
+  for (const parameter of [2, null]) await expect(buildResultsWorkbookExportModelV2(await fixture(0, parameter), ["C1"])).resolves.toMatchObject({ campaignCodes: ["C1"] });
 });
 it("preserves the explicit alias in the export model and rejects both aliases", async () => {
   const book=new ExcelJS.Workbook();

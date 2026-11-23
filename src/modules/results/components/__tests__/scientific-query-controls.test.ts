@@ -27,7 +27,7 @@ describe("scientific results navigation and filters", () => {
     const campaigns = navigationItems.find((item) => item.href === "/campanhas/campo")!;
     expect(campaigns.children?.map((item) => item.label)).toEqual(["Campo", "Resultados"]);
     const science = navigationItems.find((item) => item.href === "/resultados/impactos")!;
-    expect(science.children?.map((item) => item.label)).toEqual(["Impactos potenciais", "Como o índice é calculado", "Índice de risco na captação"]);
+    expect(science.children?.map((item) => item.label)).toEqual(["Impactos potenciais", "Acervo científico", "Como o índice é calculado", "Índice de risco na captação"]);
     expect(navigationItems.find((item) => item.label === "Atividades complementares")?.href).toBe("/acoes-pontuais");
     expect(getNavigationAccessForPath("/campanhas/resultados")?.requiredPrivileges).toEqual(["nav.results"]);
     for (const path of ["/resultados/impactos", "/resultados/calculos", "/resultados/indice-captacao"]) expect(getNavigationAccessForPath(path)?.requiredPrivileges).toContain("nav.results");

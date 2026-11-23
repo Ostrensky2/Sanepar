@@ -41,9 +41,8 @@ describe("contrato tipográfico global", () => {
     expect(shell).toContain('<p className="heading-font type-metadata');
     expect(shell).not.toMatch(/<h2[^>]*>[\s\S]*?currentItem\.headerTitle/);
     expect(campaigns).toContain('<h1 className="heading-font type-page-title');
-    expect(results).toContain('<h2 className="heading-font type-section-title');
-    expect(results).toContain("Dashboard de resultados");
-    expect(results).toContain('className="type-metadata mt-1 font-semibold');
+    // A moldura de resultados não tem título próprio: o título é o da campanha.
+    expect(results).not.toMatch(/<h[12]/);
   });
 
   it("expõe um título principal no repositório de documentos", () => {
@@ -61,10 +60,10 @@ describe("contrato tipográfico global", () => {
   });
 
   it("reutiliza a tipografia do produto no dashboard sem ler dados privados", () => {
-    const dashboard = source("src/modules/results/components/campaign-results-dashboard.tsx");
+    const dashboard = source("src/modules/results/components/results-index-dashboard.tsx");
     expect(dashboard).toContain("heading-font type-section-title");
     expect(dashboard).toContain("type-metadata");
-    expect(source("src/modules/results/components/campaign-story.tsx")).toContain("type-kpi");
+    expect(dashboard).toContain("type-kpi");
     expect(dashboard).toContain("var(--brand-navy-strong)");
   });
 });

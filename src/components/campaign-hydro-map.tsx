@@ -8,7 +8,6 @@ import { formatCaptureIndex } from "@/lib/capture-index/format";
 export { continuousResultColor } from "@/modules/results/components/result-visual";
 import {
   laboratoryRiskColor,
-  laboratoryRiskLabel,
   type LaboratoryRiskLevel,
 } from "@/lib/laboratory-risk";
 import { pointExecutionStatusLabels, type PointExecutionStatus } from "@/lib/point-execution-status";
@@ -944,31 +943,17 @@ function PointTooltip({
             <dd className="font-bold text-slate-700">{pointExecutionStatusLabels[point.executionStatus]}</dd>
           </>
         ) : null}
-        {point.riskLevel ? (
-          <>
-            <dt className="font-bold text-slate-400">Prioridade</dt>
-            <dd className="font-bold text-slate-700">{laboratoryRiskLabel(point.riskLevel)}</dd>
-          </>
-        ) : null}
-        {typeof point.score === "number" ? (
-          <>
-            <dt className="font-bold text-slate-400">Score integrado</dt>
-            <dd className="font-black text-[var(--brand-navy-strong)]">
-              {formatCaptureIndex(point.score)}
-            </dd>
-          </>
-        ) : null}
         {point.resultCompleteness ? (
           <>
-            <dt className="font-bold text-slate-400">Completude</dt>
+            <dt className="font-bold text-slate-400">Estado</dt>
             <dd className="font-bold text-slate-700">
-              {resultCompletenessLabel(point.resultCompleteness)}
+              {typeof point.resultValue === "number" ? "Índice calculado" : point.captureReading?.label ?? "Sem medição"}
             </dd>
             <dt className="font-bold text-slate-400">{point.resultMetricLabel || "Índice"}</dt>
             <dd className="font-black text-[var(--brand-navy-strong)]">
               {typeof point.resultValue === "number"
                 ? formatCaptureIndex(point.resultValue)
-                : point.resultCompleteness === "unavailable" ? "Sem medição" : `${formatResultBound(point.resultLower)}–${formatResultBound(point.resultUpper)}`}
+                : point.captureReading?.label ?? "Sem medição"}
             </dd>
           </>
         ) : null}
@@ -988,20 +973,6 @@ function formatCollectionDayLabel(day: string) {
   return trimmed.toLowerCase().startsWith("dia") ? trimmed : `Dia ${trimmed}`;
 }
 
-function resultCompletenessLabel(
-  value: NonNullable<CampaignHydroMapPoint["resultCompleteness"]>,
-) {
-  return {
-    complete: "Índice calculado",
-    partial_2: "Parcial (2/3)",
-    partial_1: "Parcial (1/3)",
-    unavailable: "Indisponível (0/3)",
-  }[value];
-}
-
-function formatResultBound(value: number | undefined) {
-  return formatCaptureIndex(value);
-}
 
 // Data de coleta em DD/MM/AAAA, aceitando ISO "AAAA-MM-DD" ou já em BR.
 function formatCollectionDate(value: string) {

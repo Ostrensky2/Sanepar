@@ -15,7 +15,7 @@ it("reopens generated neutral XLSX preserving numeric zero versus unavailable, w
  const book=new ExcelJS.Workbook();addAggregateResults(book.addWorksheet("Agregados 0.8"),data);
  const reopened=new ExcelJS.Workbook();await reopened.xlsx.load(await book.xlsx.writeBuffer());
  const sheet=reopened.getWorksheet("Agregados 0.8")!;
- expect(sheet.rowCount).toBe(17);expect(sheet.getCell("H2").value).toBe(0);expect(sheet.getCell("H3").value).toBe(null);
+ expect(sheet.rowCount).toBe(13);expect(sheet.getCell("H2").value).toBe(0);expect(sheet.getCell("H3").value).toBe(null);
  expect(JSON.stringify(sheet.getRow(1).values)).not.toMatch(/SIA|local|organismo/i);
 });
 it("rejects 0.7 before writing any cells",()=>{
@@ -32,7 +32,7 @@ it("writes each campaign + SIA note 0.8 into the unified sheet and reopens it wi
  }
  const reopened=new ExcelJS.Workbook();await reopened.xlsx.load(await book.xlsx.writeBuffer());
  const row=(campaign:number,sia:string)=>{const sheet=reopened.getWorksheet("C"+campaign)!;for(let r=1;r<=sheet.rowCount;r++)if(sheet.getCell(r,2).value===normalizeMatrixSia(sia))return sheet.getRow(r);throw Error("linha ausente")};
- const cells=(campaign:number,sia:string)=>{const r=row(campaign,sia);return {state:r.getCell(3).value,shown:r.getCell(4).value,categories:[9,10,11].map(c=>r.getCell(c).value),version:r.getCell(12).value,exact:[19,20,21,22].map(c=>r.getCell(c).value),profiles:[25,26].map(c=>r.getCell(c).value)}};
+ const cells=(campaign:number,sia:string)=>{const r=row(campaign,sia);return {state:r.getCell(3).value,shown:r.getCell(4).value,categories:[8,9,10].map(c=>r.getCell(c).value),version:r.getCell(11).value,exact:[18,19,20,21].map(c=>r.getCell(c).value),profiles:[24,25].map(c=>r.getCell(c).value)}};
  // Mesmo SIA, campanhas diferentes: cada aba traz a nota da sua campanha.
  for(const campaign of [1,2,3]){
   const source=captureIndexRows(campaign).find(item=>item.sia==="17")!, got=cells(campaign,"17");

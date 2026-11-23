@@ -81,12 +81,8 @@ export type ResultsWorkbookImport = {
   contractVersion: typeof RESULTS_CONTRACT_VERSION;
   calculationVersion: typeof RESULTS_CALCULATION_VERSION;
   catalogVersion: typeof RESULTS_CATALOG_VERSION;
-  parameters: {
-    severityExponent: 1;
-    alpha: 100;
-    requiredSetCount: 3;
-    domainCount: 3;
-  };
+  /** Só em publicações antigas: parâmetros do cálculo anterior. Não é lido nem exibido. */
+  parameters?: unknown;
   source: {
     fileName: string;
     sha256: string;

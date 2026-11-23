@@ -413,6 +413,7 @@ export function LegacyPublicationFlow() {
           ? `${resultsInventory.publishedCount} de ${resultsInventory.totalCampaigns} campanhas com resultados publicados`
           : inventoryLoading ? "Consultando publicações…" : "Estado não confirmado"}
       </p>
+      <p className="type-metadata">Desta planilha do laboratório o aplicativo usa os organismos, as leituras, a literatura e a situação dos conjuntos. As abas do índice anterior não são lidas nem guardadas: as notas exibidas vêm só do índice de captação, metodologia 0.8.</p>
 
       <section className="glass-panel radius-panel p-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-2">
@@ -477,8 +478,8 @@ export function LegacyPublicationFlow() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 text-xs font-semibold text-[var(--brand-navy-strong)]">
-                <span>{resultsPreview.completePointCount} completos</span>
-                <span>{resultsPreview.partialPointCount} parciais</span>
+                <span>{resultsPreview.completePointCount} com os 3 conjuntos</span>
+                <span>{resultsPreview.partialPointCount} com 1 ou 2 conjuntos</span>
                 <span>{resultsPreview.unavailablePointCount} indisponíveis</span>
               </div>
             </div>
@@ -494,7 +495,7 @@ export function LegacyPublicationFlow() {
                   <span>
                   <strong className="text-[var(--brand-navy-strong)]">{campaign.code} · {campaign.canonicalName}</strong>
                   <span className="mt-1 block text-[var(--ink-soft)]">
-                    {campaign.totalPointCount} pontos · {campaign.completePointCount} completos · {campaign.partialPointCount} parciais · {campaign.unavailablePointCount} indisponíveis
+                    {campaign.totalPointCount} pontos · {campaign.completePointCount} com os 3 conjuntos · {campaign.partialPointCount} com 1 ou 2 · {campaign.unavailablePointCount} sem conjunto utilizável
                   </span>
                   </span>
                 </label>

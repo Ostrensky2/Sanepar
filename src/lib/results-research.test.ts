@@ -46,16 +46,18 @@ it("deduplicates reference identifiers without multiplying associations and reje
 });
 it("joins occurrence analytical state only by campaign/SIA/set, retaining reason and exclusion",()=>{
   const dto=run("section=occurrences&filter.analyticalStatus=Inconclusivo");
-  expect(dto.rows).toHaveLength(2);expect(dto.rows[0].values).toMatchObject({included:0,reason:"Razão explícita"});
+  expect(dto.rows).toHaveLength(2);expect(dto.rows[0].values).toMatchObject({reason:"Razão explícita"});
+  // A marcação "entrou na síntese" do cálculo anterior não é mais devolvida.
+  expect(Object.keys(dto.rows[0].values)).not.toContain("included");
 });
 it("content change produces a distinct revision despite unchanged declared label; unknown filters fail closed",()=>{
   const model=fixture();const before=run().revision.id;model.sheets[1].rows[5][10]="changed rationale";
   expect(run("",model).revision.id).not.toBe(before);expect(()=>run("filter.unknown=x")).toThrow();
   expect(()=>run("limit=1000")).toThrow();
 });
-it("method displays canonical terminology without rewriting raw provenance",()=>{
-  const dto=run("section=method");expect(dto.rows[1].values.explanation).toContain("Metadados");
-  expect(dto.rows[1].provenance.sourceValues["Coluna 3"]).toContain("Metadata-C2");
+it("the old per-set calculation sections are gone: only literature and occurrences can be queried",()=>{
+  for(const section of ["method","calculations"]) expect(()=>run("section="+section)).toThrow();
+  for(const section of ["impacts","occurrences","references"]) expect(run("section="+section).section).toBe(section);
 });
 it("impacts separate what was detected in the chosen campaign from the rest of the catalog",()=>{
   const all=run("campaignCode=C1&catalogScope=all");

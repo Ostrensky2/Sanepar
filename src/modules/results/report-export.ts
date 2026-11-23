@@ -13,8 +13,6 @@ function assertSnapshot(snapshot: ReportSnapshot) { if (!snapshot.records.length
 export type ReportMode = "summary" | "detailed";
 /** Notas curtas de leitura, ao final do documento. Detalhes técnicos de origem ficam somente na aba Rastreabilidade do XLSX. */
 export const reportNotes = [
-  "Índices em escala de 0 a 1, apresentados com três casas decimais.",
-  "Pontos parciais mostram uma faixa possível, sem valor único, e ficam fora de médias e rankings.",
   "Detectar DNA não comprova abundância, viabilidade, toxina ou dano no local. A literatura descreve efeitos possíveis; não os confirma no ponto. Organismo sem nota não conta como zero.",
 ];
 
