@@ -27,7 +27,7 @@ export function ScientificLibrary() {
   return <section aria-labelledby="acervo-cientifico" className="app-card min-w-0 space-y-3 p-4 sm:p-6">
     <h2 id="acervo-cientifico" className="type-section-title scroll-mt-24">Acervo de fichas científicas</h2>
     {error?<p role="alert">{error}</p>:!library?<p role="status">Carregando fichas…</p>:<>
-    <p>Versão {library.version} · {library.counts.cards} fichas revisadas · {library.counts.identities} identidades · {library.counts.sources} fontes. Candidatos aguardam revisão e ficam fora desta consulta.</p>
+    <p>Versão {library.version} · {library.counts.cards} fichas revisadas · {library.counts.identities} assuntos distintos · {library.counts.sources} fontes. Candidatos aguardam revisão e ficam fora desta consulta.</p>
     <label className="block type-label">Buscar fichas por nome ou tema<input type="search" value={query} onChange={e=>setQuery(e.target.value)} className="mt-1 block min-h-11 w-full max-w-lg rounded-lg border border-[var(--line-strong)] px-3"/></label>
     <p role="status">{cards.length} de {library.counts.cards} fichas.</p>
     {!cards.length&&<p>Nenhuma ficha corresponde à busca.</p>}

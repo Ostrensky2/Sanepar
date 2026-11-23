@@ -2,8 +2,85 @@ import "server-only";
 
 // Projeção explícita e versionada. Nunca importar o caderno privado neste módulo.
 export const scientificLibrary = {
-  "version": "fichas-ecologia/1.3.0",
+  "version": "fichas-ecologia/1.4.0",
   "cards": [
+    {
+      "id": "LL2-01",
+      "taxon": "Daphnia",
+      "rank": "genus",
+      "topic": "Sazonalidade e indicadores isotópicos",
+      "finding": "Comparação observacional em quatro lagos: séries de mais de um ano de animais e material orgânico suspenso, com análise adicional de efípios em sedimentos superficiais. Durante a estratificação de verão, as assinaturas de carbono dos animais se aproximaram das do material suspenso. Após a mistura de outono, as assinaturas dos animais foram mais baixas. Não foi detectada variação espacial entre pontos para a assinatura dos animais nos lagos estudados.",
+      "limits": "O período de produção dos efípios variou entre lagos. O indicador sedimentar isolado não reconstrói inequivocamente as transferências de carbono; ausência de diferença detectável entre pontos não prova homogeneidade universal. Leitura: Resumo dos autores, itens 2–5.",
+      "sourceIds": [
+        "LL2-01"
+      ]
+    },
+    {
+      "id": "LL2-02",
+      "taxon": "Kellicottia bostoniensis",
+      "rank": "species",
+      "topic": "Distribuição e sazonalidade de rotíferos",
+      "finding": "Série observacional de doze meses em reservatórios interligados, com comparação espacial e temporal da densidade e modelagem de variáveis ambientais. O estudo registrou a espécie em todos os reservatórios examinados uma década após o primeiro registro no sistema. Os autores relacionam as densidades observadas a períodos mais frios.",
+      "limits": "A comparação temporal não separa experimentalmente temperatura, conectividade e demais fatores. Distribuição não constitui medição de consequência ecológica adversa. Leitura: Resumo dos autores, Methods, Results e Conclusions.",
+      "sourceIds": [
+        "LL2-02"
+      ]
+    },
+    {
+      "id": "LL2-03",
+      "taxon": "Candidatus Methylopumilus",
+      "rank": "genus",
+      "topic": "Sazonalidade do bacterioplâncton",
+      "finding": "Quatro anos de acompanhamento de duas linhagens planctônicas em um lago, com 992 amostras. A linhagem LD28 apresentou picos na primavera e no período outono–inverno; no verão, sua distribuição diferiu entre camadas. A segunda linhagem foi geralmente menos abundante e também apresentou máximo na primavera.",
+      "limits": "Padrões das duas linhagens naquele lago, não calendário universal do gênero. Coincidência sazonal não estabelece causalidade. Leitura: Resumo primário, PMID 25942006; comparação espacial e temporal.",
+      "sourceIds": [
+        "LL2-03"
+      ]
+    },
+    {
+      "id": "LL2-04",
+      "taxon": "Actinobactérias planctônicas da linhagem acI",
+      "rank": "linhagem",
+      "topic": "Diversidade entre linhagens dulcícolas",
+      "finding": "Comparação dos genomas de 16 isolados dulcícolas da linhagem acI. As comparações encontraram diferenças dentro de espécies e entre espécies, particularmente em regiões associadas ao transporte e ao metabolismo de carboidratos.",
+      "limits": "A explicação proposta para o sucesso ecológico é hipótese. O estudo não mede fluxo de carbono no ambiente nem estabelece uma função uniforme para um gênero. Leitura: Resumo primário, PMID 29027997; comparação dos genomas.",
+      "sourceIds": [
+        "LL2-04"
+      ]
+    },
+    {
+      "id": "LL2-05",
+      "taxon": "Crustáceos planctônicos dulcícolas",
+      "rank": "grupo ecológico",
+      "topic": "Comprimento e massa seca",
+      "finding": "Comparação de oito espécies; relações entre medidas corporais e massa seca, com observações de campo e estudo de alimentação em laboratório. As relações foram semelhantes entre os dois diaptomídeos estudados e mais variáveis entre branquiópodes.",
+      "limits": "As medidas anatômicas diferem entre grupos. Uma relação observada em determinada espécie não é uma conversão universal nem permite estimar biomassa a partir de reads. Leitura: Resumo primário, itens 1–3.",
+      "sourceIds": [
+        "LL2-05"
+      ]
+    },
+    {
+      "id": "LL2-06",
+      "taxon": "Spongillidae",
+      "rank": "family",
+      "topic": "Micro-hábitat e distribuição",
+      "finding": "Comparação observacional de cinco espécies de esponjas em 32 locais de uma planície fluvial dulcícola. A distribuição diferiu conforme o substrato: várias espécies foram mais abundantes em madeira, enquanto substratos pedregosos se destacaram para Spongilla lacustris.",
+      "limits": "As associações observadas não demonstram preferência idêntica em toda a família nem causalidade isolada do substrato. Leitura: Resumo primário, itens 1–3.",
+      "sourceIds": [
+        "LL2-06"
+      ]
+    },
+    {
+      "id": "LL2-07",
+      "taxon": "Comunidade fitoplanctônica dulcícola",
+      "rank": "comunidade",
+      "topic": "Variação temporal e vertical",
+      "finding": "Amostragem mensal em quatro profundidades de um lago dulcícola costeiro subtropical brasileiro. Os autores detectaram variação temporal da comunidade, mas não detectaram diferença vertical no período estudado.",
+      "limits": "Contraste dentro de um lago e período, sem generalização a outros lagos, sem equivalência entre ausência de diferença detectada e uniformidade permanente. Leitura: Resumo primário, Methods e Results.",
+      "sourceIds": [
+        "LL2-07"
+      ]
+    },
     {
       "id": "eco-z1",
       "taxon": "Daphnia",
@@ -463,6 +540,41 @@ export const scientificLibrary = {
   ],
   "sources": [
     {
+      "id": "LL2-01",
+      "citation": "DOI 10.1111/fwb.13952",
+      "url": "https://doi.org/10.1111/fwb.13952"
+    },
+    {
+      "id": "LL2-02",
+      "citation": "DOI 10.1590/S2179-975X0324",
+      "url": "https://doi.org/10.1590/S2179-975X0324"
+    },
+    {
+      "id": "LL2-03",
+      "citation": "DOI 10.1038/ismej.2015.55",
+      "url": "https://doi.org/10.1038/ismej.2015.55"
+    },
+    {
+      "id": "LL2-04",
+      "citation": "DOI 10.1038/ismej.2017.156",
+      "url": "https://doi.org/10.1038/ismej.2017.156"
+    },
+    {
+      "id": "LL2-05",
+      "citation": "DOI 10.1046/j.1365-2427.1998.00267.x",
+      "url": "https://doi.org/10.1046/j.1365-2427.1998.00267.x"
+    },
+    {
+      "id": "LL2-06",
+      "citation": "DOI 10.1111/j.1365-2427.2007.01747.x",
+      "url": "https://doi.org/10.1111/j.1365-2427.2007.01747.x"
+    },
+    {
+      "id": "LL2-07",
+      "citation": "DOI 10.1590/S2179-975X2013000100011",
+      "url": "https://doi.org/10.1590/S2179-975X2013000100011"
+    },
+    {
       "id": "Z1",
       "citation": "Loose (1993), Limnology and Oceanography 38:1837",
       "url": "https://doi.org/10.4319/lo.1993.38.8.1837"
@@ -669,8 +781,8 @@ export const scientificLibrary = {
     }
   ],
   "counts": {
-    "cards": 41,
-    "identities": 31,
-    "sources": 41
+    "cards": 48,
+    "identities": 36,
+    "sources": 48
   }
 };
