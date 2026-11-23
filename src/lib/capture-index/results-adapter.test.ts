@@ -19,22 +19,33 @@ describe("ponte do índice de captação para as telas de resultados", () => {
   const campaigns = captureIndexResultsCampaigns(new Map([["220", { latitude: -25.4, longitude: -49.2, waterBody: "Rio de teste", municipality: "Município de teste" }]]));
 
   it("entrega as três campanhas com os mesmos números da saída versionada", () => {
-    expect(campaigns.map(item => [item.campaignCode, item.points.length, item.counts.complete])).toEqual([["C1", 73, 73], ["C2", 76, 76], ["C3", 76, 76]]);
+    expect(campaigns.map(item => [item.campaignCode, item.points.length, item.counts.complete])).toEqual([["C1", 73, 73], ["C2", 76, 75], ["C3", 76, 76]]);
     for (const campaign of campaigns) for (const point of campaign.points) {
       const row = captureIndexRows(Number(campaign.campaignCode.slice(1))).find(item => item.sia === point.siaCode)!;
       expect([point.overall.value, point.overall.rank]).toEqual([row.general, row.rank]);
-      expect(point.domains.environmental.value).toBe(row.scores.Ambiental!.score);
-      expect(point.domains.operational.value).toBe(row.scores.Operacional!.score);
-      expect(point.domains.humanHealth.value).toBe(row.scores["Saúde humana"]!.score);
+      expect(point.domains.environmental.value).toBe(row.scores.Ambiental?.score ?? null);
+      expect(point.domains.operational.value).toBe(row.scores.Operacional?.score ?? null);
+      expect(point.domains.humanHealth.value).toBe(row.scores["Saúde humana"]?.score ?? null);
+      expect(point.calculationVersion).toBe("IR-CAPTACAO-0.8");
+      expect(point.riskProfiles?.map(profile => profile.key)).toEqual(["operacional", "sanitario"]);
       expect(point.domains.humanHealth.lower).toBeLessThanOrEqual(point.domains.humanHealth.upper);
       expect(point.components.coi.included).toBe(row.components.COI.status === "disponível");
     }
   });
 
   it("a média da Home é a média da rede, com um voto por ponto", () => {
-    const c2 = campaigns[1], rows = captureIndexRows(2);
+    const c2 = campaigns[1], rows = captureIndexRows(2).filter(row => row.general !== null);
     expect(completeOverallSummary(c2).mean!).toBeCloseTo(rows.reduce((sum, row) => sum + row.general!, 0) / rows.length, 12);
     expect(orderCaptureCampaignsForHome(campaigns).map(item => item.campaignCode)).toEqual(["C3", "C2", "C1"]);
+  });
+
+  it("sem estimativa não vira zero nem faixa: C2 · SIA 257 fica fora da média e do ranking", () => {
+    const point = campaigns[1].points.find(item => item.siaCode === "257")!;
+    expect([point.overall.value, point.overall.rank, point.completeness, point.estimateState]).toEqual([null, null, "unavailable", "sem estimativa"]);
+    expect([point.domains.humanHealth.value, point.domains.environmental.value !== null, point.domains.operational.value !== null]).toEqual([null, true, true]);
+    expect(point.conditionOfUse).toContain("Sem estimativa");
+    const zero = campaigns[0].points.find(item => item.siaCode === "17")!;
+    expect([zero.domains.operational.value, zero.estimateState]).toEqual([0, "estimado"]);
   });
 
   it("localiza só os pontos com coordenada conhecida e não inventa posição", () => {
@@ -66,7 +77,7 @@ describe("ponte do índice de captação para as telas de resultados", () => {
     expect(auth).toHaveBeenCalledWith(expect.any(Request), "data.view");
     expect(ok.headers.get("cache-control")).toBe("private, no-store");
     const payload = await ok.json();
-    expect(payload.version).toBe("IR-CAPTACAO-0.7-piloto");
+    expect(payload.version).toBe("IR-CAPTACAO-0.8");
     expect(payload.campaigns[2].points.find((point: { siaCode: string }) => point.siaCode === "220").coordinates).toMatchObject({ latitude: -25.4, longitude: -49.2 });
     expect(payload.campaigns[2].points.find((point: { siaCode: string }) => point.siaCode === "78").coordinates).toBeNull();
     // a ordem de entrada não decide: cada campanha usa a sua coordenada; a C2, sem registro próprio, usa a reserva do mesmo SIA

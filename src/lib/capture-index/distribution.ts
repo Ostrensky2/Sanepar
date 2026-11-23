@@ -1,4 +1,4 @@
-/** Ordenação empírica do motor 0.7: uma observação por ponto medido,
+/** Ordenação empírica: uma observação por ponto medido,
  * posição ceil(p*N) em base 1, sem interpolação ou ponderação por reads. */
 export function distribution(values: readonly (number | null)[]) {
   const sorted = values.filter((v): v is number => v !== null && Number.isFinite(v)).sort((a, b) => a - b);

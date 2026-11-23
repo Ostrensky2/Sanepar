@@ -38,9 +38,9 @@ describe("vistas do índice de captação", () => {
     expect([points, history, point]).toEqual([[], [], null]);
     const selected = captureResultViews(rows, 2, "2");
     expect(selected.history).toEqual([
-      { campaign: 1, present: true, score: 1 },
-      { campaign: 2, present: true, score: null },
-      { campaign: 3, present: false, score: null },
+      { campaign: 1, present: true, score: 1, state: "estimado" },
+      { campaign: 2, present: true, score: null, state: "sem medição" },
+      { campaign: 3, present: false, score: null, state: null },
     ]);
     expect(selected.point?.general).toBe("sem medição");
   });

@@ -56,7 +56,8 @@ export default function AjudaPage() {
           <h1 className="heading-font type-page-title text-[var(--brand-navy-strong)]">Ajuda</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--ink-soft)]">
             Como usar cada tela, passo a passo, e o que fazer quando algo não aparece.
-          </p>
+            </p>
+            <a className="inline-flex min-h-11 items-center font-semibold underline" href="/resultados/calculos/0-8">Consultar o método 0.8</a>
         </div>
         <label className="flex h-11 items-center gap-3 rounded-xl border border-[var(--line-strong)] bg-white px-4 lg:min-w-[340px]">
           <Search className="h-4 w-4 text-[var(--ink-soft)]" />
@@ -137,7 +138,7 @@ export default function AjudaPage() {
             <span className="min-w-0">
               <span className="block text-sm font-black text-[var(--brand-navy-strong)]">Versões</span>
               <span className="mt-0.5 block truncate text-label font-semibold text-[var(--ink-soft)]">
-                O que mudou · em uso: {APP_VERSION}
+                O que mudou no software · em uso: {APP_VERSION}
               </span>
             </span>
             <ChevronRight className={cn("h-4 w-4 text-[var(--ink-soft)]", showVersions && "text-[var(--brand-teal)]")} />

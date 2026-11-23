@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   if(!auth.ok) return auth.response;
   const params = new URL(request.url).searchParams;
   const campaign = params.get("campaign");
-  const headers = {"Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff"};
+  const headers = {"Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff","X-Results-Version":"0.8"};
   if(!campaign || !/^[1-9]$/.test(campaign) || [...params].length!==1)
     return Response.json({error:"Informe somente uma campanha de 1 a 9."},{status:422,headers});
   return Response.json({version:captureIndexMeta.version,rowsSha256:captureIndexMeta.rowsSha256,

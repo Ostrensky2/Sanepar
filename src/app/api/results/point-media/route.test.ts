@@ -8,8 +8,8 @@ const auth = vi.hoisted(()=>vi.fn());
 const download = vi.hoisted(()=>vi.fn());
 vi.mock("@/lib/supabase",()=>({createOptionalSupabaseClient:()=>({storage:{from:(bucket:string)=>({download:(key:string)=>download(bucket,key)})}})}));
 vi.mock("@/lib/api-auth",()=>({requireApiSession:auth}));
-const indexRows=vi.hoisted(()=>vi.fn(()=>[{sia:"2"},{sia:"3"}]));
-vi.mock("@/lib/capture-index",()=>({captureIndexRows:indexRows}));
+const indexRows=vi.hoisted(()=>vi.fn(async (_campaign:number,sia:number)=>[2,3].includes(sia)));
+vi.mock("@/lib/results/point-media-scope",()=>({authorizedDiaryPointExists:indexRows}));
 vi.mock("@/lib/results/point-media",async importOriginal=>{
   const m=await importOriginal<typeof import("@/lib/results/point-media")>();
   return {...m,pointMedia:vi.fn(m.pointMedia),mediaById:vi.fn(m.mediaById),imageBytes:vi.fn(m.imageBytes)};

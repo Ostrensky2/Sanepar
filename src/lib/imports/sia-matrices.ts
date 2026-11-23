@@ -343,9 +343,11 @@ export async function buildCampaignMatrixWorkbook(pkg: MatrixPackage, snapshot: 
     const warning=[primaryConflict?`Divergência de fonte/visita: ${[...new Set(detail)].join("; ")}. Não identifica a amostra molecular.`:"",contextual.some(r=>civilDay(r.sourceDate) && civilDay(r.sourceDate)!==day)?"Datas de referência conservadas em Resultados finais e Evidências de campo; não estabelecem nem invalidam visita.":""].filter(Boolean).join(" ");
     return {day,status,warning,referenceDays,diaryDay,source:day?(diaryDay?`Diário de Campo: ${entry!.id}`:[...new Set(rr.map(r=>`${r.source} · ${r.sourcePointId??""}`))].join("; ")):""};
   };
-  const finalSheet=add("Resultados finais",["Campanha","SIA","Estado 0.7","Índice geral (como exibido)","Faixa de incerteza","Cobertura","Faixa","Posição","Ambiental","Operacional","Saúde humana","Versão","SHA-256 das linhas","Dia da visita documentada no ponto (não é data laboratorial)","Precisão","Fonte do dia de campo","Situação da visita documental","Vínculo do índice a visita/réplica","Geral integral","Ambiental integral","Operacional integral","Saúde humana integral"]);
+  const finalSheet=add("Resultados finais",["Campanha","SIA","Estado da nota 0.8","Índice geral 0.8 (como exibido)","Faixa de incerteza","Cobertura","Faixa","Posição","Ambiental","Operacional","Saúde humana","Versão","SHA-256 das linhas","Dia da visita documentada no ponto (não é data laboratorial)","Precisão","Fonte do dia de campo","Situação da visita documental","Vínculo do índice a visita/réplica","Geral integral","Ambiental integral","Operacional integral","Saúde humana integral"]);
   finalSheet.getCell("W1").value="Dia(s) de referência declarados (não comprovam visita)";
   finalSheet.getCell("X1").value="Ressalva das fontes";
+  finalSheet.getCell("Y1").value="Perfil de risco biológico operacional da captação";
+  finalSheet.getCell("Z1").value="Perfil de risco biológico sanitário da captação";
   const finalResultCount=addFinalResults(finalSheet,index,campaign,allSias,normalizeMatrixSia,link);
   summary.addRow(["Resultados finais da saída versionada (linhas)",index?finalResultCount:"Fonte não consultada"]);
   const sheetSias=allSias.filter(sia=>link(sia).day && !link(sia).diaryDay);

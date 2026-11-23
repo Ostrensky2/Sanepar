@@ -23,16 +23,16 @@ it.each(["Campanha","campaignId"])("lê %s dentro do XLSX serializado, preserva 
 });
 it("C4 com campo mas sem resultado versionado não é analisada, nem recebe zero",()=>{
   const s=new Excel.Workbook().addWorksheet("final");
-  const idx:IntegratedIndex={meta:{version:"IR-CAPTACAO-0.7-piloto",status:"piloto",rowsSha256:"0".repeat(64)},rows:[]};
+  const idx:IntegratedIndex={meta:{version:"IR-CAPTACAO-0.8",status:"metodologia 0.8",rowsSha256:"0".repeat(64)},rows:[]};
   expect(addFinalResults(s,idx,4,["SIA-0001"],normalizeMatrixSia,()=>({day:"",status:"SEM DATA",source:""}))).toBe(0);
   expect(s.getCell("C1").text).toBe("Sem resultado localizado");expect(s.getCell("D1").text).toBe("");
   expect(()=>addFinalResults(s,{...idx,rows:[{campaign:"C3",sia:"1"}] as IntegratedIndex["rows"]},4,[],normalizeMatrixSia,()=>({day:"",status:"",source:""}))).toThrow(/outra campanha/);
 });
-it.skipIf(!process.env.SIA_REAL_INTEGRATED)("arquivos reais de campo + ZIP 16 matrizes + saída 0.7 da instância local",async()=>{
+it.skipIf(!process.env.SIA_REAL_INTEGRATED)("arquivos reais de campo + ZIP 16 matrizes + notas 0.8 da instância local",async()=>{
   async function get<T>(path:string){const r=await fetch("http://127.0.0.1:3100"+path,{redirect:"error"});expect(r.status).toBe(200);return await r.json() as T}
   const pkg=await readMatrixPackage([file(process.env.SIA_MATRIX_REAL_ZIP!)]);expect(pkg.sources.length).toBe(16);
   const snapshot=await get<DiarySnapshot>("/api/field-diary");
-  const baseline=JSON.parse(readFileSync("src/lib/capture-index/indice-captacao.json","utf8")) as {rows:{campaign:number;sia:string;general:number|null;scores:Record<string,{score:number}|null>}[]};
+  const baseline={rows:(JSON.parse(readFileSync("src/lib/capture-index/pontos-0.8.json","utf8")) as {rows:{campaign:number;sia:string;geral:number|null;ambiental:number|null;operacional:number|null;saude:number|null}[]}).rows.map(p=>({campaign:p.campaign,sia:p.sia,general:p.geral,scores:{Ambiental:p.ambiental===null?null:{score:p.ambiental},Operacional:p.operacional===null?null:{score:p.operacional},"Saúde humana":p.saude===null?null:{score:p.saude}} as Record<string,{score:number}|null>}))};
   for(const c of [1,2,3,4]){
     const idx=await get<IntegratedIndex>("/api/results/capture-index?campaign="+c);
     expect(idx.rows.length).toBe([73,76,76,0][c-1]);

@@ -77,50 +77,30 @@ export function teamRulesForModule(title: string) {
 export const helpModules: HelpModule[] = [
   {
     title: "Início",
-    short: "Visão geral: números, evolução, mapa e campanhas",
+    short: "Distribuição por campanha, indicadores e mapa de navegação",
     icon: BookOpen,
-    purpose:
-      "Mostra o estado do monitoramento de uma vez: os números da campanha mais recente, a evolução do índice entre campanhas, o mapa com o índice de cada ponto e o andamento das campanhas.",
-    whenToUse: [
-      "Comece por aqui para saber como está o monitoramento.",
-      "Use a evolução para comparar campanhas ou acompanhar um ponto ao longo do tempo.",
-      "Use o mapa para achar um ponto e abrir o resultado completo dele.",
-    ],
+    purpose: "A régua compara distribuições agregadas por campanha. O índice médio usa as estimativas numéricas da edição 0.8. O mapa serve à navegação cartográfica.",
+    whenToUse: ["Compare campanhas no mesmo domínio e confira quantas captações foram medidas."],
     primaryTasks: [
-      {
-        title: "Acompanhar um ponto ao longo das campanhas",
-        steps: [
-          "Em Evolução do índice geral, digite o SIA, o manancial ou o município.",
-          "Escolha a sugestão: as colunas passam a mostrar o valor do ponto em cada campanha.",
-          "Coluna com faixa colorida = ponto parcial naquela campanha (faltou um conjunto).",
-        ],
-      },
-      {
-        title: "Ler o mapa do índice",
-        steps: [
-          "Escolha a campanha e o índice (geral, ambiental, operacional ou saúde humana).",
-          "A cor do ponto é o índice, na escala de 0 a 1; o anel mostra quantos conjuntos entraram no cálculo.",
-          "Clique num ponto para ver o painel com os valores e o botão Ver resultado completo.",
-        ],
-      },
+      { title: "Comparar distribuições", steps: [
+        "Selecione o domínio na régua e leia as frequências nas mesmas faixas.",
+        "A média considera as observações com estimativa numérica. O máximo é o maior valor observado e pode refletir um pico.",
+        "Consulte os intervalos para distinguir uma faixa com zero observações de uma campanha sem medição.",
+      ] },
     ],
     controls: [
-      { label: "?", detail: "Ao lado de cada título, explica aquele bloco." },
-      { label: "Evolução do índice geral", detail: "Média de cada campanha ou valores de um ponto escolhido." },
-      { label: "Mapa do índice", detail: "Cor = índice de 0 a 1; anel = conjuntos usados." },
+      { label: "Domínio", detail: "Alterna a distribuição agregada." },
+      { label: "Mapa de navegação", detail: "Abra o mapa para consultar a base cartográfica." },
     ],
-    notes: [
-      "O Início é só consulta; nada é editado aqui.",
-      "“Provisório” quer dizer que o laboratório ainda não informou a qualidade dos conjuntos.",
-    ],
+    notes: ["A leitura orienta investigação. A capacidade preditiva depende de validação independente."],
     troubleshooting: [
       {
-        issue: "Ponto não aparece no mapa",
-        action: "O ponto pode estar sem coordenada válida. Ele continua nos totais e nas tabelas de Campanhas e resultados.",
+        issue: "Onde consultar a distribuição por campanha?",
+        action: "Na régua acima do mapa, selecione o domínio e consulte as frequências da campanha.",
       },
       {
         issue: "Campanha sem coluna na evolução",
-        action: "Os resultados dessa campanha ainda não foram publicados em Central de dados → Pendências → Fluxo legado.",
+        action: "Verifique se há medições publicadas para o domínio. Uma campanha sem medição não recebe valor zero.",
       },
     ],
     keywords: ["mapa", "inicio", "evolucao", "indice", "painel"],
@@ -366,46 +346,15 @@ export const helpModules: HelpModule[] = [
     title: "Ciência e método",
     short: "Como o índice é calculado e o que a literatura diz",
     icon: FlaskConical,
-    purpose:
-      "Explica o índice com números reais: escolha um ponto e veja, passo a passo, como os organismos detectados viraram o índice de 0 a 1. Traz também o catálogo de efeitos descritos na literatura para cada organismo.",
-    whenToUse: [
-      "Use para entender por que um ponto tem o índice que tem.",
-      "Use para consultar os efeitos descritos para um organismo e as referências.",
-      "Use Valores por ponto para ver o valor de cada conjunto em cada domínio.",
-    ],
+    purpose: "Consulte a metodologia 0.8, usada em todo o aplicativo, e o que a literatura diz.",
+    whenToUse: ["Antes de comparar resultados, confira a versão identificada na visualização."],
     primaryTasks: [
-      {
-        title: "Refazer o cálculo de um ponto",
-        steps: [
-          "Abra Como o índice é calculado → Passo a passo.",
-          "Escolha a campanha e o ponto (a lista segue o ranking).",
-          "Escolha o conjunto e o domínio: os passos 1 a 4 e 6 mostram os números deles.",
-          "No passo 5, a grade mostra como os três conjuntos formam o índice geral.",
-        ],
-      },
-      {
-        title: "Consultar efeitos de um organismo",
-        steps: [
-          "Abra Impactos potenciais → Efeitos descritos.",
-          "Pesquise o organismo ou filtre por domínio, nota e tipo de evidência.",
-          "Use Onde ocorrem para ver em quais pontos ele foi detectado.",
-        ],
-      },
+      { title: "Conferir o método", steps: ["Abra Ciência e método → Como o índice é calculado.", "Confira a versão, as limitações da evidência e o que foi efetivamente medido."] },
+      { title: "Consultar uma referência", steps: ["Abra o Acervo científico e confira o achado, o limite de interpretação e a fonte da ficha."] },
     ],
-    controls: [
-      { label: "Metodologia completa (PDF)", detail: "Documento técnico do método, em nova aba." },
-      { label: "Ver fórmula", detail: "Mostra a fórmula de cada passo, para quem quiser." },
-    ],
-    notes: [
-      "Esta área só consulta; nada altera o cálculo publicado.",
-      "Organismo sem nota na literatura fica fora da conta; não conta como zero.",
-    ],
-    troubleshooting: [
-      {
-        issue: "Ponto parcial no passo a passo",
-        action: "O conjunto que faltou aparece como “fora”; o índice geral vira uma faixa possível.",
-      },
-    ],
+    controls: [{ label: "Como o índice é calculado", detail: "Documentação de cálculo e interpretação na própria página." }],
+    notes: ["Ausência de medição ou de evidência suficiente não equivale a zero."],
+    troubleshooting: [{ issue: "Dois números parecem incompatíveis", action: "Confira método, campanha, domínio e denominador antes da comparação." }],
     keywords: ["metodo", "calculo", "indice", "formula", "impactos", "literatura", "referencias"],
   },
   {
@@ -672,10 +621,11 @@ export const helpModules: HelpModule[] = [
       { label: "Diagnóstico", detail: "Verifica integridade operacional dos dados principais." },
     ],
     notes: [
+      "Em Regras, a versão exibida é a do software. Consulte Ciência e método para identificar a versão de cálculo.",
       "Configurações é área administrativa; alterações afetam a operação inteira.",
       "Cada painel respeita seu próprio privilégio: uma categoria pode entrar em Configurações vendo apenas o painel liberado, como só Pessoas autorizadas.",
       "Backups locais dependem de localhost e do host operacional configurado.",
-      "A versão atual é atualizada sempre que o app recebe alteração.",
+      "O número de versão do software identifica a publicação do aplicativo.",
     ],
     troubleshooting: [
       {

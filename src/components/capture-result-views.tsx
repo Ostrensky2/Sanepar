@@ -52,13 +52,13 @@ const button =
 const card = "app-card min-w-0 p-4 sm:p-6";
 const cell = "px-3 py-2.5 text-left align-middle tabular-nums";
 
-function BandChip({ value }: { value: number | null }) {
+function BandChip({ value, empty = "Sem medição" }: { value: number | null; empty?: string }) {
   const band = bandText(value);
   if (!band)
     return (
       <span className="inline-flex items-center gap-1.5 text-sm text-[var(--text-secondary)]">
         <span aria-hidden className="size-3 rounded-full border-2 border-[var(--ink-soft)] bg-transparent" />
-        Sem medição
+        {empty}
       </span>
     );
   return (
@@ -69,7 +69,7 @@ function BandChip({ value }: { value: number | null }) {
   );
 }
 
-function Meter({ value, label }: { value: number | null; label?: string }) {
+function Meter({ value, label, empty }: { value: number | null; label?: string; empty?: string }) {
   const band = bandText(value);
   return (
     <div className="min-w-0">
@@ -78,7 +78,7 @@ function Meter({ value, label }: { value: number | null; label?: string }) {
         <span aria-hidden className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-[var(--surface-muted)]">
           <span className="block h-full rounded-full" style={{ width: `${Math.max((value ?? 0) * 100, value ? 2 : 0)}%`, backgroundColor: band?.color }} />
         </span>
-        <span className="w-12 text-right text-sm font-bold tabular-nums">{formatCaptureIndex(value)}</span>
+        <span className={`${value === null && empty ? "w-auto" : "w-12"} text-right text-sm font-bold tabular-nums`}>{value === null && empty ? empty : formatCaptureIndex(value)}</span>
       </div>
     </div>
   );
@@ -250,7 +250,7 @@ function Network({ data, href }: { data: CaptureResultViews; href: (view: Captur
           </table>
         </div>
         <p className="mt-3 text-sm text-[var(--text-secondary)]">
-          O P90 usa a posição arredondada para cima, sem interpolação. Zero é nota calculada; ponto sem medição fica fora da média e do P90.
+          O P90 usa a posição arredondada para cima, sem interpolação. Zero é nota calculada; ponto sem estimativa ou sem medição fica fora da média e do P90.
         </p>
       </section>
     </div>
@@ -495,20 +495,21 @@ function Point({ data, campaign, sia, effect, href }: { data: CaptureResultViews
                 <p className="text-lg font-bold leading-snug">{placeName(places.get(sia)) || "Ponto de captação"}</p>
                 <p className="pt-2 text-sm opacity-80">Índice geral</p>
                 <p className="text-5xl font-extrabold tabular-nums">{data.point.general}</p>
-                <div className="pt-1"><BandChip value={row?.general ?? null} /></div>
+                <div className="pt-1"><BandChip value={data.point.exact.general} empty={data.point.state === "sem estimativa" ? "Sem estimativa" : "Sem medição"} /></div>
+                {data.point.state === "sem estimativa" && <p className="pt-2 text-sm">Há leitura neste ponto e campanha, mas a nota 0.8 não pode ser afirmada. Não é zero.</p>}
                 {row?.rank && <p className="pt-2 text-sm">{row.rank}º de {data.ranking.length} pontos medidos na campanha</p>}
               </div>
               <div className="min-w-0 space-y-5">
                 <div>
                   <h2 className="text-xl font-bold text-[var(--brand-navy-strong)]">Categorias</h2>
                   <p className="text-sm text-[var(--text-secondary)]">
-                    {row?.predominant ? <>Nota determinada por <strong className="text-[var(--ink)]">{row.predominant}</strong>. </> : null}
+                    {row?.predominant ? <>Categoria de maior nota: <strong className="text-[var(--ink)]">{row.predominant}</strong>. </> : null}
                     Marcadores: {data.point.coverage}.
                   </p>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-3">
-                  {data.point.domains.map((d, i) => (
-                    <Meter key={d.key} value={row?.domains[i] ?? null} label={d.label} />
+                  {data.point.domains.map((d) => (
+                    <Meter key={d.key} value={data.point!.exact.domains[d.key] ?? null} label={d.label} empty={data.point!.state === "sem medição" ? "sem medição" : "sem estimativa"} />
                   ))}
                 </div>
                 <div>
@@ -522,8 +523,8 @@ function Point({ data, campaign, sia, effect, href }: { data: CaptureResultViews
                         className={`rounded-xl border p-3 transition hover:bg-[var(--surface-soft)] ${h.campaign === campaign ? "border-[var(--brand-navy)] ring-2 ring-[var(--brand-blue-soft)]" : "border-[var(--line-ghost)]"}`}
                       >
                         <span className="block text-sm font-semibold text-[var(--text-secondary)]">C{h.campaign} · {seasons[h.campaign - 1].split(" ")[0]}</span>
-                        <span className="block text-2xl font-extrabold tabular-nums">{h.present ? formatCaptureIndex(h.score) : "—"}</span>
-                        <span className="block text-sm">{h.present ? <BandChip value={h.score} /> : "Sem registro"}</span>
+                        <span className="block text-2xl font-extrabold tabular-nums">{!h.present ? "—" : h.state === "sem estimativa" ? "sem estimativa" : formatCaptureIndex(h.score)}</span>
+                        <span className="block text-sm">{h.present ? <BandChip value={h.score} empty={h.state === "sem estimativa" ? "Sem estimativa" : "Sem medição"} /> : "Sem registro"}</span>
                       </Link>
                     ))}
                   </div>

@@ -1,0 +1,30 @@
+.panel { min-width:0; color:var(--ink); }
+.select { margin-inline-start:.5rem; min-height:44px; padding:.25rem .75rem; border:1px solid var(--line-strong); border-radius:.4rem; background:white; }
+.keys,.axis { display:flex; gap:.75rem; flex-wrap:wrap; }
+.keys span { display:inline-flex; align-items:center; gap:.35rem; }
+.keys i { display:inline-block; height:1.1rem; border-left:2px solid var(--ink); }
+.row { padding-block:.5rem; border-top:1px solid var(--line-strong); }
+.row small { font-size:.875rem; font-weight:400; }
+.chart { position:relative; display:grid; grid-template-columns:repeat(40,minmax(0,1fr)); gap:1px; align-items:end; height:5rem; margin-top:.5rem; border-bottom:1px solid var(--line-strong); background:var(--surface-soft,#f3f7f9); }
+.chart i { position:absolute; top:0; bottom:0; border-left:2px solid var(--ink); }
+.axis { justify-content:space-between; font-size:.75rem; }
+.table { width:100%; table-layout:fixed; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+.table caption { text-align:left; font-weight:700; margin-bottom:.4rem; }
+.table th,.table td { text-align:right; padding:.3rem .25rem; border-bottom:1px solid var(--line-strong); }
+.table th:first-child { text-align:left; }
+.table b { display:inline-block; width:.7rem; height:.7rem; margin-right:.35rem; }
+.summary { cursor:pointer; min-height:44px; padding-block:.6rem; }
+.plot { display:grid; grid-template-columns:2.5rem minmax(0,1fr); gap:.35rem; }
+.yAxis { display:flex; flex-direction:column; justify-content:space-between; align-items:end; font-size:.75rem; }
+.chart { margin:0; align-items:stretch; }
+.chart button { display:flex; align-items:end; height:100%; min-width:0; padding:0; cursor:pointer; }
+.chart button span { display:block; width:100%; }
+.chart button[aria-pressed=true] { outline:1px solid var(--ink); outline-offset:-1px; }
+.chart button:focus-visible { outline:2px solid var(--brand-navy); z-index:1; }
+.chart i { pointer-events:none; bottom:auto; transform:translateX(-50%); filter:drop-shadow(0 0 1px white); }
+.axis { margin-inline-start:2.85rem; }
+
+.tableFrame { width:100%; overflow-x:auto; }
+.table th:first-child { width:clamp(8rem,28%,17rem); }
+.table th:not(:first-child), .table td { text-align:center; }
+.table:has(th:nth-child(7)) { min-width:38rem; }

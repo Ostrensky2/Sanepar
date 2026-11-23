@@ -45,7 +45,7 @@ const metricOptions: Array<{ value: ResultMetric; label: string }> = [
 const completenessOptions: Array<{ value: "all" | ResultCompleteness; label: string }> = [
   { value: "all", label: "Todos os resultados" },
   { value: "complete", label: "Com índice calculado" },
-  { value: "unavailable", label: "Sem medição" },
+  { value: "unavailable", label: "Sem estimativa ou sem medição" },
 ];
 
 export function ResultsIndexDashboard({
@@ -146,11 +146,11 @@ export function ResultsIndexDashboard({
           Síntese integrada por ponto
         </h2>
         <div className="mt-2 flex items-center gap-1">
-          <p className="type-body text-[var(--ink)]">Índices de 0 a 1 · versão piloto.</p>
+          <p className="type-body text-[var(--ink)]">Índices de 0 a 1 · metodologia 0.8, por campanha e ponto.</p>
           <ResultsInterpretationHelp title="Como ler a síntese por ponto">
             <p>Compare o escore entre campanhas pela escala fixa ou consulte sua posição dentro da campanha.</p>
 
-            <p>Ponto completo tem um número. Ponto parcial tem uma faixa.</p>
+            <p>Ponto com nota calculada tem um número, inclusive zero. “Sem estimativa” e “sem medição” não têm número e não são zero.</p>
 
             <p><strong>Piloto:</strong> o índice de captação ainda não foi confrontado com ocorrências reais. Zero significa nenhuma contribuição pontuada, não ausência demonstrada de risco.</p>
           </ResultsInterpretationHelp>
@@ -215,7 +215,7 @@ export function ResultsIndexDashboard({
         <div className="app-card min-w-0 overflow-hidden border-[var(--line-ghost)] bg-[var(--surface-panel)] p-0">
           <div className="border-b border-[var(--line-soft)] p-4">
             <div className="flex items-center gap-1">
-              <h3 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">Mapa do índice</h3>
+              <h3 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">Mapa do índice · metodologia 0.8</h3>
               <button type="button" aria-label="Como ler o mapa" title="Como ler o mapa" aria-haspopup="dialog" className="-my-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--brand-teal)] transition hover:bg-[var(--surface-soft)] hover:text-[var(--brand-navy-strong)] focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]" onClick={() => setMapHelpOpen(true)}><CircleHelp aria-hidden="true" className="h-5 w-5" /></button>
             </div>
             <p role="status" className="type-metadata mt-1 text-[var(--ink-soft)]">
@@ -228,7 +228,7 @@ export function ResultsIndexDashboard({
                 <option value="fixed">Comparar campanhas · escore fixo</option><option value="relative">Dentro da campanha · posição relativa</option>
               </select></label>
               <ul className="flex flex-wrap gap-x-4 gap-y-1 type-caption">{(relative ? relativeBands : bands).map(b => <li key={b.label}><span aria-hidden="true" className="mr-1 inline-block size-3 rounded-full border" style={{backgroundColor:b.color}} />{!relative && <strong>{bandNames[bands.findIndex(x => x.label === b.label)]} </strong>}{b.label}</li>)}</ul>
-              <p className="type-metadata mt-2">A cor representa o intervalo numérico do escore. Vazado significa sem medição. O contorno indica a cobertura da categoria exibida ou determinante (menor cobertura em empate). Contínuo: ≥50% dos reads avaliados; tracejado: 20 a &lt;50%; pontilhado: &lt;20%.</p>
+              <p className="type-metadata mt-2">A cor representa o intervalo numérico do escore. Vazado significa sem estimativa ou sem medição. O contorno indica a cobertura da categoria exibida ou determinante (menor cobertura em empate). Contínuo: ≥50% dos reads avaliados; tracejado: 20 a &lt;50%; pontilhado: &lt;20%.</p>
               {relative && <p className="type-metadata">Mediana {formatValue(population.median)} · P90 {formatValue(population.p90)} · {population.count} pontos com medição. A posição descreve esta campanha. Uma mudança em toda a rede pode preservar as posições.</p>}
               {selection && <p className="type-metadata" aria-live="polite">{selectedPoint?.siaCode} · {selection.label}{selectedValue !== null && <> · posição {1 + population.sorted.filter(n => n > selectedValue).length} de {population.count}</>}{selection.domain && <> · cobertura {selection.grade} ({domains[selection.domain]})</>}</p>}</div>
           </div>
@@ -260,6 +260,7 @@ export function ResultsIndexDashboard({
       <MunicipalityTable rows={municipalityRows} />
       <ResultsHistory campaigns={campaigns} metric={metric} campaignLabels={campaignLabels} /></>}
       {mapHelpOpen && <ResultsReviewDialog title="Como ler o mapa" closeLabel="Fechar explicação" onClose={() => setMapHelpOpen(false)}>
+        <p className="type-metadata">O mapa apresenta as notas 0.8 de cada ponto nesta campanha. Zero é nota calculada. Sem estimativa: há leitura, mas a nota não pode ser afirmada. Sem medição: não há biblioteca utilizável.</p>
         <div className="space-y-4">{mapHelpSections(campaign, visiblePoints, mapPoints.map((point) => point.id), metric).map((section) => <section key={section.title}>
           <h3 className="type-label font-bold text-[var(--brand-navy-strong)]">{section.title}</h3>
           <p className="type-metadata mt-1">{section.text}</p>
@@ -275,7 +276,7 @@ export function mapHelpSections(campaign: ResultsCampaign, visiblePoints: Result
   return [
     { title: "Índice e cores", text: `${metricLabel(metric)}: escala de 0 a 1, fixa entre campanhas. O índice não representa probabilidade, percentual de dano ou classes de risco. Na escala fixa, roxo indica escore entre 0,70 e 1.` },
     { title: "Escala relativa", text: "A mediana e o percentil 90 usam todos os pontos medidos da campanha na categoria selecionada, antes dos filtros de busca. Acima do P90 indica posição relativa, não perigo." },
-    { title: "Cobertura", text: "O contorno indica a cobertura da curadoria da categoria vista; no geral, a menor cobertura entre as categorias de maior nota. O símbolo vazado indica ausência de medição utilizável." },
+    { title: "Cobertura", text: "O contorno indica a cobertura da curadoria da categoria vista; no geral, a menor cobertura entre as categorias de maior nota. O símbolo vazado indica ponto sem estimativa ou sem medição utilizável." },
     { title: "Localização", text: `${mappedIds.length} de ${visiblePoints.length} resultados filtrados no mapa. ${missing.length} sem coordenada utilizável${missing.length ? ` (${missing.map((point) => point.siaCode).join(", ")})` : ""}. Resultados sem coordenada permanecem nos totais e na tabela de resultados da campanha.` },
     { title: "Navegação", text: "Clique simples seleciona o cartão, sem zoom. Duplo clique amplia e centra o ponto no zoom máximo; repetir no mesmo ponto retorna ao enquadramento geral da campanha. Em outro ponto, amplia o novo alvo. Os botões de zoom, enquadramento e Ir para o ponto também estão disponíveis por teclado." },
     ...(conditions.length ? [{ title: "Condição de uso", text: `Condição de uso informada: ${conditions.join("; ")}.` }] : []),
@@ -299,7 +300,8 @@ function CompletenessSummary({ campaign, metric }: { campaign: ResultsCampaign; 
     ["Com 16S utilizável", String(campaign.points.filter(p => p.components.bacteria.included).length), "pontos na campanha"],
     ["Com COI utilizável", String(campaign.points.filter(p => p.components.coi.included).length), "pontos na campanha"],
     ["Com um só marcador", String(campaign.points.filter((point) => point.completeness !== "unavailable" && (!point.components.coi.included || !point.components.bacteria.included)).length), "índice calculado sem o COI ou sem o 16S"],
-    ["Sem medição", String(campaign.counts.unavailable), "sem biblioteca utilizável"],
+    ["Sem estimativa", String(campaign.points.filter((point) => point.estimateState === "sem estimativa").length), "há leitura; a nota não pode ser afirmada"],
+    ["Sem medição", String(campaign.points.filter((point) => point.completeness === "unavailable" && point.estimateState !== "sem estimativa").length), "sem biblioteca utilizável"],
     ["Total", String(campaign.counts.total), "pontos"],
     ["Índice médio", formatValue(mean), `${completeValues.length} pontos com índice calculado`],
   ];
@@ -334,11 +336,16 @@ function PointDetail({ points, onSelect, point, metric, photoUrl, onFocus }: { p
       <h3 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">{point.waterBody || "Ponto sem manancial informado"}</h3>
       <p className="type-metadata text-[var(--ink-soft)]">{point.municipality || "Município não informado"}</p>
       <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 type-metadata">
-        <dt className="font-bold text-[var(--ink-soft)]">Completude</dt><dd className="font-bold text-[var(--ink)]">{completenessLabel(point.completeness)}</dd>
-        <dt className="font-bold text-[var(--ink-soft)]">{metricLabel(metric)}</dt><dd className="font-bold tabular-nums text-[var(--brand-navy-strong)]">{point.completeness === "unavailable" ? "Indisponível" : formatRange(range)}</dd>
+        <dt className="font-bold text-[var(--ink-soft)]">Estado</dt><dd className="font-bold text-[var(--ink)]">{pointStateLabel(point)}</dd>
+        <dt className="font-bold text-[var(--ink-soft)]">{metricLabel(metric)}</dt><dd className="font-bold tabular-nums text-[var(--brand-navy-strong)]">{formatPointValue(point, range)}</dd>
         <dt className="font-bold text-[var(--ink-soft)]">Leituras utilizadas</dt><dd>{[point.components.bacteria.included && "16S", point.components.cyanobacteria.included && "cloroplasto (16S)", point.components.coi.included && "COI"].filter(Boolean).join(", ") || "Nenhuma"}</dd>
-        {metricOptions.filter((option) => option.value !== "overall").map((option) => <div key={option.value} className="contents"><dt className="font-bold text-[var(--ink-soft)]">{option.label}</dt><dd className="tabular-nums">{point.completeness === "unavailable" ? "Indisponível" : formatRange(metricRange(point, option.value))}</dd></div>)}
+        {metricOptions.filter((option) => option.value !== "overall").map((option) => <div key={option.value} className="contents"><dt className="font-bold text-[var(--ink-soft)]">{option.label}</dt><dd className="tabular-nums">{formatPointValue(point, metricRange(point, option.value))}</dd></div>)}
       </dl>
+      {point.riskProfiles?.length ? <section aria-label="Perfis de risco biológico da captação" className="mt-4 border-t border-[var(--line-ghost)] pt-3">
+        <h4 className="type-label font-bold text-[var(--brand-navy-strong)]">Perfis de risco biológico · {point.campaignCode} · SIA {point.siaCode}</h4>
+        <ul className="mt-1 space-y-2 type-metadata">{point.riskProfiles.map((profile) => <li key={profile.key} data-profile={profile.key}><strong>{profile.label}: {profile.score}</strong>
+          <span className="block">{profile.value === null ? (profile.state === "sem medição" ? "Sem biblioteca utilizável." : "Há leitura, mas a nota não pode ser afirmada. Não é zero.") : profile.effects.length || profile.otherContributions ? [...profile.effects.map((effect) => effect.title), ...(profile.otherContributions ? [`${profile.otherContributions} outra(s) contribuição(ões) documentada(s)`] : [])].join("; ") : "Nenhum tipo de efeito com contribuição documentada nesta amostra."}</span></li>)}</ul>
+      </section> : null}
       <p className="type-caption mt-3 text-[var(--ink-soft)]">{point.coordinates ? `${point.coordinates.latitude.toFixed(5)}, ${point.coordinates.longitude.toFixed(5)}` : "Sem coordenadas — incluído nas contagens e resultados."}</p>
       {point.completeness.startsWith("partial") && <p className="type-metadata mt-2 text-[var(--ink)]">Intervalo possível do índice; sem estimativa pontual.</p>}
       <details className="mt-3 border-t border-[var(--line-ghost)] pt-2 type-metadata text-[var(--ink)]">
@@ -381,9 +388,9 @@ export function resultDetailHref(campaignCode: string, siaCode?: string) {
 }
 
 function ResultsTable({ points, metric, onSelect }: { points: ResultPoint[]; metric: ResultMetric; onSelect: (key: string) => void }) {
-  return <TablePanel title="Pontos e faixas possíveis" description={`${points.length} resultados, inclusive sem localização.`}>
-    <table className="type-table w-full min-w-[620px] text-left"><thead><tr className="bg-[var(--surface-soft)]"><th className="px-3 py-2">SIA</th><th className="px-3 py-2">Município</th><th className="px-3 py-2">Completude</th><th className="px-3 py-2 text-right">{metricLabel(metric)}</th></tr></thead>
-      <tbody>{points.map((point) => <tr key={point.key} className="border-t border-[var(--line-ghost)] hover:bg-[var(--surface-soft)]"><td className="p-0"><button className="min-h-11 w-full px-3 py-2 text-left font-bold text-[var(--brand-navy-strong)] focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]" onClick={() => onSelect(point.key)}>{point.siaCode}</button></td><td className="px-3 py-2">{point.municipality || "—"}</td><td className="px-3 py-2">{completenessLabel(point.completeness)}</td><td className="px-3 py-2 text-right font-bold tabular-nums">{point.completeness === "unavailable" ? "Sem medição" : formatRange(metricRange(point, metric))}</td></tr>)}</tbody>
+  return <TablePanel title="Pontos e notas" description={`${points.length} resultados, inclusive sem localização.`}>
+    <table className="type-table w-full min-w-[620px] text-left"><thead><tr className="bg-[var(--surface-soft)]"><th className="px-3 py-2">SIA</th><th className="px-3 py-2">Município</th><th className="px-3 py-2">Estado</th><th className="px-3 py-2 text-right">{metricLabel(metric)}</th></tr></thead>
+      <tbody>{points.map((point) => <tr key={point.key} className="border-t border-[var(--line-ghost)] hover:bg-[var(--surface-soft)]"><td className="p-0"><button className="min-h-11 w-full px-3 py-2 text-left font-bold text-[var(--brand-navy-strong)] focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]" onClick={() => onSelect(point.key)}>{point.siaCode}</button></td><td className="px-3 py-2">{point.municipality || "—"}</td><td className="px-3 py-2">{pointStateLabel(point)}</td><td className="px-3 py-2 text-right font-bold tabular-nums">{formatPointValue(point, metricRange(point, metric))}</td></tr>)}</tbody>
     </table>
   </TablePanel>;
 }
@@ -486,6 +493,18 @@ function metricLabel(metric: ResultMetric) {
 
 function completenessLabel(value: ResultCompleteness) {
   return ({ complete: "Índice calculado", partial_2: "Parcial — 2/3", partial_1: "Parcial — 1/3", unavailable: "Sem medição" } as const)[value];
+}
+
+/** Estado da nota 0.8 do ponto: calculada (inclusive zero), sem estimativa ou sem medição. */
+function pointStateLabel(point: ResultPoint) {
+  return point.estimateState === "sem estimativa" ? "Sem estimativa" : point.estimateState === "sem medição" ? "Sem medição" : completenessLabel(point.completeness);
+}
+
+/** Nota ausente nunca vira zero nem faixa: mostra o estado. */
+function formatPointValue(point: ResultPoint, range: { value: number | null; lower: number; upper: number }) {
+  if (range.value !== null) return formatValue(range.value);
+  if (point.estimateState) return point.estimateState === "sem medição" ? "Sem medição" : "Sem estimativa";
+  return point.completeness === "unavailable" ? "Indisponível" : formatRange(range);
 }
 
 function formatRange(range: { value: number | null; lower: number; upper: number }) {

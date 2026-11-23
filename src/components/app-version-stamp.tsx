@@ -4,7 +4,7 @@ import { APP_LAST_UPDATED_LABEL, APP_VERSION } from "@/lib/app-version";
 export function AppVersionStamp() {
   return (
     <div
-      aria-label={`Yva’e Monitoramento, plataforma institucional ATGC e Sanepar, versão atual ${APP_VERSION}, última alteração em ${APP_LAST_UPDATED_LABEL}`}
+      aria-label={`Yva’e Monitoramento, plataforma institucional ATGC e Sanepar, versão do software ${APP_VERSION}, última alteração em ${APP_LAST_UPDATED_LABEL}`}
       className="grid w-fit gap-1.5"
     >
       <p className="heading-font justify-self-center text-sm font-extrabold leading-none tracking-tight text-[var(--brand-navy-strong)]">
@@ -18,7 +18,7 @@ export function AppVersionStamp() {
       </p>
       {/* Leva a Ajuda › Versões, que explica o que mudou em cada versão. */}
       <Link href="/ajuda?secao=versoes" title="O que mudou nesta versão" className="w-fit rounded-lg border border-[var(--line-ghost)] bg-white/70 px-2.5 py-1 text-caption font-medium leading-none text-[var(--ink-soft)] transition hover:border-[var(--brand-teal)]">
-        <strong className="font-bold text-[var(--brand-navy-strong)]">Versão atual</strong>{" "}
+        <strong className="font-bold text-[var(--brand-navy-strong)]">Versão do software</strong>{" "}
         <span className="font-black text-[var(--brand-navy-strong)]">{APP_VERSION}</span> · Última alteração em{" "}
         {APP_LAST_UPDATED_LABEL}
       </Link>

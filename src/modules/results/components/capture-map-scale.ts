@@ -26,7 +26,9 @@ export const relativeBands = [
 export function reading(point: ResultPoint, metric: Metric, relative?: ReturnType<typeof distribution>) {
   const value = metric === "overall" ? point.overall.value : point.domains[metric].value;
   const keys = Object.keys(domains) as ResultDomain[];
-  const winners = keys.filter(k => value !== null && point.domains[k].value === value);
+  // Na 0.8 o geral pode superar a maior categoria: a categoria determinante é a de maior nota (o piso).
+  const top = keys.reduce<number | null>((best, k) => { const v = point.domains[k].value; return v !== null && (best === null || v > best) ? v : best; }, null);
+  const winners = keys.filter(k => value !== null && point.domains[k].value === (metric === "overall" ? top : value));
   const domain = metric === "overall" ? [...winners].sort((a,b) =>
     (point.bibliographicCoverage?.[a] ?? -1) - (point.bibliographicCoverage?.[b] ?? -1))[0] : metric;
   const coverage = domain ? point.bibliographicCoverage?.[domain] : null;
@@ -34,5 +36,5 @@ export function reading(point: ResultPoint, metric: Metric, relative?: ReturnTyp
   const band = relative && relative.median !== null && relative.p90 !== null
     ? relativeBands[value !== null && value > relative.p90 ? 2 : value !== null && value > relative.median ? 1 : 0]
     : bands[fixedBandIndex(value)];
-  return {color: value === null ? null : band?.color ?? null, label: value === null ? "Sem medição" : band?.label, grade, domain, coverage, winners};
+  return {color: value === null ? null : band?.color ?? null, label: value === null ? (point.estimateState === "sem estimativa" ? "Sem estimativa" : "Sem medição") : band?.label, grade, domain, coverage, winners};
 }

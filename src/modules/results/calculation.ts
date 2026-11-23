@@ -8,6 +8,7 @@ import {
 } from "./types";
 
 export const RESULTS_ALPHA = 100;
+// Historical workbook engine (SANEPAR-INDICE-0.3); its RMS/mean is not the 0.8 method.
 
 export function calculateComponentIndex(weightedSignal: number, alpha = RESULTS_ALPHA) {
   assertUnitInterval(weightedSignal, "sinal ponderado");

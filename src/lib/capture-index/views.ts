@@ -116,6 +116,7 @@ export function captureResultViews(
             campaign: campaigns[i],
             present: !!match,
             score: match?.general ?? null,
+            state: !match ? null : match.general !== null ? "estimado" : match.estimate === "sem estimativa" ? "sem estimativa" : "sem medição",
           };
         })
       : [],

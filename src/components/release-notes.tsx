@@ -14,10 +14,22 @@ export function ReleaseNotes() {
         <p className="text-caption font-black text-[var(--brand-teal)]">Histórico do Yva’e</p>
         <h2 id="release-notes-title" className="heading-font mt-1 text-2xl font-black text-[var(--brand-navy-strong)]">Versões</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--ink-soft)]">
-          Você está na versão <strong className="text-[var(--brand-navy-strong)]">{APP_VERSION}</strong>, atualizada em {APP_LAST_UPDATED_LABEL}.
+          Você está na versão do software <strong className="text-[var(--brand-navy-strong)]">{APP_VERSION}</strong>, atualizada em {APP_LAST_UPDATED_LABEL}.
           Cada versão principal (1, 2, 3…) resume o que mudou; as atualizações de cada publicação entram dentro dela.
         </p>
+        <p className="mt-2 type-metadata">Método de cálculo: todo o aplicativo usa a metodologia 0.8, inclusive mapa, ficha, tabela e planilha por campanha e ponto. <a href="/resultados/calculos/0-8" className="underline">Ler o método 0.8</a></p>
       </header>
+
+      <section className="mt-5 space-y-2 rounded-lg border border-[var(--line-strong)] p-4" aria-label="Método 0.8">
+        <h3 className="type-panel-title">Método 0.8 · em uso em todo o aplicativo</h3>
+        <p>A resolução do marcador e a cobertura e confiabilidade dos bancos de referência limitam a identificação. Use espécie quando sustentada; caso contrário, registre gênero, família, ordem, nível superior ou identificação não resolvida. Se duas espécies do mesmo gênero compartilham o trecho lido, o gênero é o nome mais específico que esse trecho permite sustentar.</p>
+        <p>Essa escolha não melhora a sequência nem reclassifica resultados anteriores. A confiança no nome, a evidência de um efeito naquele grupo e a prioridade de triagem são avaliações distintas. Parentesco pode motivar um alerta; não atribui grau automaticamente nem confirma dano.</p>
+        <p>Versão do software: <strong>{APP_VERSION}</strong>.</p>
+        <p>As categorias ambiental, operacional e saúde foram preservadas. A maior nota entre elas é o piso do índice geral; um dano distinto e documentado em outra categoria pode reforçá-lo.</p>
+        <p>Cada ponto (SIA) tem a sua nota 0.8 em cada campanha, a mesma no mapa, na ficha, na tabela e na planilha unificada, com os perfis de risco biológico operacional e sanitário da captação.</p>
+        <p>Exemplo: dois registros da mesma consequência A não somam duas contribuições. Uma consequência B distinta, com evidência independente no domínio e aceita na revisão, pode elevar o resultado.</p>
+        <p>O Início apresenta a distribuição por campanha, com média, máximo e frequências por faixa. A ajuda explica a leitura. O mapa do Início oferece navegação cartográfica.</p>
+      </section>
 
       <div className="mt-5 space-y-6">
         {MAJOR_RELEASES.map((release) => {
