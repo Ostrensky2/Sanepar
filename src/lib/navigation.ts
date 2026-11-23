@@ -105,6 +105,14 @@ export const navigationItems: NavigationItem[] = [
         icon: BookOpen,
       },
       {
+        href: "/resultados/acervo",
+        label: "Acervo científico",
+        summary: "fichas revisadas e referências",
+        headerTitle: "Acervo científico",
+        privilege: "data.view",
+        icon: BookOpen,
+      },
+      {
         href: "/resultados/calculos",
         label: "Como o índice é calculado",
         summary: "passo a passo do cálculo e valores por ponto",
