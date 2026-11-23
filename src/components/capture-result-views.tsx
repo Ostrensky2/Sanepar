@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import {
   Bug,
   ChartColumnBig,
+  ChevronLeft,
+  ChevronRight,
   Download,
   FileText,
   LayoutDashboard,
@@ -40,6 +42,7 @@ const bandText = (value: number | null) => {
   const i = fixedBandIndex(value);
   return i < 0 ? null : { ...bands[i], name: bandNames[i], index: i };
 };
+const shortDomains = ["Danos", "Operação", "Saúde"];
 const seasons = ["Verão 2026", "Outono 2026", "Inverno 2026"];
 
 const link =
@@ -277,17 +280,24 @@ const placeName = (p?: Place) => [p?.waterBody, p?.municipality].filter(Boolean)
 function Campaign({ data, number, href }: { data: CaptureResultViews; number: number; href: (v: CaptureView, n?: number, sia?: string) => string }) {
   const places = usePlaces(number);
   const [all, setAll] = useState(false);
+  const [search, setSearch] = useState("");
   const s = data.campaignStats;
   const overall = data.network.find((row) => row.campaign === number);
-  const shown = all ? data.ranking : data.ranking.slice(0, 10);
+  const attention = overall ? overall.bins.slice(2).reduce((sum, x) => sum + x, 0) : 0;
+  const term = search.trim().toLocaleLowerCase("pt-BR");
+  const matches = term
+    ? data.ranking.filter((row) => `sia ${row.sia} ${placeName(places.get(row.sia))}`.toLocaleLowerCase("pt-BR").includes(term))
+    : data.ranking;
+  const shown = all || term ? matches : matches.slice(0, 10);
   return (
     <div className="space-y-6">
-      <section aria-label="Números da campanha" className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <section aria-label="Números da campanha" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Kpi label="Pontos medidos" value={`${s.measured}`} note={`de ${s.total} registrados`} />
         <Kpi label="Índice médio" value={formatCaptureIndex(s.mean)} note="cada ponto pesa igual" />
         <Kpi label="Mediana" value={formatCaptureIndex(s.median)} note="metade dos pontos abaixo" />
         <Kpi label="Percentil 90" value={formatCaptureIndex(s.p90)} note="10% dos pontos acima" />
         <Kpi label="Maior índice" value={formatCaptureIndex(s.max)} note={data.ranking[0] ? `SIA ${data.ranking[0].sia}` : undefined} accent={bandText(s.max)?.color} />
+        <Kpi label="Atenção ou acima" value={String(attention)} note={`de ${s.measured} pontos, índice a partir de 0,15`} accent={attention ? bands[2].color : undefined} />
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_1fr]">
@@ -334,12 +344,41 @@ function Campaign({ data, number, href }: { data: CaptureResultViews; number: nu
 
       <section className={card}>
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <SectionHead title={all ? `Todos os ${data.ranking.length} pontos medidos` : "Os 10 pontos com maior índice"}>
+          <SectionHead title={term ? `${matches.length} ponto(s) encontrado(s)` : all ? `Todos os ${data.ranking.length} pontos medidos` : "Os 10 pontos com maior índice"}>
             Ordem de atenção dentro da C{number}. Posição não é probabilidade de dano.
           </SectionHead>
-          <Link href={href("mapa", number)} className={button}><MapIcon className="size-4" aria-hidden />Ver no mapa</Link>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="block text-sm font-semibold">
+              Buscar SIA, manancial ou município
+              <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ex.: 78 ou Iraí" className="mt-1 block min-h-11 w-64 max-w-full rounded-lg border border-[var(--line-strong)] bg-white px-3 text-base font-normal" />
+            </label>
+            <Link href={href("mapa", number)} className={button}><MapIcon className="size-4" aria-hidden />Ver no mapa</Link>
+          </div>
         </div>
-        <div className="overflow-x-auto">
+        {!shown.length && <p role="status" className="rounded-lg bg-[var(--surface-soft)] p-4">Nenhum ponto medido com esse texto na C{number}.</p>}
+        <ul className="space-y-3 md:hidden">
+          {shown.map((row) => (
+            <li key={row.sia}>
+              <Link href={href("ponto", number, row.sia)} className="block rounded-xl border border-[var(--line-ghost)] bg-white p-3 focus-visible:outline-2">
+                <span className="flex items-start gap-3">
+                  <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--surface-soft)] text-sm font-bold">{row.rank}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-bold">SIA {row.sia}</span>
+                    <span className="block text-sm text-[var(--text-secondary)]">{placeName(places.get(row.sia)) || (row.coi ? "16S e COI" : "só 16S")}</span>
+                  </span>
+                  <span className="text-right">
+                    <span className="block text-xl font-extrabold tabular-nums">{formatCaptureIndex(row.general)}</span>
+                    <BandChip value={row.general} />
+                  </span>
+                </span>
+                <span className="mt-3 grid grid-cols-3 gap-3">
+                  {row.domains.map((value, i) => <Meter key={i} value={value} label={shortDomains[i]} />)}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <div className={`hidden overflow-x-auto md:block ${shown.length ? "" : "md:hidden"}`}>
           <table className="w-full min-w-[56rem] text-sm">
             <thead>
               <tr className="border-b border-[var(--line-strong)] text-[var(--text-secondary)]">
@@ -373,7 +412,7 @@ function Campaign({ data, number, href }: { data: CaptureResultViews; number: nu
             </tbody>
           </table>
         </div>
-        {data.ranking.length > 10 && (
+        {!term && data.ranking.length > 10 && (
           <button type="button" className={button + " mt-4"} onClick={() => setAll(!all)}>
             {all ? "Mostrar só os 10 primeiros" : `Mostrar os ${data.ranking.length} pontos`}
           </button>
@@ -418,6 +457,9 @@ function Point({ data, campaign, sia, effect, href }: { data: CaptureResultViews
   const places = usePlaces(campaign);
   const row = sia ? data.ranking.find((r) => r.sia === sia) : undefined;
   const options = useMemo(() => [...data.points].sort((a, b) => Number(a) - Number(b)), [data.points]);
+  const position = row ? data.ranking.indexOf(row) : -1;
+  const previous = position > 0 ? data.ranking[position - 1] : undefined;
+  const next = position >= 0 ? data.ranking[position + 1] : undefined;
   return (
     <div className="space-y-6">
       <section className={card}>
@@ -435,6 +477,12 @@ function Point({ data, campaign, sia, effect, href }: { data: CaptureResultViews
           </select>
         </label>
         {!sia && <p className="mt-3 text-[var(--text-secondary)]">Escolha um ponto, ou abra a ficha pela tabela da aba Por campanha.</p>}
+        {(previous || next) && (
+          <nav aria-label="Pontos vizinhos na ordem de atenção" className="mt-3 flex flex-wrap gap-2">
+            {previous && <Link className={button} href={href("ponto", campaign, previous.sia)}><ChevronLeft className="size-4" aria-hidden />{previous.rank}º · SIA {previous.sia}</Link>}
+            {next && <Link className={button} href={href("ponto", campaign, next.sia)}>{next.rank}º · SIA {next.sia}<ChevronRight className="size-4" aria-hidden /></Link>}
+          </nav>
+        )}
       </section>
 
       {sia && !data.point && <p role="status" className={card}>SIA {sia} sem registro nesta campanha.</p>}
@@ -484,7 +532,7 @@ function Point({ data, campaign, sia, effect, href }: { data: CaptureResultViews
             </div>
           </section>
           <section className={card + " space-y-4"}>
-            <CapturePointEvidence row={data.point} version={data.version} effectId={effect} />
+            <CapturePointEvidence row={data.point} version={data.version} effectId={effect} compact />
           </section>
           <section className={card}>
             <PointMediaGallery key={campaign + "-" + sia} campaign={campaign} sia={sia} />
