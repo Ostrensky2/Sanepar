@@ -2,8 +2,26 @@ import "server-only";
 
 // Projeção explícita e versionada. Nunca importar o caderno privado neste módulo.
 export const scientificLibrary = {
-  "version": "fichas-ecologia/1.2.0",
+  "version": "fichas-ecologia/1.3.0",
   "cards": [
+    {
+      "id": "eco-z1",
+      "taxon": "Daphnia",
+      "rank": "genus",
+      "topic": "Migração vertical",
+      "finding": "Uma população híbrida de D. galeata × hyalina apresentou migração vertical diária em coluna de água experimental. O estudo examinou a persistência do padrão em escuridão constante, após cobrir a coluna.",
+      "limits": "O resultado não sustentou um ritmo endógeno autônomo como explicação suficiente nas condições estudadas. A conclusão se restringe à população e às condições do estudo. Leitura do resumo dos autores.",
+      "sourceIds": ["Z1"]
+    },
+    {
+      "id": "eco-z2",
+      "taxon": "Keratella",
+      "rank": "genus",
+      "topic": "Variação morfológica",
+      "finding": "Em K. cochlearis, as medidas de comprimento da espinha variaram em direções opostas conforme o predomínio de grupos de predadores de tamanhos diferentes no monitoramento de água doce.",
+      "limits": "O trabalho distingue acompanhamento de campo e comparação experimental. O comprimento da espinha não mede abundância nem comprova isoladamente um mecanismo em campo. Leitura do resumo, da seção Field study e da discussão de explicações alternativas.",
+      "sourceIds": ["Z2"]
+    },
     {
       "id": "eco-r1",
       "taxon": "Cosmarium",
@@ -445,6 +463,16 @@ export const scientificLibrary = {
   ],
   "sources": [
     {
+      "id": "Z1",
+      "citation": "Loose (1993), Limnology and Oceanography 38:1837",
+      "url": "https://doi.org/10.4319/lo.1993.38.8.1837"
+    },
+    {
+      "id": "Z2",
+      "citation": "Bi-directional plasticity (2017), Scientific Reports",
+      "url": "https://doi.org/10.1038/s41598-017-08772-7"
+    },
+    {
       "id": "R1",
       "citation": "Hoehnea (2011), inventário limnético de desmídias",
       "url": "https://doi.org/10.1590/S2236-89062011000300006"
@@ -641,8 +669,8 @@ export const scientificLibrary = {
     }
   ],
   "counts": {
-    "cards": 39,
+    "cards": 41,
     "identities": 31,
-    "sources": 39
+    "sources": 41
   }
 };
