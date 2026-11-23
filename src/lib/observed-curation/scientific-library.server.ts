@@ -2,8 +2,63 @@ import "server-only";
 
 // Projeção explícita e versionada. Nunca importar o caderno privado neste módulo.
 export const scientificLibrary = {
-  "version": "fichas-ecologia/1.4.0",
+  "version": "fichas-ecologia/1.5.0",
   "cards": [
+    {
+      "id": "CLF-04",
+      "taxon": "Diatomáceas de água doce",
+      "rank": "grupo ecológico",
+      "topic": "Comparabilidade de eDNA e microscopia",
+      "finding": "eDNA da água superficial comparado com identificação microscópica de diatomáceas bentônicas. Os índices tróficos derivados dos dois levantamentos diferiram sistematicamente. A representação relativa de alguns grupos explicou parte da discrepância.",
+      "limits": "Tanto a matriz quanto o método diferiram. Não atribuir o desacordo apenas ao sequenciamento nem converter reads em abundância. Leitura: Resumo primário, comparação de duas bacias fluviais.",
+      "sourceIds": [
+        "CLF-04"
+      ]
+    },
+    {
+      "id": "CLF-05",
+      "taxon": "Copépodes dulcícolas",
+      "rank": "grupo ecológico",
+      "topic": "Seleção alimentar e percepção de partículas",
+      "finding": "Cinco espécies comparadas em ensaios de alimentação; hipótese de detecção química examinada separadamente. A seleção variou com características das partículas. Em Diaptomus birgei, a adição dos estímulos químicos testados não alterou a taxa de remoção nem a seletividade.",
+      "limits": "Evidência comportamental sobre alimentação de copépodes, não percepção humana de odor ou gosto, nem prova de ausência de quimiorrecepção no grupo. Leitura: Resumo primário, ensaios com traçadores.",
+      "sourceIds": [
+        "CLF-05"
+      ]
+    },
+    {
+      "id": "CL1-01",
+      "taxon": "Cryptomonas",
+      "rank": "genus",
+      "topic": "Distribuição vertical em lago estratificado",
+      "finding": "Observação plurianual de um lago estratificado. Populações de C. phaseolus, C. undulata e, frequentemente, C. rostratiformis compunham um máximo profundo de clorofila no verão. Os autores não as observaram no epilímnio nessa estação.",
+      "limits": "Resultado para as populações e camadas examinadas. A explicação da coexistência pela variação luminosa é hipótese; não é indicação sensorial. Leitura: Resumo primário, itens 1–5.",
+      "sourceIds": [
+        "CL1-01"
+      ]
+    },
+    {
+      "id": "CL1-02",
+      "taxon": "Comunidades de turbelários dulcícolas",
+      "rank": "comunidade",
+      "topic": "Composição versus riqueza observada",
+      "finding": "Amostragem das margens de áreas úmidas permanentes agrupadas segundo perímetro ao longo de um ciclo anual. As categorias diferiram na composição. A riqueza média observada não diferiu significativamente entre categorias nem entre amostras sazonais, embora a riqueza estimada fosse maior nas pequenas áreas úmidas.",
+      "limits": "Riqueza observada e estimada respondem a perguntas diferentes. O estudo não demonstra equivalência entre comunidades. Leitura: Resumo primário, comparação anual entre três categorias de áreas úmidas.",
+      "sourceIds": [
+        "CL1-02"
+      ]
+    },
+    {
+      "id": "CL1-03",
+      "taxon": "Comunidades zooplanctônicas de veredas",
+      "rank": "comunidade",
+      "topic": "Riqueza e densidade",
+      "finding": "Comparação observacional entre ambientes com e sem macrófitas, com doze coletas superficiais. O lago com macrófitas teve maior riqueza e menor densidade de zooplâncton; o outro exibiu o padrão inverso.",
+      "limits": "A vegetação não foi manipulada. Heterogeneidade ambiental e disponibilidade de recursos não foram separadas experimentalmente. Leitura: Resumo primário, Methods, Results e Conclusions.",
+      "sourceIds": [
+        "CL1-03"
+      ]
+    },
     {
       "id": "LL2-01",
       "taxon": "Daphnia",
@@ -540,6 +595,31 @@ export const scientificLibrary = {
   ],
   "sources": [
     {
+      "id": "CLF-04",
+      "citation": "DOI 10.1080/02705060.2026.2633108",
+      "url": "https://doi.org/10.1080/02705060.2026.2633108"
+    },
+    {
+      "id": "CLF-05",
+      "citation": "DOI 10.1093/plankt/13.6.1203",
+      "url": "https://doi.org/10.1093/plankt/13.6.1203"
+    },
+    {
+      "id": "CL1-01",
+      "citation": "DOI 10.1046/j.1365-2427.1998.00260.x",
+      "url": "https://doi.org/10.1046/j.1365-2427.1998.00260.x"
+    },
+    {
+      "id": "CL1-02",
+      "citation": "DOI 10.1111/ivb.12032",
+      "url": "https://doi.org/10.1111/ivb.12032"
+    },
+    {
+      "id": "CL1-03",
+      "citation": "Structure and biodiversity of zooplankton communities in freshwater habitats of a Vereda wetland region, Minas Gerais, Brazil",
+      "url": "https://doi.org/10.1590/S2179-975X0415"
+    },
+    {
       "id": "LL2-01",
       "citation": "DOI 10.1111/fwb.13952",
       "url": "https://doi.org/10.1111/fwb.13952"
@@ -781,8 +861,8 @@ export const scientificLibrary = {
     }
   ],
   "counts": {
-    "cards": 48,
-    "identities": 36,
-    "sources": 48
+    "cards": 53,
+    "identities": 40,
+    "sources": 53
   }
 };

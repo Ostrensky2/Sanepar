@@ -21,8 +21,8 @@ it("entrega o acervo ao leitor autorizado com cache privado desativado", async (
   expect(response.status).toBe(200);
   expect(response.headers.get("Cache-Control")).toBe("private, no-store");
   const library = await response.json();
-  expect(library.version).toBe("fichas-ecologia/1.4.0");
-  expect(library.counts).toEqual({ cards: 48, identities: 36, sources: 48 });
+  expect(library.version).toBe("fichas-ecologia/1.5.0");
+  expect(library.counts).toEqual({ cards: 53, identities: 40, sources: 53 });
   expect(library.counts.cards).toBe(library.cards.length);
   expect(library.sources.length).toBe(library.counts.sources);
 });
