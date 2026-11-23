@@ -11,6 +11,8 @@ export const bands = [
   { start: 0.35, label: "0,35 a <0,70", color: "#ce673f" },
   { start: 0.70, label: "0,70 a 1", color: "#762a83" },
 ];
+/** Nome de cada faixa, na ordem de `bands`. Faixa não é classe de risco comprovada. */
+export const bandNames = ["Sinal muito baixo", "Sinal fraco", "Atenção", "Prioridade", "Prioridade máxima"] as const;
 export function fixedBandIndex(value: number | null) {
   if (value === null || !Number.isFinite(value) || value < 0 || value > 1) return -1;
   return bands.reduce((found, band, index) => value >= band.start ? index : found, -1);

@@ -11,7 +11,7 @@ import {
   CampaignHydroMap,
   type CampaignHydroMapPoint,
 } from "@/components/campaign-hydro-map";
-import { bands, relativeBands, distribution, reading, domains } from "./capture-map-scale";
+import { bands, bandNames, relativeBands, distribution, reading, domains } from "./capture-map-scale";
 import { analyticalStatusText } from "../presentation";
 
 import { ResultsInterpretationHelp } from "./results-interpretation-help";
@@ -30,6 +30,8 @@ export type ResultsIndexDashboardProps = {
   campaignLabels?: Record<string, string>;
   fieldPhotos?: Record<string, string>;
   summary?: boolean;
+  /** Dentro de uma subaba que já tem título: esconde só o cabeçalho repetido. */
+  embedded?: boolean;
   overview?: (campaign: ResultsCampaign) => React.ReactNode;
 };
 
@@ -52,6 +54,7 @@ export function ResultsIndexDashboard({
   campaignLabels = {},
   fieldPhotos = {},
   summary = false,
+  embedded = false,
   overview,
 }: ResultsIndexDashboardProps) {
   const firstCampaignCode = initialCampaignCode ?? campaigns[0]?.campaignCode ?? "";
@@ -137,7 +140,7 @@ export function ResultsIndexDashboard({
   return (
     <section id="results-index-dashboard" className="scroll-mt-20 space-y-4" aria-labelledby="results-index-title">
       {overview?.(campaign)}
-      <header className={summary ? "sr-only" : "app-card p-4 sm:p-5"}>
+      <header className={summary || embedded ? "sr-only" : "app-card p-4 sm:p-5"}>
         <p className="type-eyebrow text-[var(--brand-navy-strong)]">Resultados por índices</p>
         <h2 id="results-index-title" className="heading-font type-section-title text-[var(--brand-navy-strong)]">
           Síntese integrada por ponto
@@ -224,7 +227,7 @@ export function ResultsIndexDashboard({
               <select className="min-h-11 rounded border bg-white px-2" value={relative ? "relative" : "fixed"} onChange={e => setRelative(e.target.value === "relative")}>
                 <option value="fixed">Comparar campanhas · escore fixo</option><option value="relative">Dentro da campanha · posição relativa</option>
               </select></label>
-              <ul className="flex flex-wrap gap-x-4 gap-y-1 type-caption">{(relative ? relativeBands : bands).map(b => <li key={b.label}><span aria-hidden="true" className="mr-1 inline-block size-3 rounded-full border" style={{backgroundColor:b.color}} />{b.label}</li>)}</ul>
+              <ul className="flex flex-wrap gap-x-4 gap-y-1 type-caption">{(relative ? relativeBands : bands).map(b => <li key={b.label}><span aria-hidden="true" className="mr-1 inline-block size-3 rounded-full border" style={{backgroundColor:b.color}} />{!relative && <strong>{bandNames[bands.findIndex(x => x.label === b.label)]} </strong>}{b.label}</li>)}</ul>
               <p className="type-metadata mt-2">A cor representa o intervalo numérico do escore. Vazado significa sem medição. O contorno indica a cobertura da categoria exibida ou determinante (menor cobertura em empate). Contínuo: ≥50% dos reads avaliados; tracejado: 20 a &lt;50%; pontilhado: &lt;20%.</p>
               {relative && <p className="type-metadata">Mediana {formatValue(population.median)} · P90 {formatValue(population.p90)} · {population.count} pontos com medição. A posição descreve esta campanha. Uma mudança em toda a rede pode preservar as posições.</p>}
               {selection && <p className="type-metadata" aria-live="polite">{selectedPoint?.siaCode} · {selection.label}{selectedValue !== null && <> · posição {1 + population.sorted.filter(n => n > selectedValue).length} de {population.count}</>}{selection.domain && <> · cobertura {selection.grade} ({domains[selection.domain]})</>}</p>}</div>

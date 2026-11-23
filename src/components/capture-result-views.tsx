@@ -12,7 +12,7 @@ import {
   MapPin,
   Microscope,
 } from "lucide-react";
-import { bands, fixedBandIndex } from "@/modules/results/components/capture-map-scale";
+import { bands, bandNames, fixedBandIndex } from "@/modules/results/components/capture-map-scale";
 import { formatCaptureIndex } from "@/lib/capture-index/format";
 import type { CaptureResultViews } from "@/lib/capture-index/views";
 import { defaultCampaigns } from "@/lib/campaign-management";
@@ -36,8 +36,6 @@ const tabs: Record<CaptureView, { label: string; icon: typeof MapIcon }> = {
   ponto: { label: "Por ponto", icon: MapPin },
 };
 
-/** Nome de cada faixa da escala fixa (mesmos limites e cores do mapa). Faixa não é classe de risco comprovada. */
-export const bandNames = ["Sinal muito baixo", "Sinal fraco", "Atenção", "Prioridade", "Prioridade máxima"] as const;
 const bandText = (value: number | null) => {
   const i = fixedBandIndex(value);
   return i < 0 ? null : { ...bands[i], name: bandNames[i], index: i };
@@ -412,7 +410,7 @@ function MapTab({ campaign }: { campaign: number }) {
   const labels = Object.fromEntries(defaultCampaigns.map((item, index) => [`C${index + 1}`, item.title]));
   if (state === "error") return <p role="alert" className={card}>Não foi possível carregar o mapa agora.</p>;
   if (!state) return <section className="app-card h-96 animate-pulse bg-[var(--surface-soft)]" aria-label="Carregando o mapa" />;
-  return <ResultsIndexDashboard key={campaign} campaigns={state} initialCampaignCode={`C${campaign}`} campaignLabels={labels} />;
+  return <ResultsIndexDashboard key={campaign} campaigns={state} initialCampaignCode={`C${campaign}`} campaignLabels={labels} embedded />;
 }
 
 function Point({ data, campaign, sia, effect, href }: { data: CaptureResultViews; campaign: number; sia?: string; effect?: string; href: (v: CaptureView, n?: number, sia?: string) => string }) {
