@@ -18,7 +18,7 @@ it.each(["Campanha","campaignId"])("lê %s dentro do XLSX serializado, preserva 
   const out=await buildCampaignMatrixWorkbook(pkg,{entries:[],complete:true,totalCount:0,persistence:"cloud"},2,undefined,[],undefined,undefined,{name:"campo.xlsx",size:buf.length,arrayBuffer:async()=>buf.buffer});
   const book=new Excel.Workbook();await book.xlsx.load(out.bytes);
   expect(out.sheetSias).toEqual(["SIA-0045"]);expect(out.unresolvedSias).toEqual(["SIA-0046","SIA-0047"]);expect(out.linkedByDiary).toBe(0);
-  const final=book.getWorksheet("Resultados finais")!;expect(final.getCell("N2").text).toBe("2026-06-12");expect(final.getCell("P2").text).toContain("Ficha!2");expect(final.getCell("R2").text).toContain("não identifica visita");
+  const final=book.getWorksheet("Resultados finais")!;expect(final.getCell("M2").text).toBe("2026-06-12");expect(final.getCell("O2").text).toContain("Ficha!2");expect(final.getCell("Q2").text).toContain("não identifica visita");
   ws.getCell("A2").value="C1";const bad=new Uint8Array(await wb.xlsx.writeBuffer());await expect(buildCampaignMatrixWorkbook(pkg,{entries:[],complete:true,totalCount:0,persistence:"cloud"},2,undefined,[],undefined,undefined,{name:"campo.xlsx",size:bad.length,arrayBuffer:async()=>bad.buffer})).rejects.toThrow(/Campanha interna/);
 });
 it("C4 com campo mas sem resultado versionado não é analisada, nem recebe zero",()=>{
@@ -52,24 +52,24 @@ it.skipIf(!process.env.SIA_REAL_INTEGRATED)("arquivos reais de campo + ZIP 16 ma
     for(const p of idx.rows)expect(by.get(normalizeMatrixSia(p.sia)!)?.getCell(4).text).toBe(p.measured?p.general:"");
     const original=baseline.rows.filter(p=>p.campaign===c);
     expect(original).toHaveLength(idx.rows.length);
-    for(const p of original)expect([19,20,21,22].map(col=>by.get(normalizeMatrixSia(p.sia)!)!.getCell(col).value)).toEqual([p.general,...["Ambiental","Operacional","Saúde humana"].map(d=>p.scores[d]?.score??null)]);
+    for(const p of original)expect([18,19,20,21].map(col=>by.get(normalizeMatrixSia(p.sia)!)!.getCell(col).value)).toEqual([p.general,...["Ambiental","Operacional","Saúde humana"].map(d=>p.scores[d]?.score??null)]);
     const ev=book.getWorksheet("Evidências de campo")!, vals=ev.getSheetValues().slice(2) as unknown[][];
     if(c===1){
       const bare=await buildCampaignMatrixWorkbook(pkg,snapshot,c,undefined,ref.references,ref,idx);
       expect(bare.linkedBySheet+bare.linkedByDiary).toBe(0);expect(bare.referenceOnlySias).toHaveLength(72);
       expect(out.linkedBySheet).toBe(72);expect(out.unresolvedSias).toEqual(["SIA-0305"]);
-      for(const [sia,date] of [[106,"2026-03-07"],[146,"2026-03-03"],[241,"2026-03-07"],[244,"2026-03-08"]] as const)expect(by.get(normalizeMatrixSia(sia)!)?.getCell(14).text).toBe(date);
+      for(const [sia,date] of [[106,"2026-03-07"],[146,"2026-03-03"],[241,"2026-03-07"],[244,"2026-03-08"]] as const)expect(by.get(normalizeMatrixSia(sia)!)?.getCell(13).text).toBe(date);
       expect(vals.some(r=>String(r[2]).includes("1037*")&&!r[3])).toBe(true);
       expect(vals.some(r=>String(r[12]).includes("valor salvo da fórmula"))).toBe(true);
     }
-    if(c===2){expect(by.get("SIA-0174")!.getCell(14).text).toBe("2026-06-12");expect(by.get("SIA-0174")!.getCell(18).text).toContain("não identifica visita");expect(vals.some(r=>r[3]==="SIA-0174"&&r[7]==="not_realized"&&!r[9])).toBe(true);expect(out.linkedByDiary).toBe(75);expect(out.unresolvedSias).toEqual(["SIA-1037"])}
+    if(c===2){expect(by.get("SIA-0174")!.getCell(13).text).toBe("2026-06-12");expect(by.get("SIA-0174")!.getCell(17).text).toContain("não identifica visita");expect(vals.some(r=>r[3]==="SIA-0174"&&r[7]==="not_realized"&&!r[9])).toBe(true);expect(out.linkedByDiary).toBe(75);expect(out.unresolvedSias).toEqual(["SIA-1037"])}
     if(c===2){
       for(const [sia,day] of [["SIA-0091","2026-06-21"],["SIA-0377","2026-06-22"]]){
-        expect(by.get(sia)!.getCell(14).text).toBe(day);
-        const detail=by.get(sia)!.getCell(24).text;
+        expect(by.get(sia)!.getCell(13).text).toBe(day);
+        const detail=by.get(sia)!.getCell(23).text;
         for(const needle of ["Planilha1!","Planilha2!","2026-06-21","2026-06-22","Diário"])expect(detail).toContain(needle);
       }
-      expect(by.get("SIA-0174")!.getCell(24).text).toContain("2026-06-18 (not_realized)");
+      expect(by.get("SIA-0174")!.getCell(23).text).toContain("2026-06-18 (not_realized)");
       expect(vals.some(r=>String(r[2]).includes("3051037")&&!r[3])).toBe(true);
     }
     if(c===3){expect(new Set(pkg.sources.filter(s=>s.campaign===c).map(s=>s.run)).size).toBe(2);expect(out.linkedByDiary).toBe(76)}

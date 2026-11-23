@@ -8,23 +8,17 @@ import { formatNumber, formatProportionAsPercent } from "@/lib/number-format";
 import type { ResultsInventoryItem, ResultsInventoryResponse } from "@/lib/results-publication-contract";
 import { RESULTS_RESEARCH_SECTIONS, type ResearchRow, type ResearchValue, type ResultsResearchResponse, type ResultsResearchSection } from "@/lib/results-research-contract";
 import { ScientificActiveFilters, ScientificMultiFilter, ScientificRecordDetail, ScientificSourceLinks, ScientificViews, scientificControl } from "./scientific-query-controls";
-import { formatResultIndex } from "../format-index";
 import { hasAvailableResultsSource, sameSourceHash } from "../presentation";
 import { isHiddenVersionField, mentionsInternalVersion } from "../hidden-fields";
 import { buildResearchReport, researchRecordLabel, researchSelectionIdentity, researchUnit } from "../report-snapshot";
 import { ReportActions } from "./report-actions";
-import { ResearchMethod } from "./research-method";
-import { IndexBar } from "./campaign-story";
-import { resultDetailHref } from "./results-index-dashboard";
 
-const labels: Record<ResultsResearchSection, string> = { impacts: "Efeitos descritos", occurrences: "Onde ocorrem", references: "Referências", calculations: "Valores por ponto", method: "Passo a passo" };
+const labels: Record<ResultsResearchSection, string> = { impacts: "Efeitos descritos", occurrences: "Onde ocorrem", references: "Referências" };
 /** Filtros sempre visíveis por visão; os demais ficam em "Mais filtros". */
 const PRIMARY_FACETS: Record<ResultsResearchSection, string[]> = {
   impacts: ["domain", "effectCode", "score", "evidenceType", "analyticalGroups", "municipality"],
   occurrences: ["sia", "municipality", "set", "domain", "score"],
   references: ["domain", "effectCode", "score"],
-  calculations: ["sia", "set", "analyticalStatus"],
-  method: [],
 };
 
 export function researchValueText(value: ResearchValue | undefined): string {
@@ -32,13 +26,11 @@ export function researchValueText(value: ResearchValue | undefined): string {
 }
 export function researchFieldText(key: string, value: ResearchValue | undefined) {
   if (key === "included" && (value === 0 || value === 1 || value === "0" || value === "1")) return Number(value) === 1 ? "Sim" : "Não";
-  if (/^(environmental|operational|humanHealth)(Calculated|Used)$/.test(key)) return formatResultIndex(value, "Não informado na fonte");
   if ((key === "proportion" || /Coverage$/.test(key)) && typeof value === "number") return formatProportionAsPercent(value);
   return researchValueText(value);
 }
 /** Índices 0–1 ganham a barra na escala de cor do mapa; o resto é texto. */
 function researchCell(key: string, value: ResearchValue | undefined): ReactNode {
-  if (/^(environmental|operational|humanHealth)(Calculated|Used)$/.test(key) && typeof value === "number" && Number.isFinite(value)) return <IndexBar value={value} />;
   if (key === "detection") return value === "Não detectado" ? <span className="text-[var(--ink-soft)]">Só no catálogo</span> : <strong className="whitespace-nowrap font-semibold text-[var(--brand-navy-strong)]">{researchValueText(value)}</strong>;
   return researchFieldText(key, value);
 }
@@ -79,15 +71,14 @@ export function researchMonitoringHref(row: ResearchRow, inventory: ResultsInven
   return `/campanhas/resultados?${new URLSearchParams({ campaign: target.canonicalId, publicationId: target.publicationId, sourceHash: target.source.sha256, sia: String(sia) })}`;
 }
 
-export { ResearchMethod } from "./research-method";
 
-export function ResearchBrowser({ module, initialQuery = "" }: { module: "impacts" | "calculations"; initialQuery?: string }) {
+export function ResearchBrowser({ module, initialQuery = "" }: { module: "impacts"; initialQuery?: string }) {
   const router = useRouter();
   const initial = new URLSearchParams(initialQuery);
   const isPreparation = module === "impacts" && initial.get("source") === "preparation";
   const revisionHash = initial.get("revisionHash") ?? "";
   const packageKey = initial.get("packageKey") ?? "";
-  const sections: ResultsResearchSection[] = module === "impacts" ? isPreparation ? ["impacts", "references"] : ["impacts", "occurrences", "references"] : ["method", "calculations"];
+  const sections: ResultsResearchSection[] = isPreparation ? ["impacts", "references"] : ["impacts", "occurrences", "references"];
   const initialSection = initial.get("section") as ResultsResearchSection;
   const [section, setSection] = useState<ResultsResearchSection>(sections.includes(initialSection) ? initialSection : sections[0]);
   const [inventory, setInventory] = useState<ResultsInventoryItem[] | null>(isPreparation ? [] : null);
@@ -111,8 +102,7 @@ export function ResearchBrowser({ module, initialQuery = "" }: { module: "impact
   const identityMismatch = !!inventory && !!sourceCode && (!selectedSource || (pinnedIdentity.publicationId && selectedSource.publicationId !== pinnedIdentity.publicationId) || (pinnedIdentity.sourceHash && !sameSourceHash(selectedSource.source.sha256, pinnedIdentity.sourceHash)));
   const source = identityMismatch ? undefined : selectedSource;
   const sourceUnavailable = !!source && !hasAvailableResultsSource(source);
-  // Passo a passo e Valores por ponto ficam sempre na campanha escolhida no seletor acima.
-  const requestFilters = (section === "method" || section === "calculations") && source ? { ...filters, campaign: [source.campaignCode] } : filters;
+  const requestFilters = filters;
   const requestParams = isPreparation ? new URLSearchParams({ source: "preparation", revisionHash, ...(packageKey ? { packageKey } : {}), section, offset: String(offset), limit: "25", q: appliedQuery }) : source ? researchQuery(source, section, requestFilters, appliedQuery, offset) : null;
   if (isPreparation && requestParams) for (const [key, values] of Object.entries(filters)) for (const value of values) requestParams.append(`filter.${key}`, value);
   if (requestParams) requestParams.set("catalogScope", catalogScope);
@@ -121,7 +111,6 @@ export function ResearchBrowser({ module, initialQuery = "" }: { module: "impact
   const selectionIdentity = data ? `${researchSelectionIdentity(data, source?.campaignCode ?? "")}:${catalogScope}` : "";
   const selectedRows = selection.identity === selectionIdentity ? selection.rows : [];
   const error = failure?.key === requestKey ? failure.message : "";
-  const isMethod = section === "method";
 
   useEffect(() => {
     if (isPreparation) return;
@@ -160,10 +149,10 @@ export function ResearchBrowser({ module, initialQuery = "" }: { module: "impact
     const params = researchQuery(source, link.section, link.filters, "", 0);
     if (!params) return;
     if (sections.includes(link.section)) { setSection(link.section); setFilters(link.filters); setQuery(""); setAppliedQuery(""); setOffset(0); setDetail(null); }
-    else router.push(`/resultados/${link.section === "calculations" || link.section === "method" ? "calculos" : "impactos"}?${params}`);
+    else router.push(`/resultados/impactos?${params}`);
   }
 
-  const facets = (data?.facets ?? []).filter((facet) => !(facet.key === "campaign" && (section === "calculations" || section === "method")));
+  const facets = data?.facets ?? [];
   const primary = facets.filter((facet) => PRIMARY_FACETS[section].includes(facet.key));
   const secondary = facets.filter((facet) => !PRIMARY_FACETS[section].includes(facet.key));
   const secondaryActive = secondary.filter((facet) => filters[facet.key]?.length).length;
@@ -187,21 +176,20 @@ export function ResearchBrowser({ module, initialQuery = "" }: { module: "impact
       </div> : !inventory.length && !isPreparation ? <p role="status">Nenhuma campanha publicada. A entrada de planilhas é feita em <Link href="/dados/pendencias#fluxo-legado" className="underline">Central de dados → Pendências → Fluxo legado</Link>.</p> : <>
       <div className="app-card grid items-end gap-3 p-3 sm:grid-cols-2 lg:grid-cols-[minmax(12rem,16rem)_minmax(0,1fr)_minmax(12rem,16rem)]">
         {!isPreparation && <label className="type-label flex min-w-0 flex-col gap-1">Campanha
-          <select className={scientificControl} disabled={!inventory?.length} value={source?.campaignCode ?? ""} onChange={(event) => { setSelection({ identity: "", rows: [] }); setSourceCode(event.target.value); setPinnedIdentity({ publicationId: null, sourceHash: null }); setOffset(0); setDetail(null); if (isMethod) setFilters((current) => ({ ...current, sia: [], set: [], domain: [] })); }}>
+          <select className={scientificControl} disabled={!inventory?.length} value={source?.campaignCode ?? ""} onChange={(event) => { setSelection({ identity: "", rows: [] }); setSourceCode(event.target.value); setPinnedIdentity({ publicationId: null, sourceHash: null }); setOffset(0); setDetail(null); }}>
             {(!inventory?.length || identityMismatch) && <option value="">Nenhuma campanha publicada</option>}
             {inventory?.map((item) => <option key={`${item.campaignCode}:${item.publicationId}`} value={item.campaignCode}>{publicationOptionLabel(item)}</option>)}
           </select>
         </label>}
-        {!isMethod && <form role="search" className="flex min-w-0 items-end gap-2" onSubmit={(event) => { event.preventDefault(); setAppliedQuery(query); setOffset(0); }}>
-          <label className="type-label flex min-w-0 flex-1 flex-col gap-1">Pesquisar<input disabled={sourceUnavailable} type="search" className={`${scientificControl} w-full`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={module === "calculations" ? "Ponto, SIA, conjunto ou situação" : "Organismo, efeito, composto ou referência"} /></label>
+        {<form role="search" className="flex min-w-0 items-end gap-2" onSubmit={(event) => { event.preventDefault(); setAppliedQuery(query); setOffset(0); }}>
+          <label className="type-label flex min-w-0 flex-1 flex-col gap-1">Pesquisar<input disabled={sourceUnavailable} type="search" className={`${scientificControl} w-full`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Organismo, efeito, composto ou referência" /></label>
           <button type="submit" disabled={sourceUnavailable} className={scientificControl}>Buscar</button>
         </form>}
         {section === "impacts" && <label className="type-label flex min-w-0 flex-col gap-1">Mostrar<select disabled={sourceUnavailable} className={scientificControl} value={catalogScope} onChange={(event) => { setSelection({ identity: "", rows: [] }); setCatalogScope(event.target.value); setOffset(0); }}>
           {!isPreparation && <option value="detected">Só organismos detectados nesta campanha</option>}<option value="associations">Todas as associações (detectados primeiro)</option><option value="scored">Só associações com score</option><option value="unscored">Só associações sem score (NA)</option><option value="without-association">Organismos sem associação</option><option value="all">Catálogo inteiro, com organismos sem associação</option>
         </select></label>}
       </div>
-      {data && isMethod && (data.method ? <ResearchMethod method={data.method} selectedSia={filters.sia?.[0]} onSelectSia={(sia) => changeFilter("sia", [sia])} pointHref={source ? (sia) => resultDetailHref(source.campaignCode, sia) : undefined} /> : <p role="alert">Explicação do cálculo indisponível para esta publicação. Nenhuma fórmula substituta foi aplicada.</p>)}
-      {data && !isMethod && <>
+      {data && <>
         {facets.length > 0 && <div className="space-y-2">
           <div className="grid items-start gap-2 sm:grid-cols-2 xl:grid-cols-3">{primary.map((facet) => <ScientificMultiFilter key={facet.key} label={facet.label} options={facet.options} selected={filters[facet.key] ?? []} onChange={(values) => changeFilter(facet.key, values)} />)}</div>
           {secondary.length > 0 && <details open={secondaryActive > 0 || undefined}><summary className="type-label min-h-11 cursor-pointer content-center text-[var(--brand-navy-strong)]">Mais filtros{secondaryActive ? ` (${secondaryActive} ativo${secondaryActive > 1 ? "s" : ""})` : ""}</summary><div className="grid items-start gap-2 pt-2 sm:grid-cols-2 xl:grid-cols-3">{secondary.map((facet) => <ScientificMultiFilter key={facet.key} label={facet.label} options={facet.options} selected={filters[facet.key] ?? []} onChange={(values) => changeFilter(facet.key, values)} />)}</div></details>}

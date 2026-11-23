@@ -134,7 +134,6 @@ export function captureIndexView(row: CaptureIndexRow) {
     // Numeric source values for workbook consumers; no display rounding or recalculation.
     exact: { general: row.general, domains: Object.fromEntries(captureDomains.map(domain => [domain, row.scores[domain]?.score ?? null])) },
     general: noEstimate ? "sem estimativa" : formatCaptureIndex(row.general),
-    range: measured && row.generalFloor !== null && row.generalCeiling !== null ? `${formatCaptureIndex(row.generalFloor)} a ${formatCaptureIndex(row.generalCeiling)}` : "",
     position: measured && row.rank ? `${row.rank}º de ${row.ranked}` : "",
     band: row.band ?? "",
     predominant: row.predominant ? captureDomainLabels[row.predominant] : measured ? "nenhuma contribuição pontuada" : "",
@@ -146,7 +145,7 @@ export function captureIndexView(row: CaptureIndexRow) {
       const main = score?.contributions.find(item => item.component === score.component) ?? score?.contributions[0];
       return {
         key: domain, label: captureDomainLabels[domain], maturity: data.maturity[domain].nivel,
-        score: !score && state !== "sem medição" ? "sem estimativa" : formatCaptureIndex(score?.score), range: score ? `${formatCaptureIndex(score.floor)} a ${formatCaptureIndex(score.ceiling)}` : "",
+        score: !score && state !== "sem medição" ? "sem estimativa" : formatCaptureIndex(score?.score),
         confidence: score ? confidenceLabel[score.confidence] : "", confidenceGrade: score?.confidence ?? "", evaluated: score ? formatCaptureShare(score.evaluated) : "",
         evaluatedBy: score?.evaluatedByComponent ? Object.entries(score.evaluatedByComponent).map(([name, value]) => `${componentLabels[name] ?? name} ${formatCaptureShare(value)}`).join(" · ") : "",
         componentCode: score?.component ?? null, component: score?.component ? componentLabels[score.component] : "",
@@ -187,30 +186,30 @@ const raw = (value: number | null | undefined) => value === null || value === un
 /** CSV de leitura: exatamente os textos do painel, uma linha por campanha e ponto. Nota ausente não vira zero: a coluna `estado` diz por quê. */
 export function captureIndexCsv(rows: CaptureIndexRow[]): string {
   const header = ["versao", "campanha", "SIA", "estado", "indice_geral", "posicao_na_campanha", "predominante", "categorias_na_faixa", "cobertura",
-    ...captureDomains.flatMap(domain => [`${domain}_nota`, `${domain}_piso_a_teto`, `${domain}_confianca`, `${domain}_reads_avaliados`, `${domain}_principal`]),
+    ...captureDomains.flatMap(domain => [`${domain}_nota`, `${domain}_cobertura_da_curadoria`, `${domain}_reads_avaliados`, `${domain}_principal`]),
     "corrida_16S", "corrida_COI", "COI_situacao", "cloroplasto_no_16S", "cianobacterias_no_16S", "diatomaceas_no_16S", "COI_reads_marinhos_retirados", "alertas", "dominancia_fora_do_padrao", "exoticas_presentes",
     "perfil_risco_operacional", "perfil_risco_sanitario"];
   return csv([header, ...rows.map(captureIndexView).map(view => [captureIndexMeta.version, view.campaign, view.sia, view.state, view.general, view.position, view.predominant, view.elevated, view.coverage,
-    ...view.domains.flatMap(domain => [domain.score, domain.range, domain.confidenceGrade, domain.evaluated, domain.main]),
+    ...view.domains.flatMap(domain => [domain.score, domain.confidenceGrade, domain.evaluated, domain.main]),
     view.components[0].run, view.components[2].run, view.components[2].status, view.chloroplast, view.cyanobacteria, view.diatoms, String(row_excluded(view)), String(view.alerts.length), view.dominance, view.exotics, ...view.profiles.map(profile => profile.summary)])]);
 }
 
 /** CSV de auditoria: valores sem arredondar e uma linha por contribuição (ponto, domínio, táxon, ficha), para refazer cada nota. */
 export function captureIndexAuditCsv(rows: CaptureIndexRow[]): string {
   const header = ["versao", "linhas_sha256", "campanha", "SIA", "tipo", "dominio", "componente", "corrida", "taxon", "reads", "reads_validos_componente", "gravidade", "aplicabilidade",
-    "ficha", "fonte", "q", "nota_dominio", "piso_dominio", "teto_dominio", "fracao_avaliada", "confianca", "geral", "estado_da_nota", "posicao", "situacao", "reads_observados", "base_do_grupo", "participacao", "referencia_na_rede"];
+    "ficha", "fonte", "q", "nota_dominio", "fracao_avaliada", "cobertura_da_curadoria", "geral", "estado_da_nota", "posicao", "situacao", "reads_observados", "base_do_grupo", "participacao", "referencia_na_rede"];
   const lines: string[][] = [];
   for (const row of rows) {
     const base = [captureIndexMeta.version, captureIndexMeta.rowsSha256, `C${row.campaign}`, row.sia];
     const tail = [raw(row.general), row.estimate ?? "", raw(row.rank)];
     for (const name of captureComponents) {
       const component = row.components[name];
-      lines.push([...base, "biblioteca", "", name, component.run, "", "", raw(component.validReads), "", "", "", "", "", "", "", "", "", "", ...tail, component.status, raw(component.observedReads), "", "", ""]);
+      lines.push([...base, "biblioteca", "", name, component.run, "", "", raw(component.validReads), "", "", "", "", "", "", "", "", ...tail, component.status, raw(component.observedReads), "", "", ""]);
     }
     for (const domain of captureDomains) {
       const score = row.scores[domain];
       if (!score) continue;
-      const scoreCells = [raw(score.score), raw(score.floor), raw(score.ceiling), raw(score.evaluated), score.confidence];
+      const scoreCells = [raw(score.score), raw(score.evaluated), score.confidence];
       lines.push([...base, "nota", domain, score.component ?? "", "", "", "", "", "", "", "", "", "", ...scoreCells, ...tail, "", "", "", "", ""]);
       for (const item of score.contributions) {
         lines.push([...base, "contribuicao", domain, item.component, row.components[item.component as ComponentName]?.run ?? "", item.taxon, raw(item.reads),
@@ -218,7 +217,7 @@ export function captureIndexAuditCsv(rows: CaptureIndexRow[]): string {
       }
     }
     for (const alert of row.alerts) {
-      lines.push([...base, `alerta: ${alert.motivo}`, alert.dominio, alert.componente, "", alert.taxon, raw(alert.reads), "", raw(alert.gravidade), raw(alert.aplicabilidade), alert.ficha, "", "", "", "", "", "", "", ...tail, "", "", "", raw(alert.participacao), raw(alert.referencia)]);
+      lines.push([...base, `alerta: ${alert.motivo}`, alert.dominio, alert.componente, "", alert.taxon, raw(alert.reads), "", raw(alert.gravidade), raw(alert.aplicabilidade), alert.ficha, "", "", "", "", "", ...tail, "", "", "", raw(alert.participacao), raw(alert.referencia)]);
     }
   }
   return csv([header, ...lines]);

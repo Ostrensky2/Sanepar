@@ -49,13 +49,17 @@ it("returns a consistent single-campaign publication DTO for the authoritative h
  const dto=await response.json();expect(response.status).toBe(200);expect(dto.publication.campaigns).toHaveLength(1);
  expect(dto.publication.scope.campaignCodes).toEqual(["C1"]);expect(isResultsPublicationV2(dto.publication)).toBe(true);
 });
-it("returns the original legacy publication and view model, never a fabricated V2",async()=>{
+it("returns the legacy publication identity without its old scores or classes, never a fabricated V2",async()=>{
  const publication=legacyPublication();
  m.rpc.mockResolvedValue({data:{heads:{C1:id},publications:[{id,points:publication,created_at:publication.importedAt}],sourceHashes:[]}});
  const response=await GET(new Request("http://localhost/api/imports/results?campaignNumber=1"));
  const dto=await response.json();
  expect(response.status).toBe(200);expect(dto).toMatchObject({status:"published",format:"legacy-v1",publicationId:id,campaign:null,downloadAvailable:false,sourceAvailability:"missing_source_artifact"});
- expect(dto.publication).toEqual(publication);expect(dto.viewModel).toEqual(publication.viewModel);expect(isResultsPublicationV2(dto.publication)).toBe(false);
+ expect(dto.publication).toMatchObject({campaignId:publication.campaignId,campaignNumber:publication.campaignNumber,fileName:publication.fileName,schemaVersion:publication.schemaVersion});
+ // Notas, classes e ranking do método anterior não saem do servidor.
+ expect(dto.publication.rankingRows).toEqual([]);expect(dto.viewModel.points).toEqual([]);expect(dto.viewModel.alerts).toEqual([]);expect(dto.viewModel.municipios).toEqual([]);
+ expect(dto.viewModel.meta).toMatchObject({classes:{},score_min:null,score_max:null,score_med:null});
+ expect(dto.viewModel).toEqual(dto.publication.viewModel);expect(isResultsPublicationV2(dto.publication)).toBe(false);
 });
 it("does not hide a legacy publication whose authoritative head has not been installed",async()=>{
  m.rpc.mockResolvedValue({data:{heads:{},publications:[{id,points:legacyPublication(),created_at:"2026-08-21"}],sourceHashes:[]}});
@@ -68,7 +72,7 @@ it("uses the same authoritative legacy head for explicit V1, with no local HTML 
  const publication=legacyPublication();
  m.rpc.mockResolvedValue({data:{heads:{C1:id},publications:[{id,points:publication,created_at:publication.importedAt}],sourceHashes:[]}});
  const response=await GET(new Request("http://localhost/api/imports/results?campaignNumber=1&schemaVersion=yvae-results/1.0"));
- expect(await response.json()).toMatchObject({format:"legacy-v1",publicationId:id,publication});expect(m.from).not.toHaveBeenCalled();
+ expect(await response.json()).toMatchObject({format:"legacy-v1",publicationId:id,publication:{campaignId:publication.campaignId,rankingRows:[]}});expect(m.from).not.toHaveBeenCalled();
 });
 it.each(["campaignNumber=99","campaignId=unknown&campaignNumber=1","campaignId=campanha-1-verao-2026&campaignNumber=2"])("rejects incompatible campaign identity %s",async query=>{
  expect((await GET(new Request(`http://localhost/api/imports/results?${query}`))).status).toBe(400);expect(m.rpc).not.toHaveBeenCalled();

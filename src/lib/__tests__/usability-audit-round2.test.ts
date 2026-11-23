@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { formatSiaCode } from "@/components/field-diary/calendar";
 import { documentReference } from "@/components/document-repository";
 import { navigationItems } from "@/lib/navigation";
-import { methodTrace } from "@/lib/results-research";
 import type { ResearchRow } from "@/lib/results-research-contract";
 import type { SourcePreviewRow } from "@/lib/results-source-preview-contract";
 import { conditionOfUseParts } from "@/modules/results/components/results-index-dashboard";
@@ -37,22 +36,4 @@ describe("auditoria de usabilidade — 2ª rodada", () => {
     expect(conditionOfUseParts("Aprovado")).toEqual({ label: "Aprovado", detail: "" });
   });
 
-  it("refaz o cálculo de um ponto com os números publicados e mostra conjunto ausente como fora", () => {
-    const rows = [
-      component("SIA-0001", "Cianobactérias", [0.9, 0.6, 0.3]), component("SIA-0001", "Bactérias", [0.3, 0.3, 0.3]), component("SIA-0001", "COI", [0.6, 0.3, 0.6]),
-      component("SIA-0002", "Cianobactérias", [0.1, 0.1, 0.1]), component("SIA-0002", "Bactérias", [0.1, 0.1, 0.1]),
-    ];
-    const occurrences = [occurrence("SIA-0001", "Cianobactérias", "Organismo menor", 25, null), occurrence("SIA-0001", "Cianobactérias", "Organismo maior", 75, 3)];
-    const { points, trace } = methodTrace(rows, occurrences, "C1", null);
-    expect(points.map((point) => [point.sia, point.rank])).toEqual([["SIA-0001", 1], ["SIA-0002", null]]);
-    expect(trace?.sia).toBe("SIA-0001");
-    expect(trace?.sets[0].organisms.map((organism) => organism.label)).toEqual(["Organismo maior", "Organismo menor"]);
-    expect(trace?.sets[0].domains.Ambiental.signal).toBeCloseTo(0.75);
-    expect(trace?.sets[0].domains.Ambiental.calculated).toBeCloseTo(Math.log(76) / Math.log(101));
-    expect(trace?.domains.Ambiental.value).toBeCloseTo(Math.sqrt((0.81 + 0.09 + 0.36) / 3));
-    const partial = methodTrace(rows, occurrences, "C1", "SIA-0002").trace!;
-    expect(partial.sets.map((set) => [set.set, set.included])).toEqual([["Cianobactérias", true], ["Bactérias", true], ["COI", false]]);
-    expect(partial.overall.value).toBeNull();
-    expect(partial.overall.upper).toBeGreaterThan(partial.overall.lower);
-  });
 });

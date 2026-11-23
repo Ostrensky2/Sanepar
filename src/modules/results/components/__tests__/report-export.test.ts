@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { samePublishedSource } from "../../presentation";
-import { buildPointReport, buildResearchReport, safeReportUrl, type ReportSnapshot } from "../../report-snapshot";
+import { buildResearchReport, safeReportUrl, type ReportSnapshot } from "../../report-snapshot";
 import { humanReportTables, readingOverview, summaryReportTables, pdfText, reportCampaignLabel, reportCell, reportDate, reportNotes, reportPdfDefinition, reportWorkbook } from "../../report-export";
 import type { ResultsCampaign } from "../../types";
 import type { ResultsResearchResponse, ResearchRow } from "@/lib/results-research-contract";
@@ -59,23 +59,6 @@ describe("Selective scientific reports", () => {
     const types = readFileSync(new URL("../../types.ts", import.meta.url), "utf8");
     expect(types).toContain('RESULTS_CALCULATION_VERSION = "SANEPAR-INDICE-0.3"');
     expect(types).toContain('RESULTS_CATALOG_VERSION = "SANEPAR-RISCOS-0.3"');
-  });
-  it("retrieves all pages for only selected campaign and SIA, empty means zero", async () => {
-    const fetcher = mockPoint();
-    await expect(buildPointReport(source, [])).rejects.toThrow("explicitamente");
-    expect(fetcher).not.toHaveBeenCalled();
-    const report = await buildPointReport(source, [point.key]);
-    expect(report.records).toHaveLength(1);
-    expect(report.records[0].tables.find((table) => table.title.startsWith("Ocorrências"))?.rows).toHaveLength(2);
-    expect(JSON.stringify(report)).toContain("Último táxon");
-    for (const [url] of fetcher.mock.calls) { const params = new URL(url, "http://localhost").searchParams; expect(params.get("sia")).toBe("SIA-0011"); expect(params.get("campaignCode")).toBe("C2"); expect(params.get("publicationId")).toBe("publication"); }
-    expect(report.provenance).not.toHaveProperty("Método técnico");
-    expect(report.provenance).not.toHaveProperty("Apresentação");
-    expect(JSON.stringify(report.records)).not.toContain("SANEPAR-INDICE");
-  });
-  it("rejects same SIA in another campaign and stale publication", async () => {
-    mockPoint(true); await expect(buildPointReport(source, [point.key])).rejects.toThrow("fora da seleção");
-    mockPoint(false, true); await expect(buildPointReport(source, [point.key])).rejects.toThrow("incompatível");
   });
   it("fetches research pages but exports exact selected IDs, not whole filtered population", async () => {
     const row = { id: "a1", values: { organismLabel: "Táxon áçã", references: "Fonte integral", score: "NA" }, organismIds: ["T1"], associationIds: ["a1"], links: [], referenceLinks: [{ id: "doi", href: "javascript:alert(1)", label: "Origem", correspondence: "check_required" }], provenance: { sourceHash: hash, publicationId: "publication", revisionId: "rev", sheet: "Evidencias_risco", row: 2, sourceValues: { Texto: "=1+1" }, headers: {} } } as ResearchRow;

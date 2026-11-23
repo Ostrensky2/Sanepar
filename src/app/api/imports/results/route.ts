@@ -10,6 +10,7 @@ import {
 import {
   buildResultsPublicationV2,
   findResultsCampaignV2,
+  withoutLegacyIndex,
   isResultsPublicationV2,
   normalizeCampaignCode,
 } from "@/lib/results-v2-persistence";
@@ -72,15 +73,18 @@ export async function GET(request: Request) {
       return noStoreJson({error:error instanceof Error?error.message:"Publicação indisponível.",code:error instanceof ResultsStoreError?error.code:"persistence_unavailable"},error instanceof ResultsStoreError?error.status:503);
     }
     if(current && isLegacyResultsCampaign(current.points,campaignCode)) {
-      return noStoreJson({status:"published",format:"legacy-v1",publicationId:current.id,publication:current.points,viewModel:current.points.viewModel,campaign:null,sourceAvailability:"missing_source_artifact",downloadAvailable:false});
+      const publication=withoutLegacyScores(current.points);
+      return noStoreJson({status:"published",format:"legacy-v1",publicationId:current.id,publication,viewModel:publication.viewModel,campaign:null,sourceAvailability:"missing_source_artifact",downloadAvailable:false});
     }
     for (const row of current ? [current] : []) {
       if (!isResultsPublicationV2(row.points)) continue;
       if(requestedVersion===RESULTS_SCHEMA_VERSION) return noStoreJson({error:"A publicação vigente usa outro formato. Atualize a consulta.",code:"publication_format_mismatch"},409);
-      const campaign = findResultsCampaignV2(row.points, campaignCode);
-      if (campaign) {
+      const stored = findResultsCampaignV2(row.points, campaignCode);
+      if (stored) {
+        // O índice antigo guardado na publicação não é servido; ver withoutLegacyIndex.
+        const campaign = withoutLegacyIndex(stored);
         const scope = row.points.scope ? {campaignCodes:[campaignCode],campaignHashes:{[campaignCode]:row.points.scope.campaignHashes[campaignCode]}} : undefined;
-        return noStoreJson({ status: "published", format:"v2", publication: { ...row.points, campaigns: [campaign], ...(scope ? {scope} : {}) }, campaign });
+        return noStoreJson({ status: "published", format:"v2", publication: { ...row.points, parameters: undefined, campaigns: [campaign], ...(scope ? {scope} : {}) }, campaign });
       }
     }
     return noStoreJson({ status: "empty", publication: null, campaign: null, viewModel:null });
@@ -227,6 +231,16 @@ function parseRequestedCampaignCodes(formData: FormData) {
     throw new Error("A seleção múltipla contém uma campanha inválida.");
   }
   return normalized;
+}
+
+/** Publicações do formato anterior guardam notas, classes e justificativas do método antigo.
+ * Nada disso é servido: ficam a identificação da publicação e os totais de leitura. */
+function withoutLegacyScores<T extends { viewModel: Record<string, unknown>; rankingRows: unknown[]; methodology: unknown }>(publication: T): T {
+  const meta = publication.viewModel.meta as Record<string, unknown>;
+  const heat = (value: unknown) => value && typeof value === "object" ? { ...(value as object), rows: [] } : value;
+  const viewModel = { ...publication.viewModel, meta: { ...meta, classes: {}, score_min: null, score_max: null, score_med: null },
+    points: [], municipios: [], alerts: [], heat_ciano: heat(publication.viewModel.heat_ciano), heat_bact: heat(publication.viewModel.heat_bact), heat_coi: heat(publication.viewModel.heat_coi) };
+  return { ...publication, rankingRows: [], methodology: {}, viewModel } as T;
 }
 
 function noStoreJson(body: unknown, status = 200) {

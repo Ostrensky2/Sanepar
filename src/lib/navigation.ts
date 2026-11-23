@@ -115,7 +115,7 @@ export const navigationItems: NavigationItem[] = [
       {
         href: "/resultados/calculos",
         label: "Como o índice é calculado",
-        summary: "passo a passo do cálculo e valores por ponto",
+        summary: "metodologia 0.8: categorias, piso e reforço",
         headerTitle: "Como o índice é calculado",
         icon: Calculator,
       },

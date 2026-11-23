@@ -95,7 +95,7 @@ function Legend() {
       ))}
       <li className="inline-flex items-center gap-1.5">
         <span aria-hidden className="size-3 rounded-full border-2 border-[var(--ink-soft)]" />
-        <strong className="text-[var(--ink)]">Sem medição</strong>
+        <strong className="text-[var(--ink)]">Sem estimativa ou sem medição</strong>
       </li>
     </ul>
   );
@@ -214,7 +214,7 @@ function Network({ data, href }: { data: CaptureResultViews; href: (view: Captur
                 </tr>
               </thead>
               <tbody>
-                {[...bandNames, "Sem medição"].map((name, i) => (
+                {[...bandNames, "Sem estimativa ou sem medição"].map((name, i) => (
                   <tr key={name} className="border-b border-[var(--line-ghost)]">
                     <th className={cell} scope="row">{name}{i < bands.length ? ` (${bands[i].label})` : ""}</th>
                     {data.network.map((row) => <td key={row.campaign} className={cell}>{row.bins[i] ?? row.missing}</td>)}
@@ -305,7 +305,7 @@ function Campaign({ data, number, href }: { data: CaptureResultViews; number: nu
           <section className={card}>
             <SectionHead title="Pontos por faixa do índice geral">Quantos pontos da C{number} caem em cada faixa da escala fixa.</SectionHead>
             <ul className="space-y-3">
-              {[...bandNames, "Sem medição"].map((name, i) => {
+              {[...bandNames, "Sem estimativa ou sem medição"].map((name, i) => {
                 const count = i < bands.length ? overall.bins[i] : overall.missing;
                 const pct = s.total ? (100 * count) / s.total : 0;
                 return (
@@ -326,7 +326,7 @@ function Campaign({ data, number, href }: { data: CaptureResultViews; number: nu
         )}
 
         <section className={card}>
-          <SectionHead title="As três categorias">O índice geral é o maior dos três. A barra mostra a distribuição dos pontos em cada categoria.</SectionHead>
+          <SectionHead title="As três categorias">A maior das três é o piso do índice geral; um dano distinto e documentado em outra categoria pode elevá-lo. A barra mostra a distribuição dos pontos em cada categoria.</SectionHead>
           <div className="space-y-5">
             {data.categories.map((category, i) => (
               <div key={category.name} className="space-y-2">

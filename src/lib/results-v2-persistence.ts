@@ -136,6 +136,22 @@ export function findResultsCampaignV2(
   ) ?? null;
 }
 
+/** Publicações gravadas antes da metodologia 0.8 guardam o índice anterior, calculado no envio da planilha.
+ * Esses valores nunca saem do servidor: a resposta leva só identificação, contagens e situação dos conjuntos.
+ * As notas exibidas vêm exclusivamente do índice de captação 0.8. */
+export function withoutLegacyIndex<T extends ResultsPublicationV2["campaigns"][number]>(campaign: T): T {
+  const empty = { environmental: null, operational: null, humanHealth: null };
+  return {
+    ...campaign,
+    points: campaign.points?.map((point) => ({
+      ...point,
+      domains: { environmental: { value: null, lower: 0, upper: 0 }, operational: { value: null, lower: 0, upper: 0 }, humanHealth: { value: null, lower: 0, upper: 0 } },
+      overall: { value: null, lower: 0, upper: 0, rank: null },
+      components: Object.fromEntries(Object.entries(point.components).map(([set, component]) => [set, { ...component, calculated: { ...empty }, used: { ...empty } }])) as typeof point.components,
+    })) ?? campaign.points,
+  };
+}
+
 export function buildResultsPublicationScopePlan(
   rows: readonly ResultsPublicationV2Row[],
   next: ResultsPublicationV2,

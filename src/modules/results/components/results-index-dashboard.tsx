@@ -152,7 +152,7 @@ export function ResultsIndexDashboard({
 
             <p>Ponto com nota calculada tem um número, inclusive zero. “Sem estimativa” e “sem medição” não têm número e não são zero.</p>
 
-            <p><strong>Piloto:</strong> o índice de captação ainda não foi confrontado com ocorrências reais. Zero significa nenhuma contribuição pontuada, não ausência demonstrada de risco.</p>
+            <p><strong>Limite:</strong> o índice de captação ainda não foi confrontado com ocorrências reais. Zero significa nenhuma contribuição pontuada, não ausência demonstrada de risco.</p>
           </ResultsInterpretationHelp>
         </div>
       </header>
@@ -186,7 +186,7 @@ export function ResultsIndexDashboard({
             {metricOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </Control>
-        <Control label="Completude">
+        <Control label="Estado da nota">
           <select
             value={completeness}
             onChange={(event) => setCompleteness(event.target.value as "all" | ResultCompleteness)}
@@ -296,7 +296,7 @@ function CompletenessSummary({ campaign, metric }: { campaign: ResultsCampaign; 
     ? completeValues.reduce((sum, value) => sum + value, 0) / completeValues.length
     : null;
   const items = [
-    ["Com índice calculado", String(campaign.counts.complete), "pontos medidos"],
+    ["Com índice calculado", String(campaign.counts.complete), "pontos com nota 0.8"],
     ["Com 16S utilizável", String(campaign.points.filter(p => p.components.bacteria.included).length), "pontos na campanha"],
     ["Com COI utilizável", String(campaign.points.filter(p => p.components.coi.included).length), "pontos na campanha"],
     ["Com um só marcador", String(campaign.points.filter((point) => point.completeness !== "unavailable" && (!point.components.coi.included || !point.components.bacteria.included)).length), "índice calculado sem o COI ou sem o 16S"],
@@ -305,7 +305,7 @@ function CompletenessSummary({ campaign, metric }: { campaign: ResultsCampaign; 
     ["Total", String(campaign.counts.total), "pontos"],
     ["Índice médio", formatValue(mean), `${completeValues.length} pontos com índice calculado`],
   ];
-  return <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Completude dos resultados">
+  return <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Estado das notas da campanha">
     {items.map(([label, value, suffix]) => <article key={label} className="app-card p-4">
       <p className="type-label text-[var(--ink-soft)]">{label}</p>
       <p className="heading-font type-kpi text-[var(--brand-navy-strong)]">{value}</p>
@@ -347,7 +347,6 @@ function PointDetail({ points, onSelect, point, metric, photoUrl, onFocus }: { p
           <span className="block">{profile.value === null ? (profile.state === "sem medição" ? "Sem biblioteca utilizável." : "Há leitura, mas a nota não pode ser afirmada. Não é zero.") : profile.effects.length || profile.otherContributions ? [...profile.effects.map((effect) => effect.title), ...(profile.otherContributions ? [`${profile.otherContributions} outra(s) contribuição(ões) documentada(s)`] : [])].join("; ") : "Nenhum tipo de efeito com contribuição documentada nesta amostra."}</span></li>)}</ul>
       </section> : null}
       <p className="type-caption mt-3 text-[var(--ink-soft)]">{point.coordinates ? `${point.coordinates.latitude.toFixed(5)}, ${point.coordinates.longitude.toFixed(5)}` : "Sem coordenadas — incluído nas contagens e resultados."}</p>
-      {point.completeness.startsWith("partial") && <p className="type-metadata mt-2 text-[var(--ink)]">Intervalo possível do índice; sem estimativa pontual.</p>}
       <details className="mt-3 border-t border-[var(--line-ghost)] pt-2 type-metadata text-[var(--ink)]">
         <summary className="flex min-h-11 cursor-pointer items-center font-semibold">Situação dos conjuntos utilizados</summary>
         <ul className="space-y-2">{([['bacteria', 'Bactérias (16S)'], ['cyanobacteria', 'Algas (cloroplasto)'], ['coi', 'COI']] as const).map(([key, label]) => {
@@ -396,7 +395,7 @@ function ResultsTable({ points, metric, onSelect }: { points: ResultPoint[]; met
 }
 
 function RankingTable({ points, metric }: { points: ResultPoint[]; metric: ResultMetric }) {
-  return <TablePanel title="Ranking de resultados completos" description="Resultados parciais e indisponíveis ficam fora do ranking.">
+  return <TablePanel title="Ranking dos pontos com nota" description="Pontos sem estimativa ou sem medição ficam fora do ranking.">
     <table className="type-table w-full min-w-[480px] text-left"><thead><tr className="bg-[var(--surface-soft)]"><th className="px-3 py-2">Posição</th><th className="px-3 py-2">SIA</th><th className="px-3 py-2">Município</th><th className="px-3 py-2 text-right">Valor</th></tr></thead>
       <tbody>{points.map((point, index) => <tr key={point.key} className="border-t border-[var(--line-ghost)]"><td className="px-3 py-2 font-bold">{metric === "overall" ? point.overall.rank ?? index + 1 : index + 1}</td><td className="px-3 py-2 font-bold text-[var(--brand-navy-strong)]">{point.siaCode}</td><td className="px-3 py-2">{point.municipality || "—"}</td><td className="px-3 py-2 text-right font-bold tabular-nums">{formatValue(metricRange(point, metric).value)}</td></tr>)}</tbody>
     </table>
@@ -405,22 +404,22 @@ function RankingTable({ points, metric }: { points: ResultPoint[]; metric: Resul
 
 type MunicipalityRow = { name: string; total: number; complete: number; partial: number; unavailable: number };
 function MunicipalityTable({ rows }: { rows: MunicipalityRow[] }) {
-  return <TablePanel title="Resumo por município" description="Contagens por estado do resultado, sem score municipal sintético.">
-    <table className="type-table w-full min-w-[560px] text-left"><thead><tr className="bg-[var(--surface-soft)]"><th className="px-3 py-2">Município</th><th className="px-3 py-2 text-right">Total</th><th className="px-3 py-2 text-right">Completos</th><th className="px-3 py-2 text-right">Parciais</th><th className="px-3 py-2 text-right">Indisponíveis</th></tr></thead>
-      <tbody>{rows.map((row) => <tr key={row.name} className="border-t border-[var(--line-ghost)]"><td className="px-3 py-2 font-bold text-[var(--brand-navy-strong)]">{row.name}</td><td className="px-3 py-2 text-right">{row.total}</td><td className="px-3 py-2 text-right">{row.complete}</td><td className="px-3 py-2 text-right">{row.partial}</td><td className="px-3 py-2 text-right">{row.unavailable}</td></tr>)}</tbody>
+  return <TablePanel title="Resumo por município" description="Contagens por estado da nota, sem nota municipal.">
+    <table className="type-table w-full min-w-[560px] text-left"><thead><tr className="bg-[var(--surface-soft)]"><th className="px-3 py-2">Município</th><th className="px-3 py-2 text-right">Total</th><th className="px-3 py-2 text-right">Com nota</th><th className="px-3 py-2 text-right">Sem estimativa ou sem medição</th></tr></thead>
+      <tbody>{rows.map((row) => <tr key={row.name} className="border-t border-[var(--line-ghost)]"><td className="px-3 py-2 font-bold text-[var(--brand-navy-strong)]">{row.name}</td><td className="px-3 py-2 text-right">{row.total}</td><td className="px-3 py-2 text-right">{row.complete}</td><td className="px-3 py-2 text-right">{row.unavailable + row.partial}</td></tr>)}</tbody>
     </table>
   </TablePanel>;
 }
 
 function ResultsHistory({ campaigns, metric, campaignLabels }: { campaigns: ResultsCampaign[]; metric: ResultMetric; campaignLabels: Record<string, string> }) {
-  return <TablePanel title="Histórico por campanha" description="Média dos pontos completos de cada campanha; não há linha conectando lacunas.">
+  return <TablePanel title="Média de cada campanha" description="Média dos pontos com nota, campanha a campanha. Cada campanha é calculada à parte; os valores ficam lado a lado só para consulta.">
     <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">{campaigns.map((campaign) => {
       const values = campaign.points.flatMap((point) => {
         const value = metricRange(point, metric).value;
         return point.completeness === "complete" && value !== null ? [value] : [];
       });
       const mean = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
-      return <article key={campaign.campaignCode} className="rounded-xl border border-[var(--line-ghost)] bg-white p-4"><p className="type-label font-bold text-[var(--brand-navy-strong)]">{campaignLabels[campaign.campaignCode] ?? campaign.campaignCode}</p><p className="heading-font type-kpi mt-1 text-[var(--brand-navy-strong)]">{formatValue(mean)}</p><p className="type-caption text-[var(--ink-soft)]">Índice médio · {values.length} pontos completos</p></article>;
+      return <article key={campaign.campaignCode} className="rounded-xl border border-[var(--line-ghost)] bg-white p-4"><p className="type-label font-bold text-[var(--brand-navy-strong)]">{campaignLabels[campaign.campaignCode] ?? campaign.campaignCode}</p><p className="heading-font type-kpi mt-1 text-[var(--brand-navy-strong)]">{formatValue(mean)}</p><p className="type-caption text-[var(--ink-soft)]">Índice médio · {values.length} pontos com nota</p></article>;
     })}</div>
   </TablePanel>;
 }
@@ -492,7 +491,7 @@ function metricLabel(metric: ResultMetric) {
 
 
 function completenessLabel(value: ResultCompleteness) {
-  return ({ complete: "Índice calculado", partial_2: "Parcial — 2/3", partial_1: "Parcial — 1/3", unavailable: "Sem medição" } as const)[value];
+  return value === "complete" ? "Índice calculado" : "Sem medição";
 }
 
 /** Estado da nota 0.8 do ponto: calculada (inclusive zero), sem estimativa ou sem medição. */

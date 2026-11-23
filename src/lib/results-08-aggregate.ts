@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import source from "./results-08-aggregate.json";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { RESULTS_08_GROUPS, RESULTS_08_SERIES, RESULTS_08_SOURCE_SHA256, RESULTS_08_POLICY, RESULTS_08_SCHEMA, type Results08Aggregate, type Results08HomeDistribution } from "./results-08-contract";
 
 export function validateResults08Aggregate(value: unknown): Results08Aggregate {
@@ -29,6 +30,9 @@ export function validateResults08Aggregate(value: unknown): Results08Aggregate {
 }
 /** Frozen E8 projection: no derivation from bins or point-level data. */
 export function results08Aggregate() {
+  // Lê os decimais do próprio arquivo. Importar o JSON como módulo deixa o empacotador reescrever os números:
+  // no build de produção, o último dígito de uma média mudava e a conferência abaixo recusava a fonte.
+  const source: unknown = JSON.parse(readFileSync(join(process.cwd(), "src/lib/results-08-aggregate.json"), "utf8"));
   // Hash of the canonical JSON projection, distinct from E8's original-file hash.
   if (createHash("sha256").update(JSON.stringify(source)).digest("hex") !== "9382ada8ea0cc5169d8541a6cf671b5834eecae298a837c11f49ea37fcbb2e4a") throw new Error("Projeção oficial 0.8 divergente.");
   return validateResults08Aggregate(source);

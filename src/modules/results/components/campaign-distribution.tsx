@@ -39,21 +39,15 @@ export function CampaignDistribution() {
   }, []);
   const [selected, setSelected] = useState<Record<string, number>>({});
   const campaigns = Object.keys(data?.campanhas ?? {}).filter(c => /^C[1-9]$/.test(c)).sort();
-  const series = campaigns.flatMap(c => data?.campanhas[c][domain] ?? []);
-  const coverage = series.reduce((sum, row) => ({
-    measured: sum.measured + row.observados,
-    numeric: sum.numeric + row.n,
-    missing: sum.missing + row.nulos,
-  }), { measured: 0, numeric: 0, missing: 0 });
   return <section className={`app-card space-y-4 ${styles.panel}`} aria-labelledby="campaign-distribution-title">
     <header><div className="flex items-center gap-2"><h2 id="campaign-distribution-title" className="type-section-title">Distribuição do índice por campanha</h2>
       <button type="button" aria-label="Como ler a distribuição por campanha" aria-haspopup="dialog" onClick={() => setHelpOpen(true)} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--brand-teal)] hover:bg-[var(--surface-soft)] focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]"><CircleHelp aria-hidden="true" className="h-5 w-5" /></button></div>
-      <p className="type-metadata">Método 0.8 · distribuição agregada por campanha</p></header>
+      <p className="type-metadata">Método 0.8 · distribuição de cada campanha</p></header>
     {!data ? <p role="status">{error || "Carregando distribuições…"}</p> : <>
       <label className="type-label">Domínio <select className={styles.select} value={domain} onChange={e => setDomain(e.target.value as Domain)}>
         {(Object.keys(domains) as Domain[]).map(key => <option key={key} value={key}>{domains[key]}</option>)}
       </select></label>
-      <p role="status">Total do domínio {domains[domain]} · Medidos: {coverage.measured} · Com estimativa: {coverage.numeric} · Sem estimativa: {coverage.missing}</p>
+      <p role="status">Domínio {domains[domain]} · cada campanha é lida à parte; não há total nem média entre campanhas.</p>
       <p className="type-metadata">A média e os percentuais consideram somente as captações com estimativa numérica no domínio selecionado. As contagens por faixa também excluem os registros sem estimativa.</p>
       <div className={styles.keys} aria-label="Legenda das linhas">{markers.map(([key,label,style,width]) => <span key={key}><i style={{ borderLeftStyle: style, borderLeftWidth: width }} />{label}</span>)}</div>
       
@@ -99,7 +93,7 @@ export function CampaignDistribution() {
       <div className={styles.tableFrame}><table className={styles.table}><caption>Frequências por faixa do índice</caption><thead><tr><th scope="col">Faixa</th>{campaigns.map(c=><th scope="col" key={c}>{c}</th>)}</tr></thead>
         <tbody>{colors.map((color,i)=><tr key={color}><th scope="row"><b style={{backgroundColor:color}} />{format(bounds[i]/40)} a {i<4?"< ":""}{format(bounds[i+1]/40)}</th>{campaigns.map(c=><td key={c}>{data.campanhas[c][domain]?.n ? data.campanhas[c][domain]!.colunas.slice(bounds[i],bounds[i+1]).reduce((a,b)=>a+b,0) : "—"}</td>)}</tr>)}</tbody></table></div>
       <details><summary className={styles.summary}>Consultar frequências dos 40 intervalos</summary><div className={styles.tableFrame}><table className={styles.table}><caption>Contagens por intervalo · {domains[domain]}</caption><thead><tr><th scope="col">Intervalo</th>{campaigns.map(c=><th scope="col" key={c}>{c}</th>)}</tr></thead><tbody>{Array.from({length:40},(_,i)=><tr key={i}><th scope="row">{format(i/40)} a {i<39?"< ":""}{format((i+1)/40)}</th>{campaigns.map(c=><td key={c}>{data.campanhas[c][domain]?.n ? data.campanhas[c][domain]!.colunas[i] : "—"}</td>)}</tr>)}</tbody></table></div></details>
-      <a className="inline-flex min-h-11 items-center font-semibold underline" href="/api/results/aggregate-export">Baixar agregados do método 0.8 (CSV)</a>
+      <a className="inline-flex min-h-11 items-center font-semibold underline" href="/api/results/aggregate-export">Baixar resultados 0.8 por campanha (CSV)</a>
       <footer className="type-metadata">A média pode esconder picos. O máximo é a maior nota observada, não a condição de toda a campanha. As faixas orientam investigação; não confirmam dano.</footer>
     </>}
     {helpOpen && <ResultsReviewDialog title="Como ler a distribuição por campanha" closeLabel="Fechar ajuda da distribuição" onClose={() => setHelpOpen(false)}>

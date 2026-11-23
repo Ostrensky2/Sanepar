@@ -3,7 +3,11 @@ export const RESULTS_08_VERSION = "0.8" as const;
 export const RESULTS_08_SOURCE_SHA256 = "5667da69789821f2744812e516282e54fdb73008e8cdb80051801931af455308";
 export const RESULTS_08_POLICY = "sinal-documentado/1" as const;
 export const RESULTS_08_SCHEMA = "agregados-home-export/1" as const;
+/** Grupos do arquivo-fonte oficial. `total` existe só para conferir a integridade da fonte; nunca é exibido nem exportado. */
 export const RESULTS_08_GROUPS = ["C1", "C2", "C3", "total"] as const;
+/** Campanhas são independentes: toda leitura, tela e exportação é por campanha, sem juntar campanhas. */
+export const RESULTS_08_CAMPAIGNS = ["C1", "C2", "C3"] as const;
+export type Results08Campaign = typeof RESULTS_08_CAMPAIGNS[number];
 export const RESULTS_08_SERIES = ["geral08", "ambiental", "operacional", "saude"] as const;
 export const RESULTS_08_BANDS = ["[0,0.05)", "[0.05,0.15)", "[0.15,0.35)", "[0.35,0.70)", "[0.70,1]"] as const;
 export type Results08Group = typeof RESULTS_08_GROUPS[number];

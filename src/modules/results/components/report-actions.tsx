@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { ReportSnapshot, PointReportSource } from "../report-snapshot";
-import { buildPointReport, verifyReportCurrent } from "../report-snapshot";
-import { campaignControl } from "./campaign-molecular";
+import type { ReportSnapshot } from "../report-snapshot";
+import { verifyReportCurrent } from "../report-snapshot";
+const campaignControl = "min-h-11 min-w-0 max-w-full rounded border border-[var(--line-strong)] bg-white px-3 text-sm focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]";
 import { countLabel } from "@/lib/number-format";
 
 export function ReportActions({ count, build, identity }: { count: number; build: () => Promise<ReportSnapshot>; identity: string }) {
@@ -45,17 +45,4 @@ export function ReportActions({ count, build, identity }: { count: number; build
     finally { setBusy(false); }
   }
   return <div className="space-y-2" data-export-timings={timings ? JSON.stringify(timings) : undefined}><p className="type-metadata">PDF e impressão: {detailed ? "Relatório detalhado" : "Ficha-síntese"}. XLSX sempre completo, com uma aba “Leitura” no início na mesma ordem da ficha.</p><label className="type-label flex min-h-11 items-center gap-2"><input type="checkbox" checked={detailed} disabled={busy} onChange={(event) => setDetailed(event.target.checked)} />Relatório detalhado — incluir evidências e referências integrais no PDF e na impressão</label><div className="flex flex-wrap gap-2">{([ ["print", "Imprimir"], ["pdf", "Exportar PDF"], ["xlsx", "Exportar XLSX"] ] as const).map(([format, label]) => <button type="button" key={format} className={campaignControl} disabled={!count || busy} onClick={() => void run(format)}>{label}</button>)}</div><p className="type-metadata" role="status">{message || `${countLabel(count, "item selecionado", "itens selecionados")}. Filtros não selecionam registros.`}</p>{timings && <p className="type-caption">Coleta {(timings.collectionMs / 1000).toFixed(1)} s{timings.reused ? " (snapshot reutilizado)" : ""} · revalidação {(timings.revalidationMs / 1000).toFixed(1)} s · geração {(timings.generationMs / 1000).toFixed(1)} s.</p>}</div>;
-}
-
-export function PointReportSelection({ source }: { source: PointReportSource }) {
-  const [query, setQuery] = useState("");
-  const [ids, setIds] = useState<string[]>([]);
-  const search = (value: string) => value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLocaleLowerCase();
-  const matches = source.campaign.points.filter((point) => search(`${point.siaCode} ${point.municipality ?? ""} ${point.waterBody ?? ""}`).includes(search(query)));
-  return <details className="border-y border-[var(--line-strong)] py-2"><summary className="type-label min-h-11 cursor-pointer py-3">Exportar fichas de pontos (PDF ou XLSX){ids.length ? ` · ${countLabel(ids.length, "selecionado", "selecionados")}` : ""}</summary><div className="space-y-3">
-    <label className="type-label block">Pesquisar pontos por SIA, nome ou município<input className={`${campaignControl} mt-1 block w-full`} type="search" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
-    <fieldset className="max-h-52 overflow-y-auto"><legend className="type-metadata">Marque explicitamente os pontos desta campanha</legend>{matches.map((point) => <label key={point.key} className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={ids.includes(point.key)} onChange={(event) => setIds((current) => event.target.checked ? [...current, point.key] : current.filter((id) => id !== point.key))} />{point.siaCode} · {point.waterBody} · {point.municipality}</label>)}{!matches.length && <p>Nenhum ponto encontrado.</p>}</fieldset>
-    <button type="button" className={campaignControl} disabled={!ids.length} onClick={() => setIds([])}>Limpar seleção</button>
-    <ReportActions count={ids.length} identity={JSON.stringify([source.publicationId, source.sourceHash, source.campaign.campaignCode, ids])} build={() => buildPointReport(source, ids)} />
-  </div></details>;
 }

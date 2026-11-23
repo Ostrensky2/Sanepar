@@ -22,6 +22,27 @@ exportação de outra edição: pedir `version=0.7` às rotas devolve 422.
 Lote atual: C1 73 observações e 73 notas gerais; C2 76 e 75; C3 76 e 76. Esses
 totais são conferência, não regra de código.
 
+## Nota de cada categoria
+
+Cada organismo com ficha contribui com a massa
+`q = (reads ÷ reads válidos do marcador − base do grupo) × gravidade ÷ 3 × aplicabilidade`.
+Gravidade vai de 1 a 3; aplicabilidade é 1, 0,5, 0,1 ou 0; a base só existe para os grupos
+que somam em conjunto (diatomáceas e assinatura de esgoto). Em cada marcador utilizável soma-se
+`q` e aplica-se a curva `ln(1 + 100·Q) ÷ ln(101)`. A nota da categoria é a do marcador de maior
+nota. Ocorrência com menos de 10 reads ou menos de 0,01% da biblioteca vira alerta e não pontua.
+
+## Índice geral
+
+`max(M, maxᵢ[pᵢ + (1 − pᵢ)(Bᵢ + Cᵢ) ÷ 2])`. M é a maior das três notas (o piso). Cada categoria
+positiva é testada como primária; B e C são as notas de reforço das outras duas, contando só
+consequência distinta, com evidência aplicável e admitida pela adjudicação, e a maior massa de
+cada classe repetida. Sem reforço elegível, o geral é o piso. Não é média nem média quadrática.
+
+## Campanhas independentes
+
+Tudo é por campanha: nota, ordenação, média, mediana, P90 e faixas. Não existe total, média ou
+exportação juntando campanhas. Onde as campanhas aparecem lado a lado, é só para consulta.
+
 ## Três estados que não se confundem
 
 | Estado | Quando | Tela | Planilha |
@@ -61,7 +82,7 @@ Todas exigem `data.view`, respondem `private, no-store` e `X-Results-Version: 0.
 O perfil usa somente fichas do catálogo de efeitos presentes naquela amostra.
 Nada é inferido de outra campanha, de outro ponto ou do nome do táxon. É associação
 documentada; o efeito não foi medido. Aparece no painel do ponto, na ficha, no CSV
-de leitura e nas colunas Y e Z da aba “Resultados finais”.
+de leitura e nas colunas X e Y da aba “Resultados finais”.
 
 ## Verificação
 

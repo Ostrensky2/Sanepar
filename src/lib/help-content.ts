@@ -79,7 +79,7 @@ export const helpModules: HelpModule[] = [
     title: "Início",
     short: "Distribuição por campanha, indicadores e mapa de navegação",
     icon: BookOpen,
-    purpose: "A régua compara distribuições agregadas por campanha. O índice médio usa as estimativas numéricas da edição 0.8. O mapa serve à navegação cartográfica.",
+    purpose: "A régua compara a distribuição de cada campanha, uma ao lado da outra. O índice médio aparece campanha a campanha; não há média entre campanhas. O mapa serve à navegação cartográfica.",
     whenToUse: ["Compare campanhas no mesmo domínio e confira quantas captações foram medidas."],
     primaryTasks: [
       { title: "Comparar distribuições", steps: [
@@ -89,7 +89,7 @@ export const helpModules: HelpModule[] = [
       ] },
     ],
     controls: [
-      { label: "Domínio", detail: "Alterna a distribuição agregada." },
+      { label: "Domínio", detail: "Alterna a categoria exibida na distribuição de cada campanha." },
       { label: "Mapa de navegação", detail: "Abra o mapa para consultar a base cartográfica." },
     ],
     notes: ["A leitura orienta investigação. A capacidade preditiva depende de validação independente."],
@@ -110,29 +110,43 @@ export const helpModules: HelpModule[] = [
     short: "Campo e resultados de cada campanha",
     icon: MapPin,
     purpose:
-      "Reúne tudo de uma campanha em duas abas: Campo (percurso, calendário e diário) e Resultados (panorama, prioridades, organismos e fichas dos pontos).",
+      "Reúne tudo de uma campanha em duas abas: Campo (percurso, calendário e diário) e Resultados (índice de captação, metodologia 0.8, por campanha e por ponto).",
     whenToUse: [
       "Use para ver o que foi coletado, onde e quando.",
-      "Use para saber quais pontos pedem atenção primeiro e por quê.",
-      "Use para gerar a ficha de um ou mais pontos em PDF, impressão ou XLSX.",
+      "Use para saber quais pontos da campanha pedem atenção primeiro e por quê.",
+      "Use para consultar a nota de um ponto (SIA), as três categorias e os perfis de risco biológico.",
       "Use a aba Campo para baixar o diário da campanha ou gerar a planilha das amostras para o Biolog.",
     ],
     primaryTasks: [
       {
         title: "Achar os pontos que pedem atenção",
         steps: [
-          "Na aba Resultados, abra Prioridades.",
-          "Os cinco cartões são os pontos completos com maior índice geral.",
-          "Clique em Abrir ficha para ver os organismos que mais pesaram e o que confirmar em laboratório.",
+          "Na aba Resultados, escolha a campanha (C1, C2 ou C3) e abra Por campanha.",
+          "A tabela lista os pontos da campanha do maior para o menor índice geral.",
+          "Clique no ponto para abrir a ficha em Por ponto.",
         ],
       },
       {
-        title: "Gerar fichas de pontos",
+        title: "Consultar um ponto (SIA)",
         steps: [
-          "Abra Exportar fichas de pontos (PDF ou XLSX) e marque os pontos.",
-          "Ficha-síntese: uma página com índices, o que mais pesou e os organismos dominantes.",
-          "Relatório detalhado: acrescenta as evidências da literatura, da que mais pesou para a que menos pesou.",
-          "XLSX: planilha completa, com todos os campos da fonte.",
+          "Abra Por ponto e escolha o SIA.",
+          "A ficha mostra o índice geral, as três categorias, os perfis de risco biológico operacional e sanitário e os efeitos documentados na amostra.",
+          "O quadro “O mesmo ponto em cada campanha” mostra a nota de cada campanha lado a lado. Cada campanha é calculada à parte; nenhuma nota passa de uma campanha para outra.",
+        ],
+      },
+      {
+        title: "Ver os pontos no mapa",
+        steps: [
+          "Abra Mapa.",
+          "A cor indica a faixa do índice. Símbolo vazado indica ponto sem estimativa ou sem medição.",
+          "Clique no ponto para ver a nota, as categorias e os perfis de risco.",
+        ],
+      },
+      {
+        title: "Exportar os resultados",
+        steps: [
+          "No rodapé de Resultados, use Exportar para leitura (igual à tela) ou Exportar para auditoria (valores sem arredondar e fichas).",
+          "A planilha unificada da campanha fica em Central de dados → Planilhas de resultados. A aba Resultados finais traz a nota de cada SIA.",
         ],
       },
       {
@@ -154,32 +168,34 @@ export const helpModules: HelpModule[] = [
       },
     ],
     controls: [
-      { label: "Campanha exibida", detail: "Troca todo o conteúdo da tela; a fase aparece ao lado do nome." },
-      { label: "Selos Ciano · Bact · COI", detail: "Mostram qual conjunto entrou no cálculo do ponto." },
-      { label: "Faixa colorida", detail: "Ponto parcial: o valor fica entre o menor e o maior valor possível." },
+      { label: "Campanha exibida", detail: "Troca todo o conteúdo da tela; a fase aparece ao lado do nome. Nada de uma campanha entra na outra." },
+      { label: "Subabas de Resultados", detail: "Visão geral, Por campanha, Mapa, Tipos de efeito, Exóticas e Por ponto." },
+      { label: "Faixas de cor", detail: "Escala fixa de 0 a 1 em cinco faixas: até 0,05; de 0,05 a 0,15; de 0,15 a 0,35; de 0,35 a 0,70; e de 0,70 a 1." },
       { label: "Exportar (aba Campo)", detail: "Diário desta campanha, diário de todas as campanhas ou planilha das amostras para o Biolog." },
     ],
     notes: [
-      "Os índices vão de 0 a 1 e são relativos aos pontos da campanha; não são classes de risco.",
+      "O índice vai de 0 a 1 em escala fixa, igual em todas as campanhas. Não é probabilidade de dano nem classe de risco.",
+      "A maior das três categorias é o piso do índice geral. Um dano distinto e documentado em outra categoria pode elevá-lo; o índice geral não é a média das três.",
+      "Zero é nota calculada. “Sem estimativa” (há leitura, mas a nota não pode ser afirmada) e “sem medição” (sem biblioteca utilizável) não são zero.",
       "A edição de campo fica em Central de dados → Diário de campo.",
       "A planilha para o Biolog leva todas as amostras da campanha, também as que já foram antes: o Biolog ignora a amostra que já importou.",
       "Na planilha, o branco sai como controle negativo (objetivo CONTROLE, origem água ultrapura) e o conservante de cada amostra vai na coluna Conservante.",
     ],
     troubleshooting: [
       {
-        issue: "Aba Resultados sem dados",
-        action: "Publique a planilha da campanha em Central de dados → Pendências → Fluxo legado.",
+        issue: "Campanha sem índice na aba Resultados",
+        action: "O índice é calculado depois que o laboratório entrega os resultados da campanha. Enquanto isso, a campanha aparece sem nota; não é zero.",
       },
       {
-        issue: "Ficha demora a gerar",
-        action: "A ficha confere todas as páginas da fonte antes de gerar. Aguarde a mensagem de conclusão.",
+        issue: "Ponto aparece como “sem estimativa”",
+        action: "Há leitura no ponto, mas falta um marcador para afirmar a nota. Abra a ficha em Por ponto para ver quais marcadores foram utilizáveis.",
       },
       {
         issue: "Planilha para o Biolog sem amostras",
         action: "A planilha sai das amostras lançadas em “Amostras do ponto”, no registro de campo. Registros sem amostra ficam de fora.",
       },
     ],
-    keywords: ["campanha", "resultados", "prioridades", "ficha", "pdf", "campo", "calendario", "biolog", "exportar", "planilha"],
+    keywords: ["campanha", "resultados", "indice", "sia", "ponto", "mapa", "perfil de risco", "campo", "calendario", "biolog", "exportar", "planilha"],
   },
   {
     title: "Diário de campo",
@@ -443,6 +459,7 @@ export const helpModules: HelpModule[] = [
           "Abra Pendências → Fluxo legado e selecione o arquivo.",
           "Confira na prévia as campanhas encontradas e desmarque as que não quer publicar.",
           "Publique. A publicação anterior de cada campanha marcada é substituída por inteiro; as demais ficam como estão.",
+          "Dessa planilha o app usa organismos, leituras, literatura e situação dos conjuntos. As notas exibidas vêm só do índice de captação 0.8; as abas do índice anterior não são lidas.",
         ],
       },
       {

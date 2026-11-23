@@ -3,21 +3,21 @@ import type { captureIndexMeta, captureIndexView } from "../capture-index";
 import { parsePointExecutionStatus } from "../point-execution-status";
 import { resolveCanonicalCampaign } from "../campaign-identity";
 import type { MatrixReferencePoint } from "./sia-matrices";
-import { RESULTS_08_GROUPS, RESULTS_08_SERIES, RESULTS_08_POLICY, RESULTS_08_SCHEMA, type Results08Aggregate, type Results08Group } from "../results-08-contract";
+import { RESULTS_08_CAMPAIGNS, RESULTS_08_SERIES, RESULTS_08_POLICY, RESULTS_08_SCHEMA, type Results08Aggregate, type Results08Campaign } from "../results-08-contract";
 
-/** Aggregate-only worksheet: never joins these statistics to SIA, visits or organisms. */
-export function addAggregateResults(sheet: Worksheet, input: Results08Aggregate, selectedGroup?: Results08Group) {
-  if (selectedGroup !== undefined && !RESULTS_08_GROUPS.includes(selectedGroup)) throw Error("Grupo agregado inválido.");
-  if (input?.versao !== "0.8" || input.politica !== RESULTS_08_POLICY || input.schema !== RESULTS_08_SCHEMA) throw Error("Edição agregada incompatível; 0.7 não é fonte atual.");
+/** Estatísticas por campanha, uma campanha por bloco. As campanhas nunca são juntadas num total. */
+export function addAggregateResults(sheet: Worksheet, input: Results08Aggregate, selectedGroup?: Results08Campaign) {
+  if (selectedGroup !== undefined && !RESULTS_08_CAMPAIGNS.includes(selectedGroup)) throw Error("Campanha inválida.");
+  if (input?.versao !== "0.8" || input.politica !== RESULTS_08_POLICY || input.schema !== RESULTS_08_SCHEMA) throw Error("Edição agregada incompatível com a metodologia 0.8.");
   const rows: (string | number | null)[][] = [];
-  for (const group of selectedGroup ? [selectedGroup] : RESULTS_08_GROUPS) for (const series of RESULTS_08_SERIES) {
+  for (const group of selectedGroup ? [selectedGroup] : RESULTS_08_CAMPAIGNS) for (const series of RESULTS_08_SERIES) {
     const value=input.grupos?.[group]?.[series];
     if (!value || ![value.observados,value.numericos,value.nulos].every(n=>Number.isSafeInteger(n)&&n>=0) || value.observados!==value.numericos+value.nulos ||
       ![value.minimo,value.media,value.maximo].every(n=>value.numericos===0 ? n===null : typeof n==="number"&&Number.isFinite(n)&&n>=0&&n<=1) ||
       (value.numericos>0 && !(value.minimo!<=value.media! && value.media!<=value.maximo!))) throw Error("Estatística agregada incompatível.");
     rows.push([input.versao,input.politica,group,series,value.observados,value.numericos,value.nulos,value.minimo,value.media,value.maximo]);
   }
-  sheet.addRow(["Versão","Política","Grupo agregado","Série","Observados","Numéricos","Nulos","Mínimo","Média","Máximo"]);
+  sheet.addRow(["Versão","Política","Campanha","Série","Observados","Numéricos","Nulos","Mínimo","Média","Máximo"]);
   for (const row of rows) sheet.addRow(row);
   return rows.length;
 }
@@ -114,7 +114,7 @@ export function addFinalResults(sheet:Worksheet, index:IntegratedIndex|undefined
   for(const sia of new Set([...sias,...bySia.keys()])){
     const row=bySia.get(sia), l=link(sia);
     const state=!row ? (index?"Sem resultado localizado":"Fonte final não consultada") : row.state==="estimado"?"Nota 0.8 calculada":row.state==="sem estimativa"?"Sem estimativa":"Sem medição";
-    sheet.addRow([campaign,sia,state,row?.measured?row.general:"",row?.range??"",row?.coverage??"",row?.band??"",row?.position??"",
+    sheet.addRow([campaign,sia,state,row?.measured?row.general:"",row?.coverage??"",row?.band??"",row?.position??"",
       ...domains.map(d=>row?.domains.find(x=>x.key===d)?.score??""),index?.meta.version??"",index?.meta.rowsSha256??"",
       l.day,l.day?"dia civil":"",l.source,l.status,"Resultado por campanha + SIA; não identifica visita, amostra ou réplica individual.",row?.exact.general??null,...domains.map(d=>row?.exact.domains[d]??null),l.referenceDays??"",l.warning??"",
       ...(["operacional","sanitario"] as const).map(key=>row?.profiles?.find(p=>p.key===key)?.summary??"")]);

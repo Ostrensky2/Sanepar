@@ -3,7 +3,6 @@ import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import { RESULTS_SHEETS, MOLECULAR_SHEET, LEGACY_MOLECULAR_SHEET, molecularSheetName, canonicalSheetName } from "./sheet-names";
 
-import { calculateAggregates, calculateComponentIndex, competitionRanks } from "./calculation";
 import {
   ANALYTICAL_SETS,
   RESULT_DOMAINS,
@@ -27,34 +26,22 @@ type MutableMolecularGroup = {
   totalReads: number;
   recordCount: number;
   scoredReads: Record<ResultDomain, number>;
-  weightedReads: Record<ResultDomain, number>;
 };
 
 const REQUIRED_SHEETS = RESULTS_SHEETS;
 
+// A planilha do laboratório traz abas com o índice anterior, por conjuntos. O aplicativo usa somente a
+// metodologia 0.8 (índice de captação): dessas abas só se leem a identificação do ponto, as contagens e a
+// situação analítica. As colunas de índice, limites, posição e parâmetros não são lidas, recalculadas,
+// conferidas nem guardadas.
 const INDEX_HEADERS = [
-  "Campanha", "Ponto", "Manancial / Corpo Hídrico", "Município", "Índice ambiental",
-  "Índice operacional", "Índice saúde humana", "Índice geral", "Posição na campanha",
-  "Cobertura ambiental", "Cobertura operacional", "Cobertura saúde", "Conjuntos disponíveis",
-  "Situação", "Registros com impacto", "Observações", "Versão do cálculo",
-  "Limite inferior ambiental", "Limite superior ambiental", "Limite inferior operacional",
-  "Limite superior operacional", "Limite inferior saúde", "Limite superior saúde",
-  "Limite inferior geral", "Limite superior geral", "Conjuntos utilizados",
-  "Conjuntos indisponíveis", "Condição de uso", "Situação Bactérias",
-  "Situação Cianobactérias", "Situação COI",
+  "Campanha", "Ponto", "Manancial / Corpo Hídrico", "Município",
+  "Registros com impacto", "Observações", "Condição de uso",
 ] as const;
 
 const COMPONENT_HEADERS = [
   "Chave do cálculo", "Campanha", "Ponto", "Conjunto", "Total de reads", "Registros",
-  "Reads score 1 ambiental", "Reads score 2 ambiental", "Reads score 3 ambiental",
-  "Reads sem score ambiental", "Cobertura ambiental", "Sinal ponderado ambiental",
-  "Índice ambiental", "Reads score 1 operacional", "Reads score 2 operacional",
-  "Reads score 3 operacional", "Reads sem score operacional", "Cobertura operacional",
-  "Sinal ponderado operacional", "Índice operacional", "Reads score 1 saúde",
-  "Reads score 2 saúde", "Reads score 3 saúde", "Reads sem score saúde", "Cobertura saúde",
-  "Sinal ponderado saúde", "Índice saúde", "Situação analítica", "Motivo / observação analítica",
-  "Incluir na síntese (0/1)", "Componente ambiental utilizado",
-  "Componente operacional utilizado", "Componente saúde utilizado",
+  "Situação analítica", "Motivo / observação analítica",
 ] as const;
 
 const METADATA_HEADERS = [
@@ -85,7 +72,6 @@ function parseLoadedWorkbook(workbook: ExcelJS.Workbook, repaired: boolean, byte
   for (const warning of cachedZeroProvenance(workbook)) warnings.add(warning);
   if (repaired) warnings.add("Namespaces OpenXML incompatíveis com ExcelJS foram normalizados somente em memória.");
 
-  const parameters = parseParameters(requiredSheet(workbook, "Metodo_calculo"));
   const evidenceScores = parseEvidenceScores(requiredSheet(workbook, "Evidencias_risco"));
   const catalog = parseCatalog(requiredSheet(workbook, "Riscos_bibliografia"), evidenceScores, warnings);
   const metadata = parseMolecularRows(requiredSheet(workbook, MOLECULAR_SHEET), catalog);
@@ -100,13 +86,12 @@ function parseLoadedWorkbook(workbook: ExcelJS.Workbook, repaired: boolean, byte
     metadata.coordinates,
     warnings,
   );
-  const campaigns = buildCampaigns(points, requiredSheet(workbook, "Indices_pontos"), warnings);
+  const campaigns = buildCampaigns(points);
 
   return {
     contractVersion: RESULTS_CONTRACT_VERSION,
     calculationVersion: RESULTS_CALCULATION_VERSION,
     catalogVersion: RESULTS_CATALOG_VERSION,
-    parameters,
     source: {
       fileName,
       sha256: createHash("sha256").update(bytes).digest("hex").toUpperCase(),
@@ -142,7 +127,6 @@ export async function parseResultsWorkbookWithModelV2(buffer: Uint8Array, fileNa
 
 function exportLoadedWorkbook(source: ExcelJS.Workbook, campaignCodes: readonly string[]): ResultsWorkbookExportModel & { cacheRecovery: string[] } {
   validateSheetSet(source);
-  parseParameters(requiredSheet(source, "Metodo_calculo"));
   const selected = new Set(campaignCodes);
   const indexSheet = requiredSheet(source, "Indices_pontos");
   const available = new Set<string>();
@@ -256,22 +240,6 @@ export function validateResultsPreparationModel(sheets:ResultsWorkbookExportMode
   if(kind==="campaign_fragment")parseLoadedWorkbook(workbook,false,Buffer.from("isolated-preparation-validation"),"preparation-validation.xlsx");
 }
 
-function parseParameters(worksheet: ExcelJS.Worksheet): ResultsWorkbookImport["parameters"] {
-  const expected = [
-    ["Expoente da gravidade", 1],
-    ["Curvatura logarítmica", 100],
-    ["Conjuntos exigidos", 3],
-    ["Domínios", 3],
-    ["Versão do cálculo", RESULTS_CALCULATION_VERSION],
-  ] as const;
-  expected.forEach(([label, value], offset) => {
-    const row = 6 + offset;
-    requireEqual(textValue(worksheet.getCell(row, 1)), label, `${worksheet.name}!A${row}`);
-    requireEqual(primitiveValue(worksheet.getCell(row, 2)), value, `${worksheet.name}!B${row}`);
-  });
-  return { severityExponent: 1, alpha: 100, requiredSetCount: 3, domainCount: 3 };
-}
-
 function parseEvidenceScores(worksheet: ExcelJS.Worksheet) {
   const columns = headerMap(worksheet, 5, [
     "ID organismo", "Domínio", "Score bibliográfico", "Versão do catálogo",
@@ -350,7 +318,6 @@ function parseMolecularRows(worksheet: ExcelJS.Worksheet, catalog: Map<string, D
       const score = scores[domain];
       if (score === null) continue;
       group.scoredReads[domain] += reads;
-      group.weightedReads[domain] += reads * (score / 3);
     }
     groups.set(key, group);
     recordCount += 1;
@@ -394,31 +361,15 @@ function parseComponents(
     const source = molecular.get(key);
     if (!source) fail(worksheet, rowNumber, "Chave do cálculo", `sem registros moleculares para ${key}`);
 
-    const calculated = {} as DomainNumbers;
+    // Cobertura da literatura: fatia dos reads com nota no catálogo. É contagem, não índice.
     const coverage = {} as DomainNumbers;
-    for (const domain of RESULT_DOMAINS) {
-      const signal = source.totalReads > 0 ? source.weightedReads[domain] / source.totalReads : null;
-      calculated[domain] = signal === null ? null : calculateComponentIndex(signal);
-      coverage[domain] = source.totalReads > 0 ? source.scoredReads[domain] / source.totalReads : null;
-      auditCell(row.getCell(columns.get(componentIndexHeader(domain))!), calculated[domain], worksheet, rowNumber, componentIndexHeader(domain), warnings);
-      auditCell(row.getCell(columns.get(componentCoverageHeader(domain))!), coverage[domain], worksheet, rowNumber, componentCoverageHeader(domain), warnings);
-      auditCell(row.getCell(columns.get(componentSignalHeader(domain))!), signal, worksheet, rowNumber, componentSignalHeader(domain), warnings);
-    }
+    for (const domain of RESULT_DOMAINS) coverage[domain] = source.totalReads > 0 ? source.scoredReads[domain] / source.totalReads : null;
     auditCell(row.getCell(columns.get("Total de reads")!), source.totalReads, worksheet, rowNumber, "Total de reads", warnings, true);
     auditCell(row.getCell(columns.get("Registros")!), source.recordCount, worksheet, rowNumber, "Registros", warnings, true);
 
     const sourceStatus = requiredText(row.getCell(columns.get("Situação analítica")!), worksheet, rowNumber, "Situação analítica");
     const status = analyticalStatus(sourceStatus);
     const eligible = status === "approved" || status === "available_unassessed";
-    const included = eligible && RESULT_DOMAINS.every((domain) => calculated[domain] !== null);
-    const cachedIncluded = requiredNonNegativeNumber(row.getCell(columns.get("Incluir na síntese (0/1)")!), worksheet, rowNumber, "Incluir na síntese (0/1)");
-    requireEqual(cachedIncluded, included ? 1 : 0, `${worksheet.name}, linha ${rowNumber}, Incluir na síntese (0/1)`);
-    const used = {} as DomainNumbers;
-    for (const domain of RESULT_DOMAINS) {
-      used[domain] = included ? calculated[domain] : null;
-      auditCell(row.getCell(columns.get(componentUsedHeader(domain))!), used[domain], worksheet, rowNumber, componentUsedHeader(domain), warnings);
-    }
-
     components.set(key, {
       set,
       status,
@@ -426,9 +377,9 @@ function parseComponents(
       reason: nullableText(row.getCell(columns.get("Motivo / observação analítica")!)),
       totalReads: source.totalReads,
       recordCount: source.recordCount,
-      included,
-      calculated,
-      used,
+      included: eligible && source.totalReads > 0,
+      calculated: noIndex(),
+      used: noIndex(),
       bibliographicCoverage: coverage,
     });
   }
@@ -459,29 +410,14 @@ function parsePoints(
       set,
       components.get(componentKey(campaign, sia, set)) ?? missingComponent(set),
     ])) as Record<AnalyticalSet, ResultComponent>;
-    const aggregate = calculateAggregates(Object.fromEntries(ANALYTICAL_SETS.map((set) => [set, pointComponents[set].used])) as Record<AnalyticalSet, DomainNumbers>);
+    const usedSetCount = ANALYTICAL_SETS.filter((set) => pointComponents[set].included).length;
     const availableSetCount = ANALYTICAL_SETS.filter((set) => pointComponents[set].status !== "missing_records").length;
     const bibliographicCoverage = Object.fromEntries(RESULT_DOMAINS.map((domain) => [
       domain,
-      aggregate.usedSetCount === 3
+      usedSetCount === 3
         ? ANALYTICAL_SETS.reduce((sum, set) => sum + (pointComponents[set].bibliographicCoverage[domain] as number), 0) / 3
         : null,
     ])) as DomainNumbers;
-
-    auditCell(row.getCell(columns.get("Conjuntos disponíveis")!), availableSetCount, worksheet, rowNumber, "Conjuntos disponíveis", warnings, true);
-    auditCell(row.getCell(columns.get("Conjuntos utilizados")!), aggregate.usedSetCount, worksheet, rowNumber, "Conjuntos utilizados", warnings, true);
-    auditCell(row.getCell(columns.get("Índice ambiental")!), aggregate.domains.environmental.value, worksheet, rowNumber, "Índice ambiental", warnings);
-    auditCell(row.getCell(columns.get("Índice operacional")!), aggregate.domains.operational.value, worksheet, rowNumber, "Índice operacional", warnings);
-    auditCell(row.getCell(columns.get("Índice saúde humana")!), aggregate.domains.humanHealth.value, worksheet, rowNumber, "Índice saúde humana", warnings);
-    auditCell(row.getCell(columns.get("Índice geral")!), aggregate.overall.value, worksheet, rowNumber, "Índice geral", warnings);
-    for (const domain of RESULT_DOMAINS) {
-      auditCell(row.getCell(columns.get(pointLowerHeader(domain))!), aggregate.domains[domain].lower, worksheet, rowNumber, pointLowerHeader(domain), warnings);
-      auditCell(row.getCell(columns.get(pointUpperHeader(domain))!), aggregate.domains[domain].upper, worksheet, rowNumber, pointUpperHeader(domain), warnings);
-      auditCell(row.getCell(columns.get(pointCoverageHeader(domain))!), bibliographicCoverage[domain], worksheet, rowNumber, pointCoverageHeader(domain), warnings);
-    }
-    auditCell(row.getCell(columns.get("Limite inferior geral")!), aggregate.overall.lower, worksheet, rowNumber, "Limite inferior geral", warnings);
-    auditCell(row.getCell(columns.get("Limite superior geral")!), aggregate.overall.upper, worksheet, rowNumber, "Limite superior geral", warnings);
-    requireEqual(textValue(row.getCell(columns.get("Versão do cálculo")!)), RESULTS_CALCULATION_VERSION, `${worksheet.name}, linha ${rowNumber}, Versão do cálculo`);
 
     const coordinate = coordinates.get(key);
     if (coordinate === null) warnings.add(`Coordenadas conflitantes em ${key}; o resultado permanece sem localização.`);
@@ -494,15 +430,16 @@ function parsePoints(
       coordinates: coordinate ? { ...coordinate, source: "workbook_metadata" } : null,
       calculationVersion: RESULTS_CALCULATION_VERSION,
       catalogVersion: RESULTS_CATALOG_VERSION,
-      completeness: aggregate.completeness,
+      completeness: setAvailability(usedSetCount),
       availableSetCount,
-      usedSetCount: aggregate.usedSetCount,
+      usedSetCount,
       unavailableSets: ANALYTICAL_SETS.filter((set) => !pointComponents[set].included),
       conditionOfUse: nullableText(row.getCell(columns.get("Condição de uso")!)),
       impactedRecordCount: optionalInteger(row.getCell(columns.get("Registros com impacto")!)) ?? 0,
       observations: nullableText(row.getCell(columns.get("Observações")!)),
-      domains: aggregate.domains,
-      overall: { ...aggregate.overall, rank: null },
+      // Sem nota: a planilha do laboratório não é fonte do índice. As notas vêm do índice de captação 0.8.
+      domains: Object.fromEntries(RESULT_DOMAINS.map((domain) => [domain, { value: null, lower: 0, upper: 0 }])) as ResultPoint["domains"],
+      overall: { value: null, lower: 0, upper: 0, rank: null },
       bibliographicCoverage,
       components: pointComponents,
     });
@@ -510,23 +447,16 @@ function parsePoints(
   return points;
 }
 
-function buildCampaigns(points: ResultPoint[], worksheet: ExcelJS.Worksheet, warnings: Set<string>) {
-  const rankColumn = headerMap(worksheet, 5, INDEX_HEADERS).get("Posição na campanha")!;
+function buildCampaigns(points: ResultPoint[]) {
   const campaigns = [...new Set(points.map((point) => point.campaignCode))].sort().map((campaignCode) => {
     const campaignPoints = points.filter((point) => point.campaignCode === campaignCode);
-    const complete = campaignPoints.filter((point) => point.overall.value !== null);
-    const ranks = competitionRanks(complete, (point) => point.overall.value as number);
-    for (const point of complete) point.overall.rank = ranks.get(point)!;
-    for (const point of campaignPoints) {
-      const rowNumber = 6 + points.indexOf(point);
-      auditCell(worksheet.getRow(rowNumber).getCell(rankColumn), point.overall.rank, worksheet, rowNumber, "Posição na campanha", warnings, true);
-    }
     return {
       campaignCode,
       points: campaignPoints,
+      // Contagens de disponibilidade dos conjuntos analíticos (3, 2, 1 ou nenhum); não são notas.
       counts: {
         total: campaignPoints.length,
-        complete: complete.length,
+        complete: campaignPoints.filter((point) => point.usedSetCount === 3).length,
         partialWithTwoSets: campaignPoints.filter((point) => point.usedSetCount === 2).length,
         partialWithOneSet: campaignPoints.filter((point) => point.usedSetCount === 1).length,
         unavailable: campaignPoints.filter((point) => point.usedSetCount === 0).length,
@@ -534,6 +464,11 @@ function buildCampaigns(points: ResultPoint[], worksheet: ExcelJS.Worksheet, war
     } satisfies ResultsCampaign;
   });
   return campaigns;
+}
+
+const noIndex = (): DomainNumbers => ({ environmental: null, operational: null, humanHealth: null });
+function setAvailability(usedSetCount: number): ResultPoint["completeness"] {
+  return usedSetCount === 3 ? "complete" : usedSetCount === 2 ? "partial_2" : usedSetCount === 1 ? "partial_1" : "unavailable";
 }
 
 function validateSheetSet(workbook: ExcelJS.Workbook) {
@@ -717,7 +652,6 @@ function emptyMolecularGroup(): MutableMolecularGroup {
     totalReads: 0,
     recordCount: 0,
     scoredReads: { environmental: 0, operational: 0, humanHealth: 0 },
-    weightedReads: { environmental: 0, operational: 0, humanHealth: 0 },
   };
 }
 
@@ -749,36 +683,8 @@ function setLabel(set: AnalyticalSet) {
   return set === "bacteria" ? "Bactérias" : set === "cyanobacteria" ? "Cianobactérias" : "COI";
 }
 
-function componentIndexHeader(domain: ResultDomain) {
-  return domain === "environmental" ? "Índice ambiental" : domain === "operational" ? "Índice operacional" : "Índice saúde";
-}
-
 function catalogScoreHeader(domain: ResultDomain) {
   return domain === "environmental" ? "Score ambiental" : domain === "operational" ? "Score operacional" : "Score saúde humana";
-}
-
-function componentCoverageHeader(domain: ResultDomain) {
-  return domain === "environmental" ? "Cobertura ambiental" : domain === "operational" ? "Cobertura operacional" : "Cobertura saúde";
-}
-
-function componentSignalHeader(domain: ResultDomain) {
-  return domain === "environmental" ? "Sinal ponderado ambiental" : domain === "operational" ? "Sinal ponderado operacional" : "Sinal ponderado saúde";
-}
-
-function componentUsedHeader(domain: ResultDomain) {
-  return domain === "environmental" ? "Componente ambiental utilizado" : domain === "operational" ? "Componente operacional utilizado" : "Componente saúde utilizado";
-}
-
-function pointLowerHeader(domain: ResultDomain) {
-  return domain === "environmental" ? "Limite inferior ambiental" : domain === "operational" ? "Limite inferior operacional" : "Limite inferior saúde";
-}
-
-function pointUpperHeader(domain: ResultDomain) {
-  return domain === "environmental" ? "Limite superior ambiental" : domain === "operational" ? "Limite superior operacional" : "Limite superior saúde";
-}
-
-function pointCoverageHeader(domain: ResultDomain) {
-  return domain === "environmental" ? "Cobertura ambiental" : domain === "operational" ? "Cobertura operacional" : "Cobertura saúde";
 }
 
 function normalizeText(value: string) {

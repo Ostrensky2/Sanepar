@@ -1,13 +1,9 @@
 import { readFileSync } from "node:fs";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { ResultsPublication, ResultsViewModel } from "@/lib/imports/results-contract";
 import type { ResultsInventoryItem } from "@/lib/results-publication-contract";
 import { hasAvailableResultsSource, samePublishedSource } from "../../presentation";
 import { isPublishedLegacyResponse, isPublishedV2Response, type PublishedResultsResponse } from "../../published-response";
-import { LegacyPublishedResults } from "../legacy-published-results";
-import { isMethodologyPdfAvailable, MethodologyPdfLink } from "../methodology-pdf-link";
 import { researchQuery } from "../research-browser";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
@@ -29,18 +25,6 @@ describe("cloud legacy DTO UI, synthetic only and no database", () => {
     expect(isPublishedV2Response({ status: "empty", campaign: null, publication: null })).toBe(false);
     expect(isPublishedLegacyResponse(Array(69).fill({ score: 1 }) as unknown as PublishedResultsResponse)).toBe(false);
   });
-  it("renders the exact published legacy values and all sections, escaped, without local HTML or V2 inference", () => {
-    const response = legacy(2);
-    if (!isPublishedLegacyResponse(response)) throw new Error("fixture");
-    const before = JSON.stringify(response);
-    const markup = renderToStaticMarkup(createElement(LegacyPublishedResults, { publication: response.publication }));
-    for (const value of ["Campanha 2", "75", "0.5778986515401948", "Moderado", "Texto original integral", "Alerta original", "Não informado na publicação", "arquivo-fonte"]) expect(markup).toContain(value);
-    expect(markup).not.toContain("<img");
-    expect(markup).toContain("&lt;img");
-    expect(markup).not.toContain("<iframe");
-    expect(markup).not.toContain("Nenhuma campanha publicada");
-    expect(JSON.stringify(response)).toBe(before);
-  });
   it("blocks source-dependent queries for null hashes but preserves real inventory totals", () => {
     const item: ResultsInventoryItem = { campaignCode: "C2", canonicalId: "campanha-2", canonicalName: "Campanha 2", publicationId: "head-2", publishedAt: "2026-01-01", format: "legacy-v1", sourceAvailability: "missing_source_artifact", source: { sha256: null, fileName: "original.xlsx" }, counts: { total: 74, complete: null, partialWithTwoSets: null, partialWithOneSet: null, unavailable: null }, downloadAvailable: false };
     expect(hasAvailableResultsSource(item)).toBe(false);
@@ -48,14 +32,7 @@ describe("cloud legacy DTO UI, synthetic only and no database", () => {
     expect(samePublishedSource({ publicationId: "head-2", sha256: null }, { publicationId: "head-2", sha256: null })).toBe(false);
     expect(item.counts).toEqual({ total: 74, complete: null, partialWithTwoSets: null, partialWithOneSet: null, unavailable: null });
     const v2 = { ...item, format: "v2" as const, sourceAvailability: "available" as const, source: { ...item.source, sha256: "a".repeat(64) } };
-    expect(researchQuery(v2, "method", {}, "", 0)?.get("sourceHash")).toBe("a".repeat(64));
-  });
-  it("does not present a PDF link until the private GET confirms status and MIME", () => {
-    expect(isMethodologyPdfAvailable(new Response(null, { status: 503 }))).toBe(false);
-    expect(isMethodologyPdfAvailable(new Response(null, { status: 401 }))).toBe(false);
-    expect(isMethodologyPdfAvailable(new Response(null, { status: 200, headers: { "content-type": "text/html" } }))).toBe(false);
-    expect(isMethodologyPdfAvailable(new Response(null, { status: 200, headers: { "content-type": "application/pdf" } }))).toBe(true);
-    expect(renderToStaticMarkup(createElement(MethodologyPdfLink))).not.toContain("href=");
+    expect(researchQuery(v2, "impacts", {}, "", 0)?.get("sourceHash")).toBe("a".repeat(64));
   });
   it("keeps unassigned history separate and never maps read errors to empty", () => {
     const repository = readFileSync(new URL("../../../../components/spreadsheet-repository.tsx", import.meta.url), "utf8");
@@ -67,5 +44,7 @@ describe("cloud legacy DTO UI, synthetic only and no database", () => {
     expect(campaigns).not.toContain('setPublishedResults({ status: "empty"');
     const panels = readFileSync(new URL("../../../../components/campaign-results-panels.tsx", import.meta.url), "utf8");
     expect(panels).not.toContain("Painel_eDNA_Campanha1_Sanepar.html");
+    // O painel e a ficha do índice anterior saíram do aplicativo; a moldura só recebe o índice de captação 0.8.
+    expect(panels).not.toMatch(/LegacyPublishedResults|CampaignResultsDashboard/);
   });
 });

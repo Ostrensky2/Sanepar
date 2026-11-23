@@ -1,9 +1,5 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { CampaignHydroMapPoint } from "@/components/campaign-hydro-map";
-import { SelectedResultPoint } from "@/components/campaign-results-panels";
 import { hydrateResultPointPhotos } from "@/components/campaigns-page-content";
 import type { FieldDiaryEntry } from "@/lib/field-diary";
 
@@ -82,30 +78,5 @@ describe("mídia dos resultados por campanha", () => {
     }
   });
 
-  it("renderiza foto acessível e fallback explícito", () => {
-    const url = photoUrl(780);
-    const withPhoto = renderToStaticMarkup(
-      <SelectedResultPoint point={{ ...point(780), municipality: "Pinhais", photoUrl: url }} />,
-    );
-    const withoutPhoto = renderToStaticMarkup(<SelectedResultPoint point={point(780)} />);
 
-    expect(withPhoto).toContain(`src="${url.replaceAll("&", "&amp;")}"`);
-    expect(withPhoto).toContain("Foto de campo do ponto SIA-0780 em Pinhais");
-    expect(withPhoto).toContain("Ampliar foto de campo do ponto SIA-0780");
-    expect(withoutPhoto).toContain("Foto de campo indisponível");
-  });
-
-  it("usa a mesma seleção na ficha, no mapa e na tabela", () => {
-    const source = readFileSync(
-      resolve(process.cwd(), "src/components/campaign-results-panels.tsx"),
-      "utf8",
-    );
-
-    expect(source).toContain("<SelectedResultPoint point={selectedPoint} />");
-    expect(source).toContain("selectedPointId={selectedPoint.id}");
-    expect(source).toContain("onSelectPoint={(point) => setSelectedPointId(point.id)}");
-    expect(source).toContain("onClick={() => setSelectedPointId(municipality.priorityPoint.id)}");
-    expect(source).toContain("onDoubleClick={() => setIsPhotoExpanded(true)}");
-    expect(source).toContain("<RiskPhotoModal");
-  });
 });

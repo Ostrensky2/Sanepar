@@ -28,17 +28,18 @@ export const MAJOR_RELEASES: MajorRelease[] = [
     range: "2.0.0 em diante",
     period: "Setembro de 2026",
     summary:
-      "Resultados recalculados com o novo índice por conjuntos, telas reorganizadas em menos destinos, a seção Ciência e método para explicar cada número e um único caminho para trazer dados de campo.",
+      "Resultados pelo índice de captação, metodologia 0.8, por campanha e por ponto; telas reorganizadas em menos destinos, a seção Ciência e método para explicar cada número e um único caminho para trazer dados de campo.",
     areas: [
       {
-        title: "Resultados com o novo índice",
+        title: "Resultados: índice de captação 0.8",
         items: [
-          "Índice de 0 a 1 calculado por conjunto analítico (Cianobactérias, Bactérias e COI) e por domínio (ambiental, operacional e saúde humana).",
-          "Ponto sem os três conjuntos aparece como parcial, com uma faixa possível no lugar de um valor único, e fica fora de médias e rankings.",
-          "Panorama, Prioridades (os 5 pontos que pedem atenção primeiro), Alertas, abas por conjunto com mapa de calor e Evolução entre campanhas.",
-          "Ficha de cada ponto: índice, domínios, reads por conjunto, organismos dominantes e o que mais pesou no índice.",
-          "Fichas em PDF (síntese ou detalhada) e em XLSX completo, com uma aba “Leitura” no início na mesma ordem da ficha.",
-          "Publicação por campanha: a prévia mostra as campanhas do arquivo e só as marcadas são substituídas.",
+          "Índice de 0 a 1 em escala fixa, calculado em cada campanha e em cada ponto (SIA), com três categorias: danos físicos e ambientais, riscos operacionais e perigo potencial à saúde.",
+          "A maior das três categorias é o piso do índice geral; um dano distinto e documentado em outra categoria pode elevá-lo. O índice geral não é a média das três.",
+          "Zero é nota calculada. “Sem estimativa” e “sem medição” aparecem com esses nomes e não são zero.",
+          "Visão geral, Por campanha, Mapa, Tipos de efeito, Exóticas e Por ponto, sempre com a mesma nota.",
+          "Ficha de cada ponto: índice geral, categorias, perfis de risco biológico operacional e sanitário e os efeitos documentados na amostra.",
+          "Exportações para leitura e para auditoria, e planilha unificada da campanha com a nota de cada SIA.",
+          "Cada campanha é calculada à parte: não há total nem média juntando campanhas.",
         ],
       },
       {
@@ -46,8 +47,7 @@ export const MAJOR_RELEASES: MajorRelease[] = [
         items: [
           "Impactos potenciais: o que a literatura descreve para cada organismo, primeiro os detectados na campanha escolhida, depois o restante do catálogo.",
           "Onde ocorrem e Referências, ligados entre si e à ficha do ponto.",
-          "Como o índice é calculado: escolha um ponto e refaça a conta passo a passo com os números dele.",
-          "Documento metodológico em PDF.",
+          "Como o índice é calculado: a metodologia 0.8, com a fórmula das categorias, o piso e o reforço.",
         ],
       },
       {
@@ -72,14 +72,14 @@ export const MAJOR_RELEASES: MajorRelease[] = [
       },
     ],
     moved: [
-      { before: "Painel eDNA da Campanha 1 (score de risco)", now: "Campanhas e resultados › Resultados, com o novo índice. Os valores não são comparáveis ao score antigo." },
+      { before: "Painel eDNA da Campanha 1 (score de risco) e índice por conjuntos", now: "Campanhas e resultados › Resultados, com o índice de captação 0.8. Os valores não são comparáveis aos anteriores." },
       { before: "Solicitações", now: "Suporte (contato direto com a equipe)." },
       { before: "Central de dados › Planilhas de campo", now: "Central de dados › Diário de campo › Importar planilha." },
       { before: "Ações pontuais", now: "Atividades complementares (abas Consultar e Registrar)." },
       { before: "Entrada de dados", now: "Central de dados." },
     ],
     notes: [
-      "O índice da versão 2 não é comparável ao score de risco do painel da versão 1: a fórmula, a escala e os conjuntos mudaram.",
+      "O índice de captação 0.8 não é comparável ao score de risco do painel da versão 1 nem ao índice por conjuntos: a fórmula e a escala mudaram.",
       "Links antigos continuam funcionando e levam à tela nova correspondente.",
     ],
     updates: [

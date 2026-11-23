@@ -84,7 +84,6 @@ import type {
 import { CaptureCampaignResults } from "@/components/capture-campaign-results";
 import type { ResultsCampaign } from "@/modules/results";
 import type { ResultsInventoryItem, ResultsInventoryResponse } from "@/lib/results-publication-contract";
-import { CampaignPointFicha } from "@/modules/results/components/campaign-point-ficha";
 
 import { isPublishedLegacyResponse, isPublishedV2Response, type PublishedResultsResponse as CampaignResultsResponse } from "@/modules/results/published-response";
 
@@ -560,57 +559,6 @@ export function CampaignsPageContent({
       setExportMessage(`Planilha exportada com ${sortedEntries.length} registros.`);
     } catch {
       setExportMessage("Não foi possível exportar a planilha agora.");
-    } finally {
-      setIsExporting(false);
-    }
-  }
-
-  async function exportCampaignResultsWorkbook() {
-    setExportMessage("");
-
-    const publication = isPublishedLegacyResponse(publishedResults)
-      ? publishedResults.publication
-      : null;
-    if (!selectedResultExportPoints.length && !publication && !v2Campaign) {
-      setExportMessage("Esta campanha ainda não possui resultados homologados para exportação.");
-      return;
-    }
-
-    setIsExporting(true);
-
-    try {
-      if (v2Campaign) {
-        const response = await fetch(
-          `/api/imports/results/template?source=published&campaignCode=${encodeURIComponent(v2Campaign.campaignCode)}`,
-          { cache: "no-store" },
-        );
-        if (!response.ok) throw new Error("O binário verificável da publicação não está disponível; nenhuma fonte antiga foi usada.");
-        downloadBlob(await response.blob(), buildCampaignResultsFileName(selectedCampaign.title));
-        setExportMessage(
-          `Planilha v2 reimportável exportada com ${v2Campaign.points.length} resultados em sete abas. O Diário de campo permanece no download próprio.`,
-        );
-        return;
-      }
-
-      const ExcelJS = await import("exceljs");
-      const workbook = new ExcelJS.Workbook();
-      workbook.creator = "Yva'e Monitoramento";
-      workbook.created = new Date();
-      workbook.modified = new Date();
-
-      addFieldDiarySummarySheet(workbook, selectedDiaryEntries, selectedCampaign.title, "Resumo");
-      if (selectedResultExportPoints.length) {
-        addCampaignResultsSheet(workbook, selectedResultExportPoints, selectedDiaryEntries);
-      } else if (publication) {
-        addPublishedResultsSheets(workbook, publication);
-      }
-      addFieldDiaryEntriesSheet(workbook, selectedDiaryEntries);
-      await downloadWorkbook(workbook, buildCampaignResultsFileName(selectedCampaign.title));
-      setExportMessage(
-        `Planilha exportada com ${publication?.rankingRows.length ?? selectedResultExportPoints.length} resultados e ${selectedDiaryEntries.length} registros de campo.`,
-      );
-    } catch {
-      setExportMessage("Não foi possível gerar a planilha desta campanha agora.");
     } finally {
       setIsExporting(false);
     }
