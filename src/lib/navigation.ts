@@ -83,7 +83,7 @@ export const navigationItems: NavigationItem[] = [
   {
     href: "/resultados/impactos",
     label: "Ciência e método",
-    summary: "catálogo de impactos, acervo científico e como o índice é calculado",
+    summary: "catálogo de impactos, o que se sabe sobre cada organismo e como o índice é calculado",
     headerTitle: "Ciência e método",
     icon: BookOpen,
     group: "consult",
@@ -94,14 +94,6 @@ export const navigationItems: NavigationItem[] = [
         label: "Impactos potenciais",
         summary: "fichas de efeito do índice, com gravidade e fonte",
         headerTitle: "Impactos potenciais",
-        icon: BookOpen,
-      },
-      {
-        href: "/resultados/acervo",
-        label: "Acervo científico",
-        summary: "fichas revisadas e referências",
-        headerTitle: "Acervo científico",
-        privilege: "data.view",
         icon: BookOpen,
       },
       {
@@ -224,6 +216,8 @@ const routePrivilegeOverrides: Record<string, PrivilegeKey[]> = {
   "/campanhas/resultados": ["nav.results"],
   // Endereço antigo do índice de captação: só redireciona para Resultados.
   "/resultados/indice-captacao": ["nav.results"],
+  // Endereço antigo do Acervo científico: o conteúdo agora abre dentro de Impactos potenciais.
+  "/resultados/acervo": ["nav.results"],
 };
 
 export function findNavigationItem(pathname: string) {

@@ -1,9 +1,6 @@
-import { ScientificLibrary } from "@/modules/results/components/scientific-library";
+import { redirect } from "next/navigation";
 
+/** Endereço antigo do Acervo científico: as fichas de conhecimento agora abrem na ficha de cada organismo, em Impactos potenciais. */
 export default function ScientificLibraryPage() {
-  return (
-    <main className="app-container min-w-0">
-      <ScientificLibrary />
-    </main>
-  );
+  redirect("/resultados/impactos");
 }
