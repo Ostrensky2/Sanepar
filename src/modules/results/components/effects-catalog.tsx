@@ -11,7 +11,7 @@ function applicability(ficha: CaptureFicha) {
   return value === null ? "indeterminada, não pontua" : value === 1 ? "todo o táxon (1)" : value === 0.5 ? "parte substancial (0,5)" : value === 0.1 ? "minoria (0,1)" : "sem efeito sustentado (0)";
 }
 
-/** Catálogo de impactos da metodologia 0.8: as fichas de efeito que o índice usa, por categoria.
+/** Catálogo de impactos do método 3.0: as fichas de efeito que o índice usa, por categoria.
  * Organismos em gênero, família ou grupo; espécie só para exóticas. Nada vem da planilha antiga do laboratório. */
 export function EffectsCatalog() {
   const fichas = captureFichas();

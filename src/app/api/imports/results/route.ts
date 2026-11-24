@@ -6,7 +6,7 @@ const RETIRED = "A planilha antiga do laboratório não é mais lida nem publica
 
 /** Fluxo antigo de publicação da planilha do laboratório (banco em espécie, de setembro de 2026): desativado em 24/11/2026.
  * Nada do que foi publicado por ele é lido. As consultas respondem como "sem publicação", para as telas que ainda perguntam;
- * os resultados exibidos vêm do índice 0.8 (`/api/results/capture-index`) e das matrizes por SIA (`/api/results/organisms`). */
+ * os resultados exibidos vêm do índice de captação (`/api/results/capture-index`) e das matrizes por SIA (`/api/results/organisms`). */
 export async function GET(request: Request) {
   const auth = await requireApiSession(request);
   if (!auth.ok) return auth.response;

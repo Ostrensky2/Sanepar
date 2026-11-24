@@ -27,13 +27,14 @@ import { readFieldDiaryEntries, type FieldDiaryEntry } from "@/lib/field-diary";
 import { readSelectedCampaignId, writeSelectedCampaignId } from "@/lib/selected-campaign";
 import { cn } from "@/lib/utils";
 import { countLabel } from "@/lib/number-format";
+import { METHOD_LABEL } from "@/lib/results-08-contract";
 
 type StepState = "done" | "attention" | "pending";
 
 type HubData = {
   management: CampaignManagementById;
   diary: FieldDiaryEntry[] | null;
-  /** Pontos com nota no índice 0.8, por número da campanha. Vem das matrizes por SIA; a planilha antiga não é lida. */
+  /** Pontos com nota no índice de captação, por número da campanha. Vem das matrizes por SIA; a planilha antiga não é lida. */
   results: Record<number, number> | null;
   conflicts: number | null;
 };
@@ -185,7 +186,7 @@ export function DataHub() {
               data.results === null
                 ? "Carregando…"
                 : focus.resultPoints
-                  ? `${countLabel(focus.resultPoints, "ponto", "pontos")} com nota no índice 0.8`
+                  ? `${countLabel(focus.resultPoints, "ponto", "pontos")} com nota no método ${METHOD_LABEL}`
                   : focus.analysisDone
                     ? "Análises concluídas, mas as matrizes por SIA ainda não entraram no índice"
                     : "Ainda sem resultados"

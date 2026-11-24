@@ -260,7 +260,7 @@ export function CampaignsPageContent({
 
   const [molecular, setMolecular] = useState<{ version: string; counts: Map<number,number> } | null>();
   useEffect(() => {
-    // Resultado molecular (índice 0.8, das matrizes por SIA) no resumo das duas abas; a publicação antiga não é consultada.
+    // Resultado molecular (índice de captação, das matrizes por SIA) no resumo das duas abas; a publicação antiga não é consultada.
     const controller = new AbortController();
     async function loadCoverage() {
       const response = await fetch("/api/results/capture-index", {cache:"no-store", signal:controller.signal});

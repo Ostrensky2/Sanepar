@@ -18,8 +18,8 @@ MiSeq, por SIA e marcador. As corridas nunca são somadas.
 | --- | --- |
 | Resultados › Organismos | planilha unificada vigente da campanha, no acervo privado (Central de dados › Planilhas de resultados) |
 | Ciência e método › Impactos potenciais | fichas usadas pelo índice (`indice-captacao.json`) |
-| Notas 0.8 (todas as telas e exportações) | `pontos-0.8.json` e `results-08-aggregate.json` |
-| Central de dados e Campanhas (pontos com resultado) | índice 0.8 (`/api/results/capture-index`) |
+| Notas do método 3.0 (todas as telas e exportações) | `pontos-0.8.json` e `results-08-aggregate.json` |
+| Central de dados e Campanhas (pontos com resultado) | índice de captação (`/api/results/capture-index`) |
 
 As matrizes completas por SIA não entram no repositório, que é público. A tela de
 Organismos lê as abas `16S generos`, `16S familias`, `Associações 16S`, `COI generos`,

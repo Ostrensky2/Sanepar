@@ -94,7 +94,7 @@ describe.skipIf(!localStore)("planilhas unificadas do acervo local (C1 a C3)", (
   }, 240000);
 });
 
-describe("índice 0.8 alinhado às matrizes do laboratório", () => {
+describe("índice de captação alinhado às matrizes do laboratório", () => {
   it("só pontua espécie quando é exótica sustentada; a cigarrinha-do-milho não entra", () => {
     const rows = captureIndexRows();
     const contributions = rows.flatMap(row => Object.values(row.scores).flatMap(score => score?.contributions ?? []));
