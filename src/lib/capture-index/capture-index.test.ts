@@ -274,8 +274,8 @@ describe("saída versionada do índice de triagem", () => {
     expect(head).not.toMatch(/media_quadratica|geral_piso|geral_teto|v05/); // sobras do índice anterior não são exportadas
   });
 
-  it("declara os pontos cegos, incluindo o mosquito-fantasma de Passaúna", () => {
-    expect(captureIndexMeta.blindSpots.map(item => item.tema).join(" ")).toMatch(/Chaoboridae/);
+  it("declara os pontos cegos sem o mosquito-fantasma, que está em desenvolvimento", () => {
+    expect(captureIndexMeta.blindSpots.map(item => item.tema).join(" ")).not.toMatch(/Chaoboridae|fantasma/i);
     expect(captureIndexMeta.blindSpots.length).toBeGreaterThanOrEqual(4);
   });
 

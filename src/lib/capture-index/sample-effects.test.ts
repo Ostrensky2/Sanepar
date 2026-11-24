@@ -15,7 +15,7 @@ it("reconcilia os nove tipos de cada extrato com o agregado das três campanhas"
       const samples = readings.map(reading => reading[index]);
       expect(samples.every(s => s.effect.id === effect.id)).toBe(true);
       if (!effect.component) {
-        expect(samples.every(s => s.status === "Não avaliado pelo método")).toBe(true);
+        expect(samples.every(s => s.status === (effect.developing ? "Em desenvolvimento" : "Não avaliado pelo método"))).toBe(true);
         continue;
       }
       expect(samples.filter(s => s.usable)).toHaveLength(effect.denominator!);

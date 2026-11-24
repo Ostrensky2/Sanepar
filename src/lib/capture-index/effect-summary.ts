@@ -1,6 +1,6 @@
 import type { CaptureIndexRow } from "./index";
 
-import { effects, matchCard, type Component } from "./effect-catalog";
+import { developingEffects, effects, matchCard, type Component } from "./effect-catalog";
 
 export function summarizeEffects(rows: readonly CaptureIndexRow[], campaign: number) {
   const seen = new Set<string>();
@@ -44,6 +44,7 @@ export function summarizeEffects(rows: readonly CaptureIndexRow[], campaign: num
   return {campaign, observations:seen.size,eligible,exoticsListed:listed,unmappedContributions:unmapped,positiveContributions,
     residualDomains:["Ambiental","Operacional","Saúde humana"].map(domain=>({domain,...(residual.get(domain)??{points:0,contributions:0})})),
     effects:effects.map(({id,title,component,note})=>({id,title,component,note,
+      developing:developingEffects.has(id),
       denominator:component?eligible[component]:null,
       counts:component && eligible[component]>0 ? counts.get(id)??{winning:0,other:0,low:0} : null}))};
 }
