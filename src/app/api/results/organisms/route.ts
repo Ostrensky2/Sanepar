@@ -4,6 +4,8 @@ import { organismDocument, organismOccurrences, organismsCampaign } from "@/lib/
 import { ORGANISM_LEVELS, type OrganismLevel, type OrganismMarker } from "@/lib/results-organisms/contract";
 
 export const runtime = "nodejs";
+// A primeira consulta de cada campanha baixa e lê a planilha unificada (alguns segundos); as seguintes usam a memória.
+export const maxDuration = 60;
 const noStore = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" };
 const fichaLevel: Partial<Record<OrganismLevel, string>> = { genero: "genus", familia: "family" };
 
