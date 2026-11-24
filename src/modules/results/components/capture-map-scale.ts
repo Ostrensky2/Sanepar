@@ -8,7 +8,7 @@ export const bands = [
   { start: 0, label: "0 a <0,05", color: "#99caca" },
   { start: 0.05, label: "0,05 a <0,15", color: "#55a6a8" },
   { start: 0.15, label: "0,15 a <0,35", color: "#e9ad44" },
-  { start: 0.35, label: "0,35 a <0,70", color: "#ce673f" },
+  { start: 0.35, label: "0,35 a <0,70", color: "#d7191c" },
   { start: 0.70, label: "0,70 a 1", color: "#762a83" },
 ];
 /** Nome de cada faixa, na ordem de `bands`. Faixa não é classe de risco comprovada. */

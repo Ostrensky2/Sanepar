@@ -110,6 +110,12 @@ export function ResultsIndexDashboard({
     () => buildResultMapPoints(visiblePoints, metric, campaignLabels, fieldPhotos, relative ? population : undefined),
     [campaignLabels, fieldPhotos, metric, visiblePoints, relative, population],
   );
+  // Ponto sem nota aparece vazado; a legenda só fala dele quando existe na campanha, com a contagem.
+  const noScore = useMemo(() => {
+    const empty = visiblePoints.filter((point) => metricRange(point, metric).value === null);
+    const estimate = empty.filter((point) => point.estimateState === "sem estimativa").length;
+    return { total: empty.length, estimate, measure: empty.length - estimate };
+  }, [visiblePoints, metric]);
   const municipalityRows = useMemo(() => summarizeMunicipalities(visiblePoints), [visiblePoints]);
   const completeRanking = useMemo(
     () => visiblePoints
@@ -231,7 +237,8 @@ export function ResultsIndexDashboard({
             <button type="button" aria-expanded={mobileMapOpen} className="min-h-11 rounded-lg border border-[var(--line-strong)] bg-white px-4 text-sm font-bold text-[var(--brand-navy-strong)] sm:hidden" onClick={() => setMobileMapOpen((open) => !open)}>{mobileMapOpen ? "Ocultar mapa" : "Ver mapa"}</button>
             <div className={mobileMapOpen ? "space-y-2" : "space-y-2 max-sm:hidden"}>
               <ul className="flex flex-wrap gap-x-4 gap-y-1 type-caption">{(relative ? relativeBands : bands).map(b => <li key={b.label}><span aria-hidden="true" className="mr-1 inline-block size-3 rounded-full border" style={{backgroundColor:b.color}} />{!relative && <strong>{bandNames[bands.findIndex(x => x.label === b.label)]} </strong>}{b.label}</li>)}
-                <li><span aria-hidden="true" className="mr-1 inline-block size-3 rounded-full border-2 border-[var(--ink-soft)] bg-white" /><strong>Vazado</strong> sem estimativa ou sem medição</li></ul>
+                {noScore.total > 0 && <li><span aria-hidden="true" className="mr-1 inline-block size-3 rounded-full border-2 border-[var(--ink-soft)] bg-white" /><strong>Vazado</strong> sem nota: {[noScore.estimate && `${noScore.estimate} sem estimativa`, noScore.measure && `${noScore.measure} sem medição`].filter(Boolean).join(" e ")}</li>}</ul>
+              <CoverageLegend />
               {relative && <p className="type-metadata">Mediana {formatValue(population.median)} · P90 {formatValue(population.p90)} · {population.count} pontos com medição.</p>}
               {selection && <p className="w-fit rounded-full border border-[var(--line-ghost)] bg-white px-3 py-1 type-metadata font-semibold text-[var(--ink)]" title="Ponto selecionado no mapa" aria-live="polite">{selectedPoint?.siaCode} · {selection.label}{selectedValue !== null && <> · posição {1 + population.sorted.filter(n => n > selectedValue).length} de {population.count}</>}{selection.domain && <> · cobertura {selection.grade} ({domains[selection.domain]})</>}</p>}
             </div>
@@ -285,6 +292,12 @@ export function mapHelpSections(campaign: ResultsCampaign, visiblePoints: Result
     { title: "Navegação", text: "Clique simples seleciona o cartão, sem zoom. Duplo clique amplia e centra o ponto no zoom máximo; repetir no mesmo ponto retorna ao enquadramento geral da campanha. Em outro ponto, amplia o novo alvo. Os botões de zoom, enquadramento e Ir para o ponto também estão disponíveis por teclado." },
     ...(conditions.length ? [{ title: "Condição de uso", text: `Condição de uso informada: ${conditions.join("; ")}.` }] : []),
   ];
+}
+
+/** O contorno do círculo diz quanto da leitura do ponto já foi avaliado na literatura (cobertura da curadoria). */
+function CoverageLegend() {
+  const ring = (dash?: string) => <svg aria-hidden="true" viewBox="0 0 14 14" className="mr-1 inline-block size-3.5 align-[-2px]"><circle cx="7" cy="7" r="5.5" fill="white" stroke="#17354c" strokeWidth="1.6" strokeDasharray={dash} /></svg>;
+  return <p className="type-caption text-[var(--ink-soft)]"><strong className="text-[var(--ink)]">Contorno</strong> = quanto da leitura já foi avaliado na literatura: <span className="whitespace-nowrap">{ring()}contínuo 50% ou mais</span> · <span className="whitespace-nowrap">{ring("3 2")}tracejado 20% a 50%</span> · <span className="whitespace-nowrap">{ring("1 1.6")}pontilhado menos de 20%</span></p>;
 }
 
 function Control({ label, children }: { label: string; children: React.ReactNode }) {

@@ -23,8 +23,11 @@ export function HomeResultsV2({ operationalKpis, projectSummary }: { operational
       {operationalKpis}
     </section>
     {/* Visão geral: um gráfico com todas as campanhas lado a lado e o mapa do índice geral. A distribuição detalhada fica em Resultados. */}
-    <CampaignRangeChart />
-    <HomeIndexMap />
+    {/* Gráfico e mapa dividem a largura no computador; no celular ficam um abaixo do outro. */}
+    <div className="grid items-stretch gap-4 xl:grid-cols-2">
+      <CampaignRangeChart />
+      <HomeIndexMap />
+    </div>
     <ProjectStatusPanel compact />{projectSummary}
   </>;
 }
