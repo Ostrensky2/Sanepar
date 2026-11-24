@@ -100,6 +100,13 @@ export const captureIndexMeta = { schema: data.schema, version: data.version, st
   fichasTotal: data.fichasTotal, rowsSha256: data.rowsSha256, blindSpots: data.blindSpots,
   maturity: captureDomains.map(domain => ({ label: captureDomainLabels[domain], level: data.maturity[domain].nivel, text: data.maturity[domain].texto })) };
 
+/** Fichas de efeito usadas pelo índice (gênero, família ou grupo; espécie só para exóticas), em ordem de categoria e táxon. */
+export function captureFichas() {
+  return Object.entries(data.fichas).map(([id, ficha]) => ({ id, ...ficha }))
+    .sort((a, b) => captureDomains.indexOf(a.domain as Domain) - captureDomains.indexOf(b.domain as Domain) || a.taxon.localeCompare(b.taxon, "pt-BR"));
+}
+export type CaptureFicha = ReturnType<typeof captureFichas>[number];
+
 export function captureIndexRows(campaign?: number): CaptureIndexRow[] {
   return campaign === undefined ? data.rows : data.rows.filter(row => row.campaign === campaign);
 }

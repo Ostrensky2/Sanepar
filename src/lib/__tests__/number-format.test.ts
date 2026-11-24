@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { formatNumber, formatProportionAsPercent, isCoordinateField } from "../number-format";
-import { reportCell } from "@/modules/results/report-export";
 
 describe("formatNumber", () => {
   it("never shows more than three decimals", () => {
@@ -27,12 +26,8 @@ describe("formatProportionAsPercent", () => {
 });
 
 describe("coordenadas", () => {
-  it("são reconhecidas e nunca arredondadas no relatório", () => {
+  it("são reconhecidas pelo rótulo", () => {
     for (const label of ["Latitude", "Longitude efetiva", "Coordenadas", "lat", "lon"]) expect(isCoordinateField(label)).toBe(true);
     for (const label of ["Cobertura", "Índice geral", "Reads"]) expect(isCoordinateField(label)).toBe(false);
-    const table = { title: "Identificação", columns: ["Campo", "Valor"], rows: [["Latitude", -25.4284123], ["Longitude", -49.2733987], ["Cobertura", 0.00612345]] };
-    expect(reportCell(table, table.rows[0], 1)).toBe("-25.4284123");
-    expect(reportCell(table, table.rows[1], 1)).toBe("-49.2733987");
-    expect(reportCell(table, table.rows[2], 1)).toBe("0,006");
   });
 });

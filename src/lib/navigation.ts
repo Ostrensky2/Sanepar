@@ -92,7 +92,7 @@ export const navigationItems: NavigationItem[] = [
       {
         href: "/resultados/impactos",
         label: "Impactos potenciais",
-        summary: "associações, ocorrências e referências",
+        summary: "fichas de efeito do índice, com gravidade e fonte",
         headerTitle: "Impactos potenciais",
         icon: BookOpen,
       },
@@ -188,7 +188,7 @@ export const navigationItems: NavigationItem[] = [
       {
         href: "/dados/pendencias",
         label: "Pendências",
-        summary: "conflitos de importação a decidir e fluxo legado de publicação",
+        summary: "conflitos de importação a decidir",
         headerTitle: "Pendências de importação",
         icon: AlertTriangle,
       },

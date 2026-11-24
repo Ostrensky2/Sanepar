@@ -1,26 +1,14 @@
-import path from "node:path";
-import { stat } from "node:fs/promises";
 import { requireApiSession } from "@/lib/api-auth";
 import { workbookEvidence } from "@/lib/sia-workbook-evidence";
-import { workbookStore, workbookLimit, digest } from "@/lib/sia-workbook-store";
-import {cloudWorkbookStore,functionWorkbookLimit} from "@/lib/sia-workbook-cloud";
-import {createOptionalSupabaseClient} from "@/lib/supabase";
+import { workbookLimit, digest } from "@/lib/sia-workbook-store";
+import {functionWorkbookLimit} from "@/lib/sia-workbook-cloud";
+import { siaWorkbookStore } from "@/lib/sia-workbook-access";
 
 export const runtime="nodejs";
 const mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const headers={"Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff"};
 const json=(v:unknown,status=200)=>Response.json(v,{status,headers});
-async function store(){
-  if(process.env.VERCEL==="1"){
-    if(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/\/$/,"")!=="https://uoptbbmfgfiuhbmicofp.supabase.co"||process.env.VERCEL_ENV!=="production")throw Error("PRIVATE_STORE_UNAVAILABLE");
-    const client=createOptionalSupabaseClient();
-    if(!client)throw Error("PRIVATE_STORE_UNAVAILABLE");
-    return cloudWorkbookStore(client);
-  }
-  const base=path.resolve(process.cwd(),"../.local-nuvem");
-  if(!(await stat(path.join(base,"rodar-local.ps1"))).isFile()) throw Error("LOCAL_STORE_UNAVAILABLE");
-  return workbookStore(path.join(base,"artifacts","sia-workbooks"));
-}
+const store=siaWorkbookStore;
 export async function GET(req:Request){
   const auth=await requireApiSession(req,"data.import");
   if(!auth.ok)return auth.response;

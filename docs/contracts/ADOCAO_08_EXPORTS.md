@@ -8,6 +8,12 @@ As fontes anteriores de 225 estimativas estão supersedidas e não são fallback
 Não houve recálculo nesta camada. O hash do JSON canônico incorporado é
 `9382ada8ea0cc5169d8541a6cf671b5834eecae298a837c11f49ea37fcbb2e4a`.
 
+Atualização de 24/11/2026 (`docs/contracts/RESULTADOS_SO_MATRIZES_MARCIO.md`): a fonte agregada
+foi regerada com o COI no recorte de água doce das matrizes por SIA do Marcio. Mudou só a
+série ambiental de C2 e C3 (duas observações). SHA-256 do arquivo incorporado:
+`c0d5f6d6ea58849385f1e9038bb87c769d6f14ccd9abebec162dc8c2802e56e9`; do JSON canônico:
+`b488909ed573689ab1107a2d87a2e40dada5e054da3f7fc19569adb019089dae`.
+
 ## Fonte e autorização
 
 `GET /api/results/aggregate-export` requer `data.view`, com `private, no-store`.

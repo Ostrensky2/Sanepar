@@ -106,14 +106,14 @@ describe("results index dashboard v2 contract", () => {
     ])[0].campaignCode).toBe("C2");
   });
 
-  it("uses the selected v2 publication count in the campaign KPI", () => {
+  it("shows the molecular result of the 0.8 index in the campaign summary, never the old publication", () => {
     const source = readFileSync(
       new URL("../../../../components/campaigns-page-content.tsx", import.meta.url),
       "utf8",
     );
-    expect(source).toContain("? v2Campaign.counts.total");
-    expect(source).toContain("resultPoints={hasPublishedResults ? resultPointCount : null}");
-    expect(source).toContain("Publicação no acervo:");
+    expect(source).toContain("Medição molecular: {molecularLabel}");
+    expect(source).not.toContain("Publicação no acervo:");
+    expect(source).not.toContain("/api/imports/results?inventory=1");
   });
 
   it("maps every localizable completeness state and keeps points without coordinates out of the map only", () => {

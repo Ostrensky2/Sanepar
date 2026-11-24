@@ -17,12 +17,6 @@ import {
   navigationItems,
 } from "@/lib/navigation";
 import { analyticalStatusText } from "@/modules/results/presentation";
-import {
-  publicationOptionLabel,
-  researchCountsText,
-  researchFieldText,
-  visibleResearchColumns,
-} from "@/modules/results/components/research-browser";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -71,7 +65,8 @@ describe("fases da campanha", () => {
 
 describe("assistente de importação", () => {
   it("indica a tela certa pelas abas da planilha", () => {
-    expect(detectImportDestination(["Metadados", "Indices_pontos"])).toMatchObject({ href: "/dados/pendencias#fluxo-legado" });
+    // A planilha antiga do laboratório não é mais publicada: o assistente aponta para as matrizes por SIA.
+    expect(detectImportDestination(["Metadados", "Indices_pontos"])).toMatchObject({ title: "Planilha antiga do laboratório", href: "/dados/resultados" });
     expect(detectImportDestination(["Pontos"])).toMatchObject({ href: "/dados/acoes-pontuais" });
     expect(detectImportDestination(["Campanhas"])).toMatchObject({ href: "/dados/diario-de-campo" });
     expect(detectImportDestination(["Plan1"])).toHaveProperty("error");
@@ -82,22 +77,6 @@ describe("linguagem do usuário nos resultados", () => {
   it("nunca expõe códigos internos de situação analítica", () => {
     expect(analyticalStatusText({ sourceStatus: null, status: "missing_records" })).toBe("Sem registros");
     expect(analyticalStatusText({ sourceStatus: " Disponível ", status: "available_unassessed" })).toBe("Disponível");
-  });
-
-  it("mostra a campanha pelo nome, Sim/Não e só contagens relevantes", () => {
-    expect(publicationOptionLabel({ canonicalName: "1ª Campanha" })).toBe("1ª Campanha");
-    expect(researchFieldText("included", 1)).toBe("Sim");
-    expect(researchFieldText("included", 0)).toBe("Não");
-    expect(researchCountsText({ filtered: 423, population: 423, organisms: 0 })).toBe("423 registros.");
-    expect(researchCountsText({ filtered: 5, population: 10, organisms: 2 })).toBe("5 de 10 registros · 2 organismos.");
-  });
-
-  it("oculta a coluna calculada quando é idêntica à utilizada", () => {
-    const columns = [{ key: "environmentalCalculated", label: "Calc" }, { key: "environmentalUsed", label: "Usado" }];
-    const same = [{ values: { environmentalCalculated: 0.5, environmentalUsed: 0.5 } }] as never;
-    const different = [{ values: { environmentalCalculated: 0.4, environmentalUsed: 0.5 } }] as never;
-    expect(visibleResearchColumns(columns, same).map((column) => column.key)).toEqual(["environmentalUsed"]);
-    expect(visibleResearchColumns(columns, different)).toHaveLength(2);
   });
 });
 

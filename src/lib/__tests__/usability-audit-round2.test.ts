@@ -3,16 +3,7 @@ import { describe, expect, it } from "vitest";
 import { formatSiaCode } from "@/components/field-diary/calendar";
 import { documentReference } from "@/components/document-repository";
 import { navigationItems } from "@/lib/navigation";
-import type { ResearchRow } from "@/lib/results-research-contract";
-import type { SourcePreviewRow } from "@/lib/results-source-preview-contract";
 import { conditionOfUseParts } from "@/modules/results/components/results-index-dashboard";
-
-const component = (sia: string, set: string, used: [number, number, number]): SourcePreviewRow => ({
-  _sourceRow: 1, Campanha: "C1", Ponto: sia, Conjunto: set, "Situação analítica": "Disponível", "Incluir na síntese (0/1)": 1,
-  "Componente ambiental utilizado": used[0], "Componente operacional utilizado": used[1], "Componente saúde utilizado": used[2],
-});
-const occurrence = (sia: string, set: string, organismLabel: string, reads: number, environmentalScore: number | null) =>
-  ({ values: { campaign: "C1", sia, set, organismLabel, reads, environmentalScore, operationalScore: null, humanHealthScore: null, waterBody: "Rio Sintético", municipality: "Cidade" } }) as unknown as ResearchRow;
 
 describe("auditoria de usabilidade — 2ª rodada", () => {
   it("remove o módulo Solicitações do menu, das rotas e do selo", () => {

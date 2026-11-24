@@ -7,7 +7,7 @@ import { RESULTS_08_SOURCE_SHA256 } from "./results-08-contract";
 
 it("uses the frozen official aggregate, preserving source means/maxima and five classes", () => {
   const data = results08Aggregate();
-  expect(RESULTS_08_SOURCE_SHA256).toBe("5667da69789821f2744812e516282e54fdb73008e8cdb80051801931af455308");
+  expect(RESULTS_08_SOURCE_SHA256).toBe("c0d5f6d6ea58849385f1e9038bb87c769d6f14ccd9abebec162dc8c2802e56e9");
   expect(data.grupos.total.geral08).toMatchObject({ observados: 225, numericos: 224, nulos: 1 });
   expect(data.grupos.total.saude.numericos).toBe(224);
   expect(data.grupos.total.ambiental.numericos).toBe(225);

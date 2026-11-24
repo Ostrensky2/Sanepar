@@ -3,7 +3,7 @@
  "version": "0.8",
  "policy": "sinal-documentado/1",
  "provenance": "adjudicated-component-masses/v1",
- "aggregateSha256": "f1045a4c289fd39a89c683feb1a0dee8170ca6f0a001d31c871725aaef844f80",
+ "aggregateSha256": "f97e0d1013c1e248f16416942e3d87de8b36f692684ecb6a55c1a7ab12ffb519",
  "coreSha256": "7d72905db85a86b9226b084ba664d1dbb2c713b365d5cafcdc58864dad862acc",
  "rows": [
   {
@@ -770,7 +770,7 @@
    "campaign": 2,
    "sia": "125",
    "geral": 0.02208773279075664,
-   "ambiental": 0.019120953191942024,
+   "ambiental": 0.004940738836566752,
    "operacional": 0.021170158386082518,
    "saude": 0.015785499625940225
   },
@@ -1306,7 +1306,7 @@
    "campaign": 3,
    "sia": "78",
    "geral": 0.3512559173952099,
-   "ambiental": 0.004124300771798161,
+   "ambiental": 0,
    "operacional": 0.09896993329634723,
    "saude": 0.3473417554939381
   },

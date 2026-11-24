@@ -83,7 +83,6 @@ import type {
 } from "@/lib/results-v2-persistence";
 import { CaptureCampaignResults } from "@/components/capture-campaign-results";
 import type { ResultsCampaign } from "@/modules/results";
-import type { ResultsInventoryItem, ResultsInventoryResponse } from "@/lib/results-publication-contract";
 
 import { isPublishedLegacyResponse, isPublishedV2Response, type PublishedResultsResponse as CampaignResultsResponse } from "@/modules/results/published-response";
 
@@ -160,7 +159,6 @@ export function CampaignsPageContent({
   const [isBiologExportOpen, setIsBiologExportOpen] = useState(false);
   const [dismissedUnavailableResultsNoticeCampaignId, setDismissedUnavailableResultsNoticeCampaignId] =
     useState<string | null>(null);
-  const [resultsInventory, setResultsInventory] = useState<ResultsInventoryItem[] | null>(null);
   const [mapEditEntry, setMapEditEntry] = useState<FieldDiaryPayload | null>(null);
   const [mapEditMessage, setMapEditMessage] = useState("");
 
@@ -260,21 +258,9 @@ export function CampaignsPageContent({
     };
   }, []);
 
-  useEffect(() => {
-    // Inventário leve das publicações vigentes: alimenta o card de resultados também na aba Campo.
-    const controller = new AbortController();
-    void fetch("/api/imports/results?inventory=1", { cache: "no-store", signal: controller.signal })
-      .then(async (response) => (response.ok ? ((await response.json()) as ResultsInventoryResponse) : null))
-      .then((value) => {
-        if (!controller.signal.aborted && Array.isArray(value?.campaigns)) setResultsInventory(value.campaigns);
-      })
-      .catch(() => undefined);
-    return () => controller.abort();
-  }, []);
-
   const [molecular, setMolecular] = useState<{ version: string; counts: Map<number,number> } | null>();
   useEffect(() => {
-    if (view !== "resultados") return;
+    // Resultado molecular (índice de captação, das matrizes por SIA) no resumo das duas abas; a publicação antiga não é consultada.
     const controller = new AbortController();
     async function loadCoverage() {
       const response = await fetch("/api/results/capture-index", {cache:"no-store", signal:controller.signal});
@@ -290,7 +276,7 @@ export function CampaignsPageContent({
     }
     void loadCoverage().catch(() => { if (!controller.signal.aborted) setMolecular(null); });
     return () => controller.abort();
-  }, [view]);
+  }, []);
 
   const selectedCampaign = useMemo(() => {
     const candidate = campaigns.find((campaign) => campaign.id === selectedCampaignId);
@@ -500,13 +486,6 @@ export function CampaignsPageContent({
 
   const fieldRowCount = selectedDiaryEntries.length;
   const collection = collectedPhysicalPoints(selectedDiaryEntries, selectedCampaign.id, fieldSourcePoints.map(point => point.code), selectedFieldCampaignPoints.map(point => point.code));
-  const inventoryResult = resultsInventory?.find((item) => item.canonicalId === selectedCampaign.id) ?? null;
-  const resultPointCount = v2Campaign
-    ? v2Campaign.counts.total
-    : isPublishedLegacyResponse(publishedResults)
-      ? publishedResults.viewModel.meta.linhas
-      : inventoryResult?.counts.total ?? 0;
-  const hasPublishedResults = Boolean(isPublishedV2Response(publishedResults) || isPublishedLegacyResponse(publishedResults) || inventoryResult);
   const mapEmptyTitle = isPreparation ? "Aguardando importação da planilha" : emptyMapTitle;
   const mapEmptyDescription = isPreparation
     ? "Importe a planilha com os pontos previstos na aba Dados para visualizá-los no mapa."
@@ -698,9 +677,7 @@ export function CampaignsPageContent({
             collected={`${collection.identified}/${selectedManagement.plannedPoints}`}
             pendingSia={collection.pending}
             fieldRows={fieldRowCount}
-            resultPoints={hasPublishedResults ? resultPointCount : null}
-            molecularLabel={view !== "resultados" ? undefined : molecular === undefined ? "Consultando resultado molecular…" : molecularAvailability(molecular ? molecular.counts.get(Number(selectedCampaign.id.match(/campanha-(\d+)/)?.[1])) ?? 0 : null, molecular?.version ?? "")}
-            publicationKnown={publishedResults?.status === "empty" || resultsInventory !== null}
+            molecularLabel={molecular === undefined ? "Consultando resultado molecular…" : molecularAvailability(molecular ? molecular.counts.get(Number(selectedCampaign.id.match(/campanha-(\d+)/)?.[1])) ?? 0 : null, molecular?.version ?? "")}
             stages={selectedStages}
           >
             <MetabarcodingStagesIndicator
@@ -1298,9 +1275,7 @@ function CampaignSummaryStrip({
   collected,
   pendingSia,
   fieldRows,
-  resultPoints,
   molecularLabel,
-  publicationKnown,
   stages,
   children,
 }: {
@@ -1309,9 +1284,7 @@ function CampaignSummaryStrip({
   collected: string;
   pendingSia: number;
   fieldRows: number;
-  resultPoints: number | null;
   molecularLabel?: string;
-  publicationKnown: boolean;
   stages: MetabarcodingStage[];
   children: ReactNode;
 }) {
@@ -1322,7 +1295,6 @@ function CampaignSummaryStrip({
     pendingSia ? `${pendingSia} ${pendingSia === 1 ? "registro de visita com SIA pendente" : "registros de visita com SIA pendente"}` : null,
     <><strong className="tabular-nums">{fieldRows.toLocaleString("pt-BR")}</strong> registros de campo</>,
     molecularLabel && <>Medição molecular: {molecularLabel}</>,
-    resultPoints === null ? (publicationKnown ? "Publicação no acervo: não localizada" : "Publicação no acervo: consulta indisponível") : <>Publicação no acervo: <strong className="tabular-nums">{resultPoints.toLocaleString("pt-BR")}</strong> pontos</>,
   ].filter(Boolean);
 
   return (

@@ -455,15 +455,6 @@ export const helpModules: HelpModule[] = [
         ],
       },
       {
-        title: "Publicar resultados do laboratório",
-        steps: [
-          "Abra Pendências → Fluxo legado e selecione o arquivo.",
-          "Confira na prévia as campanhas encontradas e desmarque as que não quer publicar.",
-          "Publique. A publicação anterior de cada campanha marcada é substituída por inteiro; as demais ficam como estão.",
-          "Dessa planilha o app usa organismos, leituras, literatura e situação dos conjuntos. As notas exibidas vêm só do índice de captação 3.0; as abas do índice anterior não são lidas.",
-        ],
-      },
-      {
         title: "Preparar matrizes por SIA sem publicar",
         steps: [
           "Em Planilhas de resultados, use Preparar matrizes por SIA. Selecione o ZIP do laboratório ou os XLSX de famílias/gêneros 16S/COI e clique em Conferir matrizes localmente.",
@@ -503,7 +494,7 @@ export const helpModules: HelpModule[] = [
       { label: "Padrões de coleta", detail: "O que o registro de campo já traz preenchido: amostras sugeridas por ponto, conservante, armazenamento, volume e parâmetros." },
       { label: "Diário de campo", detail: "Registros de campo, um a um ou pela planilha (importador único)." },
       { label: "Planilhas de resultados", detail: "Preparo de matrizes e download da planilha de trabalho por campanha." },
-      { label: "Pendências", detail: "Conflitos de importação à espera de decisão e, em seção separada, fluxo legado de publicação." },
+      { label: "Pendências", detail: "Conflitos de importação à espera de decisão." },
     ],
     notes: [
       "Somente categorias autorizadas podem importar, publicar ou excluir dados.",

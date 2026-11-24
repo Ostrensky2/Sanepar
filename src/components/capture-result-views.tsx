@@ -32,7 +32,7 @@ import { SiaPeek, peekMembers, useCampaignPoints, type PeekPoint } from "@/modul
 
 import { captureViews, networkViews, type CaptureView } from "@/lib/capture-index/result-tabs";
 import { CampaignDistribution } from "@/modules/results/components/campaign-distribution";
-import { ResearchBrowser } from "@/modules/results/components/research-browser";
+import { OrganismsBrowser } from "@/modules/results/components/organisms-browser";
 export type { CaptureView };
 
 /** Subabas da página de resultados. Cada uma responde a uma pergunta; nenhuma recalcula o índice. */
@@ -696,7 +696,7 @@ export function CaptureResultViewsPanel({ path, view, campaign, sia, effect, ori
       {view === "distribuicao" ? (
         <CampaignDistribution />
       ) : view === "organismos" && selectedCampaign ? (
-        <ResearchBrowser key={`organismos-${selectedCampaign}`} module="impacts" mode="results" initialQuery={`campaignCode=C${selectedCampaign}`} />
+        <OrganismsBrowser key={`organismos-${selectedCampaign}`} campaign={selectedCampaign} />
       ) : view === "mapa" && selectedCampaign ? (
         <MapTab campaign={selectedCampaign} />
       ) : view === "efeitos" && selectedCampaign ? (
