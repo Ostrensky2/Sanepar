@@ -5,6 +5,7 @@ import { isCaptureView, type CaptureView } from "@/lib/capture-index/result-tabs
 import { InvalidCampaignNotice } from "./invalid-campaign-notice";
 import { PageHeader } from "./page-header";
 import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
+import { IndexPlainSummary } from "@/modules/results/components/index-plain-explanation";
 import { SectionTabs } from "./section-tabs";
 import { campaignFromQuery } from "@/lib/campaign-identity";
 import { defaultCampaigns } from "@/lib/campaign-management";
@@ -75,6 +76,7 @@ export function CaptureResultsEntry({
         title="Resultados na captação"
         description="Índice de captação · metodologia 3.0 · por campanha e por ponto."
         help={<ResultsInterpretationHelp title="Como ler os resultados na captação">
+          <IndexPlainSummary />
           <p>O índice de triagem da biota na captação vai de 0 a 1, em escala fixa. Ele ordena a atenção entre os pontos; não mede probabilidade de dano nem descreve a água tratada.</p>
           <p>Cada campanha (C1 a C3) é calculada à parte, ponto a ponto (SIA). Nenhuma nota passa de uma campanha para outra.</p>
           <p>Zero é nota calculada. “Sem estimativa” indica que há leitura, mas a nota não pode ser afirmada. “Sem medição” indica que não há biblioteca utilizável. Nenhum dos dois é zero.</p>

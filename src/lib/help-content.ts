@@ -360,6 +360,61 @@ export const helpModules: HelpModule[] = [
     ],
   },
   {
+    title: "Como o índice de risco é calculado",
+    short: "O método 3.0 em linguagem simples, passo a passo",
+    icon: FlaskConical,
+    purpose:
+      "O índice responde a uma pergunta: quanto do que vive naquela água é organismo capaz de causar problema, e quão grave é esse problema. É calculado para cada ponto de captação (SIA), em cada campanha, sem misturar campanhas. É um alerta para orientar a atenção, não a medida de um dano ocorrido.",
+    whenToUse: [
+      "Antes de interpretar a nota de um ponto, a cor no mapa ou a posição de um ponto na lista.",
+      "Para explicar o índice a quem não é da área.",
+      "A descrição científica completa está em Ciência e método › Como o índice é calculado › Metodologia 3.0.",
+    ],
+    primaryTasks: [
+      {
+        title: "O cálculo em seis passos",
+        steps: [
+          "Leitura do DNA: a água coletada é filtrada e o DNA que ficou no filtro é sequenciado. Cada trecho lido (um read) é atribuído a um organismo, em geral no nível de gênero ou de família.",
+          "Consulta às fichas: para cada organismo, o aplicativo procura uma ficha no catálogo, feita a partir da literatura. A ficha diz o tipo de problema (ambiental, operacional ou de saúde), a gravidade, de 1 a 3, e a aplicabilidade. Organismo sem ficha não soma nada.",
+          "Peso de cada organismo: a fatia do DNA da amostra que pertence a ele, multiplicada pela gravidade e pela aplicabilidade. Perigoso e abundante pesa muito; perigoso e raro pesa pouco. Achado com pouquíssimo DNA (menos de 10 reads ou menos de 0,01% da amostra) vira só um alerta.",
+          "Nota de cada categoria: os pesos são somados e a soma vira uma nota de 0 a 1. A escala é sensível no começo e exigente no topo: uma soma de pesos de 1% já dá 0,15; 4% dá 0,35; a nota 0,70 pede cerca de 24%; a nota 1 pediria a amostra inteira com gravidade e aplicabilidade máximas.",
+          "Nota geral: é a maior das três categorias. Sobe um pouco quando outra categoria traz um problema diferente e documentado; repetir o mesmo problema não acrescenta nada. Não é a média das três.",
+          "Faixa e cor: a nota cai em uma faixa (Sinal muito baixo, Sinal fraco, Atenção, Prioridade ou Prioridade máxima), que é a cor do ponto no mapa e nos gráficos.",
+        ],
+      },
+      {
+        title: "Um exemplo com números",
+        steps: [
+          "Um organismo ocupa 3% do DNA da amostra, tem gravidade 2 e aplicabilidade 0,5.",
+          "O peso dele é 3% × 2 ÷ 3 × 0,5 = 1%.",
+          "Se for o único problema daquela categoria, a nota da categoria é 0,15, no começo da faixa Atenção.",
+        ],
+      },
+    ],
+    controls: [
+      { label: "Gravidade (1 a 3)", detail: "Quão sério é o problema descrito na literatura para aquele organismo: 1 é leve, 3 é grave. Vem da ficha." },
+      { label: "Aplicabilidade (1 · 0,5 · 0,1 · 0)", detail: "Quanto do grupo detectado realmente carrega o problema. 1 = todo o grupo; 0,5 = uma parte grande; 0,1 = só uma minoria; 0 = nenhum efeito sustentado, não soma. Exemplo: gênero em que quase todas as espécies produzem toxina = 1; gênero em que só uma ou outra produz = 0,1. É um peso convencionado a partir da literatura, não uma medida feita na amostra." },
+      { label: "Categorias", detail: "Danos físicos e ambientais, riscos operacionais e perigo potencial à saúde. Cada uma tem a sua nota; a nota geral parte da maior." },
+      { label: "Faixas", detail: "Sinal muito baixo: 0 a <0,05. Sinal fraco: 0,05 a <0,15. Atenção: 0,15 a <0,35. Prioridade: 0,35 a <0,70. Prioridade máxima: 0,70 a 1." },
+    ],
+    notes: [
+      "As notas não são fixas. O índice depende das fichas, e as fichas acompanham o conhecimento científico: quando uma ficha é incluída ou revisada, as notas são recalculadas com o catálogo atualizado, inclusive as das campanhas antigas. A nota de um ponto pode mudar sem que a amostra tenha mudado.",
+      "O método é dinâmico de propósito: a cada revisão fica mais completo e explica melhor os fatores que podem levar a problemas no tratamento da água, para a população e para o ambiente. Todas as campanhas são lidas com o mesmo catálogo, o mais atual.",
+      "O índice é um alerta, não a medida de um dano ocorrido. Ele diz onde olhar primeiro; não prova que o problema aconteceu nem descreve a água tratada.",
+      "Zero quer dizer que nenhum organismo com ficha pontuou. Não prova que não há risco.",
+      "“Sem estimativa” e “sem medição” não são zero: faltou leitura suficiente para afirmar uma nota.",
+      "A nota não é porcentagem nem probabilidade.",
+      "Cada campanha é calculada só com os seus próprios dados.",
+    ],
+    troubleshooting: [
+      { issue: "A nota geral é maior que a maior categoria", action: "É esperado quando outra categoria traz um problema diferente e documentado: ele acrescenta um pouco à maior nota." },
+      { issue: "Um organismo perigoso foi detectado e a nota é baixa", action: "Ele ocupa uma fatia pequena do DNA da amostra, ou a aplicabilidade da ficha é baixa. Veja a ficha do ponto em Resultados › Por ponto." },
+      { issue: "A nota de uma campanha antiga mudou", action: "É esperado depois de uma revisão das fichas: as campanhas antigas são recalculadas com o catálogo atualizado. A amostra é a mesma; mudou o conhecimento sobre os organismos." },
+      { issue: "O ponto aparece sem cor no mapa", action: "É um ponto sem nota (sem estimativa ou sem medição). Não é zero." },
+    ],
+    keywords: ["indice", "risco", "calculo", "como e calculado", "aplicabilidade", "gravidade", "nota", "faixa", "leigo", "linguagem simples", "metodo 3.0", "peso", "dna", "reads"],
+  },
+  {
     title: "Ciência e método",
     short: "Como o índice é calculado e o que a literatura diz",
     icon: FlaskConical,

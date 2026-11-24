@@ -10,6 +10,7 @@ import { RESULTS_08_POLICY, RESULTS_08_SCHEMA, RESULTS_08_SOURCE_SHA256, type Re
 import { bandNames, bands } from "./capture-map-scale";
 import { buildResultMapPoints } from "./results-index-dashboard";
 import { ResultsInterpretationHelp } from "./results-interpretation-help";
+import { IndexPlainSummary } from "./index-plain-explanation";
 import { SiaPeek, peekMembers, useCampaignPoints, type PeekMetric } from "./sia-peek";
 import styles from "./campaign-distribution.module.css";
 
@@ -81,6 +82,7 @@ export function CampaignRangeChart() {
         <div className="flex items-center gap-1">
           <h2 id="campaign-range-title" className="heading-font type-section-title text-[var(--brand-navy-strong)]">Índices por campanha</h2>
           <ResultsInterpretationHelp title="Como ler o gráfico dos índices por campanha">
+            <IndexPlainSummary />
             <p>Cada campanha é uma posição no eixo horizontal. A linha de cima liga o maior índice entre os pontos de cada campanha, a do meio (mais grossa) liga a média e a de baixo liga o menor índice. A área sombreada vai do menor ao maior.</p>
             <p>Use os botões para trocar o índice: geral, ambiental, operacional ou saúde. A escala é fixa, de 0 a 1, a mesma da metodologia 3.0; as linhas horizontais são os limites das faixas.</p>
             <p>Passe o mouse ou toque no maior ou no menor valor para ver quais SIAs o formam. Clicar fixa a lista, e cada SIA abre a ficha do ponto.</p>

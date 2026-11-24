@@ -5,6 +5,7 @@ import { sampleEffects } from "@/lib/capture-index/sample-effects";
 import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
 import { bandNames, bands, fixedBandIndex } from "@/modules/results/components/capture-map-scale";
 import { formatCaptureIndex } from "@/lib/capture-index/format";
+import { IndexPlainSummary } from "@/modules/results/components/index-plain-explanation";
 import type { CaptureIndexView } from "@/lib/capture-index";
 
 type Campaign = { campaign: string; number: number; points: number; measured: number; mean: string; median: string; p90: string;
@@ -162,6 +163,8 @@ export function CaptureIndexPanel({ campaign, initialSia = "", effectId, returnH
     </details>
     <details className="disclosure"><summary className="cursor-pointer">Como é calculado</summary>
       <div className="space-y-1 type-metadata">
+        <IndexPlainSummary />
+        <p className="pt-2 font-semibold text-[var(--ink)]">Em detalhe:</p>
         <p>Cada organismo detectado contribui com a sua participação nos reads válidos da biblioteca × a gravidade do efeito (1 a 3) × a aplicabilidade registrada na ficha (1, 0,5, 0,1 ou 0). A soma passa por uma curva logarítmica e vira a nota da categoria, de 0 a 1.</p>
         <p>Metodologia 3.0. A nota de cada categoria é a do marcador de maior nota entre os utilizáveis. A maior das três notas é o piso do índice geral. Um dano distinto e documentado em outra categoria pode reforçar esse piso; repetir o mesmo dano não reforça. Por isso o índice geral pode ficar acima da maior categoria, e não é a média das três. O número da rede é a média dos pontos da campanha, com um voto por ponto.</p>
         <p>Três estados não se confundem: zero é nota calculada; “sem estimativa” indica que há leitura, mas a nota não pode ser afirmada; “sem medição” indica que não há biblioteca utilizável. Cada campanha é calculada só com os seus próprios dados.</p>
