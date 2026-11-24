@@ -387,7 +387,7 @@ export const helpModules: HelpModule[] = [
         steps: [
           "Um organismo ocupa 3% do DNA da amostra, tem gravidade 2 e aplicabilidade 0,5.",
           "O peso dele é 3% × 2 ÷ 3 × 0,5 = 1%.",
-          "Se for o único problema daquela categoria, a nota da categoria é 0,15, no começo da faixa Atenção.",
+          "Se for o único problema daquela categoria, a soma dos pesos (Q) é 0,01 e a nota é ln(1 + 100 × 0,01) ÷ ln(101) = ln(2) ÷ 4,615 = 0,15, no começo da faixa Atenção. ln é o logaritmo natural; o 100 amplia os pesos pequenos; dividir por ln(101) faz a nota máxima ser 1.",
         ],
       },
     ],
@@ -422,6 +422,7 @@ export const helpModules: HelpModule[] = [
     whenToUse: ["Antes de comparar resultados, confira a versão identificada na visualização."],
     primaryTasks: [
       { title: "Conferir o método", steps: ["Abra Ciência e método → Como o índice é calculado.", "Confira a versão, as limitações da evidência e o que foi efetivamente medido."] },
+      { title: "Ler a metodologia científica", steps: ["Abra Ciência e método → Metodologia científica.", "As etapas vão da coleta em campo ao laboratório, à identificação dos organismos, às matrizes por ponto, ao catálogo de fichas e ao cálculo. O “?” de cada etapa traz os detalhes."] },
       { title: "Consultar a ficha de um organismo", steps: ["Abra Ciência e método → Impactos potenciais e escolha a categoria e o tipo de efeito.", "Clique no quadrinho do organismo: a ficha mostra os efeitos (gravidade, aplicabilidade, descrição e fontes) e, quando houver, o bloco “O que se sabe sobre o organismo”, com o achado, os limites de interpretação e as fontes.", "Organismos que só têm esse bloco aparecem em “Sem efeito registrado”: não entram na nota."] },
     ],
     controls: [{ label: "Como o índice é calculado", detail: "Documentação de cálculo e interpretação na própria página." }],
