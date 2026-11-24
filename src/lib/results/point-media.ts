@@ -46,6 +46,19 @@ async function privateFile(file:string,limit:number) {
   if (!meta.isFile() || meta.size===0 || meta.size>limit) throw Error("Invalid private source");
   return readFile(location);
 }
+const attestationColumns=["campaign","sia","date","conflict","storagePath","digest"] as const;
+/** Atestação em JSON (lista) ou CSV com o cabeçalho campaign,sia,date,conflict,storagePath,digest. */
+export function parseAttestationText(text:string):Attestation[] {
+  const body=text.replace(/^\uFEFF/,"").trim();
+  if (body.startsWith("[")) return JSON.parse(body);
+  const [header,...lines]=body.split(/\r?\n/);
+  if (header!==attestationColumns.join(",")) throw Error("Invalid attestation header");
+  return lines.filter(Boolean).map(line=>{
+    const cells=line.split(",");
+    if (cells.length!==attestationColumns.length || !/^\d+$/.test(cells[0]) || !/^\d+$/.test(cells[1]) || !["true","false"].includes(cells[3])) throw Error("Invalid attestation row");
+    return {campaign:Number(cells[0]),sia:Number(cells[1]),date:cells[2]||null,conflict:cells[3]==="true",storagePath:cells[4],digest:cells[5]};
+  });
+}
 async function readAttestations():Promise<Attestation[]|null> {
   // Optional deployment contract. No cloud configuration, upload, or access
   // change is performed here. The reviewed digest is server-side, never a URL
@@ -54,9 +67,11 @@ async function readAttestations():Promise<Attestation[]|null> {
     const hash=process.env.YVAE_PRIVATE_MEDIA_ATTESTATION_SHA256;
     if (!hash) return null;
     if (!/^[a-f0-9]{64}$/.test(hash)) throw Error("Invalid attestation");
-    const raw=await readPrivateObject("documents",`attestations/point-media/${hash}.json`,2*1024*1024);
+    // O bucket de documentos aceita CSV e não JSON; a mesma atestação pode estar em qualquer dos dois formatos.
+    const raw=await readPrivateObject("documents",`attestations/point-media/${hash}.csv`,2*1024*1024)
+      .catch(()=>readPrivateObject("documents",`attestations/point-media/${hash}.json`,2*1024*1024));
     if (sha(raw)!==hash) throw Error("Unverified attestation");
-    const rows:Attestation[]=JSON.parse(raw.toString("utf8"));
+    const rows:Attestation[]=parseAttestationText(raw.toString("utf8"));
     if (!Array.isArray(rows) || rows.some(r=>r.file!==undefined)) throw Error("Invalid storage attestation");
     return rows;
   }
@@ -84,4 +99,16 @@ export async function imageBytes(item:MediaItem) {
   const b=item.file ? await privateFile(item.file,32*1024*1024) : await readPrivateObject("photos",item.storagePath??"",32*1024*1024);
   if (sha(b)!==item.digest) throw Error("Unverified image");
   return b;
+}
+/** First reviewed photo of each SIA in a campaign (map card), only for scopes without conflict. */
+export async function campaignCoverMedia(campaign:number):Promise<Map<number,{id:string;item:MediaItem}>> {
+  const rows=await readAttestations();
+  const covers=new Map<number,{id:string;item:MediaItem}>();
+  if (!rows) return covers;
+  for (const sia of [...new Set(rows.filter(r=>r.campaign===campaign).map(r=>r.sia))]) {
+    const {items,conflict}=resolveAttestedMedia(rows,campaign,sia);
+    const first=[...items].sort((a,b)=>String(a.date??"").localeCompare(String(b.date??"")))[0];
+    if (!conflict && first) covers.set(sia,{id:mediaId(campaign,sia,first),item:first});
+  }
+  return covers;
 }

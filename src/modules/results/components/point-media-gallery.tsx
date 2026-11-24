@@ -39,3 +39,22 @@ export function PointMediaGallery({campaign,sia}:{campaign:number;sia:string}) {
   if (!s || !Number(s[1]) || ![1,2,3].includes(campaign)) return null;
   return <GalleryForSelection key={campaign+"|"+Number(s[1])} campaign={campaign} sia={String(Number(s[1]))}/>;
 }
+
+const coverCampaigns=[1,2,3] as const;
+/** Uma foto revisada por ponto, das campanhas com resultado, no formato do mapa de resultados ("C2|17" → endereço). */
+export function useCampaignCoverPhotos() {
+  const [photos,setPhotos]=useState<Record<string,string>>();
+  useEffect(()=>{
+    const controller=new AbortController();
+    Promise.all(coverCampaigns.map(campaign=>
+      fetch(endpoint+"?"+new URLSearchParams({campaign:String(campaign)}),{signal:controller.signal,cache:"no-store",credentials:"same-origin",redirect:"error"})
+        .then(async r=>r.ok ? (await r.json() as {photos?:Record<string,unknown>}).photos ?? {} : {})
+        .catch(()=>({}))
+        // Só endereços do próprio acervo revisado; qualquer outro valor é descartado.
+        .then(found=>Object.entries(found).filter(([sia,src])=>/^\d{1,6}$/.test(sia) && /^\/api\/results\/point-media\?id=[a-f0-9]{64}$/.test(String(src)))
+          .map(([sia,src])=>[`C${campaign}|${sia}`,String(src)] as const))))
+      .then(lists=>{if (!controller.signal.aborted) setPhotos(Object.fromEntries(lists.flat()));});
+    return ()=>controller.abort();
+  },[]);
+  return photos;
+}
