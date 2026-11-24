@@ -14,13 +14,13 @@ import { SiaPeek, peekMembers, useCampaignPoints, type PeekMetric } from "./sia-
 import styles from "./campaign-distribution.module.css";
 
 /** Os quatro índices, sempre nesta ordem e com a mesma cor em todas as campanhas. */
-const indices = [
+export const indices = [
   { key: "geral", label: "Índice geral", metric: "overall", color: "#2a78d6" },
   { key: "ambiental", label: "Ambiental", metric: "environmental", color: "#eb6834" },
   { key: "operacional", label: "Operacional", metric: "operational", color: "#1baf7a" },
   { key: "saude", label: "Saúde", metric: "humanHealth", color: "#eda100" },
 ] as const satisfies ReadonlyArray<{ key: string; label: string; metric: PeekMetric; color: string }>;
-type IndexKey = (typeof indices)[number]["key"];
+export type IndexKey = (typeof indices)[number]["key"];
 type Payload = { schema: string; politica: string; sourceSha256: string; campanhas: Record<string, Partial<Record<IndexKey, Results08HomeStatistics>>> };
 
 const campaignLabels: Record<string, string> = Object.fromEntries(defaultCampaigns.map((item, i) => [`C${i + 1}`, item.title]));

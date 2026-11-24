@@ -7,6 +7,7 @@ import { CanonicalKpi, countOperationallyActiveCampaigns } from "@/components/ho
 import { ProjectStatusPanel } from "@/components/project-status-panel";
 import { RESULTS_08_CAMPAIGNS } from "@/lib/results-08-contract";
 import { CampaignRangeChart, HomeIndexMap } from "./home-overview";
+import { AttentionChart, TopCumulativeChart } from "./home-panorama";
 import type { ResultsCampaign } from "@/modules/results";
 
 export function HomeResultsV2({ operationalKpis, projectSummary }: { operationalKpis?: React.ReactNode; projectSummary?: React.ReactNode }) {
@@ -27,6 +28,8 @@ export function HomeResultsV2({ operationalKpis, projectSummary }: { operational
     <div className="grid items-stretch gap-4 xl:grid-cols-2">
       <CampaignRangeChart />
       <HomeIndexMap />
+      <TopCumulativeChart />
+      <AttentionChart />
     </div>
     <ProjectStatusPanel compact />{projectSummary}
   </>;
