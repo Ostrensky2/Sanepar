@@ -40,7 +40,7 @@ export function CaptureResultsEntry({
     (origem !== undefined && origem !== "efeitos" && origem !== "mapa") ||
     (fromCampaign !== undefined &&
       (typeof fromCampaign !== "string" || !/^[123]$/.test(fromCampaign))) ||
-    (sia !== undefined && vista !== undefined && vista !== "ponto")
+    (sia !== undefined && vista !== undefined && vista !== "ponto" && vista !== "mapa")
   )
     return invalid;
   const view: CaptureView =
@@ -57,15 +57,16 @@ export function CaptureResultsEntry({
       : origin && campaign
         ? String(campaign)
         : undefined;
+  // Volta para a subaba de onde a ficha foi aberta (Tipos de efeito ou Mapa), na mesma campanha.
   const backParams = new URLSearchParams({
-    painel: "operacional",
+    vista: origin === "efeitos" ? "efeitos" : "mapa",
     campaign: from ?? "",
   });
   if (effect && typeof effect === "string") backParams.set("effect", effect);
   if (id && origin === "mapa") backParams.set("sia", id);
   const back =
     origin && from
-      ? `/campanhas/resultados?${backParams}#${origin === "efeitos" ? "tipos-de-efeito" : "results-index-dashboard"}`
+      ? `/campanhas/resultados?${backParams}`
       : undefined;
   return (
     <div className="app-container min-w-0 space-y-4">
@@ -77,7 +78,7 @@ export function CaptureResultsEntry({
           <p>O índice de triagem da biota na captação vai de 0 a 1, em escala fixa. Ele ordena a atenção entre os pontos; não mede probabilidade de dano nem descreve a água tratada.</p>
           <p>Cada campanha (C1 a C3) é calculada à parte, ponto a ponto (SIA). Nenhuma nota passa de uma campanha para outra.</p>
           <p>Zero é nota calculada. “Sem estimativa” indica que há leitura, mas a nota não pode ser afirmada. “Sem medição” indica que não há biblioteca utilizável. Nenhum dos dois é zero.</p>
-          <p>Use as subabas: Visão geral, Por campanha, Mapa, Tipos de efeito, Exóticas e Por ponto.</p>
+          <p>Use as subabas: Visão geral, Distribuição, Por campanha, Mapa, Tipos de efeito, Exóticas, Organismos e Por ponto.</p>
         </ResultsInterpretationHelp>}
         tabs={<SectionTabs />}
       />

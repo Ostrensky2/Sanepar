@@ -2,6 +2,8 @@
 import React, { useEffect, useState } from "react";
 import type { EffectSummary } from "@/lib/capture-index/effect-summary";
 import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
+import { useCampaignPoints } from "@/modules/results/components/sia-peek";
+import { PointSelect } from "./point-select";
 
 type ResponseData = {version:string;summary:EffectSummary};
 export function orderedCampaignSias(siaCodes?: readonly string[]) {
@@ -16,6 +18,12 @@ export function CaptureEffectsSummary({campaign, siaCodes}: CampaignEvidenceProp
 function CampaignEvidence({campaign, siaCodes}: CampaignEvidenceProps) {
   const [data,setData]=useState<ResponseData|null>(null),[error,setError]=useState(false);
   const [selected,select]=useState("");
+  const [point,setPoint]=useState("");
+  // Lista dos pontos da campanha para escolher, sem precisar saber o número do SIA.
+  const campaignPoints = useCampaignPoints()[`C${campaign}`];
+  const pointOptions = campaignPoints?.length
+    ? campaignPoints.map(item => ({ sia: item.siaCode, municipality: item.municipality, waterBody: item.waterBody }))
+    : orderedCampaignSias(siaCodes).map(sia => ({ sia }));
   useEffect(()=>{
     const controller=new AbortController();
     const url = new URL(window.location.href);
@@ -43,7 +51,7 @@ function CampaignEvidence({campaign, siaCodes}: CampaignEvidenceProps) {
               <ResultsInterpretationHelp title="Como ler o quadro de tipos de efeito">
                 <p>O quadro mostra, para a C{campaign}, em quantos pontos cada mecanismo tem ficha contribuindo para a nota. Cada ponto é contado uma vez por efeito.</p>
                 <p>“No componente determinante” significa que a ficha contribuiu no componente que definiu a nota do domínio, não que foi sua única causa. “Só em outro componente” não aumenta essa nota. Alertas de baixo suporte podem coexistir com outras fichas; não some as colunas.</p>
-                <p>Os totais descrevem a campanha. Para abrir a ficha de um ponto, escolha um SIA da campanha ou digite o código. As sugestões incluem os pontos da campanha independentemente do efeito selecionado. Ao voltar, a campanha e o tipo de efeito selecionado são preservados.</p>
+                <p>Os totais descrevem a campanha. Para abrir a ficha de um ponto, escolha-o na lista; ela traz todos os pontos da campanha, independentemente do efeito selecionado. Ao voltar, a campanha e o tipo de efeito selecionado são preservados.</p>
                 <p>Uma associação bibliográfica não confirma um efeito observado. O “?” de cada cartão traz o limite daquele efeito.</p>
               </ResultsInterpretationHelp></div>
             <p className="text-sm text-[var(--text-secondary)]">C{campaign} · {s.observations} pontos · {data?.version}</p>
@@ -63,17 +71,12 @@ function CampaignEvidence({campaign, siaCodes}: CampaignEvidenceProps) {
             window.history.replaceState(window.history.state, "", url);
           }}>
             <option value="">Todos os tipos</option>{s.effects.map(e=><option key={e.id} value={e.id}>{e.title}</option>)}</select></label>
-          <form action="/resultados/indice-captacao" className="flex items-end gap-2">
+          <form action="/campanhas/resultados" className="flex items-end gap-2">
             <input type="hidden" name="campaign" value={campaign} />
             <input type="hidden" name="origem" value="efeitos" />
             {selected && <input type="hidden" name="effect" value={selected} />}
-            <label className="block min-w-0 flex-1 text-sm font-semibold">Abrir a ficha de um ponto
-              <input name="sia" list={`sias-campanha-${campaign}`} required pattern={String.raw`([Ss][Ii][Aa][\s\-]*)?[0-9]+`} placeholder="Ex.: SIA-0011" className={field} />
-            </label>
-            <datalist id={`sias-campanha-${campaign}`}>
-              {orderedCampaignSias(siaCodes).map(sia => <option key={sia} value={sia} />)}
-            </datalist>
-            <button className="min-h-11 rounded-lg bg-[var(--brand-navy-strong)] px-4 font-semibold text-white">Abrir ficha</button>
+            <PointSelect label="Abrir a ficha de um ponto" name="sia" required placeholder="Escolha o ponto" points={pointOptions} value={point} onChange={setPoint} className="min-w-0 flex-1" selectClassName={field + " font-normal"} />
+            <button disabled={!point} className="min-h-11 rounded-lg bg-[var(--brand-navy-strong)] px-4 font-semibold text-white disabled:opacity-50">Abrir ficha</button>
           </form>
         </div>
       </div>

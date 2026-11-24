@@ -72,19 +72,27 @@ export function researchMonitoringHref(row: ResearchRow, inventory: ResultsInven
 }
 
 
-export function ResearchBrowser({ module, initialQuery = "" }: { module: "impacts"; initialQuery?: string }) {
+/**
+ * Consulta do catálogo de impactos.
+ * - `catalog` (Ciência e método): só o catálogo e as referências, sem dados de campanha.
+ * - `results` (Resultados > Organismos): o que foi detectado na campanha escolhida na página e onde ocorre.
+ */
+export function ResearchBrowser({ module, initialQuery = "", mode = "catalog" }: { module: "impacts"; initialQuery?: string; mode?: "catalog" | "results" }) {
   const router = useRouter();
   const initial = new URLSearchParams(initialQuery);
   const isPreparation = module === "impacts" && initial.get("source") === "preparation";
+  const isResults = mode === "results" && !isPreparation;
+  const isCatalog = !isResults;
   const revisionHash = initial.get("revisionHash") ?? "";
   const packageKey = initial.get("packageKey") ?? "";
-  const sections: ResultsResearchSection[] = isPreparation ? ["impacts", "references"] : ["impacts", "occurrences", "references"];
+  const sections: ResultsResearchSection[] = isResults ? ["impacts", "occurrences"] : ["impacts", "references"];
+  const sectionLabels: Record<ResultsResearchSection, string> = isResults ? { ...labels, impacts: "Detectados na campanha" } : labels;
   const initialSection = initial.get("section") as ResultsResearchSection;
   const [section, setSection] = useState<ResultsResearchSection>(sections.includes(initialSection) ? initialSection : sections[0]);
   const [inventory, setInventory] = useState<ResultsInventoryItem[] | null>(isPreparation ? [] : null);
   const [inventoryError, setInventoryError] = useState("");
-  const [sourceCode, setSourceCode] = useState(initial.get("campaignCode") ?? "");
-  const [pinnedIdentity, setPinnedIdentity] = useState({ publicationId: initial.get("publicationId"), sourceHash: initial.get("sourceHash") });
+  const [sourceCode] = useState(isResults ? initial.get("campaignCode") ?? "" : "");
+  const [pinnedIdentity] = useState({ publicationId: initial.get("publicationId"), sourceHash: initial.get("sourceHash") });
   const [filters, setFilters] = useState<Record<string, string[]>>(() => {
     const values: Record<string, string[]> = {};
     initial.forEach((value, key) => { if (key.startsWith("filter.")) (values[key.slice(7)] ??= []).push(value); });
@@ -92,13 +100,14 @@ export function ResearchBrowser({ module, initialQuery = "" }: { module: "impact
   });
   const [query, setQuery] = useState(initial.get("q") ?? "");
   const [appliedQuery, setAppliedQuery] = useState(initial.get("q") ?? "");
-  const [catalogScope, setCatalogScope] = useState(initial.get("catalogScope") ?? (isPreparation ? "associations" : "detected"));
+  const [catalogScope, setCatalogScope] = useState(isResults ? "detected" : initial.get("catalogScope") === "detected" ? "associations" : initial.get("catalogScope") ?? "associations");
   const [offset, setOffset] = useState(0);
   const [loaded, setLoaded] = useState<{ key: string; data: ResultsResearchResponse } | null>(null);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const [detail, setDetail] = useState<ResearchRow | null>(null);
   const [selection, setSelection] = useState<{ identity: string; rows: ResearchRow[] }>({ identity: "", rows: [] });
-  const selectedSource = sourceCode ? inventory?.find((item) => item.campaignCode === sourceCode) : inventory?.[0];
+  // No catálogo a campanha não importa: usa-se a publicação mais recente só como fonte do catálogo.
+  const selectedSource = sourceCode ? inventory?.find((item) => item.campaignCode === sourceCode) : isCatalog ? [...(inventory ?? [])].sort((a, b) => b.campaignCode.localeCompare(a.campaignCode, "pt-BR", { numeric: true }))[0] : inventory?.[0];
   const identityMismatch = !!inventory && !!sourceCode && (!selectedSource || (pinnedIdentity.publicationId && selectedSource.publicationId !== pinnedIdentity.publicationId) || (pinnedIdentity.sourceHash && !sameSourceHash(selectedSource.source.sha256, pinnedIdentity.sourceHash)));
   const source = identityMismatch ? undefined : selectedSource;
   const sourceUnavailable = !!source && !hasAvailableResultsSource(source);
@@ -149,20 +158,23 @@ export function ResearchBrowser({ module, initialQuery = "" }: { module: "impact
     const params = researchQuery(source, link.section, link.filters, "", 0);
     if (!params) return;
     if (sections.includes(link.section)) { setSection(link.section); setFilters(link.filters); setQuery(""); setAppliedQuery(""); setOffset(0); setDetail(null); }
+    else if (link.section === "occurrences") router.push(`/campanhas/resultados?${new URLSearchParams({ vista: "organismos", campaign: source.campaignCode.replace(/^C/, "") })}`);
     else router.push(`/resultados/impactos?${params}`);
   }
 
-  const facets = data?.facets ?? [];
+  // No catálogo, filtros e colunas que dependem da campanha (município, ponto, detecção) ficam em Resultados.
+  const campaignOnly = ["municipality", "sia", "set"];
+  const facets = (data?.facets ?? []).filter((facet) => !isCatalog || !campaignOnly.includes(facet.key));
   const primary = facets.filter((facet) => PRIMARY_FACETS[section].includes(facet.key));
   const secondary = facets.filter((facet) => !PRIMARY_FACETS[section].includes(facet.key));
   const secondaryActive = secondary.filter((facet) => filters[facet.key]?.length).length;
-  const allColumns = data ? visibleResearchColumns(data.columns, data.rows) : [];
+  const allColumns = data ? visibleResearchColumns(data.columns, data.rows).filter((column) => !isCatalog || column.key !== "detection") : [];
   // Coluna com o mesmo texto em todas as linhas da página vira nota acima da tabela.
   const constantColumns = data && data.rows.length >= 5 ? allColumns.filter((column) => data.rows.every((row) => researchFieldText(column.key, row.values[column.key]) === researchFieldText(column.key, data.rows[0].values[column.key]))) : [];
   const columns = allColumns.filter((column) => !constantColumns.includes(column));
   const pageCount = data ? Math.max(1, Math.ceil(data.counts.filtered / data.pagination.limit)) : 1;
   return <div className="min-w-0 space-y-4">
-    <ScientificViews views={sections.map((value) => ({ value, label: labels[value] }))} selected={section} onChange={changeSection} />
+    <ScientificViews views={sections.map((value) => ({ value, label: sectionLabels[value] }))} selected={section} onChange={changeSection} />
     {isPreparation ? <p className="type-metadata break-words">Revisão bibliográfica independente, sem campanha ou publicação de resultados. <Link href="/resultados/impactos" className="underline">Consultar as campanhas publicadas</Link></p> : null}
     {inventoryError ? <p role="alert">{inventoryError}</p> : inventory === null ? <p role="status">Consultando campanhas publicadas…</p> : identityMismatch ? <div className="space-y-2">
         <p role="status">{!selectedSource
@@ -172,21 +184,15 @@ export function ResearchBrowser({ module, initialQuery = "" }: { module: "impact
         {inventory.length > 0 && !selectedSource && <nav aria-label="Campanhas com catálogo histórico" className="flex flex-wrap gap-3">
           {inventory.map(item => <Link key={item.campaignCode} className="inline-flex min-h-11 items-center underline" href={`/resultados/impactos?campaignCode=${encodeURIComponent(item.campaignCode)}`}>Abrir catálogo {item.campaignCode}</Link>)}
         </nav>}
-        {!inventory.length && <Link className="inline-flex min-h-11 items-center underline" href="/resultados/indice-captacao">Consultar a visão da rede no índice atual</Link>}
+        {!inventory.length && <Link className="inline-flex min-h-11 items-center underline" href="/campanhas/resultados">Consultar a visão da rede no índice atual</Link>}
       </div> : !inventory.length && !isPreparation ? <p role="status">Nenhuma campanha publicada. A entrada de planilhas é feita em <Link href="/dados/pendencias#fluxo-legado" className="underline">Central de dados → Pendências → Fluxo legado</Link>.</p> : <>
-      <div className="app-card grid items-end gap-3 p-3 sm:grid-cols-2 lg:grid-cols-[minmax(12rem,16rem)_minmax(0,1fr)_minmax(12rem,16rem)]">
-        {!isPreparation && <label className="type-label flex min-w-0 flex-col gap-1">Campanha
-          <select className={scientificControl} disabled={!inventory?.length} value={source?.campaignCode ?? ""} onChange={(event) => { setSelection({ identity: "", rows: [] }); setSourceCode(event.target.value); setPinnedIdentity({ publicationId: null, sourceHash: null }); setOffset(0); setDetail(null); }}>
-            {(!inventory?.length || identityMismatch) && <option value="">Nenhuma campanha publicada</option>}
-            {inventory?.map((item) => <option key={`${item.campaignCode}:${item.publicationId}`} value={item.campaignCode}>{publicationOptionLabel(item)}</option>)}
-          </select>
-        </label>}
+      <div className={`app-card grid items-end gap-3 p-3 sm:grid-cols-2 ${isResults ? "" : "lg:grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)]"}`}>
         {<form role="search" className="flex min-w-0 items-end gap-2" onSubmit={(event) => { event.preventDefault(); setAppliedQuery(query); setOffset(0); }}>
           <label className="type-label flex min-w-0 flex-1 flex-col gap-1">Pesquisar<input disabled={sourceUnavailable} type="search" className={`${scientificControl} w-full`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Organismo, efeito, composto ou referência" /></label>
           <button type="submit" disabled={sourceUnavailable} className={scientificControl}>Buscar</button>
         </form>}
-        {section === "impacts" && <label className="type-label flex min-w-0 flex-col gap-1">Mostrar<select disabled={sourceUnavailable} className={scientificControl} value={catalogScope} onChange={(event) => { setSelection({ identity: "", rows: [] }); setCatalogScope(event.target.value); setOffset(0); }}>
-          {!isPreparation && <option value="detected">Só organismos detectados nesta campanha</option>}<option value="associations">Todas as associações (detectados primeiro)</option><option value="scored">Só associações com score</option><option value="unscored">Só associações sem score (NA)</option><option value="without-association">Organismos sem associação</option><option value="all">Catálogo inteiro, com organismos sem associação</option>
+        {section === "impacts" && isCatalog && <label className="type-label flex min-w-0 flex-col gap-1">Mostrar<select disabled={sourceUnavailable} className={scientificControl} value={catalogScope} onChange={(event) => { setSelection({ identity: "", rows: [] }); setCatalogScope(event.target.value); setOffset(0); }}>
+          <option value="associations">Todas as associações</option><option value="scored">Só associações com score</option><option value="unscored">Só associações sem score (NA)</option><option value="without-association">Organismos sem associação</option><option value="all">Catálogo inteiro, com organismos sem associação</option>
         </select></label>}
       </div>
       {data && <>
@@ -196,7 +202,7 @@ export function ResearchBrowser({ module, initialQuery = "" }: { module: "impact
           <ScientificActiveFilters filters={Object.entries(filters).map(([key, values]) => { const facet = facets.find((item) => item.key === key); return { key, label: facet?.label ?? key, values: values.map((value) => facet?.options.find((item) => item.value === value) ?? { value, label: value }) }; })} onRemove={(key, value) => changeFilter(key, filters[key].filter((item) => item !== value))} onClear={() => { setFilters({}); setQuery(""); setAppliedQuery(""); setOffset(0); }} />
         </div>}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p role="status" className="type-metadata">{researchCountsText(data.counts)}{section === "impacts" && data.counts.detected !== undefined && catalogScope !== "detected" ? ` ${data.counts.detected.toLocaleString("pt-BR")} com organismo detectado na campanha, listados primeiro.` : ""}</p>
+          <p role="status" className="type-metadata">{researchCountsText(data.counts)}{section === "impacts" && isResults && data.counts.detected !== undefined && catalogScope !== "detected" ? ` ${data.counts.detected.toLocaleString("pt-BR")} com organismo detectado na campanha, listados primeiro.` : ""}</p>
           {!selectedRows.length && <p className="type-caption text-[var(--ink-soft)]">Marque linhas para exportar fichas em PDF ou XLSX.</p>}
         </div>
         {constantColumns.length > 0 && <p className="type-caption text-[var(--ink-soft)]">Igual em todas as linhas desta página: {constantColumns.map((column) => <span key={column.key} className="mr-3 inline-block"><strong className="text-[var(--ink)]">{column.label}</strong> {researchFieldText(column.key, data.rows[0].values[column.key])}</span>)}</p>}

@@ -64,7 +64,9 @@ describe("4ª rodada — acabamentos", () => {
     expect(read("src/app/globals.css")).toMatch(/\.overflow-x-auto:has\(table\)\s*\{\s*position: relative;/);
   });
 
-  it("Impactos abre só com os organismos detectados na campanha", () => {
-    expect(read("src/modules/results/components/research-browser.tsx")).toContain('(isPreparation ? "associations" : "detected")');
+  it("Organismos (Resultados) abre só com os detectados na campanha; o catálogo (Ciência e método) não tem campanha", () => {
+    const browser = read("src/modules/results/components/research-browser.tsx");
+    expect(browser).toContain('useState(isResults ? "detected"');
+    expect(browser).toContain('column.key !== "detection"');
   });
 });

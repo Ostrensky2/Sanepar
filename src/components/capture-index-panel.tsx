@@ -104,7 +104,7 @@ export function CaptureIndexPanel({ campaign, initialSia = "", effectId, returnH
         const origin = returnHref.match(/campaign=campanha-(\d+)/)?.[1];
         if (origin) params.set("fromCampaign", origin);
       }
-      return <a key={number} aria-current={campaign === number ? "page" : undefined} href={`/resultados/indice-captacao?${params}`} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded border font-semibold underline">C{number}</a>;
+      return <a key={number} aria-current={campaign === number ? "page" : undefined} href={`/campanhas/resultados?${params}`} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded border font-semibold underline">C{number}</a>;
     })}
   </nav>;
   const visible = filtered.slice(page * PAGE, page * PAGE + PAGE);
@@ -130,11 +130,11 @@ export function CaptureIndexPanel({ campaign, initialSia = "", effectId, returnH
       {campaign && <p className="type-metadata">Média dos {item.measured} pontos: {item.mean} · Maior índice de um ponto: {formatCaptureIndex(rows.find(row => row.measured)?.exact.general)}</p>}
       <p className="type-metadata">Média por categoria: {item.domains.map(domain => `${domain.label} ${domain.mean}`).join(" · ")}</p>
       <p className="type-metadata">Pontos por intervalo de escore: {item.bands.map(band => `${band.band}: ${band.count}`).join(" · ")}. São intervalos, não classes de risco.</p>
-      {!campaign && <p className="type-metadata"><a className="underline" href={`/resultados/indice-captacao?campaign=${item.number}`}>Ver os pontos da {item.campaign}</a></p>}
+      {!campaign && <p className="type-metadata"><a className="underline" href={`/campanhas/resultados?campaign=${item.number}`}>Ver os pontos da {item.campaign}</a></p>}
     </section>)}
 
     {campaign && summary && <>
-      <label className="block">Buscar ponto SIA <input className="mt-1 block min-h-11 w-full max-w-md rounded-lg border border-[var(--line-strong)] px-3" type="search" value={search} onChange={event => { setSearch(event.target.value); setOpenSia(""); setPage(0); }} /></label>
+      <label className="block">Ponto SIA <select className="mt-1 block min-h-11 w-full max-w-md rounded-lg border border-[var(--line-strong)] bg-white px-3" value={rows.find(row => row.campaign === `C${campaign}` && normalizedSia(row.sia) === wanted)?.sia ?? ""} onChange={event => { setSearch(event.target.value); setOpenSia(normalizedSia(event.target.value)); setPage(0); }}><option value="">Todos os pontos</option>{rows.filter(row => row.campaign === `C${campaign}`).sort((a, b) => a.sia.localeCompare(b.sia, "pt-BR", { numeric: true })).map(row => <option key={row.sia} value={row.sia}>SIA {row.sia}</option>)}</select></label>
       <p role="status" className="type-metadata">{filtered.length ? `${filtered.length} ${filtered.length === 1 ? "ponto" : "pontos"} · página ${page + 1} de ${Math.ceil(filtered.length / PAGE)}` : "Nenhum ponto corresponde à busca."}</p>
       {!filtered.length && initialSia && search === initialSia && <div ref={node => { destination.current = node; }} tabIndex={-1} className="scroll-mt-24"><p>SIA {normalizedSia(initialSia)} sem registro nesta campanha.</p>{sameSia(normalizedSia(initialSia))}</div>}
       <ul className="space-y-2">{visible.map(row => <li key={row.sia} className="rounded border p-3">

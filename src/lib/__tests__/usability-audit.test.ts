@@ -30,18 +30,18 @@ afterEach(() => {
 });
 
 describe("navegação enxuta", () => {
-  it("tem 8 destinos em três grupos e seções como abas", () => {
-    expect(navigationItems).toHaveLength(8);
+  it("tem 9 destinos em três grupos e seções como abas", () => {
+    expect(navigationItems).toHaveLength(9);
     expect(new Set(navigationItems.map((item) => item.group))).toEqual(new Set(["consult", "data", "support"]));
     expect(findNavigationItem("/dados/pendencias")?.label).toBe("Central de dados");
     expect(findNavigationItem("/resultados/calculos")?.label).toBe("Ciência e método");
   });
 
   it("marca o destino ativo pelas seções e mostra só ancestrais na trilha", () => {
-    const campaigns = navigationItems.find((item) => item.href === "/campanhas/campo")!;
-    expect(isNavigationItemActive(campaigns, "/campanhas/resultados")).toBe(true);
+    const results = navigationItems.find((item) => item.href === "/campanhas/resultados")!;
+    expect(isNavigationItemActive(results, "/campanhas/resultados")).toBe(true);
     expect(getBreadcrumbsForPath("/dados/status").map((crumb) => crumb.label)).toEqual(["Início", "Central de dados", "Fase e etapas"]);
-    expect(getBreadcrumbsForPath("/campanhas/campo").map((crumb) => crumb.label)).toEqual(["Início", "Campanhas e resultados"]);
+    expect(getBreadcrumbsForPath("/campanhas/campo").map((crumb) => crumb.label)).toEqual(["Início", "Campanhas"]);
   });
 
   it("preserva os privilégios próprios de Resultados e de Registrar atividade", () => {

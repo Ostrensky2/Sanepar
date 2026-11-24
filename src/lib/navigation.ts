@@ -64,34 +64,26 @@ export const navigationItems: NavigationItem[] = [
   },
   {
     href: "/campanhas/campo",
-    label: "Campanhas e resultados",
-    summary: "campo, percurso e resultados por campanha",
-    headerTitle: "Campanhas e resultados",
+    label: "Campanhas",
+    summary: "campo, percurso, pontos e diário de cada campanha",
+    headerTitle: "Campanhas",
     icon: CarFront,
     group: "consult",
     privilege: "nav.campaigns",
-    children: [
-      {
-        href: "/campanhas/campo",
-        label: "Campo",
-        summary: "percurso, pontos e diário da campanha",
-        headerTitle: "Campo",
-        icon: CarFront,
-      },
-      {
-        href: "/campanhas/resultados",
-        label: "Resultados",
-        summary: "índices e análises laboratoriais (monitoramento)",
-        headerTitle: "Resultados",
-        icon: FlaskConical,
-        privilege: "nav.results",
-      },
-    ],
+  },
+  {
+    href: "/campanhas/resultados",
+    label: "Resultados",
+    summary: "índice de captação, distribuição, mapa, efeitos, exóticas, organismos e pontos",
+    headerTitle: "Resultados",
+    icon: FlaskConical,
+    group: "consult",
+    privilege: "nav.results",
   },
   {
     href: "/resultados/impactos",
     label: "Ciência e método",
-    summary: "impactos potenciais e como o índice é calculado",
+    summary: "catálogo de impactos, acervo científico e como o índice é calculado",
     headerTitle: "Ciência e método",
     icon: BookOpen,
     group: "consult",
@@ -117,13 +109,6 @@ export const navigationItems: NavigationItem[] = [
         label: "Como o índice é calculado",
         summary: "metodologia 0.8: categorias, piso e reforço",
         headerTitle: "Como o índice é calculado",
-        icon: Calculator,
-      },
-      {
-        href: "/resultados/indice-captacao",
-        label: "Índice de risco na captação",
-        summary: "triagem por ponto, em três categorias, nas campanhas C1 a C3",
-        headerTitle: "Índice de risco na captação",
         icon: Calculator,
       },
     ],
@@ -237,6 +222,8 @@ const routePrivilegeOverrides: Record<string, PrivilegeKey[]> = {
   "/dados/acoes-pontuais": ["nav.data"],
   // A aba Resultados mantém o privilégio próprio de consulta de resultados.
   "/campanhas/resultados": ["nav.results"],
+  // Endereço antigo do índice de captação: só redireciona para Resultados.
+  "/resultados/indice-captacao": ["nav.results"],
 };
 
 export function findNavigationItem(pathname: string) {

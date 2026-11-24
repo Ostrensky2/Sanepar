@@ -18,8 +18,10 @@ describe("Adoção do método 0.8 em todo o aplicativo", () => {
     expect(dashboard).toContain("Mapa do índice · metodologia 0.8");
     expect(dashboard).toContain("setMobileMapOpen] = useState(false)");
     const home = source("src/modules/results/components/home-results-v2.tsx");
-    expect(home).toContain("<CampaignDistribution />");
-    expect(home).toContain("não há total nem média entre campanhas");
+    // A Home mostra a visão geral (um gráfico com todas as campanhas); a distribuição fica em Resultados > Distribuição.
+    expect(home).toContain("<CampaignRangeChart />");
+    expect(source("src/components/capture-result-views.tsx")).toContain("<CampaignDistribution />");
+    expect(source("src/modules/results/components/home-overview.tsx")).toContain("não há total nem média juntando campanhas");
     expect(home).not.toMatch(/group=total|grupos\?\.total/);
     const cards = source("src/modules/results/components/campaign-distribution.tsx");
     for (const stat of ["data-stat={line.key}", 'data-stat="com-nota"', "data-campaign={code}", "não há total nem média entre campanhas"]) expect(cards).toContain(stat);
