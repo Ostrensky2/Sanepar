@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { SectionTabs } from "@/components/section-tabs";
+import { IndexPlainExplanation } from "@/modules/results/components/index-plain-explanation";
 
 /** Documento de leitura e impressão da metodologia 3.0. O resumo visual fica em /resultados/calculos. */
 export default function Method08Page() {
@@ -14,6 +15,10 @@ export default function Method08Page() {
     <article className="app-card mx-auto max-w-3xl space-y-5 p-5 type-body leading-relaxed text-[var(--ink)] sm:p-8 print:border-0 print:shadow-none">
       <h1 className="hidden type-page-title print:block">Índice de captação · método 3.0</h1>
       <p className="rounded-lg bg-[var(--surface-soft)] px-4 py-3 type-metadata"><strong>Nome do método.</strong> Este é o método 3.0, a terceira forma de cálculo do índice. Até 24/11/2026 ele aparecia como “0.8”, e o método anterior, hoje 2.0, como “0.7”. Só o nome mudou: o cálculo e as notas são os mesmos. Planilhas e arquivos baixados antes dessa data ainda trazem o nome antigo.</p>
+      <section className={section}><h2 className={heading}>Em linguagem simples</h2>
+        <IndexPlainExplanation headingClassName="font-bold text-[var(--brand-navy-strong)]" />
+        <p className="type-metadata text-[var(--ink-soft)]">As seções seguintes trazem a descrição científica completa do método.</p>
+      </section>
       <section className={section}><h2 className={heading}>Resolução da identificação</h2>
         <p>A resolução do marcador e a cobertura e confiabilidade dos bancos de referência limitam a identificação. Use espécie quando sustentada; caso contrário, registre gênero, família, ordem, nível superior ou identificação não resolvida. Se duas espécies do mesmo gênero têm o mesmo trecho lido, aquele trecho não permite escolher entre elas.</p>
         <p>Para a cobertura das bibliotecas de referência de organismos aquáticos europeus, consulte <a className="underline" href="https://doi.org/10.1016/j.scitotenv.2019.04.247">Weigand et al. (2019)</a>. O estudo descreve lacunas nos bancos de sequências de referência; não avaliou as campanhas do Paraná.</p>

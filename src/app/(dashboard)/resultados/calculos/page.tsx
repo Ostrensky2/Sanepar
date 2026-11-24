@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { SectionTabs } from "@/components/section-tabs";
 import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
 import { bandNames, bands } from "@/modules/results/components/capture-map-scale";
+import { IndexPlainExplanation } from "@/modules/results/components/index-plain-explanation";
 
 /** Metodologia do índice de captação (IR-CAPTACAO-3.0). A leitura completa fica em /resultados/calculos/3-0.
  * A página mostra o método em três passos; os detalhes de cada passo abrem no "?" ao lado do título. */
@@ -25,6 +26,13 @@ export default function CalculationsPage() {
       tabs={<SectionTabs />}
     />
 
+    {/* Para quem opera: a mesma conta, sem fórmula. A descrição técnica vem logo abaixo. */}
+    <section id="linguagem-simples" aria-labelledby="linguagem-simples-titulo" className={card + " scroll-mt-24 type-body text-[var(--ink)]"}>
+      <h2 id="linguagem-simples-titulo" className={title}>Em linguagem simples</h2>
+      <IndexPlainExplanation />
+    </section>
+
+    <h2 className="type-section-title">A conta, passo a passo</h2>
     <section aria-label="O cálculo em três passos" className="grid gap-4 lg:grid-cols-3">
       <article className={card}>
         <div className="flex items-center gap-2"><span className={step}>1</span><h2 className={title}>Cada organismo vira uma massa</h2>
