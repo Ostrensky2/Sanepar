@@ -22,7 +22,7 @@ describe("Adoção do método 0.8 em todo o aplicativo", () => {
     expect(home).toContain("não há total nem média entre campanhas");
     expect(home).not.toMatch(/group=total|grupos\?\.total/);
     const cards = source("src/modules/results/components/campaign-distribution.tsx");
-    for (const stat of ["data-stat={key}", 'data-stat="com-nota"', "data-campaign={code}", "não há total nem média entre campanhas"]) expect(cards).toContain(stat);
+    for (const stat of ["data-stat={line.key}", 'data-stat="com-nota"', "data-campaign={code}", "não há total nem média entre campanhas"]) expect(cards).toContain(stat);
     expect(cards).not.toMatch(/group=total|grupos\?\.total/);
   });
   it("liga as superfícies ao guia do método 0.8", () => {

@@ -45,7 +45,7 @@ it.each([401,403])("preserva negativa %i sem conteúdo", async status => {
 
 it("mantém o percentual da campanha inclusive nos intervalos vazios e a interpretação editorial", () => {
   const component = readFileSync("src/modules/results/components/campaign-distribution.tsx", "utf8");
-  expect(component).toContain("share = count / row.n");
+  expect(component).toContain("count / row.n / top");
   for (const domains of Object.values(values.campanhas)) {
     for (const distribution of Object.values(domains)) {
       const percentages = distribution.colunas.map(count => 100 * count / distribution.n);

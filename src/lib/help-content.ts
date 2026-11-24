@@ -79,17 +79,17 @@ export const helpModules: HelpModule[] = [
     title: "Início",
     short: "Distribuição por campanha, indicadores e mapa de navegação",
     icon: BookOpen,
-    purpose: "Cada cartão mostra uma campanha: média, maior índice e quantos pontos estão em cada faixa. As campanhas ficam lado a lado só para consulta; não há média entre campanhas. O mapa serve à navegação cartográfica.",
+    purpose: "Cada gráfico mostra uma campanha: quantos pontos há em cada intervalo do índice, com as linhas de mínimo, média e máximo. As campanhas ficam lado a lado só para consulta; não há média entre campanhas. O mapa serve à navegação cartográfica.",
     whenToUse: ["Compare campanhas no mesmo domínio e confira quantas captações foram medidas."],
     primaryTasks: [
       { title: "Comparar distribuições", steps: [
-        "Escolha a categoria no seletor do quadro e leia as barras de cada campanha nas mesmas faixas.",
+        "Escolha a categoria no seletor do quadro e leia as colunas de cada campanha na mesma escala.",
         "A média considera as observações com estimativa numérica. O máximo é o maior valor observado e pode refletir um pico.",
         "Abra Ver as contagens em tabela para distinguir uma faixa com zero pontos de uma campanha sem medição.",
       ] },
     ],
     controls: [
-      { label: "Categoria", detail: "Alterna a categoria exibida nos cartões das campanhas: índice geral, ambiental, operacional ou saúde." },
+      { label: "Categoria", detail: "Alterna a categoria exibida nos gráficos das campanhas: índice geral, ambiental, operacional ou saúde." },
       { label: "Abrir a campanha", detail: "Leva aos resultados daquela campanha, ponto a ponto." },
       { label: "Mapa de navegação", detail: "Abra o mapa para consultar a base cartográfica." },
     ],
@@ -97,10 +97,10 @@ export const helpModules: HelpModule[] = [
     troubleshooting: [
       {
         issue: "Onde consultar a distribuição por campanha?",
-        action: "No quadro Índice de captação por campanha, escolha a categoria e leia as barras da campanha.",
+        action: "No quadro Índice de captação por campanha, escolha a categoria e leia as colunas da campanha.",
       },
       {
-        issue: "Campanha sem barras no quadro",
+        issue: "Campanha sem colunas no gráfico",
         action: "Verifique se há medições publicadas para o domínio. Uma campanha sem medição não recebe valor zero.",
       },
     ],
