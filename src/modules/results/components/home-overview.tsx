@@ -97,10 +97,15 @@ export function CampaignRangeChart() {
       <p className="flex items-center gap-1.5 type-caption text-[var(--ink-soft)]"><MousePointerClick aria-hidden className="size-4 shrink-0 text-[var(--brand-teal)]" />Passe o mouse no maior ou no menor valor para ver os SIAs.</p>
       <div className="grid grid-cols-[2.5rem_1fr] gap-x-2 pt-2" role="img" aria-label={`${index.label}: ${rows.map((row) => `${row.code} mínimo ${formatCaptureIndex(row.stat.min)}, média ${formatCaptureIndex(row.stat.mean)}, máximo ${formatCaptureIndex(row.stat.max)}`).join("; ")}`}>
         <div className="relative" style={{ height }} aria-hidden>
-          {ticks.map((tick) => <span key={tick} className="absolute right-0 -translate-y-1/2 text-[11px] tabular-nums text-[var(--ink-soft)]" style={{ top: `${y(tick)}%` }}>{formatCaptureIndex(tick)}</span>)}
+          {ticks.map((tick) => <span key={tick} className="absolute right-1.5 -translate-y-1/2 text-[11px] tabular-nums text-[var(--ink-soft)]" style={{ top: `${y(tick)}%` }}>{formatCaptureIndex(tick)}</span>)}
         </div>
         <div className="relative" style={{ height }}>
-          {ticks.map((tick) => <span key={tick} aria-hidden className={`absolute inset-x-0 border-t ${tick === 0 ? "border-[var(--line-strong)]" : "border-dashed border-[var(--line-ghost)]"}`} style={{ top: `${y(tick)}%` }} />)}
+          {ticks.filter((tick) => tick > 0).map((tick) => <span key={tick} aria-hidden className="absolute inset-x-0 border-t border-dashed border-[var(--line-ghost)]" style={{ top: `${y(tick)}%` }} />)}
+          {/* Eixos: vertical (índice, 0 a 1) à esquerda e horizontal (campanhas) no zero, com marcas em cada valor e campanha. */}
+          <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 -translate-x-1/2 bg-[var(--ink-soft)]" />
+          <span aria-hidden className="absolute inset-x-0 bottom-0 h-0.5 translate-y-1/2 bg-[var(--ink-soft)]" />
+          {ticks.map((tick) => <span key={`y${tick}`} aria-hidden className="absolute left-0 h-0.5 w-2 -translate-x-full -translate-y-1/2 bg-[var(--ink-soft)]" style={{ top: `${y(tick)}%` }} />)}
+          {campaigns.map((code, i) => <span key={`x${code}`} aria-hidden className="absolute bottom-0 h-2 w-0.5 -translate-x-1/2 translate-y-full bg-[var(--ink-soft)]" style={{ left: `${x(i)}%` }} />)}
           <>
             <svg aria-hidden viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full overflow-visible">
               <path d={band} fill={index.color} opacity="0.12" />
