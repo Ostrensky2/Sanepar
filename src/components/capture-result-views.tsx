@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bug,
+  BarChart3,
   ChartColumnBig,
+  Dna,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -23,20 +25,25 @@ import { ResultsIndexDashboard } from "@/modules/results/components/results-inde
 import { CapturePointEvidence } from "./capture-index-panel";
 import { CaptureEffectsSummary } from "./capture-effects-summary";
 import { CaptureExoticsReconciliation } from "./capture-exotics-reconciliation";
+import { PointSelect, matchesPointFilter } from "./point-select";
 import { PointMediaGallery } from "@/modules/results/components/point-media-gallery";
 import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
 import { SiaPeek, peekMembers, useCampaignPoints, type PeekPoint } from "@/modules/results/components/sia-peek";
 
-import { captureViews, type CaptureView } from "@/lib/capture-index/result-tabs";
+import { captureViews, networkViews, type CaptureView } from "@/lib/capture-index/result-tabs";
+import { CampaignDistribution } from "@/modules/results/components/campaign-distribution";
+import { ResearchBrowser } from "@/modules/results/components/research-browser";
 export type { CaptureView };
 
 /** Subabas da página de resultados. Cada uma responde a uma pergunta; nenhuma recalcula o índice. */
 const tabs: Record<CaptureView, { label: string; icon: typeof MapIcon }> = {
   rede: { label: "Visão geral", icon: LayoutDashboard },
+  distribuicao: { label: "Distribuição", icon: BarChart3 },
   campanha: { label: "Por campanha", icon: ChartColumnBig },
   mapa: { label: "Mapa", icon: MapIcon },
   efeitos: { label: "Tipos de efeito", icon: Microscope },
   exoticas: { label: "Exóticas", icon: Bug },
+  organismos: { label: "Organismos", icon: Dna },
   ponto: { label: "Por ponto", icon: MapPin },
 };
 
@@ -315,9 +322,10 @@ function Campaign({ data, number, href }: { data: CaptureResultViews; number: nu
   const s = data.campaignStats;
   const overall = data.network.find((row) => row.campaign === number);
   const attention = overall ? overall.bins.slice(2).reduce((sum, x) => sum + x, 0) : 0;
-  const term = search.trim().toLocaleLowerCase("pt-BR");
+  const term = search;
+  const pointOptions = useMemo(() => data.ranking.map((row) => ({ sia: row.sia, ...places.get(row.sia) })), [data.ranking, places]);
   const matches = term
-    ? data.ranking.filter((row) => `sia ${row.sia} ${placeName(places.get(row.sia))}`.toLocaleLowerCase("pt-BR").includes(term))
+    ? data.ranking.filter((row) => matchesPointFilter(term, { sia: row.sia, ...places.get(row.sia) }))
     : data.ranking;
   const shown = all || term ? matches : matches.slice(0, 10);
   return (
@@ -381,14 +389,11 @@ function Campaign({ data, number, href }: { data: CaptureResultViews; number: nu
             <p>As três colunas à direita mostram a nota de cada categoria. Abra a ficha para ver o que formou a nota.</p>
           </SectionHead>
           <div className="flex flex-wrap items-end gap-2">
-            <label className="block text-sm font-semibold">
-              Buscar SIA, manancial ou município
-              <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ex.: 78 ou Iraí" className="mt-1 block min-h-11 w-64 max-w-full rounded-lg border border-[var(--line-strong)] bg-white px-3 text-base font-normal" />
-            </label>
+            <PointSelect label="Ponto ou município" points={pointOptions} value={search} onChange={setSearch} municipalities className="w-72 max-w-full" />
             <Link href={href("mapa", number)} className={button}><MapIcon className="size-4" aria-hidden />Ver no mapa</Link>
           </div>
         </div>
-        {!shown.length && <p role="status" className="rounded-lg bg-[var(--surface-soft)] p-4">Nenhum ponto medido com esse texto na C{number}.</p>}
+        {!shown.length && <p role="status" className="rounded-lg bg-[var(--surface-soft)] p-4">Nenhum ponto medido com essa escolha na C{number}.</p>}
         <ul className="space-y-3 md:hidden">
           {shown.map((row) => (
             <li key={row.sia}>
@@ -595,7 +600,7 @@ const legacyHash: Record<string, CaptureView> = {
 };
 export function CaptureResultViewsPanel({ path, view, campaign, sia, effect, origin, from, back }: Props) {
   const router = useRouter();
-  const selectedCampaign = view === "rede" ? campaign : campaign ?? 3;
+  const selectedCampaign = networkViews.includes(view) ? campaign : campaign ?? 3;
   // Links antigos apontavam seções por fragmento; agora cada seção é uma subaba.
   useEffect(() => {
     function restoreFragment() {
@@ -612,7 +617,7 @@ export function CaptureResultViewsPanel({ path, view, campaign, sia, effect, ori
   }, [router]);
   function href(next: CaptureView, number = selectedCampaign, point?: string) {
     const q = new URLSearchParams({ vista: next });
-    if (number && next !== "rede") q.set("campaign", String(number));
+    if (number && !networkViews.includes(next)) q.set("campaign", String(number));
     if (point && next === "ponto") q.set("sia", point);
     if (effect && (next === "ponto" || next === "efeitos")) q.set("effect", effect);
     if (origin) q.set("origem", origin);
@@ -666,7 +671,7 @@ export function CaptureResultViewsPanel({ path, view, campaign, sia, effect, ori
             })}
           </ul>
         </nav>
-        {view !== "rede" && (
+        {!networkViews.includes(view) && (
           <div role="group" aria-label="Campanha exibida" className="flex flex-wrap items-center gap-2">
             <span className="mr-1 text-sm font-semibold text-[var(--text-secondary)]">Campanha</span>
             {[1, 2, 3].map((n) => (
@@ -688,7 +693,11 @@ export function CaptureResultViewsPanel({ path, view, campaign, sia, effect, ori
         )}
       </div>
 
-      {view === "mapa" && selectedCampaign ? (
+      {view === "distribuicao" ? (
+        <CampaignDistribution />
+      ) : view === "organismos" && selectedCampaign ? (
+        <ResearchBrowser key={`organismos-${selectedCampaign}`} module="impacts" mode="results" initialQuery={`campaignCode=C${selectedCampaign}`} />
+      ) : view === "mapa" && selectedCampaign ? (
         <MapTab campaign={selectedCampaign} />
       ) : view === "efeitos" && selectedCampaign ? (
         <CaptureEffectsSummary key={`effects-${selectedCampaign}`} campaign={selectedCampaign} />

@@ -61,9 +61,11 @@ it("mantém mapa, KPIs e contexto na Home com uma única comparação de campanh
   const dashboard = readFileSync("src/modules/results/components/results-index-dashboard.tsx", "utf8");
   const page = readFileSync("src/app/(dashboard)/page.tsx", "utf8");
   expect(home).not.toContain("HomeIndexEvolution");
-  expect(home).toContain("<CampaignHydroMap points={[]}");
+  expect(readFileSync("src/modules/results/components/home-overview.tsx", "utf8")).toContain("<CampaignHydroMap");
   expect(home).toContain("<CanonicalKpi");
   expect(home).toContain("<ProjectStatusPanel");
   expect(dashboard).toContain("<CampaignHydroMap");
-  expect((page + home).match(/<CampaignDistribution\s*\/>/g)).toHaveLength(1);
+  // A distribuição por campanha mora só em Resultados > Distribuição.
+  expect((page + home).match(/<CampaignDistribution\s*\/>/g)).toBeNull();
+  expect(readFileSync("src/components/capture-result-views.tsx", "utf8").match(/<CampaignDistribution\s*\/>/g)).toHaveLength(1);
 });

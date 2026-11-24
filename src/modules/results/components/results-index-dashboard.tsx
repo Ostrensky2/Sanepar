@@ -1,6 +1,7 @@
 "use client";
 
-import { Camera, CircleHelp, FlaskConical, Search } from "lucide-react";
+import { Camera, CircleHelp, FlaskConical } from "lucide-react";
+import { PointSelect, matchesPointFilter } from "@/components/point-select";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { defaultCampaigns } from "@/lib/campaign-management";
@@ -95,11 +96,9 @@ export function ResultsIndexDashboard({
   const campaign = campaigns.find((item) => item.campaignCode === campaignCode) ?? campaigns[0];
   const visiblePoints = useMemo(() => {
     if (!campaign) return [];
-    const normalizedQuery = normalizeText(query);
     return campaign.points.filter((point) => {
       if (completeness !== "all" && point.completeness !== completeness) return false;
-      if (!normalizedQuery) return true;
-      return matchesPointQuery(point, normalizedQuery);
+      return matchesPointFilter(query, { sia: point.siaCode, municipality: point.municipality });
     });
   }, [campaign, completeness, query]);
   const selectedPoint =
@@ -195,18 +194,19 @@ export function ResultsIndexDashboard({
             {completenessOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </Control>
-        <label>
-          <span className="type-label text-[var(--ink)]">Buscar ponto, SIA ou município</span>
-          <span className="mt-1 flex min-h-11 items-center gap-2 rounded-lg border border-[var(--line-strong)] bg-white px-3 focus-within:ring-2 focus-within:ring-[var(--brand-teal)]">
-            <Search className="h-4 w-4 text-[var(--ink-soft)]" aria-hidden="true" />
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="min-w-0 flex-1 bg-transparent text-sm text-[var(--ink)] outline-none"
-            />
-          </span>
-        </label>
+        <PointSelect
+          label="Ponto ou município"
+          points={campaign.points.map((point) => ({ sia: point.siaCode, municipality: point.municipality, waterBody: point.waterBody }))}
+          value={query}
+          onChange={(value) => {
+            setQuery(value);
+            const point = value.startsWith("sia:") ? campaign.points.find((item) => item.siaCode === value.slice(4)) : undefined;
+            if (point) setSelectedPointKey(point.key);
+          }}
+          municipalities
+          className="type-label text-[var(--ink)]"
+          selectClassName="mt-1 block min-h-11 w-full rounded-lg border border-[var(--line-strong)] bg-white px-3 text-sm font-semibold text-[var(--ink)]"
+        />
       </div>
 
       {!summary && <CompletenessSummary campaign={campaign} metric={metric} />}
@@ -380,7 +380,7 @@ function PointDetail({ points, onSelect, point, metric, photoUrl, onFocus }: { p
         </li>)}</ul>
       </section> : null}
       <div className="grid gap-2">
-        <Link href={`/resultados/indice-captacao?${new URLSearchParams({campaign:point.campaignCode.slice(1), sia:point.siaCode, origem:"mapa"})}`} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--brand-navy-strong)] px-3 type-label text-white">Ver resultado completo</Link>
+        <Link href={`/campanhas/resultados?${new URLSearchParams({campaign:point.campaignCode.slice(1), sia:point.siaCode, origem:"mapa"})}`} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--brand-navy-strong)] px-3 type-label text-white">Ver resultado completo</Link>
         <button type="button" disabled={!point.coordinates} onClick={onFocus} className="min-h-11 rounded-lg border border-[var(--line-strong)] bg-white px-3 type-label text-[var(--brand-navy-strong)] disabled:opacity-50">Ir para o ponto</button>
       </div>
       {point.conditionOfUse ? <ConditionOfUseNote text={point.conditionOfUse} /> : null}

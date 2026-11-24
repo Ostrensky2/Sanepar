@@ -5,9 +5,8 @@ import { defaultCampaigns, readCampaignManagement, type CampaignManagementById }
 import { CircleDot, FlaskConical } from "lucide-react";
 import { CanonicalKpi, countOperationallyActiveCampaigns } from "@/components/home-canonical-kpis";
 import { ProjectStatusPanel } from "@/components/project-status-panel";
-import { CampaignHydroMap } from "@/components/campaign-hydro-map";
 import { RESULTS_08_CAMPAIGNS } from "@/lib/results-08-contract";
-import { CampaignDistribution } from "./campaign-distribution";
+import { CampaignRangeChart, HomeIndexMap } from "./home-overview";
 import type { ResultsCampaign } from "@/modules/results";
 
 export function HomeResultsV2({ operationalKpis, projectSummary }: { operationalKpis?: React.ReactNode; projectSummary?: React.ReactNode }) {
@@ -23,14 +22,10 @@ export function HomeResultsV2({ operationalKpis, projectSummary }: { operational
       <CanonicalKpi icon={CircleDot} label="Campanhas ativas" value={management ? String(countOperationallyActiveCampaigns(Object.values(management).map(item => item.status))) : "—"} detail="em campo, laboratório ou análise" />
       {operationalKpis}
     </section>
-    {/* Uma leitura por campanha, lado a lado. As campanhas são independentes: não há total nem média entre campanhas. */}
-    <CampaignDistribution />
+    {/* Visão geral: um gráfico com todas as campanhas lado a lado e o mapa do índice geral. A distribuição detalhada fica em Resultados. */}
+    <CampaignRangeChart />
+    <HomeIndexMap />
     <ProjectStatusPanel compact />{projectSummary}
-    <details className="disclosure app-card p-4"><summary className="flex min-h-11 cursor-pointer items-center type-panel-title">Mapa de navegação</summary>
-      <div className="relative mt-3 h-[420px] overflow-hidden rounded-xl bg-[var(--surface-soft)] max-sm:h-[340px]">
-        <CampaignHydroMap points={[]} layers={{ roadMap: true, basins: true, dailyRoutes: false, dayTransitions: false, planned: false, effective: false, displacement: false }} />
-      </div>
-    </details>
   </>;
 }
 

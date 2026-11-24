@@ -332,6 +332,9 @@ export function FieldDiaryPageContent({
       municipalities: uniqueSorted(scopedEntries.map((entry) => entry.municipality)),
       responsibles: uniqueSorted(scopedEntries.map((entry) => entry.createdByName)),
       campaignDays: uniqueSorted(scopedEntries.map((entry) => String(entry.campaignDay))),
+      // Pontos da campanha para escolher na lista (o usuário não precisa saber o número do SIA).
+      locations: [...new Map(scopedEntries.filter((entry) => entry.sia || entry.locationName).map((entry) => [diaryPointKey(entry), [entry.sia, entry.locationName, entry.municipality].filter(Boolean).join(" · ")])).entries()]
+        .sort((a, b) => a[1].localeCompare(b[1], "pt-BR", { numeric: true })),
       occurrenceTypes: uniqueSorted(scopedEntries.map((entry) => entry.occurrenceType)),
       statuses: uniqueSorted(scopedEntries.map((entry) => entry.status)),
       followUps: uniqueSorted(scopedEntries.map((entry) => entry.requiresFollowUp)),
@@ -343,7 +346,6 @@ export function FieldDiaryPageContent({
   const filteredEntries = useMemo(
     () =>
       scopedEntries.filter((entry) => {
-        const locationText = `${entry.locationName} ${entry.sia ?? ""}`.toLowerCase();
 
         // Data e Intervalo de Datas
         if (filters.date && entry.entryDate !== filters.date) return false;
@@ -404,7 +406,7 @@ export function FieldDiaryPageContent({
 
         return (
           (isCampaignScoped || !filters.campaign || entry.campaignName === filters.campaign) &&
-          (!filters.location || locationText.includes(filters.location.toLowerCase())) &&
+          (!filters.location || diaryPointKey(entry) === filters.location) &&
           (!filters.municipality || entry.municipality === filters.municipality) &&
           (filters.occurrence === "todos" ||
             (filters.occurrence === "sim" ? entry.hasOccurrence : !entry.hasOccurrence)) &&
@@ -780,12 +782,18 @@ export function FieldDiaryPageContent({
             </select>
           </Field>
           <Field label="Ponto / SIA">
-            <input
+            <select
               value={filters.location}
               onChange={(event) => setFilters((current) => ({ ...current, location: event.target.value }))}
               className={inputClassName}
-              placeholder="Buscar ponto"
-            />
+            >
+              <option value="">Todos</option>
+              {filterOptions.locations.map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
           </Field>
           <Field label="Situação">
             <select
@@ -1232,4 +1240,9 @@ function isPlainDefaults(value: unknown): value is Partial<FieldDiaryPayload> {
   if (!value || typeof value !== "object") return false;
   const prototype = Object.getPrototypeOf(value);
   return (prototype === Object.prototype || prototype === null) && !("nativeEvent" in value);
+}
+
+/** Identifica o ponto de um registro do diário: o SIA quando houver, senão o nome do local. */
+function diaryPointKey(entry: { sia?: string | null; locationName: string }) {
+  return entry.sia || entry.locationName;
 }

@@ -20,7 +20,7 @@ export default function CalculationsPage() {
       help={<ResultsInterpretationHelp title="Como ler o cálculo">
         <p>O índice ordena a atenção entre os pontos de captação. Não é porcentagem, não é probabilidade de dano e não descreve a água tratada.</p>
         <p>Cada campanha é calculada só com os seus próprios dados, ponto a ponto (SIA). Mapa, ficha, tabela, planilha e exportações mostram a mesma nota de cada campanha e ponto.</p>
-        <p>Os números de cada ponto, com as fichas que formam cada nota, estão em <strong>Índice de risco na captação</strong>.</p>
+        <p>Os números de cada ponto, com as fichas que formam cada nota, estão em <strong>Resultados</strong>.</p>
       </ResultsInterpretationHelp>}
       tabs={<SectionTabs />}
     />
@@ -108,7 +108,7 @@ export default function CalculationsPage() {
     </section>
 
     <div className="flex flex-wrap gap-3">
-      <Link className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--brand-navy-strong)] px-4 text-sm font-bold text-white" href="/resultados/indice-captacao">Consultar resultados por campanha e ponto<ArrowRight aria-hidden className="size-4" /></Link>
+      <Link className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--brand-navy-strong)] px-4 text-sm font-bold text-white" href="/campanhas/resultados">Consultar resultados por campanha e ponto<ArrowRight aria-hidden className="size-4" /></Link>
       <Link className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--line-strong)] bg-white px-4 text-sm font-bold text-[var(--brand-navy-strong)]" href="/resultados/calculos/0-8"><BookOpenText aria-hidden className="size-4" />Ler a metodologia 0.8 completa</Link>
     </div>
   </div>;
