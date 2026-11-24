@@ -27,10 +27,9 @@ export type CaptureIndexRow = { campaign: number; sia: string; general: number |
   estimate?: "estimado" | "sem estimativa" | "sem medição"; predominant: Domain | null; elevated: number; generalRms: number | null; rank: number | null; ranked: number; band: string | null; components: Record<ComponentName, ComponentState>;
   scores: Record<Domain, Score | null>; alerts: Alert[]; descriptors: { run16S: string; chloroplastShare: number | null; cyanobacteriaShare: number | null; diatomShare: number | null; chloroplastNamedShare: number | null; coiExcludedReads: number; coiReassignedReads: number; exotics: { species: string; reads: number }[] } };
 type CampaignSummary = { pontos: number; medidos: number; media: number | null; mediana: number | null; p90: number | null; faixas: Record<string, number>; dominios?: Record<Domain, number> };
-/** `origin` diz de onde a ficha veio (aprovada, revisão de 23/11, herdada de espécie, registrada sem nota); `evidence`, a força da evidência;
- * `used`, se algum ponto das campanhas a usou; `theme`, o tema da revisão bibliográfica. */
+/** `scores`: a ficha entra na nota; `note`: por que não entra, quando não entra; `used`: algum ponto das campanhas a usou; `theme`: tema do efeito. */
 type Ficha = { taxon: string; level: string; domain: string; code: string; severity: number | null; applicability: number | null; contested: boolean; source: string; rationale: string;
-  origin?: string; evidence?: string; used?: boolean; theme?: string };
+  scores?: boolean; note?: string; used?: boolean; theme?: string };
 type CaptureIndexDocument = { schema: string; version: string; status: string; parameters: Record<string, unknown>; inputs: Record<string, string>;
   fichasTotal: number; blindSpots: { tema: string; caso: string; situacao: string }[]; maturity: Record<Domain, { nivel: string; texto: string }>; campaigns: Record<string, CampaignSummary>; fichas: Record<string, Ficha>;
   rowsSha256: string; rows: CaptureIndexRow[] };
@@ -104,7 +103,7 @@ export const captureIndexMeta = { schema: data.schema, version: data.version, st
   maturity: captureDomains.map(domain => ({ label: captureDomainLabels[domain], level: data.maturity[domain].nivel, text: data.maturity[domain].texto })) };
 
 /** Cadastro completo de fichas de efeito (gênero, família ou grupo; espécie só para exóticas), em ordem de categoria e táxon.
- * Inclui as aprovadas, as provisórias (revisão de 23/11 e herdadas de espécie) e as registradas sem nota. */
+ * Inclui as fichas que pontuam e as registradas sem nota. */
 export function captureFichas() {
   return Object.entries(data.fichas).map(([id, ficha]) => ({ id, ...ficha }))
     .sort((a, b) => captureDomains.indexOf(a.domain as Domain) - captureDomains.indexOf(b.domain as Domain) || a.taxon.localeCompare(b.taxon, "pt-BR"));

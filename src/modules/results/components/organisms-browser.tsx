@@ -79,7 +79,7 @@ export function OrganismsBrowser({ campaign }: { campaign: number }) {
         <p><strong>Grupos de risco (16S):</strong> toxinas, gosto e odor, patogenicidade, nitrificação, ferro e manganês, enxofre e corrosão, biofilmes. Um mesmo read pode entrar em mais de um grupo, por isso os grupos não se somam.</p>
         <p><strong>Pontos:</strong> em quantos SIAs da campanha o organismo teve reads. Passe o mouse no número para ver quais.</p>
         <p><strong>Maior participação:</strong> a maior fatia dos reads do marcador que o organismo alcançou num ponto. Proporção de reads não mede quantidade de organismos.</p>
-        <p><strong>Efeito no índice:</strong> marca os organismos que têm ficha de efeito e entram na nota, inclusive as fichas provisórias. Sem marca, o organismo foi detectado, mas não pontua. O clique abre as fichas dele em Impactos potenciais.</p>
+        <p><strong>Efeito no índice:</strong> marca os organismos que têm ficha de efeito e entram na nota. Sem marca, o organismo foi detectado, mas não pontua. O clique abre as fichas dele em Impactos potenciais.</p>
         <p>No COI, só entram organismos de água doce. Cada ponto usa a mesma corrida que deu a nota do índice: na C3, a NextSeq e, quando ela não tem leitura utilizável, a MiSeq. As campanhas nunca são somadas.</p>
       </ResultsInterpretationHelp>
     </div>

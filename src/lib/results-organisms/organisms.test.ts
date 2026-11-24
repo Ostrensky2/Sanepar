@@ -106,14 +106,15 @@ describe("índice de captação alinhado às matrizes do laboratório", () => {
     expect(captureFichas().some(ficha => ficha.taxon === "Dalbulus maidis")).toBe(false);
   });
 
-  it("ficha aprovada tem precedência sobre provisória, e toda ficha traz a situação", () => {
+  it("ficha aprovada tem precedência, e nenhuma ficha traz marca de provisória", () => {
     const fichas = captureFichas();
     expect(fichas.length).toBeGreaterThan(350);
-    expect(fichas.every(ficha => ficha.origin && ficha.evidence)).toBe(true);
-    // Cianotoxinas de Dolichospermum e Cuspidothrix seguem pelas fichas aprovadas, não por ficha provisória de família ou grupo.
+    expect(fichas.every(ficha => typeof ficha.scores === "boolean" && (ficha.scores || !!ficha.note))).toBe(true);
+    expect(JSON.stringify(fichas)).not.toMatch(/provis[oó]ri|a refinar/i);
+    // Cianotoxinas de Dolichospermum e Cuspidothrix seguem pelas fichas aprovadas, não por ficha de família ou grupo.
     const health = captureIndexRows().flatMap(row => row.scores["Saúde humana"]?.contributions ?? []);
     for (const genus of ["Dolichospermum", "Cuspidothrix", "Microcystis"]) expect(new Set(health.filter(item => item.taxon === genus).map(item => item.ficha))).toEqual(new Set([`CUR-${genus}-S`]));
-    // Medição contestada e exótica sem dano demonstrado não pontuam por ficha provisória.
+    // Medição contestada e exótica sem dano demonstrado não pontuam por outra ficha.
     const all = captureIndexRows().flatMap(row => Object.values(row.scores).flatMap(score => score?.contributions ?? []));
     expect(all.filter(item => /^(Cedecea|Craspedacusta|Kellicottia|Coptodon)/.test(item.taxon))).toEqual([]);
   });
