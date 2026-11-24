@@ -86,8 +86,8 @@ function CampaignEvidence({campaign, siaCodes}: CampaignEvidenceProps) {
             {e.counts
               ? <><p>Na C{campaign}, {hits} de {e.denominator} pontos com {e.component} utilizável têm ficha deste efeito contribuindo para a nota.</p>
                 <p>No componente determinante: {e.counts.winning}. A ficha está no componente que definiu a nota do domínio, sem ser necessariamente a única causa. Só em outro componente: {e.counts.other}. Contribui, mas não aumenta essa nota. Alerta de baixo suporte: {e.counts.low} de {e.denominator}. Pode coexistir com outras fichas, por isso as colunas não se somam.</p></>
-              : <p>Sem contagem nesta campanha. Isso não demonstra ausência do efeito.</p>}
-            <p>É associação documentada nas fichas; o efeito não foi medido.</p>
+              : e.developing ? null : <p>Sem contagem nesta campanha. Isso não demonstra ausência do efeito.</p>}
+            {!e.developing && <p>É associação documentada nas fichas; o efeito não foi medido.</p>}
           </ResultsInterpretationHelp></div>
         {e.counts?<>
           <div>
@@ -100,7 +100,9 @@ function CampaignEvidence({campaign, siaCodes}: CampaignEvidenceProps) {
             <div className="rounded-lg bg-[var(--surface-soft)] p-2"><dt className="text-xs leading-tight text-[var(--text-secondary)]">Só em outro componente</dt><dd className="text-lg font-bold tabular-nums">{e.counts.other}</dd></div>
             <div className="rounded-lg bg-[var(--surface-soft)] p-2"><dt className="text-xs leading-tight text-[var(--text-secondary)]">Alerta de baixo suporte</dt><dd className="text-lg font-bold tabular-nums">{e.counts.low}/{e.denominator}</dd></div>
           </dl></>
-        :<p className="w-fit rounded-full border border-dashed border-[var(--ink-soft)] px-3 py-1 text-sm font-semibold">{e.denominator===null?"Sem avaliação pelo método.":"Sem biblioteca utilizável para este mecanismo."}</p>}
+        :e.developing
+          ?<p data-developing className="w-fit rounded-full border border-[var(--brand-teal)] bg-[var(--surface-soft)] px-3 py-1 text-sm font-semibold text-[var(--brand-navy-strong)]">Em desenvolvimento</p>
+          :<p className="w-fit rounded-full border border-dashed border-[var(--ink-soft)] px-3 py-1 text-sm font-semibold">{e.denominator===null?"Sem avaliação pelo método.":"Sem biblioteca utilizável para este mecanismo."}</p>}
       </li>;})}</ul>
       <div className="app-card space-y-3 p-4 sm:p-6">
         <div className="flex items-center gap-1"><h3 className="text-lg font-bold">Outras contribuições, por domínio</h3>
