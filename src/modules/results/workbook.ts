@@ -31,7 +31,7 @@ type MutableMolecularGroup = {
 const REQUIRED_SHEETS = RESULTS_SHEETS;
 
 // A planilha do laboratório traz abas com o índice anterior, por conjuntos. O aplicativo usa somente a
-// metodologia 0.8 (índice de captação): dessas abas só se leem a identificação do ponto, as contagens e a
+// metodologia 3.0 (índice de captação): dessas abas só se leem a identificação do ponto, as contagens e a
 // situação analítica. As colunas de índice, limites, posição e parâmetros não são lidas, recalculadas,
 // conferidas nem guardadas.
 const INDEX_HEADERS = [
@@ -437,7 +437,7 @@ function parsePoints(
       conditionOfUse: nullableText(row.getCell(columns.get("Condição de uso")!)),
       impactedRecordCount: optionalInteger(row.getCell(columns.get("Registros com impacto")!)) ?? 0,
       observations: nullableText(row.getCell(columns.get("Observações")!)),
-      // Sem nota: a planilha do laboratório não é fonte do índice. As notas vêm do índice de captação 0.8.
+      // Sem nota: a planilha do laboratório não é fonte do índice. As notas vêm do índice de captação 3.0.
       domains: Object.fromEntries(RESULT_DOMAINS.map((domain) => [domain, { value: null, lower: 0, upper: 0 }])) as ResultPoint["domains"],
       overall: { value: null, lower: 0, upper: 0, rank: null },
       bibliographicCoverage,

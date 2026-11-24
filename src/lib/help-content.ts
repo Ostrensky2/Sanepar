@@ -111,7 +111,7 @@ export const helpModules: HelpModule[] = [
     short: "Campo e resultados de cada campanha",
     icon: MapPin,
     purpose:
-      "Reúne tudo de uma campanha em duas abas: Campo (percurso, calendário e diário) e Resultados (índice de captação, metodologia 0.8, por campanha e por ponto).",
+      "Reúne tudo de uma campanha em duas abas: Campo (percurso, calendário e diário) e Resultados (índice de captação, metodologia 3.0, por campanha e por ponto).",
     whenToUse: [
       "Use para ver o que foi coletado, onde e quando.",
       "Use para saber quais pontos da campanha pedem atenção primeiro e por quê.",
@@ -363,7 +363,7 @@ export const helpModules: HelpModule[] = [
     title: "Ciência e método",
     short: "Como o índice é calculado e o que a literatura diz",
     icon: FlaskConical,
-    purpose: "Consulte a metodologia 0.8, usada em todo o aplicativo, e o que a literatura diz.",
+    purpose: "Consulte a metodologia 3.0, usada em todo o aplicativo, e o que a literatura diz.",
     whenToUse: ["Antes de comparar resultados, confira a versão identificada na visualização."],
     primaryTasks: [
       { title: "Conferir o método", steps: ["Abra Ciência e método → Como o índice é calculado.", "Confira a versão, as limitações da evidência e o que foi efetivamente medido."] },
@@ -460,7 +460,7 @@ export const helpModules: HelpModule[] = [
           "Abra Pendências → Fluxo legado e selecione o arquivo.",
           "Confira na prévia as campanhas encontradas e desmarque as que não quer publicar.",
           "Publique. A publicação anterior de cada campanha marcada é substituída por inteiro; as demais ficam como estão.",
-          "Dessa planilha o app usa organismos, leituras, literatura e situação dos conjuntos. As notas exibidas vêm só do índice de captação 0.8; as abas do índice anterior não são lidas.",
+          "Dessa planilha o app usa organismos, leituras, literatura e situação dos conjuntos. As notas exibidas vêm só do índice de captação 3.0; as abas do índice anterior não são lidas.",
         ],
       },
       {

@@ -31,7 +31,7 @@ it("rejects shared formula error", async () => {
   await expect(buildResultsWorkbookExportModelV2(await fixture({error:"#DIV/0!"}), ["C1"])).rejects.toThrow(/cache/i);
 });
 it("does not read or check the old per-set method parameters", async () => {
-  // A aba Metodo_calculo é do cálculo anterior. O aplicativo usa só a metodologia 0.8 e não lê esses parâmetros.
+  // A aba Metodo_calculo é do cálculo anterior. O aplicativo usa só a metodologia 3.0 e não lê esses parâmetros.
   for (const parameter of [2, null]) await expect(buildResultsWorkbookExportModelV2(await fixture(0, parameter), ["C1"])).resolves.toMatchObject({ campaignCodes: ["C1"] });
 });
 it("preserves the explicit alias in the export model and rejects both aliases", async () => {

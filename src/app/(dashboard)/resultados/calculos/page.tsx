@@ -5,7 +5,7 @@ import { SectionTabs } from "@/components/section-tabs";
 import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
 import { bandNames, bands } from "@/modules/results/components/capture-map-scale";
 
-/** Metodologia do índice de captação (IR-CAPTACAO-0.8). A leitura completa fica em /resultados/calculos/0-8.
+/** Metodologia do índice de captação (IR-CAPTACAO-3.0). A leitura completa fica em /resultados/calculos/3-0.
  * A página mostra o método em três passos; os detalhes de cada passo abrem no "?" ao lado do título. */
 export default function CalculationsPage() {
   const card = "app-card min-w-0 space-y-3 p-4 sm:p-5";
@@ -16,7 +16,7 @@ export default function CalculationsPage() {
     <PageHeader
       eyebrow="Ciência e método"
       title="Como o índice é calculado"
-      description="Metodologia 0.8, a mesma em todas as telas: mapa, ficha, tabela e planilha."
+      description="Metodologia 3.0, a mesma em todas as telas: mapa, ficha, tabela e planilha."
       help={<ResultsInterpretationHelp title="Como ler o cálculo">
         <p>O índice ordena a atenção entre os pontos de captação. Não é porcentagem, não é probabilidade de dano e não descreve a água tratada.</p>
         <p>Cada campanha é calculada só com os seus próprios dados, ponto a ponto (SIA). Mapa, ficha, tabela, planilha e exportações mostram a mesma nota de cada campanha e ponto.</p>
@@ -109,7 +109,7 @@ export default function CalculationsPage() {
 
     <div className="flex flex-wrap gap-3">
       <Link className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--brand-navy-strong)] px-4 text-sm font-bold text-white" href="/campanhas/resultados">Consultar resultados por campanha e ponto<ArrowRight aria-hidden className="size-4" /></Link>
-      <Link className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--line-strong)] bg-white px-4 text-sm font-bold text-[var(--brand-navy-strong)]" href="/resultados/calculos/0-8"><BookOpenText aria-hidden className="size-4" />Ler a metodologia 0.8 completa</Link>
+      <Link className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--line-strong)] bg-white px-4 text-sm font-bold text-[var(--brand-navy-strong)]" href="/resultados/calculos/3-0"><BookOpenText aria-hidden className="size-4" />Ler a metodologia 3.0 completa</Link>
     </div>
   </div>;
 }

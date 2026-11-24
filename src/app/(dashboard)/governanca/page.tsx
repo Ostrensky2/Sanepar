@@ -259,7 +259,7 @@ export default async function GovernancaPage({ searchParams }: GovernancaPagePro
           description="Parâmetros administrativos do aplicativo. Consulte Ciência e método para as regras de cálculo do índice."
         >
             <p className="type-metadata">O guia explica resolução do marcador, limites dos bancos e critérios de triagem.</p>
-            <a className="inline-flex min-h-11 items-center font-semibold underline" href="/resultados/calculos/0-8">Consultar o método 0.8</a>
+            <a className="inline-flex min-h-11 items-center font-semibold underline" href="/resultados/calculos/3-0">Consultar o método 3.0</a>
           <div className="grid gap-3">
             <RuleRow
               title="Créditos de campo"

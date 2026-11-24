@@ -21,7 +21,7 @@ it("reopens generated neutral XLSX preserving numeric zero versus unavailable, w
 it("rejects 0.7 before writing any cells",()=>{
  const sheet=new ExcelJS.Workbook().addWorksheet("Teste");const old={...fixture(),versao:"0.7"} as unknown as Results08Aggregate;
  expect(()=>addAggregateResults(sheet,old)).toThrow();expect(sheet.rowCount).toBe(0);
- expect(()=>addFinalResults(sheet,{meta:{version:"IR-CAPTACAO-0.7-piloto",status:"synthetic",rowsSha256:"0".repeat(64)},rows:[]} as IntegratedIndex,1,[],String,link)).toThrow(/somente a metodologia 0\.8/);
+ expect(()=>addFinalResults(sheet,{meta:{version:"IR-CAPTACAO-0.7-piloto",status:"synthetic",rowsSha256:"0".repeat(64)},rows:[]} as IntegratedIndex,1,[],String,link)).toThrow(/somente a metodologia 3.0/);
  expect(sheet.rowCount).toBe(0);
 });
 it("writes each campaign + SIA note 0.8 into the unified sheet and reopens it with zero, no-estimate and profiles intact",async()=>{
@@ -37,7 +37,7 @@ it("writes each campaign + SIA note 0.8 into the unified sheet and reopens it wi
  for(const campaign of [1,2,3]){
   const source=captureIndexRows(campaign).find(item=>item.sia==="17")!, got=cells(campaign,"17");
   expect(got.exact).toEqual([source.general,source.scores.Ambiental!.score,source.scores.Operacional!.score,source.scores["Saúde humana"]!.score]);
-  expect([got.state,got.version]).toEqual(["Nota 0.8 calculada","IR-CAPTACAO-0.8"]);
+  expect([got.state,got.version]).toEqual(["Nota calculada (método 3.0)","IR-CAPTACAO-3.0"]);
  }
  expect([1,2,3].map(campaign=>cells(campaign,"17").shown)).toEqual(["0,13","0,09","0,16"]);
  // Zero calculado é o número 0; sem estimativa fica vazio e rotulado.

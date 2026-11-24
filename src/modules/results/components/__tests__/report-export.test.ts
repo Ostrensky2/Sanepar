@@ -93,7 +93,7 @@ describe("Selective scientific reports", () => {
     const renderer = readFileSync(new URL("../../report-export.ts", import.meta.url), "utf8");
     expect(renderer).toContain("node.textContent = value"); expect(renderer).not.toContain("innerHTML"); expect(renderer).toContain('import("pdfmake/build/pdfmake")');
     const form = readFileSync(new URL("../../../../app/(dashboard)/resultados/calculos/page.tsx", import.meta.url), "utf8");
-    expect(form).toContain('href="/resultados/calculos/0-8"'); expect(form).not.toContain('methodology-pdf'); expect(form).not.toContain("localStorage"); expect(form).not.toContain('method: "POST"'); expect(form).not.toContain("MethodologyDocumentEntry");
+    expect(form).toContain('href="/resultados/calculos/3-0"'); expect(form).not.toContain('methodology-pdf'); expect(form).not.toContain("localStorage"); expect(form).not.toContain('method: "POST"'); expect(form).not.toContain("MethodologyDocumentEntry");
   });
   it("keeps technical provenance and internal versions out of the readable PDF, with readable dates and campaign names", async () => {
     const record = { id: "C2|SIA-0011", title: "SIA-0011 · Iraí · Pinhais", tables: [{ title: "Identificação e condição de uso", columns: ["Campo", "Valor"], rows: [["Campanha", "C2"], ["SIA", "SIA-0011"], ["Completude", "complete"], ["Conjuntos utilizados", 3], ["Latitude", -25.4], ["Longitude", -49.2]] }, { title: "Índices e intervalos publicados (0–1)", columns: ["Domínio", "Índice", "Limite inferior", "Limite superior"], indexColumns: [1, 2, 3], rows: [["Geral", 0.369, 0.369, 0.369], ["Operacional", null, 0.519230121182, 0.776719365641]] }] };

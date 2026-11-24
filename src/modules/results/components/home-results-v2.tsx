@@ -19,7 +19,7 @@ export function HomeResultsV2({ operationalKpis, projectSummary }: { operational
   }, []);
   return <>
     <section className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-3" aria-label="Indicadores da operação e das campanhas">
-      <CanonicalKpi icon={FlaskConical} label="Campanhas com índice de captação" value={String(RESULTS_08_CAMPAIGNS.length)} detail={`${RESULTS_08_CAMPAIGNS.join(", ")} · metodologia 0.8`} />
+      <CanonicalKpi icon={FlaskConical} label="Campanhas com índice de captação" value={String(RESULTS_08_CAMPAIGNS.length)} detail={`${RESULTS_08_CAMPAIGNS.join(", ")} · metodologia 3.0`} />
       <CanonicalKpi icon={CircleDot} label="Campanhas ativas" value={management ? String(countOperationallyActiveCampaigns(Object.values(management).map(item => item.status))) : "—"} detail="em campo, laboratório ou análise" />
       {operationalKpis}
     </section>

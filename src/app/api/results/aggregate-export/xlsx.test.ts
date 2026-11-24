@@ -13,10 +13,10 @@ it("returns an authorized XLSX attachment whose reopened values match the offici
  const req=request(),response=await GET(req);expect(response.status).toBe(200);
  expect(mocks.auth).toHaveBeenCalledWith(req,"data.view");
  expect(response.headers.get("content-type")).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
- expect(response.headers.get("content-disposition")).toContain('resultados-0.8-por-campanha-C1-C2-C3.xlsx');
+ expect(response.headers.get("content-disposition")).toContain('resultados-metodo-3.0-por-campanha-C1-C2-C3.xlsx');
  expect(response.headers.get("x-results-version")).toBe("0.8");expect(response.headers.get("x-source-sha256")).toBe(RESULTS_08_SOURCE_SHA256);
  expect(response.headers.get("cache-control")).toBe("private, no-store");
- const book=await reopen(response),sheet=book.getWorksheet("Por campanha 0.8")!;
+ const book=await reopen(response),sheet=book.getWorksheet("Por campanha 3.0")!;
  expect(sheet.rowCount).toBe(13);let row=2;
  for(const group of ["C1","C2","C3"] as const) for(const value of Object.values(official.grupos[group])){
   expect([5,6,7,8,9,10].map(c=>sheet.getRow(row).getCell(c).value)).toEqual([value.observados,value.numericos,value.nulos,value.minimo,value.media,value.maximo]);row++;
@@ -29,7 +29,7 @@ it("honors group and preserves blank unavailable statistics versus documented ze
  data.grupos.C2.geral08={observados:1,numericos:0,nulos:1,minimo:null,media:null,maximo:null,colunas:Array(40).fill(0),faixas:Array(5).fill(0)} as unknown as typeof data.grupos.C2.geral08;
  data.grupos.C2.ambiental={...data.grupos.C2.ambiental,minimo:0,media:0,maximo:0};
  mocks.source.mockReturnValue(data);
- const response=await GET(request("format=xlsx&group=C2"));const book=await reopen(response),sheet=book.getWorksheet("Por campanha 0.8")!;
+ const response=await GET(request("format=xlsx&group=C2"));const book=await reopen(response),sheet=book.getWorksheet("Por campanha 3.0")!;
  expect(sheet.rowCount).toBe(5);expect(sheet.getCell("C2").value).toBe("C2");
  expect(sheet.getCell("H2").value).toBe(null);expect(sheet.getCell("H3").value).toBe(0);
 });

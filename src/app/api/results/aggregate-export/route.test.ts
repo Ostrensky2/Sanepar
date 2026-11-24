@@ -7,7 +7,7 @@ it("requires existing read permission and exports per-campaign statistics only",
   const req = new Request("https://example.test/api/results/aggregate-export"), response = await GET(req);
   expect(mocks.auth).toHaveBeenCalledWith(req, "data.view"); expect(response.status).toBe(200);
   expect(response.headers.get("cache-control")).toBe("private, no-store");
-  expect(response.headers.get("content-disposition")).toContain("resultados-0.8-por-campanha-C1-C2-C3.csv");
+  expect(response.headers.get("content-disposition")).toContain("resultados-metodo-3.0-por-campanha-C1-C2-C3.csv");
   expect(response.headers.get("x-export-scope")).toBe("per-campaign");
   expect((await response.text()).split("\r\n")).toHaveLength(14);
 });

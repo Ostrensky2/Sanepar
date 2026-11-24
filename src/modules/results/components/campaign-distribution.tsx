@@ -55,7 +55,7 @@ export function CampaignDistribution() {
           <h2 id="campaign-distribution-title" className="heading-font type-section-title text-[var(--brand-navy-strong)]">Índice de captação por campanha</h2>
           <button type="button" aria-label="Como ler a distribuição por campanha" aria-haspopup="dialog" onClick={() => setHelpOpen(true)} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--brand-teal)] hover:bg-[var(--surface-soft)] focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]"><CircleHelp aria-hidden="true" className="h-5 w-5" /></button>
         </div>
-        <p className="type-metadata text-[var(--ink-soft)]">Metodologia 0.8 · cada campanha lida à parte</p>
+        <p className="type-metadata text-[var(--ink-soft)]">Metodologia 3.0 · cada campanha lida à parte</p>
       </div>
       {data && <div role="group" aria-label="Categoria exibida" className={styles.segmented}>
         {(Object.keys(domains) as Domain[]).map(key => <button type="button" key={key} aria-pressed={domain === key} onClick={() => setDomain(key)}>{domains[key]}</button>)}
@@ -88,7 +88,7 @@ export function CampaignDistribution() {
       <p className="type-metadata mt-2">A média resume as notas da campanha e pode esconder uma captação com índice alto. O maior índice é o de uma captação; não representa toda a campanha. As faixas orientam investigação, não confirmam dano.</p>
       <p className="type-metadata mt-2">Passe o mouse em uma coluna, nas linhas de mínimo e máximo ou em um número da tabela para ver quais SIAs estão ali. Clicar ou tocar fixa a lista, e cada SIA abre a ficha do ponto.</p>
       <p className="type-metadata mt-2">As campanhas são independentes: não há total nem média juntando campanhas. Ponto sem estimativa fica fora da média, das colunas e das porcentagens.</p>
-      <p className="mt-2"><a className="underline" href="/resultados/calculos/0-8">Consultar o método 0.8</a></p>
+      <p className="mt-2"><a className="underline" href="/resultados/calculos/3-0">Consultar o método 3.0</a></p>
     </ResultsReviewDialog>}
   </section>;
 }

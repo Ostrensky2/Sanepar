@@ -68,7 +68,7 @@ describe("results index dashboard v2 contract", () => {
     expect(source).toContain("Com índice calculado"); // rótulos do índice de captação
     expect(source).not.toMatch(/Parcial — [12]\/3|Resultados parciais|pontos completos/);
     expect(source).toContain("“Sem estimativa” e “sem medição” não têm número e não são zero.");
-    expect(source).toContain("Mapa do índice · metodologia 0.8");
+    expect(source).toContain("Mapa do índice · metodologia 3.0");
     expect(source).not.toMatch(/histórico 0\.7|método 0\.7/);
     expect(source).toContain("Pontos sem estimativa ou sem medição ficam fora do ranking.");
     expect(source).not.toMatch(/risco (baixo|moderado|alto|crítico)/i);

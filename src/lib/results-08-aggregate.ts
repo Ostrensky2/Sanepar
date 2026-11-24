@@ -7,7 +7,7 @@ import { RESULTS_08_GROUPS, RESULTS_08_SERIES, RESULTS_08_SOURCE_SHA256, RESULTS
 export function validateResults08Aggregate(value: unknown): Results08Aggregate {
   if (!value || typeof value !== "object") throw new Error("Agregado 0.8 inválido.");
   const data = value as Results08Aggregate;
-  if (Object.keys(data).sort().join(",") !== "grupos,politica,schema,versao" || data.versao !== "0.8" || data.politica !== RESULTS_08_POLICY || data.schema !== RESULTS_08_SCHEMA) throw new Error("Proveniência 0.8 inválida.");
+  if (Object.keys(data).sort().join(",") !== "grupos,politica,schema,versao" || data.versao !== "0.8" || data.politica !== RESULTS_08_POLICY || data.schema !== RESULTS_08_SCHEMA) throw new Error("Proveniência do método 3.0 inválida.");
   if (!data.grupos || Object.keys(data.grupos).sort().join() !== [...RESULTS_08_GROUPS].sort().join()) throw new Error("Grupos 0.8 inválidos.");
   for (const group of RESULTS_08_GROUPS) {
     const series = data.grupos[group];

@@ -12,7 +12,7 @@ export type PeekMetric = "overall" | ResultDomain;
 
 const bySia = (a: PeekPoint, b: PeekPoint) => a.sia.localeCompare(b.sia, "pt-BR", { numeric: true });
 
-/** Pontos de cada campanha, com a nota 0.8 de cada um. Só leitura; serve para dizer quais SIAs formam uma barra ou um número. */
+/** Pontos de cada campanha, com a nota do método 3.0 de cada um. Só leitura; serve para dizer quais SIAs formam uma barra ou um número. */
 export function useCampaignPoints() {
   const [points, setPoints] = useState<Record<string, ResultPoint[]>>({});
   useEffect(() => {

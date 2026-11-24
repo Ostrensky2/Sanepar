@@ -28,10 +28,10 @@ export const MAJOR_RELEASES: MajorRelease[] = [
     range: "2.0.0 em diante",
     period: "Setembro de 2026",
     summary:
-      "Resultados pelo índice de captação, metodologia 0.8, por campanha e por ponto; telas reorganizadas em menos destinos, a seção Ciência e método para explicar cada número e um único caminho para trazer dados de campo.",
+      "Resultados pelo índice de captação, metodologia 3.0, por campanha e por ponto; telas reorganizadas em menos destinos, a seção Ciência e método para explicar cada número e um único caminho para trazer dados de campo.",
     areas: [
       {
-        title: "Resultados: índice de captação 0.8",
+        title: "Resultados: índice de captação 3.0",
         items: [
           "Índice de 0 a 1 em escala fixa, calculado em cada campanha e em cada ponto (SIA), com três categorias: danos físicos e ambientais, riscos operacionais e perigo potencial à saúde.",
           "A maior das três categorias é o piso do índice geral; um dano distinto e documentado em outra categoria pode elevá-lo. O índice geral não é a média das três.",
@@ -47,7 +47,7 @@ export const MAJOR_RELEASES: MajorRelease[] = [
         items: [
           "Impactos potenciais: o que a literatura descreve para cada organismo, primeiro os detectados na campanha escolhida, depois o restante do catálogo.",
           "Onde ocorrem e Referências, ligados entre si e à ficha do ponto.",
-          "Como o índice é calculado: a metodologia 0.8, com a fórmula das categorias, o piso e o reforço.",
+          "Como o índice é calculado: a metodologia 3.0, com a fórmula das categorias, o piso e o reforço.",
         ],
       },
       {
@@ -72,14 +72,14 @@ export const MAJOR_RELEASES: MajorRelease[] = [
       },
     ],
     moved: [
-      { before: "Painel eDNA da Campanha 1 (score de risco) e índice por conjuntos", now: "Campanhas e resultados › Resultados, com o índice de captação 0.8. Os valores não são comparáveis aos anteriores." },
+      { before: "Painel eDNA da Campanha 1 (score de risco) e índice por conjuntos", now: "Campanhas e resultados › Resultados, com o índice de captação 3.0. Os valores não são comparáveis aos anteriores." },
       { before: "Solicitações", now: "Suporte (contato direto com a equipe)." },
       { before: "Central de dados › Planilhas de campo", now: "Central de dados › Diário de campo › Importar planilha." },
       { before: "Ações pontuais", now: "Atividades complementares (abas Consultar e Registrar)." },
       { before: "Entrada de dados", now: "Central de dados." },
     ],
     notes: [
-      "O índice de captação 0.8 não é comparável ao score de risco do painel da versão 1 nem ao índice por conjuntos: a fórmula e a escala mudaram.",
+      "O índice de captação 3.0 não é comparável ao score de risco do painel da versão 1 nem ao índice por conjuntos: a fórmula e a escala mudaram.",
       "Links antigos continuam funcionando e levam à tela nova correspondente.",
     ],
     updates: [

@@ -59,7 +59,7 @@ export type ResultPoint = {
   overall: ResultRange & { rank: number | null };
   bibliographicCoverage: Record<ResultDomain, number | null>;
   components: Record<AnalyticalSet, ResultComponent>;
-  /** Índice de captação 0.8: nota calculada (inclusive zero), sem estimativa ou sem medição. */
+  /** Índice de captação 3.0: nota calculada (inclusive zero), sem estimativa ou sem medição. */
   estimateState?: "estimado" | "sem estimativa" | "sem medição";
   /** Perfis de risco biológico operacional e sanitário desta captação nesta campanha. */
   riskProfiles?: { key: string; label: string; state: string; value: number | null; score: string; effects: { id: string; title: string; determining: boolean }[]; otherContributions: number; summary: string }[];

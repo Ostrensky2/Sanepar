@@ -26,7 +26,7 @@ describe("ponte do índice de captação para as telas de resultados", () => {
       expect(point.domains.environmental.value).toBe(row.scores.Ambiental?.score ?? null);
       expect(point.domains.operational.value).toBe(row.scores.Operacional?.score ?? null);
       expect(point.domains.humanHealth.value).toBe(row.scores["Saúde humana"]?.score ?? null);
-      expect(point.calculationVersion).toBe("IR-CAPTACAO-0.8");
+      expect(point.calculationVersion).toBe("IR-CAPTACAO-3.0");
       expect(point.riskProfiles?.map(profile => profile.key)).toEqual(["operacional", "sanitario"]);
       expect(point.domains.humanHealth.lower).toBeLessThanOrEqual(point.domains.humanHealth.upper);
       expect(point.components.coi.included).toBe(row.components.COI.status === "disponível");
@@ -77,7 +77,7 @@ describe("ponte do índice de captação para as telas de resultados", () => {
     expect(auth).toHaveBeenCalledWith(expect.any(Request), "data.view");
     expect(ok.headers.get("cache-control")).toBe("private, no-store");
     const payload = await ok.json();
-    expect(payload.version).toBe("IR-CAPTACAO-0.8");
+    expect(payload.version).toBe("IR-CAPTACAO-3.0");
     expect(payload.campaigns[2].points.find((point: { siaCode: string }) => point.siaCode === "220").coordinates).toMatchObject({ latitude: -25.4, longitude: -49.2 });
     expect(payload.campaigns[2].points.find((point: { siaCode: string }) => point.siaCode === "78").coordinates).toBeNull();
     // a ordem de entrada não decide: cada campanha usa a sua coordenada; a C2, sem registro próprio, usa a reserva do mesmo SIA

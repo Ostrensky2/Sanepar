@@ -2,7 +2,7 @@ import { effects, matchCard } from "./effect-catalog";
 import { formatCaptureIndex } from "./format";
 
 /** Perfil de risco biológico de uma captação identificável (campanha + SIA).
- * Associa a nota 0.8 da categoria aos tipos de efeito com contribuição documentada naquela observação.
+ * Associa a nota do método 3.0 da categoria aos tipos de efeito com contribuição documentada naquela observação.
  * Nada é inferido de outra campanha, de outro ponto ou do nome do táxon: só fichas do catálogo de efeitos. */
 export const riskProfileDefinitions = [
   { key: "operacional", label: "Risco biológico operacional", domain: "Operacional", effects: ["odour", "diatom", "fouling", "larvae"] },
@@ -12,7 +12,7 @@ export type RiskProfileKey = (typeof riskProfileDefinitions)[number]["key"];
 export type RiskProfileState = "com sinal documentado" | "sem sinal documentado" | "sem estimativa" | "sem medição";
 export type RiskProfile = {
   key: RiskProfileKey; label: string; state: RiskProfileState;
-  /** Nota 0.8 da categoria; `null` quando não há estimativa ou medição. Zero é nota calculada. */
+  /** Nota do método 3.0 da categoria; `null` quando não há estimativa ou medição. Zero é nota calculada. */
   value: number | null; score: string;
   /** Tipos de efeito com contribuição positiva; `determining` = no marcador que definiu a nota da categoria. */
   effects: { id: string; title: string; determining: boolean }[];

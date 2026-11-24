@@ -39,7 +39,7 @@ function toPoint(row: CaptureIndexRow, place?: CapturePointPlace): ResultPoint {
     // Todo ponto com biblioteca utilizável tem as três notas e o índice geral; a falta do COI aparece nos conjuntos e na condição de uso.
     completeness: measured ? "complete" : "unavailable",
     availableSetCount: used.length, usedSetCount: used.length, unavailableSets: (["bacteria", "cyanobacteria", "coi"] as const).filter(set => !used.includes(set)),
-    conditionOfUse: measured ? `Medição: ${view.coverage}. ${view.elevated}.` : view.state === "sem estimativa" ? `Sem estimativa: há leitura, ${view.coverage}; a nota 0.8 não pode ser afirmada. Não é zero.` : "Sem medição: nenhuma biblioteca utilizável.",
+    conditionOfUse: measured ? `Medição: ${view.coverage}. ${view.elevated}.` : view.state === "sem estimativa" ? `Sem estimativa: há leitura, ${view.coverage}; a nota do método 3.0 não pode ser afirmada. Não é zero.` : "Sem medição: nenhuma biblioteca utilizável.",
     estimateState: view.state, riskProfiles: view.profiles,
     impactedRecordCount: Object.values(row.scores).reduce((sum, score) => sum + (score?.contributions.length ?? 0), 0),
     observations: row.alerts.length ? `${row.alerts.length} ponto(s) de atenção, sem efeito na nota.` : null,

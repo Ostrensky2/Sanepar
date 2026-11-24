@@ -151,7 +151,7 @@ export function ResultsIndexDashboard({
           Síntese integrada por ponto
         </h2>
         <div className="mt-2 flex items-center gap-1">
-          <p className="type-body text-[var(--ink)]">Índices de 0 a 1 · metodologia 0.8, por campanha e ponto.</p>
+          <p className="type-body text-[var(--ink)]">Índices de 0 a 1 · metodologia 3.0, por campanha e ponto.</p>
           <ResultsInterpretationHelp title="Como ler a síntese por ponto">
             <p>Compare o escore entre campanhas pela escala fixa ou consulte sua posição dentro da campanha.</p>
 
@@ -222,7 +222,7 @@ export function ResultsIndexDashboard({
           <div className="space-y-2 border-b border-[var(--line-soft)] p-4">
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
               <div className="flex items-center gap-1">
-                <h3 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">Mapa do índice · metodologia 0.8</h3>
+                <h3 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">Mapa do índice · metodologia 3.0</h3>
                 <button type="button" aria-label="Como ler o mapa" title="Como ler o mapa" aria-haspopup="dialog" className="-my-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--brand-teal)] transition hover:bg-[var(--surface-soft)] hover:text-[var(--brand-navy-strong)] focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]" onClick={() => setMapHelpOpen(true)}><CircleHelp aria-hidden="true" className="h-5 w-5" /></button>
               </div>
               <label className={`flex flex-wrap items-center gap-2 type-label ${mobileMapOpen ? "" : "max-sm:hidden"}`}>Escala do mapa
@@ -271,7 +271,7 @@ export function ResultsIndexDashboard({
       <MunicipalityTable rows={municipalityRows} />
       <ResultsHistory campaigns={campaigns} metric={metric} campaignLabels={campaignLabels} /></>}
       {mapHelpOpen && <ResultsReviewDialog title="Como ler o mapa" closeLabel="Fechar explicação" onClose={() => setMapHelpOpen(false)}>
-        <p className="type-metadata">O mapa apresenta as notas 0.8 de cada ponto nesta campanha. Zero é nota calculada. Sem estimativa: há leitura, mas a nota não pode ser afirmada. Sem medição: não há biblioteca utilizável.</p>
+        <p className="type-metadata">O mapa apresenta as notas do método 3.0 de cada ponto nesta campanha. Zero é nota calculada. Sem estimativa: há leitura, mas a nota não pode ser afirmada. Sem medição: não há biblioteca utilizável.</p>
         <div className="space-y-4">{mapHelpSections(campaign, visiblePoints, mapPoints.map((point) => point.id), metric).map((section) => <section key={section.title}>
           <h3 className="type-label font-bold text-[var(--brand-navy-strong)]">{section.title}</h3>
           <p className="type-metadata mt-1">{section.text}</p>
@@ -540,7 +540,7 @@ function completenessLabel(value: ResultCompleteness) {
   return value === "complete" ? "Índice calculado" : "Sem medição";
 }
 
-/** Estado da nota 0.8 do ponto: calculada (inclusive zero), sem estimativa ou sem medição. */
+/** Estado da nota (método 3.0) do ponto: calculada (inclusive zero), sem estimativa ou sem medição. */
 function pointStateLabel(point: ResultPoint) {
   return point.estimateState === "sem estimativa" ? "Sem estimativa" : point.estimateState === "sem medição" ? "Sem medição" : completenessLabel(point.completeness);
 }
