@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { ArrowRight, BookOpenText, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { SectionTabs } from "@/components/section-tabs";
@@ -42,12 +43,13 @@ export default function CalculationsPage() {
             <p>Diatomáceas e a assinatura de esgoto somam como grupos e só pontuam o que passa da base da rede.</p>
             <p>Ocorrência com menos de 10 reads ou menos de 0,01% da biblioteca vira alerta, sem elevar a nota.</p>
           </ResultsInterpretationHelp></div>
-        <p className={formula}>participação × gravidade ÷ 3 × aplicabilidade</p>
-        <dl className="space-y-2 type-metadata">
-          {[["participação", "parte dos reads válidos da biblioteca"], ["gravidade", "1 a 3, conforme a ficha do efeito"], ["aplicabilidade", "1 · 0,5 · 0,1 · 0, conforme a ficha"]].map(([term, text]) => <div key={term} className="flex items-baseline gap-3">
-            <dt className="w-28 shrink-0 font-mono text-xs font-semibold text-[var(--brand-navy-strong)]">{term}</dt><dd className="text-[var(--ink-soft)]">{text}</dd>
-          </div>)}
-        </dl>
+        <p className={formula}>massa = participação × (gravidade ÷ 3) × aplicabilidade</p>
+        <Symbols items={[
+          ["participação", <>os reads do organismo divididos pelos reads válidos da biblioteca. Ex.: 3.000 de 100.000 dá 0,03, ou 3%.</>],
+          ["gravidade ÷ 3", <>a gravidade da ficha (1 leve, 2 moderada, 3 grave) dividida por 3, para a mais grave valer 1: dá 0,33, 0,67 ou 1.</>],
+          ["aplicabilidade", <>quanto do grupo detectado carrega o efeito, conforme a ficha: 1, 0,5, 0,1 ou 0.</>],
+          ["massa", <>o resultado: a fatia do DNA, descontada pela gravidade e pela aplicabilidade. Fica entre 0 e 1.</>],
+        ]} />
         <p className="border-t border-[var(--line-ghost)] pt-3 type-caption text-[var(--ink-soft)]">Só entra organismo com efeito documentado.</p>
       </article>
       <article className={card}>
@@ -56,8 +58,17 @@ export default function CalculationsPage() {
             <p>Em cada marcador utilizável somam-se as massas, e a soma passa por uma curva logarítmica que leva o resultado para a escala de 0 a 1.</p>
             <p>São três categorias: danos físicos e ambientais, riscos operacionais e perigo potencial à saúde, identificado na captação. A nota de cada categoria é a do marcador de maior nota entre os utilizáveis.</p>
             <p>A escala é fixa e tem folga: uma nota de 0,15 corresponde a cerca de 1% de participação ponderada, 0,35 a 4% e 0,60 a 15%.</p>
+            <p><strong>Por que um logaritmo.</strong> Com uma régua reta, 1% de massa daria nota 0,01 e quase todo ponto ficaria grudado no zero. O logaritmo cresce rápido no começo e devagar depois: separa bem os sinais pequenos, que são a maioria, e deixa espaço para situações piores que as já vistas.</p>
+            <p><strong>Por que 100 e 101.</strong> O 100 amplia a massa antes do logaritmo, de modo que 1% já pese na escala. O 101 é o valor de 1 + 100 × Q quando Q é 1, a amostra inteira com gravidade e aplicabilidade máximas; dividir por ln(101) faz esse caso extremo dar exatamente 1. O “1 +” faz Q igual a zero dar nota zero, porque ln(1) é 0.</p>
           </ResultsInterpretationHelp></div>
-        <p className={formula}>nota = ln(1 + 100·Q) ÷ ln(101)</p>
+        <p className={formula}>Q = soma das massas da categoria<br />nota = ln(1 + 100 × Q) ÷ ln(101)</p>
+        <Symbols items={[
+          ["Q", <>a soma das massas dos organismos daquela categoria, entre 0 e 1. Q = 0,01 quer dizer 1%.</>],
+          ["ln", <>logaritmo natural (neperiano), a tecla “ln” da calculadora. Cresce rápido no começo e devagar depois.</>],
+          ["100", <>amplia Q antes do logaritmo, para que 1% já conte: 100 × 0,01 = 1.</>],
+          ["1 +", <>garante que, sem massa, a nota seja zero, porque ln(1) = 0.</>],
+          ["ln(101)", <>vale 4,615. É o valor de cima quando Q = 1 (1 + 100 × 1 = 101); dividir por ele faz a nota máxima ser 1.</>],
+        ]} />
         <CurveSketch />
       </article>
       <article className={card}>
@@ -67,23 +78,19 @@ export default function CalculationsPage() {
             <p>Cada categoria com nota positiva é testada como primária. Conserva-se o maior resultado elegível, nunca abaixo do piso.</p>
             <p>O índice geral não é a média das três categorias. O número de uma campanha é a média dos seus pontos, com um voto por ponto.</p>
           </ResultsInterpretationHelp></div>
-        <p className={formula}>piso + reforço por dano distinto</p>
-        <div aria-hidden className="space-y-3">
-          <ul className="space-y-1.5 type-caption text-[var(--ink-soft)]">
-            {([["Danos físicos e ambientais", 26, false], ["Riscos operacionais", 58, true], ["Perigo à saúde", 38, false]] as const).map(([label, width, top]) => <li key={label} className="grid grid-cols-[minmax(0,9.5rem)_minmax(0,1fr)] items-center gap-2">
-              <span className={top ? "font-semibold text-[var(--ink)]" : ""}>{label}</span>
-              <span className="h-2 overflow-hidden rounded-full bg-[var(--surface-soft)]"><span className="block h-full rounded-full" style={{ width: `${width}%`, backgroundColor: top ? "var(--brand-navy-strong)" : "var(--line-strong)" }} /></span>
-            </li>)}
-          </ul>
-          <div className="flex h-7 overflow-hidden rounded-md text-xs font-bold text-white">
-            <span className="flex flex-[58] items-center justify-center bg-[var(--brand-navy-strong)]">piso</span>
-            <span className="ml-0.5 flex flex-[16] items-center justify-center bg-[var(--brand-teal)]">reforço</span>
-            <span className="ml-0.5 flex-[26] bg-[var(--surface-soft)]" />
-          </div>
-        </div>
-        <p className="border-t border-[var(--line-ghost)] pt-3 type-caption text-[var(--ink-soft)]">Exemplo ilustrativo. A maior categoria dá o piso; nunca é a média das três.</p>
+        <p className={formula}>geral = P + (1 − P) × (R₁ + R₂) ÷ 2</p>
+        <Symbols items={[
+          ["P", <>a nota de uma categoria, testada como a principal. Testam-se as três e fica o maior resultado.</>],
+          ["R₁ e R₂", <>os reforços das outras duas categorias: a mesma curva do passo 2, aplicada só aos danos diferentes do da principal. Sem dano diferente, valem 0.</>],
+          ["1 − P", <>o espaço que falta até 1; o reforço só ocupa parte dele.</>],
+          ["÷ 2", <>tira a média dos dois reforços.</>],
+          ["piso", <>a maior das três notas. O geral nunca fica abaixo dele.</>],
+        ]} />
+        <p className="border-t border-[var(--line-ghost)] pt-3 type-caption text-[var(--ink-soft)]">Repetir o mesmo dano não reforça. O geral nunca é a média das três categorias.</p>
       </article>
     </section>
+
+    <WorkedExample card={card} title={title} />
 
     <section className={card} aria-labelledby="escala-titulo">
       <div className="flex items-center gap-2"><h2 id="escala-titulo" className={title}>A escala de 0 a 1</h2>
@@ -120,6 +127,54 @@ export default function CalculationsPage() {
       <Link className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--line-strong)] bg-white px-4 text-sm font-bold text-[var(--brand-navy-strong)]" href="/resultados/calculos/3-0"><BookOpenText aria-hidden className="size-4" />Ler a metodologia 3.0 completa</Link>
     </div>
   </div>;
+}
+
+/** O que cada símbolo da fórmula quer dizer, em palavras. */
+function Symbols({ items }: { items: Array<[string, ReactNode]> }) {
+  return <dl className="space-y-2 type-metadata">
+    {items.map(([term, text]) => <div key={term}>
+      <dt className="inline font-mono text-sm font-bold text-[var(--brand-navy-strong)]">{term}</dt><dd className="inline text-[var(--ink-soft)]">: {text}</dd>
+    </div>)}
+  </dl>;
+}
+
+/**
+ * Exemplo resolvido, com números inventados para ilustrar. Os resultados foram conferidos com o núcleo do cálculo
+ * (evaluateResultsIndex em src/lib/results-08-core.ts): operacional 0,1985; saúde 0,1502; geral 0,2587.
+ */
+function WorkedExample({ card, title }: { card: string; title: string }) {
+  const rows: Array<[string, string, string]> = [
+    ["Participação do organismo A", "3.000 ÷ 100.000", "0,03"],
+    ["Massa de A (gravidade 2, aplicabilidade 0,5)", "0,03 × (2 ÷ 3) × 0,5", "0,010"],
+    ["Participação do organismo B", "500 ÷ 100.000", "0,005"],
+    ["Massa de B (gravidade 3, aplicabilidade 1)", "0,005 × (3 ÷ 3) × 1", "0,005"],
+    ["Q, a soma das massas", "0,010 + 0,005", "0,015"],
+    ["Dentro do logaritmo", "1 + 100 × 0,015", "2,5"],
+    ["Logaritmo natural", "ln(2,5)", "0,916"],
+    ["Divisor fixo", "ln(101)", "4,615"],
+    ["Nota de riscos operacionais", "0,916 ÷ 4,615", "0,20"],
+  ];
+  return <section className={card} aria-labelledby="exemplo-titulo">
+    <div className="flex items-center gap-2"><h2 id="exemplo-titulo" className={title}>Exemplo resolvido, do read à nota</h2>
+      <ResultsInterpretationHelp title="Sobre o exemplo">
+        <p>Os números são inventados para mostrar a conta; não são de um ponto real. As notas de cada ponto, com as fichas que formam cada uma, estão em <strong>Resultados</strong>.</p>
+        <p>Os resultados deste exemplo foram conferidos com o mesmo cálculo usado no aplicativo.</p>
+      </ResultsInterpretationHelp></div>
+    <p className="type-body text-[var(--ink)]">Uma amostra tem 100.000 reads válidos no 16S. Dois organismos com ficha de riscos operacionais aparecem nela: A, com 3.000 reads, e B, com 500.</p>
+    <ol className="divide-y divide-[var(--line-ghost)] rounded-lg border border-[var(--line-ghost)]">
+      {rows.map(([label, math, result], i) => <li key={label} className={"grid gap-x-4 gap-y-0.5 px-3 py-2 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_4.5rem] sm:items-baseline " + (i === rows.length - 1 ? "bg-[var(--surface-soft)]" : "")}>
+        <span className="type-metadata text-[var(--ink)]">{label}</span>
+        <span className="font-mono text-sm text-[var(--ink-soft)]">{math}</span>
+        <span className="font-mono text-sm font-bold text-[var(--brand-navy-strong)] sm:text-right">= {result}</span>
+      </li>)}
+    </ol>
+    <p className="type-body text-[var(--ink)]">A nota 0,20 cai na faixa <strong>Atenção</strong> (0,15 a menos de 0,35).</p>
+    <div className="space-y-2 rounded-lg bg-[var(--surface-soft)] p-3 type-body text-[var(--ink)]">
+      <p><strong>E o índice geral?</strong> Suponha que, no mesmo ponto, a categoria de saúde tenha um dano diferente, com massa 0,01, e a ambiental não tenha nada. O reforço da saúde é ln(1 + 100 × 0,01) ÷ ln(101) = ln(2) ÷ 4,615 = <strong>0,15</strong>; o ambiental é 0.</p>
+      <p className="font-mono text-sm text-[var(--brand-navy-strong)]">geral = 0,20 + (1 − 0,20) × (0,15 + 0) ÷ 2 = 0,20 + 0,80 × 0,075 = 0,26</p>
+      <p>O geral fica em 0,26, acima da maior categoria (0,20) porque o problema de saúde é outro. Se fosse o mesmo dano, não haveria reforço e o geral seria 0,20.</p>
+    </div>
+  </section>;
 }
 
 /** A curva da nota: participação ponderada (0 a 20%) no eixo horizontal, nota (0 a 1) no vertical. */
