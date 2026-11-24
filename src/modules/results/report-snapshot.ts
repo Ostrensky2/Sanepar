@@ -6,7 +6,7 @@ export type ReportValue = string | number | boolean | null;
 export type ReportTable = { title: string; columns: string[]; rows: ReportValue[][]; indexColumns?: number[] };
 export type ReportRecord = { id: string; title: string; tables: ReportTable[]; photoUrl?: string };
 export type ReportSnapshot = { title: string; unit: string; selectedIds: string[]; generatedAt: string; provenance: Record<string, ReportValue>; limitations: string[]; records: ReportRecord[] };
-const limits = ["Reads e DNA não comprovam abundância, viabilidade, toxina ou dano local.", "Associações bibliográficas e ocorrência molecular são apresentadas separadamente; NA não equivale a zero ou ausência de risco.", "Este relatório reúne literatura e ocorrências; as notas do índice de captação 0.8 ficam em Campanhas e resultados."];
+const limits = ["Reads e DNA não comprovam abundância, viabilidade, toxina ou dano local.", "Associações bibliográficas e ocorrência molecular são apresentadas separadamente; NA não equivale a zero ou ausência de risco.", "Este relatório reúne literatura e ocorrências; as notas do índice de captação 3.0 ficam em Campanhas e resultados."];
 const scalar = (value: unknown): ReportValue => value === null || value === undefined ? null : typeof value === "number" || typeof value === "boolean" || typeof value === "string" ? value : Array.isArray(value) ? value.join("; ") : JSON.stringify(value);
 export const reportText = (value: ReportValue) => value === null ? "Não informado na fonte" : typeof value === "boolean" ? value ? "Sim" : "Não" : String(value);
 export const reportIndexColumn = (key: string) => /^(Índice |Componente .*utilizado|Limite (inferior|superior)|(?:environmental|operational|humanHealth)(?:Calculated|Used)$)/.test(key);

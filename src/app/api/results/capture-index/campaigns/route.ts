@@ -11,7 +11,7 @@ const noStore = { "Cache-Control": "private, no-store", "X-Content-Type-Options"
 export async function GET(request: Request) {
   const auth = await requireApiSession(request, "data.view");
   if (!auth.ok) return auth.response;
-  // Só existe a metodologia 0.8; pedir outra edição é erro de consulta, nunca um cálculo alternativo.
+  // Só existe a metodologia 3.0; pedir outra edição é erro de consulta, nunca um cálculo alternativo.
   const query = new URL(request.url).searchParams;
   if ([...query.keys()].some(key => key !== "version") || query.getAll("version").some(value => value !== "0.8") || query.getAll("version").length > 1)
     return Response.json({ error: "Opção inválida." }, { status: 422, headers: noStore });

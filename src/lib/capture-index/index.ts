@@ -7,7 +7,7 @@ import { formatCaptureIndex, formatCaptureShare } from "./format";
 import { distribution } from "./distribution";
 import { captureRiskProfiles } from "./risk-profiles";
 
-/** Índice de triagem de risco da biota na captação, metodologia 0.8 (IR-CAPTACAO-0.8).
+/** Índice de triagem de risco da biota na captação, metodologia 3.0 (IR-CAPTACAO-3.0).
  * As leituras e fichas vêm de `indice-captacao.json`; as notas, de `pontos-0.8.json`.
  * Painel e exportações consomem a MESMA visão: os textos são formatados uma única vez, aqui. */
 export const captureDomains = ["Ambiental", "Operacional", "Saúde humana"] as const;
@@ -38,29 +38,29 @@ const read = (name: string) => readFileSync(join(process.cwd(), "src/lib/capture
 const data = JSON.parse(read("indice-captacao.json")) as CaptureIndexDocument;
 if (data.schema !== "yvae-capture-index/4") throw new Error(`Esquema de índice não suportado: ${data.schema}`);
 
-/** Metodologia 0.8: as notas por campanha + SIA vêm de `pontos-0.8.json` (scripts/indice-08/gerar_pontos_08.py),
+/** Metodologia 3.0: as notas por campanha + SIA vêm de `pontos-0.8.json` (scripts/indice-08/gerar_pontos_08.py),
  * calculadas pelo núcleo `results-08-core.ts` e conferidas contra a fonte agregada oficial. O arquivo-base fornece
  * apenas as leituras, fichas e alertas de cada observação; nenhuma nota 0.7 é exibida, exportada ou usada em reserva. */
 type Point08 = { campaign: number; sia: string; geral: number | null; ambiental: number | null; operacional: number | null; saude: number | null };
 const pointsText = read("pontos-0.8.json");
 const points08 = JSON.parse(pointsText) as { schema: string; version: string; policy: string; rows: Point08[] };
-if (points08.schema !== "yvae-capture-index-08/1" || points08.version !== "0.8") throw new Error("Notas 0.8 por ponto incompatíveis.");
+if (points08.schema !== "yvae-capture-index-08/1" || points08.version !== "0.8") throw new Error("Notas do método 3.0 por ponto incompatíveis.");
 const unit = (value: unknown): value is number | null => value === null || (typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1);
 const pointKey = (campaign: number, sia: string) => `${campaign}|${sia}`;
 const byPoint = new Map<string, Point08>();
 for (const point of points08.rows) {
   const key = pointKey(point.campaign, point.sia);
-  if (byPoint.has(key) || ![point.geral, point.ambiental, point.operacional, point.saude].every(unit)) throw new Error("Nota 0.8 duplicada ou inválida.");
+  if (byPoint.has(key) || ![point.geral, point.ambiental, point.operacional, point.saude].every(unit)) throw new Error("Nota do método 3.0 duplicada ou inválida.");
   byPoint.set(key, point);
 }
-if (byPoint.size !== data.rows.length) throw new Error("Notas 0.8 não cobrem exatamente as observações do índice.");
+if (byPoint.size !== data.rows.length) throw new Error("Notas do método 3.0 não cobrem exatamente as observações do índice.");
 const field08 = { Ambiental: "ambiental", Operacional: "operacional", "Saúde humana": "saude" } as const;
 export const CAPTURE_BANDS = ["< 0,05", "0,05 a 0,15", "0,15 a 0,35", "0,35 a 0,70", ">= 0,70"] as const;
 const bandOf = (value: number) => CAPTURE_BANDS[[0.05, 0.15, 0.35, 0.7].filter(limit => value >= limit).length];
 for (const row of data.rows) {
   // Campanha e SIA formam a chave: uma nota nunca é emprestada de outra campanha.
   const point = byPoint.get(pointKey(row.campaign, row.sia));
-  if (!point) throw new Error(`Observação C${row.campaign} · SIA ${row.sia} sem nota 0.8.`);
+  if (!point) throw new Error(`Observação C${row.campaign} · SIA ${row.sia} sem nota do método 3.0.`);
   const libraries = captureComponents.some(name => row.components[name]?.status === "disponível");
   for (const domain of captureDomains) {
     const value = point[field08[domain]], score = row.scores[domain];
@@ -70,7 +70,7 @@ for (const row of data.rows) {
   }
   row.general = point.geral;
   row.estimate = point.geral !== null ? "estimado" : libraries ? "sem estimativa" : "sem medição";
-  // Piso, teto e média quadrática pertenciam ao índice anterior e não são publicados na 0.8.
+  // Piso, teto e média quadrática pertenciam ao índice anterior e não são publicados no método 3.0.
   row.generalFloor = row.generalCeiling = row.generalRms = null;
   const scored = captureDomains.map(domain => ({ domain, value: row.scores[domain]?.score ?? null })).filter((item): item is { domain: Domain; value: number } => item.value !== null);
   const top = scored.reduce<{ domain: Domain; value: number } | null>((best, item) => !best || item.value > best.value ? item : best, null);
@@ -91,10 +91,10 @@ for (const code of Object.keys(data.campaigns)) {
     faixas: Object.fromEntries(CAPTURE_BANDS.map(band => [band, estimated.filter(row => row.band === band).length])),
     dominios: Object.fromEntries(captureDomains.map(domain => [domain, mean(rows.flatMap(row => row.scores[domain] ? [row.scores[domain]!.score] : []))])) as Record<Domain, number> };
 }
-data.version = "IR-CAPTACAO-0.8";
-data.status = "metodologia 0.8 (sinal documentado); notas por campanha e SIA, sem mistura entre campanhas";
+data.version = "IR-CAPTACAO-3.0";
+data.status = "metodologia 3.0 (sinal documentado); notas por campanha e SIA, sem mistura entre campanhas";
 data.parameters = { ...data.parameters, bands: [0.05, 0.15, 0.35, 0.7],
-  aggregation: "índice geral 0.8 = maior das três notas, reforçada por dano distinto e documentado das outras categorias; nota da categoria = marcador vencedor" };
+  aggregation: "índice geral do método 3.0 = maior das três notas, reforçada por dano distinto e documentado das outras categorias; nota da categoria = marcador vencedor" };
 data.rowsSha256 = createHash("sha256").update(pointsText, "utf8").digest("hex");
 export const captureIndexMeta = { schema: data.schema, version: data.version, status: data.status, parameters: data.parameters, inputs: data.inputs,
   fichasTotal: data.fichasTotal, rowsSha256: data.rowsSha256, blindSpots: data.blindSpots,

@@ -41,20 +41,20 @@ describe("saída versionada do índice de triagem", () => {
     expect(distribution([null, 0])).toMatchObject({count: 1, median: 0, p90: 0});
   });
   it("tem uma linha por ponto e campanha, sem duplicar as corridas da C3", () => {
-    expect(captureIndexMeta.version).toBe("IR-CAPTACAO-0.8");
+    expect(captureIndexMeta.version).toBe("IR-CAPTACAO-3.0");
     expect([1, 2, 3].map(campaign => captureIndexRows(campaign).length)).toEqual([73, 76, 76]);
     expect(captureIndexRows()).toHaveLength(225);
     expect(new Set(captureIndexRows(3).map(row => row.sia)).size).toBe(76);
   });
 
-  it("cada campanha + SIA recebe exatamente a sua nota 0.8, e a maior categoria é o piso do geral", () => {
+  it("cada campanha + SIA recebe exatamente a sua nota do método 3.0, e a maior categoria é o piso do geral", () => {
     expect(points08).toHaveLength(225);
     let reinforced = 0;
     for (const row of captureIndexRows()) {
       const point = point08(row.campaign, row.sia);
       expect(row.general).toBe(point.geral);
       expect(captureDomains.map(domain => row.scores[domain]?.score ?? null)).toEqual([point.ambiental, point.operacional, point.saude]);
-      // Limites e média quadrática do índice anterior não existem na 0.8.
+      // Limites e média quadrática do índice anterior não existem no método 3.0.
       expect([row.generalFloor, row.generalCeiling, row.generalRms]).toEqual([null, null, null]);
       for (const domain of captureDomains) {
         const score = row.scores[domain];
@@ -250,7 +250,7 @@ describe("saída versionada do índice de triagem", () => {
     const view = captureIndexView(one(2, "136"));
     expect(view.exotics).toContain("Corbicula (espécie não resolvida) (4.402 reads)");
     expect(rows.flatMap(item => item.scores.Ambiental!.contributions).some(c => /Craspedacusta|Kellicottia|Coptodon/.test(c.taxon))).toBe(false);
-    expect(captureIndexMeta.status).toContain("metodologia 0.8");
+    expect(captureIndexMeta.status).toContain("metodologia 3.0");
   });
 
   it("diz o que foi medido e atribui o principal ao marcador que decidiu a nota (auditoria de 20/11)", () => {
@@ -305,7 +305,7 @@ describe("GET /api/results/capture-index", () => {
   it("painel e exportação de leitura mostram exatamente os mesmos textos", async () => {
     const json = await get("?campaign=2"), csv = await get("?campaign=2&format=csv");
     expect(json.headers.get("cache-control")).toBe("private, no-store");
-    expect(csv.headers.get("content-disposition")).toContain("indice-captacao-IR-CAPTACAO-0.8-C2-leitura.csv");
+    expect(csv.headers.get("content-disposition")).toContain("indice-captacao-IR-CAPTACAO-3.0-C2-leitura.csv");
     const body = new TextDecoder("utf-8", { ignoreBOM: true }).decode(await csv.arrayBuffer()); // text() descartaria o BOM
     expect(csv.headers.get("x-export-sha256")).toBe(sha256Hex(body));
     expect(body).toBe(captureIndexCsv(captureIndexRows(2)));

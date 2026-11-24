@@ -44,7 +44,7 @@ describe("cloud legacy DTO UI, synthetic only and no database", () => {
     expect(campaigns).not.toContain('setPublishedResults({ status: "empty"');
     const panels = readFileSync(new URL("../../../../components/campaign-results-panels.tsx", import.meta.url), "utf8");
     expect(panels).not.toContain("Painel_eDNA_Campanha1_Sanepar.html");
-    // O painel e a ficha do índice anterior saíram do aplicativo; a moldura só recebe o índice de captação 0.8.
+    // O painel e a ficha do índice anterior saíram do aplicativo; a moldura só recebe o índice de captação 3.0.
     expect(panels).not.toMatch(/LegacyPublishedResults|CampaignResultsDashboard/);
   });
 });

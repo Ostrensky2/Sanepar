@@ -26,7 +26,7 @@ export const relativeBands = [
 export function reading(point: ResultPoint, metric: Metric, relative?: ReturnType<typeof distribution>) {
   const value = metric === "overall" ? point.overall.value : point.domains[metric].value;
   const keys = Object.keys(domains) as ResultDomain[];
-  // Na 0.8 o geral pode superar a maior categoria: a categoria determinante é a de maior nota (o piso).
+  // No método 3.0 o geral pode superar a maior categoria: a categoria determinante é a de maior nota (o piso).
   const top = keys.reduce<number | null>((best, k) => { const v = point.domains[k].value; return v !== null && (best === null || v > best) ? v : best; }, null);
   const winners = keys.filter(k => value !== null && point.domains[k].value === (metric === "overall" ? top : value));
   const domain = metric === "overall" ? [...winners].sort((a,b) =>

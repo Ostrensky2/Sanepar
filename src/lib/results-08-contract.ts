@@ -1,5 +1,12 @@
 /** Public metadata only; aggregate data is server-only. */
 export const RESULTS_08_VERSION = "0.8" as const;
+/**
+ * Designação do método mostrada ao usuário. Em 2026-11-24 o método 0.8 passou a se chamar 3.0 e o anterior (0.7), 2.0.
+ * Só o nome mudou: o cálculo é o mesmo. Arquivos-fonte, schemas e parâmetros de API seguem com "0.8", porque estão
+ * presos a hashes e contratos; o que o usuário lê (telas, planilhas, nomes de arquivo) usa este rótulo.
+ */
+export const METHOD_LABEL = "3.0" as const;
+export const PREVIOUS_METHOD_LABEL = "2.0" as const;
 export const RESULTS_08_SOURCE_SHA256 = "5667da69789821f2744812e516282e54fdb73008e8cdb80051801931af455308";
 export const RESULTS_08_POLICY = "sinal-documentado/1" as const;
 export const RESULTS_08_SCHEMA = "agregados-home-export/1" as const;

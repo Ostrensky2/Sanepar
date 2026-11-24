@@ -3,21 +3,21 @@ import type { captureIndexMeta, captureIndexView } from "../capture-index";
 import { parsePointExecutionStatus } from "../point-execution-status";
 import { resolveCanonicalCampaign } from "../campaign-identity";
 import type { MatrixReferencePoint } from "./sia-matrices";
-import { RESULTS_08_CAMPAIGNS, RESULTS_08_SERIES, RESULTS_08_POLICY, RESULTS_08_SCHEMA, type Results08Aggregate, type Results08Campaign } from "../results-08-contract";
+import { METHOD_LABEL, RESULTS_08_CAMPAIGNS, RESULTS_08_SERIES, RESULTS_08_POLICY, RESULTS_08_SCHEMA, type Results08Aggregate, type Results08Campaign } from "../results-08-contract";
 
 /** Estatísticas por campanha, uma campanha por bloco. As campanhas nunca são juntadas num total. */
 export function addAggregateResults(sheet: Worksheet, input: Results08Aggregate, selectedGroup?: Results08Campaign) {
   if (selectedGroup !== undefined && !RESULTS_08_CAMPAIGNS.includes(selectedGroup)) throw Error("Campanha inválida.");
-  if (input?.versao !== "0.8" || input.politica !== RESULTS_08_POLICY || input.schema !== RESULTS_08_SCHEMA) throw Error("Edição agregada incompatível com a metodologia 0.8.");
+  if (input?.versao !== "0.8" || input.politica !== RESULTS_08_POLICY || input.schema !== RESULTS_08_SCHEMA) throw Error("Edição agregada incompatível com a metodologia 3.0.");
   const rows: (string | number | null)[][] = [];
   for (const group of selectedGroup ? [selectedGroup] : RESULTS_08_CAMPAIGNS) for (const series of RESULTS_08_SERIES) {
     const value=input.grupos?.[group]?.[series];
     if (!value || ![value.observados,value.numericos,value.nulos].every(n=>Number.isSafeInteger(n)&&n>=0) || value.observados!==value.numericos+value.nulos ||
       ![value.minimo,value.media,value.maximo].every(n=>value.numericos===0 ? n===null : typeof n==="number"&&Number.isFinite(n)&&n>=0&&n<=1) ||
       (value.numericos>0 && !(value.minimo!<=value.media! && value.media!<=value.maximo!))) throw Error("Estatística agregada incompatível.");
-    rows.push([input.versao,input.politica,group,series,value.observados,value.numericos,value.nulos,value.minimo,value.media,value.maximo]);
+    rows.push([METHOD_LABEL,input.politica,group,series==="geral08"?"geral":series,value.observados,value.numericos,value.nulos,value.minimo,value.media,value.maximo]);
   }
-  sheet.addRow(["Versão","Política","Campanha","Série","Observados","Numéricos","Nulos","Mínimo","Média","Máximo"]);
+  sheet.addRow(["Método","Política","Campanha","Série","Observados","Numéricos","Nulos","Mínimo","Média","Máximo"]);
   for (const row of rows) sheet.addRow(row);
   return rows.length;
 }
@@ -94,14 +94,14 @@ export function fieldWorkbookRows(book: Workbook, filename: string, hash: string
   return out;
 }
 
-/** Notas 0.8 por campanha + SIA na planilha unificada. Zero é nota calculada e vai como número 0;
+/** Notas do método 3.0 por campanha + SIA na planilha unificada. Zero é nota calculada e vai como número 0;
  * "Sem estimativa" e "Sem medição" ficam com as células numéricas vazias, nunca com zero. */
 export function addFinalResults(sheet:Worksheet, index:IntegratedIndex|undefined,campaign:number, sias:string[], normalize:(x:unknown)=>string|null,
   link:(sia:string)=>{day:string; status:string; source:string; referenceDays?:string; warning?:string}){
   const bySia=new Map<string,IntegratedIndex["rows"][number]>();
   const domains=["Ambiental","Operacional","Saúde humana"] as const;
   if(index){
-    if(index.meta?.version!=="IR-CAPTACAO-0.8" || !Array.isArray(index.rows) || !/^[a-f0-9]{64}$/i.test(index.meta.rowsSha256))throw Error("Saída do índice incompatível: a planilha aceita somente a metodologia 0.8.");
+    if(index.meta?.version!=="IR-CAPTACAO-3.0" || !Array.isArray(index.rows) || !/^[a-f0-9]{64}$/i.test(index.meta.rowsSha256))throw Error("Saída do índice incompatível: a planilha aceita somente a metodologia 3.0.");
     for(const row of index.rows){
       const sia=normalize(row.sia);
       if(!sia || row.campaign!==`C${campaign}` || bySia.has(sia))throw Error("Resultado final duplicado, sem SIA ou de outra campanha.");
@@ -113,7 +113,7 @@ export function addFinalResults(sheet:Worksheet, index:IntegratedIndex|undefined
   }
   for(const sia of new Set([...sias,...bySia.keys()])){
     const row=bySia.get(sia), l=link(sia);
-    const state=!row ? (index?"Sem resultado localizado":"Fonte final não consultada") : row.state==="estimado"?"Nota 0.8 calculada":row.state==="sem estimativa"?"Sem estimativa":"Sem medição";
+    const state=!row ? (index?"Sem resultado localizado":"Fonte final não consultada") : row.state==="estimado"?"Nota calculada (método 3.0)":row.state==="sem estimativa"?"Sem estimativa":"Sem medição";
     sheet.addRow([campaign,sia,state,row?.measured?row.general:"",row?.coverage??"",row?.band??"",row?.position??"",
       ...domains.map(d=>row?.domains.find(x=>x.key===d)?.score??""),index?.meta.version??"",index?.meta.rowsSha256??"",
       l.day,l.day?"dia civil":"",l.source,l.status,"Resultado por campanha + SIA; não identifica visita, amostra ou réplica individual.",row?.exact.general??null,...domains.map(d=>row?.exact.domains[d]??null),l.referenceDays??"",l.warning??"",

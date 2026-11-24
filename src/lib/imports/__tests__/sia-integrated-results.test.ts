@@ -23,12 +23,12 @@ it.each(["Campanha","campaignId"])("lê %s dentro do XLSX serializado, preserva 
 });
 it("C4 com campo mas sem resultado versionado não é analisada, nem recebe zero",()=>{
   const s=new Excel.Workbook().addWorksheet("final");
-  const idx:IntegratedIndex={meta:{version:"IR-CAPTACAO-0.8",status:"metodologia 0.8",rowsSha256:"0".repeat(64)},rows:[]};
+  const idx:IntegratedIndex={meta:{version:"IR-CAPTACAO-3.0",status:"metodologia 3.0",rowsSha256:"0".repeat(64)},rows:[]};
   expect(addFinalResults(s,idx,4,["SIA-0001"],normalizeMatrixSia,()=>({day:"",status:"SEM DATA",source:""}))).toBe(0);
   expect(s.getCell("C1").text).toBe("Sem resultado localizado");expect(s.getCell("D1").text).toBe("");
   expect(()=>addFinalResults(s,{...idx,rows:[{campaign:"C3",sia:"1"}] as IntegratedIndex["rows"]},4,[],normalizeMatrixSia,()=>({day:"",status:"",source:""}))).toThrow(/outra campanha/);
 });
-it.skipIf(!process.env.SIA_REAL_INTEGRATED)("arquivos reais de campo + ZIP 16 matrizes + notas 0.8 da instância local",async()=>{
+it.skipIf(!process.env.SIA_REAL_INTEGRATED)("arquivos reais de campo + ZIP 16 matrizes + notas do método 3.0 da instância local",async()=>{
   async function get<T>(path:string){const r=await fetch("http://127.0.0.1:3100"+path,{redirect:"error"});expect(r.status).toBe(200);return await r.json() as T}
   const pkg=await readMatrixPackage([file(process.env.SIA_MATRIX_REAL_ZIP!)]);expect(pkg.sources.length).toBe(16);
   const snapshot=await get<DiarySnapshot>("/api/field-diary");

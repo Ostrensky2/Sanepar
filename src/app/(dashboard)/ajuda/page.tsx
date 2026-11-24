@@ -57,7 +57,7 @@ export default function AjudaPage() {
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--ink-soft)]">
             Como usar cada tela, passo a passo, e o que fazer quando algo não aparece.
             </p>
-            <a className="inline-flex min-h-11 items-center font-semibold underline" href="/resultados/calculos/0-8">Consultar o método 0.8</a>
+            <a className="inline-flex min-h-11 items-center font-semibold underline" href="/resultados/calculos/3-0">Consultar o método 3.0</a>
         </div>
         <label className="flex h-11 items-center gap-3 rounded-xl border border-[var(--line-strong)] bg-white px-4 lg:min-w-[340px]">
           <Search className="h-4 w-4 text-[var(--ink-soft)]" />

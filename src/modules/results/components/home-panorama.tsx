@@ -85,13 +85,13 @@ export function TopCumulativeChart() {
           <h2 id="top-cumulative-title" className="heading-font type-section-title text-[var(--brand-navy-strong)]">10 pontos com maior índice acumulado</h2>
           <ResultsInterpretationHelp title="Como ler o índice acumulado por ponto">
             <p>Cada coluna é um ponto de captação (SIA). A altura é a soma do índice do ponto em todas as campanhas, por isso passa de 1: é uma pontuação acumulada, não uma porcentagem nem uma probabilidade. Quanto maior, mais vezes e com mais intensidade o ponto chamou atenção.</p>
-            <p>A coluna é dividida por campanha, da mais antiga (tom claro) à mais recente (tom escuro). Cada parte é a nota 0.8 daquele ponto naquela campanha, sem alteração. Passe o mouse ou toque em uma parte para ver a nota e abrir a ficha do ponto na campanha.</p>
+            <p>A coluna é dividida por campanha, da mais antiga (tom claro) à mais recente (tom escuro). Cada parte é a nota do método 3.0 daquele ponto naquela campanha, sem alteração. Passe o mouse ou toque em uma parte para ver a nota e abrir a ficha do ponto na campanha.</p>
             <p>O número em cima é o total; “média” é esse total dividido pelas campanhas em que o ponto tem nota.</p>
             <p><strong>Cuidado:</strong> a soma favorece quem foi coletado em mais campanhas. Ponto que ficou sem nota em alguma campanha aparece com o aviso “sem C…”, e a média ajuda a comparar com os demais.</p>
             <p>Use os botões para trocar o índice: geral, ambiental, operacional ou saúde. A lista dos 10 muda conforme o índice.</p>
           </ResultsInterpretationHelp>
         </div>
-        <p className="type-metadata text-[var(--ink-soft)]">Soma do índice do ponto nas campanhas · metodologia 0.8</p>
+        <p className="type-metadata text-[var(--ink-soft)]">Soma do índice do ponto nas campanhas · metodologia 3.0</p>
       </div>
       <IndexSwitch value={key} onChange={setKey} />
     </header>
@@ -160,7 +160,7 @@ export function AttentionChart() {
             <p>Use os botões para trocar o índice: geral, ambiental, operacional ou saúde.</p>
           </ResultsInterpretationHelp>
         </div>
-        <p className="type-metadata text-[var(--ink-soft)]">Pontos com índice a partir de 0,15, por campanha · metodologia 0.8</p>
+        <p className="type-metadata text-[var(--ink-soft)]">Pontos com índice a partir de 0,15, por campanha · metodologia 3.0</p>
       </div>
       <IndexSwitch value={key} onChange={setKey} />
     </header>

@@ -107,7 +107,7 @@ export const navigationItems: NavigationItem[] = [
       {
         href: "/resultados/calculos",
         label: "Como o índice é calculado",
-        summary: "metodologia 0.8: categorias, piso e reforço",
+        summary: "metodologia 3.0: categorias, piso e reforço",
         headerTitle: "Como o índice é calculado",
         icon: Calculator,
       },
@@ -270,7 +270,7 @@ export function getNavigationAccessForPath(pathname: string) {
  * só os ancestrais, porque o título da página já aparece no H1.
  */
 const subPages: Record<string, { parent: string; label: string }> = {
-  "/resultados/calculos/0-8": { parent: "/resultados/calculos", label: "Metodologia 0.8" },
+  "/resultados/calculos/3-0": { parent: "/resultados/calculos", label: "Metodologia 3.0" },
 };
 
 export function getBreadcrumbsForPath(pathname: string): Array<{ href: string; label: string }> {

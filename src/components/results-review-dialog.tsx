@@ -90,7 +90,7 @@ export function ResultsReviewDialog({ title = "Conheça a nova versão do Yva’
         <div id="results-review-description" className="type-body mt-3 text-[var(--ink)]">
           {children ?? <>
             <p>O aplicativo evoluiu! Esta versão apresenta índices aperfeiçoados e novas ferramentas para explorar os resultados do monitoramento, consultar impactos potenciais e compreender os cálculos e a metodologia utilizados.</p>
-            <p className="mt-3">Todo o aplicativo usa a metodologia 0.8: mapa, ficha, tabela e planilha mostram a mesma nota de cada campanha e ponto.</p>
+            <p className="mt-3">Todo o aplicativo usa a metodologia 3.0: mapa, ficha, tabela e planilha mostram a mesma nota de cada campanha e ponto.</p>
             <p className="mt-3">Uma apresentação mais clara, organizada e transparente para apoiar a análise dos resultados.</p>
             <p className="mt-3"><a href="/ajuda?secao=versoes" className="font-bold text-[var(--brand-navy-strong)] underline underline-offset-2">Veja o que mudou em Ajuda › Versões</a></p>
           </>}

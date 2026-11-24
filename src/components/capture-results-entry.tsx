@@ -73,7 +73,7 @@ export function CaptureResultsEntry({
       <PageHeader
         eyebrow="Monitoramento"
         title="Resultados na captação"
-        description="Índice de captação · metodologia 0.8 · por campanha e por ponto."
+        description="Índice de captação · metodologia 3.0 · por campanha e por ponto."
         help={<ResultsInterpretationHelp title="Como ler os resultados na captação">
           <p>O índice de triagem da biota na captação vai de 0 a 1, em escala fixa. Ele ordena a atenção entre os pontos; não mede probabilidade de dano nem descreve a água tratada.</p>
           <p>Cada campanha (C1 a C3) é calculada à parte, ponto a ponto (SIA). Nenhuma nota passa de uma campanha para outra.</p>

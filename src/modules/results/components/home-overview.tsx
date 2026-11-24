@@ -82,12 +82,12 @@ export function CampaignRangeChart() {
           <h2 id="campaign-range-title" className="heading-font type-section-title text-[var(--brand-navy-strong)]">Índices por campanha</h2>
           <ResultsInterpretationHelp title="Como ler o gráfico dos índices por campanha">
             <p>Cada campanha é uma posição no eixo horizontal. A linha de cima liga o maior índice entre os pontos de cada campanha, a do meio (mais grossa) liga a média e a de baixo liga o menor índice. A área sombreada vai do menor ao maior.</p>
-            <p>Use os botões para trocar o índice: geral, ambiental, operacional ou saúde. A escala é fixa, de 0 a 1, a mesma da metodologia 0.8; as linhas horizontais são os limites das faixas.</p>
+            <p>Use os botões para trocar o índice: geral, ambiental, operacional ou saúde. A escala é fixa, de 0 a 1, a mesma da metodologia 3.0; as linhas horizontais são os limites das faixas.</p>
             <p>Passe o mouse ou toque no maior ou no menor valor para ver quais SIAs o formam. Clicar fixa a lista, e cada SIA abre a ficha do ponto.</p>
             <p>As campanhas são independentes: não há total nem média juntando campanhas. As linhas só ajudam a comparar uma campanha com a outra. Ponto sem estimativa fica fora do mínimo, da média e do máximo.</p>
           </ResultsInterpretationHelp>
         </div>
-        <p className="type-metadata text-[var(--ink-soft)]">Menor, média e maior índice dos pontos · metodologia 0.8 · escala fixa 0 a 1</p>
+        <p className="type-metadata text-[var(--ink-soft)]">Menor, média e maior índice dos pontos · metodologia 3.0 · escala fixa 0 a 1</p>
       </div>
       {data && <div role="group" aria-label="Índice exibido" className={styles.segmented}>
         {indices.map((item) => <button type="button" key={item.key} aria-pressed={item.key === key} onClick={() => setKey(item.key)}>{item.label}</button>)}
@@ -162,7 +162,7 @@ export function HomeIndexMap() {
             <p>Para ver as categorias, a posição relativa e a ficha de cada ponto, use “Ver detalhes no mapa de Resultados”.</p>
           </ResultsInterpretationHelp>
         </div>
-        <p className="type-metadata text-[var(--ink-soft)]">Um ponto por SIA · metodologia 0.8 · escala fixa 0 a 1</p>
+        <p className="type-metadata text-[var(--ink-soft)]">Um ponto por SIA · metodologia 3.0 · escala fixa 0 a 1</p>
       </div>
       {codes.length > 0 && <div role="group" aria-label="Campanha do mapa" className={styles.segmented}>
         {codes.map((item) => <button type="button" key={item} aria-pressed={item === code} onClick={() => setChosen(item)}>{item} · {season(item).split(" ")[0]}</button>)}

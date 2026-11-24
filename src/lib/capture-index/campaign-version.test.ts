@@ -16,13 +16,13 @@ const campaigns = (query = "") => campaignsGET(new Request("http://localhost/api
 
 beforeEach(() => { auth.mockReset(); auth.mockResolvedValue({ ok: true }); });
 
-it("a consulta por campanha + SIA responde a nota 0.8 daquela campanha, não 409", async () => {
+it("a consulta por campanha + SIA responde a nota do método 3.0 daquela campanha, não 409", async () => {
   for (const campaign of [1, 2, 3]) {
     const response = await index(`?format=views&campaign=${campaign}&sia=17`);
     expect(response.status).toBe(200);
     expect(response.headers.get("x-results-version")).toBe("0.8");
     const body = await response.json(), want = expected(campaign, "17");
-    expect(body.version).toBe("IR-CAPTACAO-0.8");
+    expect(body.version).toBe("IR-CAPTACAO-3.0");
     expect([body.point.campaign, body.point.sia, body.point.state]).toEqual([`C${campaign}`, "17", "estimado"]);
     expect(body.point.exact).toEqual({ general: want.geral, domains: { Ambiental: want.ambiental, Operacional: want.operacional, "Saúde humana": want.saude } });
     // O histórico do ponto lista cada campanha com a sua própria nota; nenhuma é copiada de outra.
@@ -68,6 +68,6 @@ it("não existe consulta 0.7: pedir outra edição é recusado, sem cálculo alt
     expect(response.headers.get("x-results-version")).toBe("0.8");
   }
   const source = readFileSync("src/lib/capture-index/index.ts", "utf8");
-  expect(source).toContain('data.version = "IR-CAPTACAO-0.8"');
+  expect(source).toContain('data.version = "IR-CAPTACAO-3.0"');
   expect(JSON.stringify(await (await index("?campaign=1")).json())).not.toMatch(/0\.7-piloto/);
 });

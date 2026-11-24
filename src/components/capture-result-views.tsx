@@ -534,7 +534,7 @@ function Point({ data, campaign, sia, effect, href }: { data: CaptureResultViews
                 <p className="pt-2 text-sm opacity-80">Índice geral</p>
                 <p className="text-5xl font-extrabold tabular-nums">{data.point.general}</p>
                 <div className="pt-1"><BandChip value={data.point.exact.general} empty={data.point.state === "sem estimativa" ? "Sem estimativa" : "Sem medição"} /></div>
-                {data.point.state === "sem estimativa" && <p className="pt-2 text-sm">Há leitura neste ponto e campanha, mas a nota 0.8 não pode ser afirmada. Não é zero.</p>}
+                {data.point.state === "sem estimativa" && <p className="pt-2 text-sm">Há leitura neste ponto e campanha, mas a nota do método 3.0 não pode ser afirmada. Não é zero.</p>}
                 {row?.rank && <p className="pt-2 text-sm">{row.rank}º de {data.ranking.length} pontos medidos na campanha</p>}
               </div>
               <div className="min-w-0 space-y-5">

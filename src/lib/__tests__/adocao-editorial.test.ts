@@ -4,18 +4,18 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 const source = (path: string) => readFileSync(path, "utf8");
 const root = "src/app/(dashboard)";
-const guide = "/resultados/calculos/0-8";
+const guide = "/resultados/calculos/3-0";
 const files = (dir: string): string[] => readdirSync(dir).flatMap(name => {
   const path = join(dir, name).replaceAll("\\", "/");
   return statSync(path).isDirectory() ? files(path) : /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) ? [path] : [];
 });
 
-describe("Adoção do método 0.8 em todo o aplicativo", () => {
+describe("Adoção do método 3.0 em todo o aplicativo", () => {
   it("ancora os agregados no congelamento oficial e mantém o mapa recolhido no celular", () => {
     expect(existsSync("src/app/api/results/campaign-distribution/aggregates.json")).toBe(false);
     expect(source("src/app/api/results/campaign-distribution/route.ts")).toContain("@/lib/results-08-aggregate");
     const dashboard = source("src/modules/results/components/results-index-dashboard.tsx");
-    expect(dashboard).toContain("Mapa do índice · metodologia 0.8");
+    expect(dashboard).toContain("Mapa do índice · metodologia 3.0");
     expect(dashboard).toContain("setMobileMapOpen] = useState(false)");
     const home = source("src/modules/results/components/home-results-v2.tsx");
     // A Home mostra a visão geral (um gráfico com todas as campanhas); a distribuição fica em Resultados > Distribuição.
@@ -27,7 +27,7 @@ describe("Adoção do método 0.8 em todo o aplicativo", () => {
     for (const stat of ["data-stat={line.key}", 'data-stat="com-nota"', "data-campaign={code}", "não há total nem média entre campanhas"]) expect(cards).toContain(stat);
     expect(cards).not.toMatch(/group=total|grupos\?\.total/);
   });
-  it("liga as superfícies ao guia do método 0.8", () => {
+  it("liga as superfícies ao guia do método 3.0", () => {
     for (const path of [root+"/ajuda/page.tsx", root+"/governanca/page.tsx", root+"/resultados/calculos/page.tsx","src/components/release-notes.tsx"]) {
       expect(source(path)).toContain('href="'+guide+'"');
     }
@@ -44,7 +44,7 @@ describe("Adoção do método 0.8 em todo o aplicativo", () => {
       return /histórico 0\.7|método 0\.7|versão 0\.7|índice 0\.7|IR-CAPTACAO-0\.7|version=0\.7|"0\.7"|Estado 0\.7|histórica 0\.7/.test(text) ? [path] : [];
     });
     expect(offenders).toEqual([]);
-    expect(source("src/lib/capture-index/index.ts")).toContain('data.version = "IR-CAPTACAO-0.8"');
+    expect(source("src/lib/capture-index/index.ts")).toContain('data.version = "IR-CAPTACAO-3.0"');
   });
   it("mapa, ficha, tabela e planilha recebem a nota do ponto; não há mais frase fixa de indisponibilidade", () => {
     const all = files("src").map(source).join("\n");
@@ -57,8 +57,8 @@ describe("Adoção do método 0.8 em todo o aplicativo", () => {
     expect(matrix).toContain("/api/results/capture-index?campaign=${campaign}");
     expect(matrix).not.toContain("disabled className={control}>Baixar planilha por ponto");
     const final = source("src/lib/imports/sia-integrated-results.ts");
-    expect(final).toContain('index.meta?.version!=="IR-CAPTACAO-0.8"');
-    expect(source("src/lib/imports/sia-matrices.ts")).toContain('"Estado da nota 0.8","Índice geral 0.8 (como exibido)"');
+    expect(final).toContain('index.meta?.version!=="IR-CAPTACAO-3.0"');
+    expect(source("src/lib/imports/sia-matrices.ts")).toContain('"Estado da nota (método 3.0)","Índice geral (método 3.0, como exibido)"');
   });
   it("distingue zero, sem estimativa e sem medição nas telas e na planilha", () => {
     const dashboard = source("src/modules/results/components/results-index-dashboard.tsx");

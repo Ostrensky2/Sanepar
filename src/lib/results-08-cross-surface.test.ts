@@ -12,9 +12,12 @@ it("reconciles Home, JSON and CSV per campaign, and never exposes a total across
   expect(new Set(rows.map(r => r.slice(2,4).join("/"))).size).toBe(12);
   expect(new Set(rows.map(r => r[2]))).toEqual(new Set(["C1", "C2", "C3"]));
   for (const row of rows) {
-    const [version, policy, group, series] = row;
+    const [version, policy, group, shown] = row;
+    // O CSV mostra o nome do método (3.0) e a série "geral"; a fonte guarda "0.8" e "geral08". Só o nome muda.
+    const series = shown === "geral" ? "geral08" : shown;
     const s = json.grupos[group][series];
-    expect([version, policy, row.at(-1)]).toEqual([home.versao, home.politica, home.sourceSha256]);
+    expect(home.versao).toBe("0.8");
+    expect([version, policy, row.at(-1)]).toEqual(["3.0", home.politica, home.sourceSha256]);
     expect(row.slice(4,-1)).toEqual([s.observados,s.numericos,s.nulos,s.minimo,s.media,s.maximo,...s.faixas,...s.colunas].map(v=>String(v ?? "")));
     expect(home.campanhas[group][series === "geral08" ? "geral" : series]).toEqual({...s,n:s.numericos});
   }

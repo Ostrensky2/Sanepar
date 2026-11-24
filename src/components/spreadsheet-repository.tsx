@@ -413,7 +413,7 @@ export function LegacyPublicationFlow() {
           ? `${resultsInventory.publishedCount} de ${resultsInventory.totalCampaigns} campanhas com resultados publicados`
           : inventoryLoading ? "Consultando publicações…" : "Estado não confirmado"}
       </p>
-      <p className="type-metadata">Desta planilha do laboratório o aplicativo usa os organismos, as leituras, a literatura e a situação dos conjuntos. As abas do índice anterior não são lidas nem guardadas: as notas exibidas vêm só do índice de captação, metodologia 0.8.</p>
+      <p className="type-metadata">Desta planilha do laboratório o aplicativo usa os organismos, as leituras, a literatura e a situação dos conjuntos. As abas do índice anterior não são lidas nem guardadas: as notas exibidas vêm só do índice de captação, metodologia 3.0.</p>
 
       <section className="glass-panel radius-panel p-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-2">

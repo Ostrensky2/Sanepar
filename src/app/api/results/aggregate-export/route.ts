@@ -1,7 +1,7 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { results08Aggregate } from "@/lib/results-08-aggregate";
 import { results08Csv } from "@/lib/results-08-export";
-import { RESULTS_08_CAMPAIGNS, RESULTS_08_SOURCE_SHA256, type Results08Campaign } from "@/lib/results-08-contract";
+import { METHOD_LABEL, RESULTS_08_CAMPAIGNS, RESULTS_08_SOURCE_SHA256, type Results08Campaign } from "@/lib/results-08-contract";
 import { addAggregateResults } from "@/lib/imports/sia-integrated-results";
 
 export const runtime = "nodejs";
@@ -17,22 +17,22 @@ export async function GET(request: Request) {
       const { default: ExcelJS } = await import("exceljs");
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "Yva'e";
-      workbook.title = "Resultados 0.8 por campanha";
+      workbook.title = "Resultados do método 3.0 por campanha";
       workbook.subject = `${data.politica}; ${data.schema}`;
-      const sheet = workbook.addWorksheet("Por campanha 0.8");
+      const sheet = workbook.addWorksheet("Por campanha 3.0");
       addAggregateResults(sheet, data, group === null ? undefined : group as Results08Campaign);
       sheet.views = [{state:"frozen",ySplit:1}];
       sheet.getRow(1).font = {bold:true};
       sheet.columns.forEach((column,index)=>{column.width=index===1?25:index===3?20:18;});
       for (const column of [8,9,10]) sheet.getColumn(column).numFmt = "0.000000000000000";
       const provenance = workbook.addWorksheet("Fonte");
-      provenance.addRows([["Versão",data.versao],["Política",data.politica],["Schema",data.schema],["SHA-256 da fonte",RESULTS_08_SOURCE_SHA256],["Escopo","Estatísticas por campanha; as campanhas não são juntadas"],["Ausentes","Célula vazia = sem estimativa; zero numérico preservado"],["Campanha",group ?? "C1, C2 e C3, cada uma à parte"]]);
+      provenance.addRows([["Método",METHOD_LABEL],["Política",data.politica],["Schema",data.schema],["SHA-256 da fonte",RESULTS_08_SOURCE_SHA256],["Escopo","Estatísticas por campanha; as campanhas não são juntadas"],["Ausentes","Célula vazia = sem estimativa; zero numérico preservado"],["Campanha",group ?? "C1, C2 e C3, cada uma à parte"]]);
       provenance.getColumn(1).width=22;provenance.getColumn(2).width=72;
       const bytes = new Uint8Array(await workbook.xlsx.writeBuffer());
-      return new Response(bytes, {headers:{...headers,"Content-Type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","Content-Disposition":`attachment; filename="resultados-0.8-por-campanha-${group ?? "C1-C2-C3"}.xlsx"`,"Content-Length":String(bytes.byteLength)}});
+      return new Response(bytes, {headers:{...headers,"Content-Type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","Content-Disposition":`attachment; filename="resultados-metodo-3.0-por-campanha-${group ?? "C1-C2-C3"}.xlsx"`,"Content-Length":String(bytes.byteLength)}});
     }
     // O grupo `total` da fonte serve só à conferência interna; a resposta traz cada campanha à parte.
     if (format === "json") return Response.json({ ...data, sourceSha256: RESULTS_08_SOURCE_SHA256, grupos: Object.fromEntries((group ? [group as Results08Campaign] : RESULTS_08_CAMPAIGNS).map(key => [key, data.grupos[key]])) }, { headers });
-    return new Response(results08Csv(data, group === null ? undefined : group as Results08Campaign), { headers: { ...headers, "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="resultados-0.8-por-campanha-${group ?? "C1-C2-C3"}.csv"` } });
+    return new Response(results08Csv(data, group === null ? undefined : group as Results08Campaign), { headers: { ...headers, "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="resultados-metodo-3.0-por-campanha-${group ?? "C1-C2-C3"}.csv"` } });
   } catch { return Response.json({ error: "Resultados por campanha indisponíveis." }, { status: 503, headers }); }
 }

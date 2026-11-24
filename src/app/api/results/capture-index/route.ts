@@ -5,7 +5,7 @@ import { captureIndexAuditCsv, captureIndexCampaigns, captureIndexCsv, captureIn
 export const runtime = "nodejs";
 const noStore = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "X-Results-Version": "0.8" };
 
-/** Metodologia 0.8, por campanha e por ponto (SIA). Não existe consulta de outra edição: `version` só aceita 0.8.
+/** Metodologia 3.0, por campanha e por ponto (SIA). Não existe consulta de outra edição: `version` só aceita 0.8.
  * O painel recebe os pontos em ordem de prioridade (posição na campanha). Painel (JSON), exportação de leitura (csv) e de auditoria (audit) saem da mesma saída versionada; nada é recalculado aqui. */
 export async function GET(request: Request) {
   const auth = await requireApiSession(request, "data.view");

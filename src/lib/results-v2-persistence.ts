@@ -136,9 +136,9 @@ export function findResultsCampaignV2(
   ) ?? null;
 }
 
-/** Publicações gravadas antes da metodologia 0.8 guardam o índice anterior, calculado no envio da planilha.
+/** Publicações gravadas antes da metodologia 3.0 guardam o índice anterior, calculado no envio da planilha.
  * Esses valores nunca saem do servidor: a resposta leva só identificação, contagens e situação dos conjuntos.
- * As notas exibidas vêm exclusivamente do índice de captação 0.8. */
+ * As notas exibidas vêm exclusivamente do índice de captação 3.0. */
 export function withoutLegacyIndex<T extends ResultsPublicationV2["campaigns"][number]>(campaign: T): T {
   const empty = { environmental: null, operational: null, humanHealth: null };
   return {
