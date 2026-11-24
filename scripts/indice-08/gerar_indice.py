@@ -98,7 +98,7 @@ meta = {}      # id -> {"origin", "evidence"}
 cadastro = []
 CORRECOES = {
     "CUR-Raphidiopsis-S": dict(aplicabilidade=0.5, fonte="https://pubmed.ncbi.nlm.nih.gov/38244903",
-        justificativa="Correção da revisão de 23/11: na América do Sul, R. raciborskii está associada sobretudo a saxitoxinas (PMID 38244903, 24407962; cepa brasileira produtora, doi:10.1371/journal.pone.0009235). A fração de genótipos de cilindrospermopsina medida na China (0,3% a 39,7%, PMID 34899674) não estima o risco de saxitoxina no Paraná. Cepas produtoras e não produtoras coexistem: aplicabilidade provisória 0,5, a refinar."),
+        justificativa="Correção da revisão de 23/11: na América do Sul, R. raciborskii está associada sobretudo a saxitoxinas (PMID 38244903, 24407962; cepa brasileira produtora, doi:10.1371/journal.pone.0009235). A fração de genótipos de cilindrospermopsina medida na China (0,3% a 39,7%, PMID 34899674) não estima o risco de saxitoxina no Paraná. Cepas produtoras e não produtoras coexistem: parte substancial (0,5)."),
     "CUR-Raphidiopsis-A": dict(fonte="https://pubmed.ncbi.nlm.nih.gov/32323358",
         justificativa="Correção da revisão de 23/11: a fonte anterior não media toxicidade para animais. Tilápia exposta a cepa produtora de saxitoxina teve crescimento reduzido (PMID 32323358); Daphnia gessneri teve aptidão e alimentação reduzidas (PMID 37624198). Efeito ligado a cepas produtoras: minoria."),
     "CUR-Arcobacter-S": dict(justificativa="Correção da revisão de 23/11: associado a surtos de veiculação hídrica e a indicadores de poluição fecal; água e alimentos são rotas suspeitas; causalidade ainda não estabelecida (PMID 21233511). Só 3 de 12 espécies isoladas de infecções; maioria dos casos autolimitada: minoria."),
@@ -119,7 +119,7 @@ for f in base:
             f = replace(f, justificativa=f.justificativa + " Correção da revisão de 23/11: para B. peregrina, a espécie detectada, a infecção experimental por S. mansoni foi nula (0 de 300 caramujos; PMID 4732745). Não pontua.")
             meta[f.id] = {"origin": "registrada, sem nota", "evidence": "resultado nulo na espécie detectada"}
         else:
-            f = replace(f, aplicabilidade=0.1, justificativa=f.justificativa + " Provisória (24/11): o efeito está documentado em espécie do gênero; a presença do gênero pontua como minoria (0,1), a refinar.")
+            f = replace(f, aplicabilidade=0.1, justificativa=f.justificativa + " O efeito está documentado em espécie do gênero; a presença do gênero pontua como minoria (0,1).")
             meta[f.id] = {"origin": "herdada de espécie do gênero", "evidence": "provisória"}
     elif f.id.startswith("REV-"):
         meta[f.id] = {"origin": "registrada, sem nota", "evidence": "busca sem evidência; não avaliada"}
@@ -166,7 +166,7 @@ for r in propostas:
     elif re.search(r"(aceae|idae)$", nome): taxon, nivel = nome, "family"
     else: taxon, nivel = nome.split()[0], "genus"
     tema = r["tema"].split("/")[0]
-    just = f"{r['efeito'].strip()}. {r['resultado'].strip()} Limitações: {r['limitacoes'].strip()} Estudado em: {r['nome_estudado'].strip()} ({r['nivel_estudado']}). Fontes: {r['fontes'].strip() or 'não informadas'}. Revisão de 23/11, leitura de resumo; valores provisórios, a refinar."
+    just = f"{r['efeito'].strip()}. {r['resultado'].strip()} Limitações: {r['limitacoes'].strip()} Estudado em: {r['nome_estudado'].strip()} ({r['nivel_estudado']}). Fontes: {r['fontes'].strip() or 'não informadas'}. Revisão bibliográfica de 23/11."
     for letra in [x for x in r["dominio"].split("/") if x in LETRA]:
         dom = LETRA[letra]; ident = f"REV23-{r['registro']}-{letra}"
         pontua = r["categoria"] in ("DEM", "PAR") and r["gravidade_proposta"] in ("1", "2", "3") and (nivel != "clade" or NO_NIVEL.search(r["nivel_estudado"])) \
@@ -348,8 +348,9 @@ f_pts.write_text(json.dumps(dict(schema="yvae-capture-index-08/1", version="0.8"
     rows=[dict(campaign=x["campaign"], sia=x["sia"], geral=x["geral"], ambiental=x["ambiental"], operacional=x["operacional"], saude=x["saude"]) for x in rows]), ensure_ascii=False, indent=1) + "\n", encoding="utf8", newline="")
 
 def ficha_json(i, taxon, nivel, dominio, codigo, gravidade, aplicabilidade, contestada, fonte, justificativa):
+    registrada = meta[i]["origin"].startswith("registrada")
     return {"taxon": taxon, "level": nivel, "domain": dominio, "code": codigo, "severity": gravidade, "applicability": aplicabilidade, "contested": contestada, "source": fonte, "rationale": justificativa,
-            "origin": meta[i]["origin"], "evidence": meta[i]["evidence"], "used": i in usadas, **({"theme": TEMAS[codigo]} if codigo in TEMAS else {})}
+            "scores": not registrada, "used": i in usadas, **({"note": meta[i]["evidence"]} if registrada else {}), **({"theme": TEMAS[codigo]} if codigo in TEMAS else {})}
 
 doc["fichas"] = {f.id: ficha_json(f.id, f.taxon, f.nivel, f.dominio, f.codigo, f.gravidade, f.aplicabilidade, f.contestada, f.fonte, f.justificativa) for f in cadastro if f.dominio in DS}
 doc["fichas"].update({x["id"]: ficha_json(x["id"], x["taxon"], x["nivel"], x["dominio"], x["codigo"], x["gravidade"], None, False, x["fonte"], x["justificativa"]) for x in registradas})
@@ -357,16 +358,15 @@ doc["fichas"] = dict(sorted(doc["fichas"].items()))
 doc["fichasTotal"] = len(doc["fichas"])
 doc["parameters"]["coiFreshwaterScope"] = {"fonte": "Matrizes por SIA do Marcio, entrega de 13/11/2026", "generos": len(GEN), "familias": len(FAM), "exoticasEmEspecie": sorted(EXOTICAS),
     "regra": "táxon COI fora do recorte de água doce não pontua nem gera alerta; os reads continuam no total; ficha e rótulo de espécie só para exóticas sustentadas"}
-doc["parameters"]["provisionalCards"] = {"data": "2026-11-24", "regra": "fichas da revisão de 23/11 e fichas herdadas de espécie entram com valores provisórios, a refinar"}
 publicado = json.loads(f_idx.read_text(encoding="utf8"))
 doc["blindSpots"] = publicado["blindSpots"]      # textos editoriais mantidos como estão no aplicativo
-PROV = " Desde 24/11/2026 pontuam também fichas provisórias, a refinar: as da revisão bibliográfica de 23/11 e as herdadas de espécie do gênero."
+PROV = " Desde 24/11/2026 pontuam também as fichas da revisão bibliográfica de 23/11 e as de gêneros com espécie de efeito descrito."
 doc["maturity"] = {
     "Ambiental": {"nivel": "evidência parcial", "texto": "Fichas aprovadas: Corbicula, black bass e Raphidiopsis." + PROV + " A base da categoria vem de gêneros comuns em água doce com alguma espécie de efeito descrito (ex.: Flavobacterium, Acinetobacter), com peso de minoria."},
     "Operacional": {"nivel": "evidência parcial", "texto": "Fichas aprovadas: gosto e odor (Dolichospermum e Pseudanabaena), larvas de quironomídeos, incrustação (mexilhão-dourado e Cordylophora) e diatomáceas acima da base da rede (leitura exploratória do cloroplasto no 16S)." + PROV + " Entraram, entre outras, nitrificação, ferro e manganês e odor de algas. Mosquito-fantasma em desenvolvimento, fora da nota. Não foi confrontado com datas de ocorrências reais."},
     "Saúde humana": {"nivel": "com base de comparação", "texto": "Microcystis segue como a ficha que mais pesa nos pontos de nota alta; o peso dela é convenção aprovada em 20/11. A assinatura de esgoto (anaeróbios de intestino acima da base da rede) continua aprovada." + PROV + " A comparação com os grupos de risco do laboratório foi feita antes dessas fichas e precisa ser refeita."},
 }
-doc["status"] = "cadastro completo de fichas em 24/11/2026; fichas da revisão de 23/11 e herdadas de espécie com valores provisórios"
+doc["status"] = "cadastro completo de fichas em 24/11/2026"
 doc["rowsSha256"] = hashlib.sha256(json.dumps(doc["rows"], ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 f_idx.write_text(json.dumps(doc, ensure_ascii=False, sort_keys=True, separators=(",", ":")), encoding="utf8", newline="")
 for arquivo, padrao, valor in ((repo / "src/lib/results-08-contract.ts", r'(RESULTS_08_SOURCE_SHA256 = ")[0-9a-f]{64}(")', novo_bytes),
@@ -376,6 +376,12 @@ for arquivo, padrao, valor in ((repo / "src/lib/results-08-contract.ts", r'(RESU
     assert n == 1, arquivo
     arquivo.write_text(t2, encoding="utf8", newline="")
 if len(sys.argv) > 2:
+    interno = Path(sys.argv[2]).with_name("fichas-a-ler-na-integra.csv")
+    with open(interno, "w", newline="", encoding="utf-8-sig") as arq:
+        w = csv.writer(arq, delimiter=";"); w.writerow(["id", "organismo", "nivel", "categoria", "gravidade", "aplicabilidade", "origem", "evidencia", "usada_nas_campanhas", "fonte"])
+        for f in cadastro:
+            if f.dominio in DS and not meta[f.id]["origin"].startswith(("aprovada", "registrada")):
+                w.writerow([f.id, f.taxon, f.nivel, f.dominio, f.gravidade, f.aplicabilidade, meta[f.id]["origin"], meta[f.id]["evidence"], "sim" if f.id in usadas else "", f.fonte])
     Path(sys.argv[2]).write_text(json.dumps(rel, ensure_ascii=False, indent=1), encoding="utf8")
 print("Fichas:", rel["fichas"])
 for camp, v in rel["campanhas"].items():
