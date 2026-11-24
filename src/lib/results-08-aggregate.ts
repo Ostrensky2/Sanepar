@@ -34,7 +34,7 @@ export function results08Aggregate() {
   // no build de produção, o último dígito de uma média mudava e a conferência abaixo recusava a fonte.
   const source: unknown = JSON.parse(readFileSync(join(process.cwd(), "src/lib/results-08-aggregate.json"), "utf8"));
   // Hash of the canonical JSON projection, distinct from E8's original-file hash.
-  if (createHash("sha256").update(JSON.stringify(source)).digest("hex") !== "6af1e2cc5716775cd9059aaee2754c4a2e7ec755c03d3a18ca50a2dfe429ed65") throw new Error("Projeção oficial 0.8 divergente.");
+  if (createHash("sha256").update(JSON.stringify(source)).digest("hex") !== "644dfb2ad9a9c83b6702231a24819dff3d83a4f9ac21254114bc67e89c709b0b") throw new Error("Projeção oficial 0.8 divergente.");
   return validateResults08Aggregate(source);
 }
 

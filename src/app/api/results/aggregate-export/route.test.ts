@@ -21,6 +21,6 @@ it("JSON projection contains only allowed group and four aggregate series", asyn
   const dto = await response.json(); expect(Object.keys(dto.grupos)).toEqual(["C2"]);
   expect(Object.keys(dto.grupos.C2)).toEqual(["geral08", "ambiental", "operacional", "saude"]);
   expect(dto.grupos.C2.geral08).toMatchObject({ observados: 76, numericos: 75, nulos: 1 });
-  expect(dto.sourceSha256).toBe("1ac2a5e8ff3b32f8196ffe632d0037ef5690a8401c652da5744a02ba31595a5c");
+  expect(dto.sourceSha256).toBe("4907ccfd59f15fa23b4794d516f57537fe4a966ab13fd64085934a4d5a5bf2ca");
   expect(dto.politica).toBe("sinal-documentado/1");
 });

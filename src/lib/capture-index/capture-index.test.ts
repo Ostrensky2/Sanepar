@@ -86,7 +86,7 @@ describe("saída versionada do índice de triagem", () => {
     expect([none.general, none.scores["Saúde humana"], none.estimate]).toEqual([null, null, "sem estimativa"]);
     const view = captureIndexView(none);
     expect([view.general, view.state, view.measured, view.domains[2].score, view.coverage]).toEqual(["sem estimativa", "sem estimativa", false, "sem estimativa", "só COI (16S ausente)"]);
-    expect([view.domains[0].score, view.domains[1].score]).toEqual(["0,06", "0,06"]);
+    expect([view.domains[0].score, view.domains[1].score]).toEqual(["0,08", "0,06"]);
     expect([view.exact.general, view.exact.domains["Saúde humana"]]).toEqual([null, null]);
     expect(captureIndexRows().filter(row => row.general === null).map(row => [row.campaign, row.sia])).toEqual([[2, "257"]]);
     expect(formatCaptureIndex(null)).toBe("sem medição");
@@ -192,7 +192,7 @@ describe("saída versionada do índice de triagem", () => {
     expect(captureIndexView(row).general).toBe("0,45"); // piso 0,44 reforçado por dano operacional distinto
     expect(captureIndexView(row).elevated).toBe("3 de 3 categorias na faixa de referência (0,15)");
     expect(captureIndexRows().filter(item => item.general !== null && item.general >= 0.15)).toHaveLength(57);
-    expect(captureIndexRows().filter(item => item.elevated === 2)).toHaveLength(9);
+    expect(captureIndexRows().filter(item => item.elevated === 2)).toHaveLength(10);
     expect(captureIndexMeta.maturity.map(item => item.level)).toEqual(["evidência parcial", "evidência parcial", "com base de comparação"]);
   });
 

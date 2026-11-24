@@ -13,7 +13,7 @@ Cadastro (o que o motor lê):
    para o mesmo organismo e categoria tem precedência e não é substituída.
 
 Aplicabilidade provisória das fichas da revisão:
-  efeito demonstrado no nível detectado (gênero, família ou grupo): evidência forte 1; moderada 0,5; fraca 0,1
+  efeito demonstrado no nível detectado (gênero, família, grupo ou espécie exótica): evidência forte 1; moderada 0,5; fraca 0,1
   efeito demonstrado só em espécie ou cepa do gênero: evidência forte 0,5; demais 0,1
   efeito plausível por parente ou potencial: 0,1
 
@@ -146,7 +146,7 @@ def aplicabilidade_provisoria(r, nivel):
     if r["categoria"] == "PAR" or nivel == "clade":
         return 0.1
     forca = r["forca_evidencia"]
-    if NO_NIVEL.search(r["nivel_estudado"]):
+    if NO_NIVEL.search(r["nivel_estudado"]) or nivel == "species":      # exótica detectada em espécie: o estudo é do próprio nível
         return {"forte": 1.0, "moderada": 0.5}.get(forca, 0.1)
     return 0.5 if forca == "forte" else 0.1
 

@@ -15,7 +15,7 @@ it("expõe exclusivamente os agregados C1–C3 validados", async () => {
   expect(response.headers.get("Cache-Control")).toContain("no-store");
   expect(await response.json()).toEqual(values);
   expect(values.versao).toBe("0.8");
-  expect(values.sourceSha256).toBe("1ac2a5e8ff3b32f8196ffe632d0037ef5690a8401c652da5744a02ba31595a5c");
+  expect(values.sourceSha256).toBe("4907ccfd59f15fa23b4794d516f57537fe4a966ab13fd64085934a4d5a5bf2ca");
   expect(Object.keys(values.campanhas)).toEqual(["C1", "C2", "C3"]);
   for (const [campaign, domains] of Object.entries(values.campanhas)) {
     expect(Object.keys(domains).sort()).toEqual(["ambiental", "geral", "operacional", "saude"]);

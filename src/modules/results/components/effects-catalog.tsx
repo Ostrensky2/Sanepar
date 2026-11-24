@@ -39,8 +39,10 @@ export function EffectsCatalog({ fichas, initialQuery = "" }: { fichas: CatalogF
     registrada: fichas.filter(ficha => catalogStatus(ficha) === "registrada").length }), [fichas]);
   const filtered = useMemo(() => {
     const term = normalize(query.trim());
-    return fichas.filter(ficha => (!domain || ficha.domain === domain) && (!status || catalogStatus(ficha) === status) && (!onlyUsed || ficha.used)
+    const found = fichas.filter(ficha => (!domain || ficha.domain === domain) && (!status || catalogStatus(ficha) === status) && (!onlyUsed || ficha.used)
       && (!term || normalize(`${ficha.taxon} ${ficha.theme ?? ""} ${ficha.effect?.title ?? ""} ${ficha.rationale}`).includes(term)));
+    // Na busca, primeiro as fichas do próprio organismo; depois as que só o citam na justificativa.
+    return term ? [...found.filter(ficha => normalize(ficha.taxon).includes(term)), ...found.filter(ficha => !normalize(ficha.taxon).includes(term))] : found;
   }, [fichas, domain, status, onlyUsed, query]);
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE)), current = Math.min(page, pages - 1);
   const rows = filtered.slice(current * PAGE, current * PAGE + PAGE);
