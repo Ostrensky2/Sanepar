@@ -26,7 +26,7 @@ import { CapturePointEvidence } from "./capture-index-panel";
 import { CaptureEffectsSummary } from "./capture-effects-summary";
 import { CaptureExoticsReconciliation } from "./capture-exotics-reconciliation";
 import { PointSelect, matchesPointFilter } from "./point-select";
-import { PointMediaGallery } from "@/modules/results/components/point-media-gallery";
+import { PointMediaGallery, useCampaignCoverPhotos } from "@/modules/results/components/point-media-gallery";
 import { ResultsInterpretationHelp } from "@/modules/results/components/results-interpretation-help";
 import { SiaPeek, peekMembers, useCampaignPoints, type PeekPoint } from "@/modules/results/components/sia-peek";
 
@@ -476,6 +476,7 @@ function Campaign({ data, number, href }: { data: CaptureResultViews; number: nu
 
 function MapTab({ campaign }: { campaign: number }) {
   const [state, setState] = useState<ResultsCampaign[] | "error" | null>(null);
+  const fieldPhotos = useCampaignCoverPhotos();
   useEffect(() => {
     const controller = new AbortController();
     fetch("/api/results/capture-index/campaigns", { cache: "no-store", signal: controller.signal })
@@ -487,7 +488,7 @@ function MapTab({ campaign }: { campaign: number }) {
   const labels = Object.fromEntries(defaultCampaigns.map((item, index) => [`C${index + 1}`, item.title]));
   if (state === "error") return <p role="alert" className={card}>Não foi possível carregar o mapa agora.</p>;
   if (!state) return <section className="app-card h-96 animate-pulse bg-[var(--surface-soft)]" aria-label="Carregando o mapa" />;
-  return <ResultsIndexDashboard key={campaign} campaigns={state} initialCampaignCode={`C${campaign}`} campaignLabels={labels} embedded />;
+  return <ResultsIndexDashboard key={campaign} campaigns={state} initialCampaignCode={`C${campaign}`} campaignLabels={labels} fieldPhotos={fieldPhotos} embedded />;
 }
 
 function Point({ data, campaign, sia, effect, href }: { data: CaptureResultViews; campaign: number; sia?: string; effect?: string; href: (v: CaptureView, n?: number, sia?: string) => string }) {
@@ -570,11 +571,11 @@ function Point({ data, campaign, sia, effect, href }: { data: CaptureResultViews
               </div>
             </div>
           </section>
-          <section className={card + " space-y-4"}>
-            <CapturePointEvidence row={data.point} version={data.version} effectId={effect} compact />
-          </section>
           <section className={card}>
             <PointMediaGallery key={campaign + "-" + sia} campaign={campaign} sia={sia} />
+          </section>
+          <section className={card + " space-y-4"}>
+            <CapturePointEvidence row={data.point} version={data.version} effectId={effect} compact />
           </section>
         </>
       )}

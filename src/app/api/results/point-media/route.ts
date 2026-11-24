@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import { requireApiSession } from "@/lib/api-auth";
-import { imageBytes, mediaById, mediaId, pointMedia } from "@/lib/results/point-media";
-import { authorizedDiaryPointExists } from "@/lib/results/point-media-scope";
+import { campaignCoverMedia, imageBytes, mediaById, mediaId, pointMedia } from "@/lib/results/point-media";
+import { authorizedDiaryPointExists, authorizedDiarySias } from "@/lib/results/point-media-scope";
 
 export const runtime = "nodejs";
 const headers = {"Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer"};
@@ -11,9 +11,16 @@ export async function GET(req: Request) {
     if (!auth.ok) return auth.response;
   }
   const query = new URL(req.url).searchParams, c = Number(query.get("campaign")), s = Number(query.get("sia")), id = query.get("id");
+  const coversOnly = id===null && query.size===1 && query.has("campaign");
   if (id!==null ? (query.size!==1 || !/^[a-f0-9]{64}$/.test(id)) :
-      (query.size!==2 || !/^[1-3]$/.test(query.get("campaign") ?? "") || !/^\d{1,6}$/.test(query.get("sia") ?? ""))) return new Response(null,{status:400,headers});
+      !/^[1-3]$/.test(query.get("campaign") ?? "") || (!coversOnly && (query.size!==2 || !/^\d{1,6}$/.test(query.get("sia") ?? "")))) return new Response(null,{status:400,headers});
   try {
+    if (coversOnly) {
+      // Uma foto por ponto para o cartão do mapa; a galeria completa continua na consulta por SIA.
+      const covers = await campaignCoverMedia(c);
+      const allowed = await authorizedDiarySias(c,[...covers.keys()]);
+      return Response.json({photos:Object.fromEntries([...covers].filter(([sia])=>allowed.has(sia)).map(([sia,{id:key}])=>[String(sia),`/api/results/point-media?id=${key}`]))},{headers});
+    }
     if (id!==null) {
       const match = await mediaById(id);
       if (!match || !await authorizedDiaryPointExists(match.campaign,match.sia)) return new Response(null,{status:404,headers});

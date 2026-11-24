@@ -6,6 +6,7 @@ import { CaptureExoticsReconciliation } from "@/components/capture-exotics-recon
 import { defaultCampaigns } from "@/lib/campaign-management";
 import type { ResultsCampaign } from "@/modules/results";
 import { ResultsIndexDashboard } from "@/modules/results/components/results-index-dashboard";
+import { useCampaignCoverPhotos } from "@/modules/results/components/point-media-gallery";
 
 type State = { status: "loading" } | { status: "error" } | { status: "ready"; campaigns: ResultsCampaign[] };
 
@@ -18,8 +19,10 @@ const anchorOffset = "scroll-mt-[calc(5rem+env(safe-area-inset-top))]";
 
 /** Resultados de uma campanha pelo índice de captação: o painel com mapa, ranking, municípios e evolução,
  * seguido do detalhe por ponto (fichas que formam cada nota, alertas e espécies exóticas). */
-export function CaptureCampaignResults({ campaign, fieldPhotos }: { campaign: number; fieldPhotos?: Record<string, string> }) {
+export function CaptureCampaignResults({ campaign, fieldPhotos: givenPhotos }: { campaign: number; fieldPhotos?: Record<string, string> }) {
   const [state, setState] = useState<State>({ status: "loading" });
+  const reviewedPhotos = useCampaignCoverPhotos();
+  const fieldPhotos = givenPhotos ?? reviewedPhotos;
   useEffect(() => {
     const controller = new AbortController();
     fetch("/api/results/capture-index/campaigns", { cache: "no-store", signal: controller.signal })

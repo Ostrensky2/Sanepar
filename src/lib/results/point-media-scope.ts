@@ -25,3 +25,13 @@ export async function authorizedDiaryPointExists(campaign: number, sia: number) 
   if (error || !data || data.length > 10000) throw Error("Diary scope unavailable");
   return diaryContainsPoint(data, campaign, sia);
 }
+
+/** Same check as authorizedDiaryPointExists, for many SIAs of one campaign with a single read. */
+export async function authorizedDiarySias(campaign: number, sias: number[]) {
+  const client = createOptionalSupabaseClient();
+  if (!client) throw Error("Diary unavailable");
+  const { data, error } = await client.from("field_diary_entries")
+    .select("campaign_id,campaign_name,sia").limit(10001).returns<DiaryScope[]>();
+  if (error || !data || data.length > 10000) throw Error("Diary scope unavailable");
+  return new Set(sias.filter(sia => diaryContainsPoint(data, campaign, sia)));
+}

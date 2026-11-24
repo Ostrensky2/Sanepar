@@ -23,6 +23,7 @@ import {
   getLatestPublishedCampaignImport,
   getLatestPublishedLaboratoryRiskPoints,
 } from "@/lib/supabase";
+import { campaignCoverMedia } from "@/lib/results/point-media";
 
 const CAMPAIGN_SYNTHESIS_WORKBOOK_PATH =
   "D:/Dropbox/Sanepar_única/Campo/Campanhas/Campanhas_ Planilha sintese.xlsx";
@@ -127,12 +128,13 @@ export async function loadCampaign1DashboardMapPoints(): Promise<DashboardRiskMa
 
 export async function loadDashboardData(): Promise<DashboardData> {
   // Consultas independentes: em paralelo, a página inicial espera só a mais lenta.
-  const [campaignImport, publishedRiskPoints, diaryMediaCandidates] = await Promise.all([
+  const [campaignImport, publishedRiskPoints, diaryMediaCandidates, reviewedPhotos] = await Promise.all([
     loadCampaignImport(),
     getLatestPublishedLaboratoryRiskPoints(),
     getFieldDiaryCampaignMediaCandidates(),
+    loadReviewedCampaignOnePhotos(),
   ]);
-  const campaignPoints = overlayBundledCampaignMedia(campaignImport.points);
+  const campaignPoints = overlayBundledCampaignMedia(campaignImport.points, reviewedPhotos);
   const photoSources = [
     ...campaignPoints,
     ...diaryMediaCandidates.map((candidate) => ({
@@ -147,7 +149,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     : await loadBundledLaboratoryRiskRows();
   const laboratoryRiskPoints = publishedRiskPoints?.length
     ? hydrateLaboratoryRiskPointPhotos(
-        overlayBundledCampaignMedia(publishedRiskPoints),
+        overlayBundledCampaignMedia(publishedRiskPoints, reviewedPhotos),
         photoSources,
       )
     : hydrateLaboratoryRiskPointPhotos(
@@ -169,12 +171,31 @@ export async function loadDashboardData(): Promise<DashboardData> {
   };
 }
 
-export function overlayBundledCampaignMedia<T extends CampaignMapPoint>(points: T[]): T[] {
+/** Fotos da C1 pelo acervo revisado publicado na nuvem (identidade comprovada por SHA-256), por "campaign:1|sia:N".
+ * Só serve onde a cópia privada local não existe, como no app publicado. */
+async function loadReviewedCampaignOnePhotos(): Promise<ReadonlyMap<string, string>> {
+  if (bundledCampaignMediaByKey.size) return new Map();
+  try {
+    const covers = await campaignCoverMedia(1);
+    return new Map([...covers].flatMap(([sia, { item }]) => item.storagePath
+      ? [[`campaign:1|sia:${sia}`, `/api/documents/file?bucket=photos&path=${encodeURIComponent(item.storagePath)}`] as const]
+      : []));
+  } catch {
+    return new Map();
+  }
+}
+
+export function overlayBundledCampaignMedia<T extends CampaignMapPoint>(
+  points: T[],
+  reviewedPhotos: ReadonlyMap<string, string> = new Map(),
+): T[] {
   return points.map((point) => {
     const sanitized = sanitizeCampaignMedia(point);
     const siaKey = normalizeSiaMediaKey(point.code);
     const mediaKey = campaignMediaKey(point);
-    const canonical = bundledCampaignMediaByKey.get(mediaKey);
+    const reviewedUrl = reviewedPhotos.get(mediaKey);
+    const canonical = bundledCampaignMediaByKey.get(mediaKey) ??
+      (reviewedUrl ? { ...sanitized, photoUrl: reviewedUrl, photos: [] } : undefined);
 
     if (FAIL_CLOSED_MEDIA_SIAS.has(siaKey)) {
       const audited = AUDITED_FAIL_CLOSED_MEDIA_BY_KEY.get(mediaKey);

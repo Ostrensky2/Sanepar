@@ -9,7 +9,7 @@ const download = vi.hoisted(()=>vi.fn());
 vi.mock("@/lib/supabase",()=>({createOptionalSupabaseClient:()=>({storage:{from:(bucket:string)=>({download:(key:string)=>download(bucket,key)})}})}));
 vi.mock("@/lib/api-auth",()=>({requireApiSession:auth}));
 const indexRows=vi.hoisted(()=>vi.fn(async (_campaign:number,sia:number)=>[2,3].includes(sia)));
-vi.mock("@/lib/results/point-media-scope",()=>({authorizedDiaryPointExists:indexRows}));
+vi.mock("@/lib/results/point-media-scope",()=>({authorizedDiaryPointExists:indexRows,authorizedDiarySias:async (_campaign:number,sias:number[])=>new Set(sias.filter(sia=>[2,3].includes(sia)))}));
 vi.mock("@/lib/results/point-media",async importOriginal=>{
   const m=await importOriginal<typeof import("@/lib/results/point-media")>();
   return {...m,pointMedia:vi.fn(m.pointMedia),mediaById:vi.fn(m.mediaById),imageBytes:vi.fn(m.imageBytes)};
@@ -75,6 +75,15 @@ describe("galeria privada por seleção",()=>{
     const info=await sharp(Buffer.from(await img.arrayBuffer())).metadata();expect(info.format).toBe("jpeg");expect(info.exif).toBeUndefined();
     expect((await request("campaign=1&sia=2")).status).toBe(200);expect((await (await request("campaign=1&sia=2")).json()).visits).toEqual([]);
   });
+  it("capa por campanha: uma foto revisada por SIA do Diário, sem caminho nem digest, e nada em conflito",async()=>{
+    vi.stubEnv("YVAE_PRIVATE_MEDIA_INDEX",manifest);auth.mockResolvedValue({ok:true});
+    const json=await (await request("campaign=2")).json();
+    expect(Object.keys(json.photos)).toEqual(["2"]);
+    expect(json.photos["2"]).toBe(`/api/results/point-media?id=${mediaId(2,2,row)}`);
+    expect(JSON.stringify(json)).not.toContain("synthetic");expect(JSON.stringify(json)).not.toContain(row.digest);
+    expect(await (await request("campaign=1")).json()).toEqual({photos:{}});
+    for (const q of ["campaign=4","campaign=2&path=x","sia=2"]) expect((await request(q)).status).toBe(400);
+  });
   it("não escolhe visita conflitante; preserva múltiplas fotos legítimas, datas separadas e histórico sem data",()=>{
     const other={...row,digest:"a".repeat(64)},later={...row,date:"2026-01-03",digest:"b".repeat(64)};
     expect(resolveAttestedMedia([row,row,other,later],2,2).items).toHaveLength(3);
@@ -83,5 +92,33 @@ describe("galeria privada por seleção",()=>{
     expect(resolveAttestedMedia([{...row,conflict:true}],2,2).items).toEqual([]);
     expect(resolveAttestedMedia([{...row,date:null}],2,2).items[0].date).toBeNull();
     expect(mediaId(1,2,row)).not.toBe(mediaId(2,2,row));
+  });
+});
+
+describe("atestação em CSV (o bucket de documentos não aceita JSON)",()=>{
+  it("lê o mesmo conteúdo em CSV e recusa cabeçalho ou linha fora do formato",async()=>{
+    const {parseAttestationText}=await import("@/lib/results/point-media");
+    const digest="c".repeat(64);
+    const csv=`campaign,sia,date,conflict,storagePath,digest\n2,17,2026-06-24,false,diario/x.jpg,${digest}\n1,770,,false,migrated/a.png,${digest}\n`;
+    expect(parseAttestationText(csv)).toEqual([
+      {campaign:2,sia:17,date:"2026-06-24",conflict:false,storagePath:"diario/x.jpg",digest},
+      {campaign:1,sia:770,date:null,conflict:false,storagePath:"migrated/a.png",digest},
+    ]);
+    expect(parseAttestationText(JSON.stringify([{campaign:2,sia:2}]))).toEqual([{campaign:2,sia:2}]);
+    expect(()=>parseAttestationText("a,b\n1,2")).toThrow();
+    expect(()=>parseAttestationText(`campaign,sia,date,conflict,storagePath,digest\n2,17,,talvez,x,${digest}`)).toThrow();
+  });
+  it("no runtime remoto lê a atestação CSV pelo hash",async()=>{
+    auth.mockResolvedValue({ok:true});vi.stubEnv("VERCEL","1");
+    const png=new Uint8Array(await readFile(file));
+    const csv=`campaign,sia,date,conflict,storagePath,digest\n2,2,${row.date},false,synthetic/sample.png,${row.digest}\n`;
+    const hash=createHash("sha256").update(csv).digest("hex");
+    vi.stubEnv("YVAE_PRIVATE_MEDIA_ATTESTATION_SHA256",hash);
+    download.mockImplementation(async(bucket:string,key:string)=>bucket==="documents"
+      ? (key.endsWith(".csv")?{data:new Blob([csv]),error:null}:{data:null,error:{message:"not found"}})
+      : {data:new Blob([png]),error:null});
+    const list=await (await request("campaign=2&sia=2")).json();
+    expect(list.status).toBe("available");
+    expect(download).toHaveBeenCalledWith("documents",`attestations/point-media/${hash}.csv`);
   });
 });
