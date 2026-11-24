@@ -192,7 +192,7 @@ export function readLocalRecordItems() {
 
   const spreadsheets = readArray(SPREADSHEET_STORAGE_KEY).map((sheet, index) => ({
     id: `sheet:${readString(sheet, "id", String(index))}`,
-    href: readString(sheet, "kind") === "Laboratório" ? "/dados/pendencias#fluxo-legado" : "/dados/diario-de-campo",
+    href: readString(sheet, "kind") === "Laboratório" ? "/dados/resultados" : "/dados/diario-de-campo",
     label: readString(sheet, "fileName", "Planilha"),
     group: "Planilhas",
     keywords: `${readString(sheet, "fileName")} ${readString(sheet, "campaign")} ${readString(sheet, "kind")}`,

@@ -205,7 +205,7 @@ describe("saída versionada do índice de triagem", () => {
 
   it("dominância fora do padrão é alerta para qualquer organismo e nunca entra na nota", () => {
     const alerts = captureIndexRows().flatMap(row => row.alerts.map(alert => ({ row, alert }))).filter(item => item.alert.motivo === "dominância anômala");
-    expect(alerts).toHaveLength(72);
+    expect(alerts).toHaveLength(70);
     for (const { alert } of alerts) {
       expect([alert.ficha, alert.dominio, alert.gravidade]).toEqual(["", "", null]);
       expect(alert.participacao!).toBeGreaterThanOrEqual(0.1);

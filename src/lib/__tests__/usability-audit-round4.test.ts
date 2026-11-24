@@ -64,9 +64,12 @@ describe("4ª rodada — acabamentos", () => {
     expect(read("src/app/globals.css")).toMatch(/\.overflow-x-auto:has\(table\)\s*\{\s*position: relative;/);
   });
 
-  it("Organismos (Resultados) abre só com os detectados na campanha; o catálogo (Ciência e método) não tem campanha", () => {
-    const browser = read("src/modules/results/components/research-browser.tsx");
-    expect(browser).toContain('useState(isResults ? "detected"');
-    expect(browser).toContain('column.key !== "detection"');
+  it("Organismos (Resultados) lê a planilha unificada da campanha; o catálogo (Ciência e método) não tem campanha nem lê a planilha antiga", () => {
+    const organisms = read("src/modules/results/components/organisms-browser.tsx");
+    expect(organisms).toContain("/api/results/organisms?");
+    expect(read("src/components/capture-result-views.tsx")).toContain("<OrganismsBrowser key={`organismos-${selectedCampaign}`} campaign={selectedCampaign} />");
+    const catalog = read("src/modules/results/components/effects-catalog.tsx") + read("src/app/(dashboard)/resultados/impactos/page.tsx");
+    expect(catalog).toContain("captureFichas()");
+    for (const source of [organisms, catalog]) expect(source).not.toMatch(/api\/imports\/results|Riscos_bibliografia|Metadata-C2/);
   });
 });

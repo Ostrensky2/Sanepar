@@ -24,7 +24,6 @@ import {
   type CampaignManagementById,
 } from "@/lib/campaign-management";
 import { readFieldDiaryEntries, type FieldDiaryEntry } from "@/lib/field-diary";
-import type { ResultsInventoryItem, ResultsInventoryResponse } from "@/lib/results-publication-contract";
 import { readSelectedCampaignId, writeSelectedCampaignId } from "@/lib/selected-campaign";
 import { cn } from "@/lib/utils";
 import { countLabel } from "@/lib/number-format";
@@ -34,7 +33,8 @@ type StepState = "done" | "attention" | "pending";
 type HubData = {
   management: CampaignManagementById;
   diary: FieldDiaryEntry[] | null;
-  inventory: ResultsInventoryItem[] | null;
+  /** Pontos com nota no índice 0.8, por número da campanha. Vem das matrizes por SIA; a planilha antiga não é lida. */
+  results: Record<number, number> | null;
   conflicts: number | null;
 };
 
@@ -45,7 +45,7 @@ export function DataHub() {
   const [data, setData] = useState<HubData>(() => ({
     management: buildInitialCampaignManagement(campaigns),
     diary: null,
-    inventory: null,
+    results: null,
     conflicts: null,
   }));
 
@@ -64,13 +64,13 @@ export function DataHub() {
       .catch(() => {
         if (!cancelled) setData((current) => ({ ...current, diary: [] }));
       });
-    void fetch("/api/imports/results?inventory=1", { cache: "no-store" })
-      .then(async (response) => (response.ok ? ((await response.json()) as ResultsInventoryResponse) : null))
+    void fetch("/api/results/capture-index", { cache: "no-store" })
+      .then(async (response) => (response.ok ? ((await response.json()) as { campaigns?: { number: number; measured: number }[] }) : null))
       .then((value) => {
-        if (!cancelled) setData((current) => ({ ...current, inventory: value?.campaigns ?? [] }));
+        if (!cancelled) setData((current) => ({ ...current, results: Object.fromEntries((value?.campaigns ?? []).map((item) => [item.number, item.measured])) }));
       })
       .catch(() => {
-        if (!cancelled) setData((current) => ({ ...current, inventory: [] }));
+        if (!cancelled) setData((current) => ({ ...current, results: {} }));
       });
     void fetch("/api/import-conflicts", { cache: "no-store" })
       .then(async (response) => (response.ok ? ((await response.json()) as { conflicts?: unknown[] }) : null))
@@ -98,7 +98,8 @@ export function DataHub() {
           ),
         );
         const summary = diaryEntries ? summarizeFieldDiaryEntries(diaryEntries) : null;
-        const publication = data.inventory?.find((item) => item.canonicalId === campaign.id) ?? null;
+        const number = Number(campaign.id.match(/campanha-(\d+)/)?.[1]);
+        const resultPoints = data.results?.[number] || null;
         return {
           campaign,
           phase: campaignPhaseLabel(management?.status ?? campaign.status),
@@ -107,7 +108,8 @@ export function DataHub() {
           collectionStarted: stages.some((stage) => stage.label === "Coleta de amostras" && stage.status !== "pending"),
           analysisDone: stages.some((stage) => stage.label === "Conclusão das análises dos dados" && stage.status === "done"),
           summary,
-          publication,
+          number,
+          resultPoints,
         };
       }),
     [data],
@@ -125,7 +127,7 @@ export function DataHub() {
     : focus.summary.total > 0
       ? focus.summary.planned + focus.summary.incomplete > 0 ? "attention" : "done"
       : focus.collectionStarted ? "attention" : "pending";
-  const resultsState: StepState = focus.publication ? "done" : focus.analysisDone ? "attention" : "pending";
+  const resultsState: StepState = focus.resultPoints ? "done" : focus.analysisDone ? "attention" : "pending";
   const conflictsState: StepState = data.conflicts ? "attention" : "done";
 
   return (
@@ -180,16 +182,16 @@ export function DataHub() {
             title="Resultados laboratoriais"
             state={resultsState}
             summary={
-              data.inventory === null
+              data.results === null
                 ? "Carregando…"
-                : focus.publication
-                  ? `Publicados em ${formatDate(focus.publication.publishedAt)} · ${focus.publication.counts.total} pontos`
+                : focus.resultPoints
+                  ? `${countLabel(focus.resultPoints, "ponto", "pontos")} com nota no índice 0.8`
                   : focus.analysisDone
-                    ? "Análises concluídas, mas a planilha ainda não foi publicada"
-                    : "Ainda não publicados"
+                    ? "Análises concluídas, mas as matrizes por SIA ainda não entraram no índice"
+                    : "Ainda sem resultados"
             }
-            href="/dados/pendencias#fluxo-legado"
-            action={focus.publication ? "Publicar nova versão" : "Publicar planilha"}
+            href={focus.resultPoints ? `/campanhas/resultados?vista=campanha&campaign=${focus.number}` : "/dados/resultados"}
+            action={focus.resultPoints ? "Ver resultados" : "Preparar matrizes por SIA"}
           />
           <ChecklistStep
             icon={AlertTriangle}
@@ -229,7 +231,7 @@ export function DataHub() {
                   <th scope="row" className="px-4 py-3 font-bold text-[var(--brand-navy-strong)]">{row.campaign.selectorLabel}</th>
                   <td className="px-4 py-3">{row.phase} <span className="text-[var(--text-secondary)]">· {row.progress}%</span></td>
                   <td className="px-4 py-3 tabular-nums">{row.summary ? row.summary.total || "—" : "…"}</td>
-                  <td className="px-4 py-3">{row.publication ? `${row.publication.counts.total} pontos` : data.inventory === null ? "…" : "—"}</td>
+                  <td className="px-4 py-3">{row.resultPoints ? `${row.resultPoints} pontos` : data.results === null ? "…" : "—"}</td>
                   <td className="px-4 py-3 text-right">
                     <button
                       type="button"
@@ -303,10 +305,10 @@ export function detectImportDestination(sheetNames: string[]): Detection {
   const names = new Set(sheetNames.map((name) => name.trim()));
   if (["Metadados", "Metadata-C2", "Indices_pontos", "Calculo_conjuntos"].some((name) => names.has(name))) {
     return {
-      title: "Planilha de resultados laboratoriais",
-      detail: "Publique em Pendências → Fluxo legado. A prévia mostra as campanhas encontradas antes de publicar.",
-      href: "/dados/pendencias#fluxo-legado",
-      action: "Ir para Fluxo legado",
+      title: "Planilha antiga do laboratório",
+      detail: "Este formato não é mais usado. Os resultados entram pelas matrizes por SIA, em Planilhas de resultados.",
+      href: "/dados/resultados",
+      action: "Ir para Planilhas de resultados",
     };
   }
   if (names.has("Pontos")) {
@@ -396,9 +398,4 @@ function ImportAssistant() {
       ) : null}
     </section>
   );
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("pt-BR");
 }

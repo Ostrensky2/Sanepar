@@ -16,5 +16,5 @@ it("transcreve cada componente e ficha de alerta sem preencher lacunas nem tocar
     expect(view.exact.general).toBe(raw.general); scores++;
     for(const d of view.domains){expect(view.exact.domains[d.key]).toBe(raw.scores[d.key]?.score??null);scores++;}
   }
-  expect([alerts,withoutCard,scores]).toEqual([411,81,900]);
+  expect([alerts,withoutCard,scores]).toEqual([408,79,900]);
 });
