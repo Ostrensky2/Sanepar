@@ -422,7 +422,7 @@ export const helpModules: HelpModule[] = [
     whenToUse: ["Antes de comparar resultados, confira a versão identificada na visualização."],
     primaryTasks: [
       { title: "Conferir o método", steps: ["Abra Ciência e método → Como o índice é calculado.", "Confira a versão, as limitações da evidência e o que foi efetivamente medido."] },
-      { title: "Consultar uma referência", steps: ["Abra o Acervo científico e confira o achado, o limite de interpretação e a fonte da ficha."] },
+      { title: "Consultar a ficha de um organismo", steps: ["Abra Ciência e método → Impactos potenciais e escolha a categoria e o tipo de efeito.", "Clique no quadrinho do organismo: a ficha mostra os efeitos (gravidade, aplicabilidade, descrição e fontes) e, quando houver, o bloco “O que se sabe sobre o organismo”, com o achado, os limites de interpretação e as fontes.", "Organismos que só têm esse bloco aparecem em “Sem efeito registrado”: não entram na nota."] },
     ],
     controls: [{ label: "Como o índice é calculado", detail: "Documentação de cálculo e interpretação na própria página." }],
     notes: ["Ausência de medição ou de evidência suficiente não equivale a zero."],

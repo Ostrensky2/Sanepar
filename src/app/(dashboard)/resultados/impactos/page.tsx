@@ -23,13 +23,14 @@ export default async function ImpactsPage({ searchParams }: { searchParams: Prom
     <PageHeader
       eyebrow="Ciência e método"
       title="Impactos potenciais"
-      description="Escolha um tipo de efeito para ver os organismos ligados a ele e abrir as fichas."
+      description="Escolha um tipo de efeito para ver os organismos ligados a ele e abrir as fichas: os efeitos e o que se sabe sobre cada um."
       help={<ResultsInterpretationHelp title="Como ler o catálogo de impactos">
         <p><strong>O que é:</strong> o cadastro de fichas, a base das notas do índice. Cada ficha liga um organismo a um efeito descrito na literatura, numa das três categorias. É o cadastro inteiro, não só o que apareceu nas campanhas.</p>
         <p><strong>Como usar:</strong> escolha a categoria e o tipo de efeito. Os organismos ligados àquele efeito aparecem em quadrinhos, em ordem alfabética. Clique em um quadrinho para abrir as fichas do organismo, com gravidade, aplicabilidade, descrição e fontes. Os pontinhos coloridos mostram em quais categorias o organismo tem ficha. A busca por nome fica em “Mais filtros”.</p>
         <p><strong>Entram na nota:</strong> as fichas com gravidade e aplicabilidade definidas. As demais ficam registradas, sem nota: busca sem evidência, resultado nulo, medição contestada ou só ocorrência.</p>
         <p><strong>Nível do organismo:</strong> gênero, família ou grupo. Espécie só aparece para exóticas com identificação sustentada pelo laboratório.</p>
         <p><strong>Gravidade:</strong> de 1 (fraca) a 3 (forte). <strong>Aplicabilidade:</strong> quanto do grupo tem o efeito: todo (1), parte substancial (0,5) ou minoria (0,1).</p>
+        <p><strong>O que se sabe sobre o organismo:</strong> o ícone de livro no quadrinho indica que a ficha traz também registros da literatura sobre o organismo em si (onde ocorre, como se comporta, como é identificado). Esse conteúdo era a aba Acervo científico. Não descreve dano e não entra na nota; organismos que só têm isso ficam em “Sem efeito registrado”.</p>
         <p>O que foi detectado em cada campanha, e em que pontos, está em <strong>Resultados › Organismos</strong>. Detectar o DNA de um organismo com ficha não confirma o efeito no local.</p>
       </ResultsInterpretationHelp>}
       tabs={<SectionTabs />}
