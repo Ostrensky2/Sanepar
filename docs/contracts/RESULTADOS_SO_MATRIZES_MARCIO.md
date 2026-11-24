@@ -28,8 +28,28 @@ servidor, e guarda o resultado em memória; a cada minuto confere se a planilha 
 mudou. Cada SIA usa a mesma biblioteca que deu a nota do índice. Uma campanha nova
 aparece quando a planilha unificada dela é gerada e guardada na Central de dados.
 
-As notas e fichas são regeradas por `scripts/indice-08/recorte_marcio.py`, que recebe a
-pasta das 16 matrizes como argumento.
+As notas e fichas são regeradas por `scripts/indice-08/gerar_indice.py`, que recebe a
+pasta das 16 matrizes como argumento e recalcula as três campanhas de uma vez.
+
+## Cadastro completo de fichas (24/11/2026)
+
+Decisão do administrador: o catálogo de fichas é a base de tudo; entra tudo o que já
+temos, com valores provisórios, e o refino vem depois. O cadastro passou a ter:
+
+- fichas aprovadas até 20/11, sem mudança de peso, com precedência sobre as provisórias;
+- as correções da revisão bibliográfica independente de 23/11 (Raphidiopsis, Arcobacter,
+  quironomídeos, Biomphalaria);
+- fichas herdadas de espécie do gênero: aplicabilidade provisória 0,1;
+- fichas da revisão de 23/11 com efeito demonstrado ou plausível: gravidade do revisor e
+  aplicabilidade provisória (no nível detectado: forte 1, moderada 0,5, fraca 0,1; só em
+  espécie do gênero: forte 0,5, demais 0,1; por parente: 0,1);
+- fichas registradas, sem nota: busca sem evidência, resultado nulo, medição contestada,
+  só ocorrência, ou fonte lida que não demonstra o dano.
+
+Cada ficha traz `origin`, `evidence` e `used` em `indice-captacao.json`. A tela Impactos
+potenciais mostra o cadastro inteiro com a situação de cada ficha. Baixo suporte só vira
+alerta para ficha aprovada. O antes e depois das notas fica em
+`audit/FICHAS-REVISAO-24/antes-depois.json` (fora do repositório).
 
 ## Regras do índice
 

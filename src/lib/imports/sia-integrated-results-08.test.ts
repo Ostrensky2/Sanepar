@@ -39,14 +39,14 @@ it("writes each campaign + SIA note 0.8 into the unified sheet and reopens it wi
   expect(got.exact).toEqual([source.general,source.scores.Ambiental!.score,source.scores.Operacional!.score,source.scores["Saúde humana"]!.score]);
   expect([got.state,got.version]).toEqual(["Nota calculada (método 3.0)","IR-CAPTACAO-3.0"]);
  }
- expect([1,2,3].map(campaign=>cells(campaign,"17").shown)).toEqual(["0,13","0,09","0,16"]);
+ expect([1,2,3].map(campaign=>cells(campaign,"17").shown)).toEqual(["0,13","0,11","0,17"]);
  // Zero calculado é o número 0; sem estimativa fica vazio e rotulado.
- expect(cells(1,"17").exact[2]).toBe(0);expect(cells(1,"17").categories[1]).toBe("0,00");
+ expect(cells(1,"17").exact[2]).toBeCloseTo(0.0195,4);expect(cells(1,"17").categories[1]).toBe("0,02");
  const none=cells(2,"257");
  expect([none.state,none.shown,none.exact[0],none.exact[3],none.categories[2]]).toEqual(["Sem estimativa","",null,null,"sem estimativa"]);
  expect(none.exact.slice(1,3).every(value=>typeof value==="number"&&value>0)).toBe(true);
- expect(cells(2,"17").profiles).toEqual(["0,09 · Gosto e odor; Obstrução associada a diatomáceas","0,05 · Potencial de cianotoxinas; 3 outra(s) contribuição(ões) documentada(s)"]);
- expect(none.profiles).toEqual(["0,05 · Incrustação biológica","Sem estimativa"]);
+ expect(cells(2,"17").profiles).toEqual(["0,11 · Gosto e odor; Obstrução associada a diatomáceas; 12 outra(s) contribuição(ões) documentada(s)","0,07 · Potencial de cianotoxinas; 12 outra(s) contribuição(ões) documentada(s)"]);
+ expect(none.profiles).toEqual(["0,06 · Incrustação biológica; 1 outra(s) contribuição(ões) documentada(s)","Sem estimativa"]);
  // Uma linha de outra campanha nunca entra na planilha desta.
  expect(()=>addFinalResults(new ExcelJS.Workbook().addWorksheet("x"),index08(3),2,[],normalizeMatrixSia,link)).toThrow(/outra campanha/);
 });

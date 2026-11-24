@@ -18,7 +18,7 @@ it("entrega somente agregados privados, inclusive o estado de campanha sem linha
   const r=await GET(request("campaign=1")), data=await r.json();
   expect(r.headers.get("cache-control")).toBe("private, no-store");
   expect(data.summary.observations).toBe(73);
-  for(const [campaign,denominator,health,environment,residue] of [[1,73,36,16,259],[2,75,59,18,195],[3,76,40,12,272]]){
+  for(const [campaign,denominator,health,environment,residue] of [[1,73,36,16,2972],[2,75,59,18,2650],[3,76,40,12,3610]]){
     const {summary}=await (await GET(request("campaign="+campaign))).json();
     expect(summary.unmappedContributions).toBe(residue);
     for(const [id,positive] of [["cyanotoxins",health],["animal-toxicity",environment]] as const){

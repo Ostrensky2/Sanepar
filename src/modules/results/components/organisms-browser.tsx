@@ -79,7 +79,7 @@ export function OrganismsBrowser({ campaign }: { campaign: number }) {
         <p><strong>Grupos de risco (16S):</strong> toxinas, gosto e odor, patogenicidade, nitrificação, ferro e manganês, enxofre e corrosão, biofilmes. Um mesmo read pode entrar em mais de um grupo, por isso os grupos não se somam.</p>
         <p><strong>Pontos:</strong> em quantos SIAs da campanha o organismo teve reads. Passe o mouse no número para ver quais.</p>
         <p><strong>Maior participação:</strong> a maior fatia dos reads do marcador que o organismo alcançou num ponto. Proporção de reads não mede quantidade de organismos.</p>
-        <p><strong>Efeito no índice:</strong> marca os organismos que têm ficha de efeito e entram na nota. Sem marca, o organismo foi detectado, mas não pontua.</p>
+        <p><strong>Efeito no índice:</strong> marca os organismos que têm ficha de efeito e entram na nota, inclusive as fichas provisórias. Sem marca, o organismo foi detectado, mas não pontua. O clique abre as fichas dele em Impactos potenciais.</p>
         <p>No COI, só entram organismos de água doce. Cada ponto usa a mesma corrida que deu a nota do índice: na C3, a NextSeq e, quando ela não tem leitura utilizável, a MiSeq. As campanhas nunca são somadas.</p>
       </ResultsInterpretationHelp>
     </div>
@@ -128,7 +128,7 @@ export function OrganismsBrowser({ campaign }: { campaign: number }) {
                 <td className="px-3 py-2 text-right tabular-nums">{count(row.reads)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatCaptureShare(row.maxShare)} <span className="text-[var(--ink-soft)]">no SIA {row.maxShareSia}</span></td>
                 {!risk && <td className="px-3 py-2">{row.effects.length ? <span className="flex flex-wrap gap-1">{row.effects.map(effect =>
-                  <Link key={effect.id} href={`/resultados/impactos#ficha-${effect.id}`} className="rounded-full border border-[var(--brand-teal)] px-2 py-0.5 text-xs font-semibold text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)]">{domainShort[effect.domain] ?? effect.domain}</Link>)}</span>
+                  <Link key={effect.id} href={`/resultados/impactos?q=${encodeURIComponent(row.name.split(" ")[0])}`} className="rounded-full border border-[var(--brand-teal)] px-2 py-0.5 text-xs font-semibold text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)]">{domainShort[effect.domain] ?? effect.domain}</Link>)}</span>
                   : <span className="text-[var(--ink-soft)]">—</span>}</td>}
                 <td className="px-3 py-1 text-right"><button type="button" className={`${scientificControl} whitespace-nowrap`} aria-expanded={expanded} onClick={() => setOpen(expanded ? null : row.name)}>{expanded ? "Fechar" : "Onde ocorre"}</button></td>
               </tr>

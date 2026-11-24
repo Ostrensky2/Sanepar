@@ -49,8 +49,9 @@ it("todas as 225 observações saem iguais na consulta, no mapa e na tabela", as
 });
 
 it("zero, sem estimativa, ponto inexistente e erro de consulta continuam distintos", async () => {
-  const zero = (await (await index("?format=views&campaign=1&sia=17")).json()).point;
-  expect([zero.exact.domains.Operacional, zero.domains[1].score]).toEqual([0, "0,00"]);
+  const low = (await (await index("?format=views&campaign=1&sia=17")).json()).point;
+  expect(low.domains[1].score).toBe("0,02");
+  expect(low.exact.domains.Operacional).toBeCloseTo(0.0195, 4);
   const none = (await (await index("?format=views&campaign=2&sia=257")).json()).point;
   expect([none.exact.general, none.general, none.state, none.domains[2].score]).toEqual([null, "sem estimativa", "sem estimativa", "sem estimativa"]);
   const absent = await index("?format=views&campaign=1&sia=999999");

@@ -7,7 +7,7 @@ import { RESULTS_08_SOURCE_SHA256 } from "./results-08-contract";
 
 it("uses the frozen official aggregate, preserving source means/maxima and five classes", () => {
   const data = results08Aggregate();
-  expect(RESULTS_08_SOURCE_SHA256).toBe("c0d5f6d6ea58849385f1e9038bb87c769d6f14ccd9abebec162dc8c2802e56e9");
+  expect(RESULTS_08_SOURCE_SHA256).toBe("4907ccfd59f15fa23b4794d516f57537fe4a966ab13fd64085934a4d5a5bf2ca");
   expect(data.grupos.total.geral08).toMatchObject({ observados: 225, numericos: 224, nulos: 1 });
   expect(data.grupos.total.saude.numericos).toBe(224);
   expect(data.grupos.total.ambiental.numericos).toBe(225);
@@ -53,7 +53,8 @@ it("all-null series have no statistics or populated bins; documented zero remain
   data.grupos.C2.geral08.media = 0;
   expect(() => validateResults08Aggregate(data)).toThrow();
   const real = results08Aggregate();
-  expect(real.grupos.total.operacional.minimo).toBe(0);
+  // Com o cadastro completo de fichas (24/11) não há mais zero calculado; o mínimo real é positivo.
+  expect(real.grupos.total.operacional.minimo).toBeGreaterThan(0);
   expect(real.grupos.total.operacional.nulos).toBe(0);
 });
 
