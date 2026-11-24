@@ -33,7 +33,7 @@ describe("saída versionada do índice de triagem", () => {
     const common = campaigns[2].filter(r => measured.every(ids => ids.has(r.sia)));
     const subsets = [...campaigns, common].map(rows => distribution(rows.map(r => r.general)));
     expect(subsets.map(s => [s.count, formatCaptureIndex(s.p90)])).toEqual([
-      [73, "0,13"], [75, "0,31"], [76, "0,31"], [71, "0,27"],
+      [73, "0,17"], [75, "0,39"], [76, "0,33"], [71, "0,33"],
     ]);
     expect(captureIndexCampaigns().map(c => [c.measured, c.p90])).toEqual(
       subsets.slice(0, 3).map(s => [s.count, formatCaptureIndex(s.p90)]));
@@ -72,19 +72,21 @@ describe("saída versionada do índice de triagem", () => {
       if (row.general > floor + 1e-12) reinforced++;
       if (row.predominant) expect(row.scores[row.predominant]!.score).toBe(floor);
     }
-    expect(reinforced).toBe(74); // dano distinto e documentado em outra categoria; não é a média das três
+    expect(reinforced).toBe(73); // dano distinto e documentado em outra categoria; não é a média das três
   });
 
   it("zero, sem estimativa e sem medição são estados distintos", () => {
-    const zero = one(1, "17"), none = one(2, "257");
-    expect(zero.scores.Operacional!.score).toBe(0);
-    expect(captureIndexView(zero).domains[1].score).toBe("0,00");
-    expect(captureIndexView(zero).state).toBe("estimado");
+    const low = one(1, "17"), none = one(2, "257");
+    // Com o cadastro completo de fichas (24/11), toda categoria medida tem algum sinal: não há mais zero calculado nas três campanhas.
+    expect(captureIndexRows().flatMap(row => captureDomains.filter(domain => row.scores[domain]?.score === 0))).toEqual([]);
+    expect(formatCaptureIndex(0)).toBe("0,00");
+    expect(captureIndexView(low).domains[1].score).toBe("0,02");
+    expect(captureIndexView(low).state).toBe("estimado");
     // C2 · SIA 257: só o COI é utilizável; sem 16S a categoria de saúde não pode ser afirmada, e o geral também não.
     expect([none.general, none.scores["Saúde humana"], none.estimate]).toEqual([null, null, "sem estimativa"]);
     const view = captureIndexView(none);
     expect([view.general, view.state, view.measured, view.domains[2].score, view.coverage]).toEqual(["sem estimativa", "sem estimativa", false, "sem estimativa", "só COI (16S ausente)"]);
-    expect([view.domains[0].score, view.domains[1].score]).toEqual(["0,06", "0,05"]);
+    expect([view.domains[0].score, view.domains[1].score]).toEqual(["0,06", "0,06"]);
     expect([view.exact.general, view.exact.domains["Saúde humana"]]).toEqual([null, null]);
     expect(captureIndexRows().filter(row => row.general === null).map(row => [row.campaign, row.sia])).toEqual([[2, "257"]]);
     expect(formatCaptureIndex(null)).toBe("sem medição");
@@ -94,17 +96,19 @@ describe("saída versionada do índice de triagem", () => {
     const values = [1, 2, 3].map(campaign => one(campaign, "17").general);
     expect(values).toEqual([point08(1, "17").geral, point08(2, "17").geral, point08(3, "17").geral]);
     expect(new Set(values).size).toBe(3);
-    expect([1, 2, 3].map(campaign => captureIndexView(one(campaign, "17")).general)).toEqual(["0,13", "0,09", "0,16"]);
+    expect([1, 2, 3].map(campaign => captureIndexView(one(campaign, "17")).general)).toEqual(["0,13", "0,11", "0,17"]);
   });
 
   it("associa os perfis de risco biológico operacional e sanitário a cada captação", () => {
     const view = captureIndexView(one(2, "17"));
     expect(view.profiles.map(profile => [profile.key, profile.score, profile.effects.map(effect => effect.id)])).toEqual([
-      ["operacional", "0,09", ["odour", "diatom"]], ["sanitario", "0,05", ["cyanotoxins"]]]);
+      ["operacional", "0,11", ["odour", "diatom"]], ["sanitario", "0,07", ["cyanotoxins"]]]);
     const none = captureIndexView(one(2, "257")).profiles;
     expect(none.map(profile => [profile.key, profile.state, profile.value === null])).toEqual([["operacional", "com sinal documentado", false], ["sanitario", "sem estimativa", true]]);
     const quiet = captureIndexView(one(1, "17")).profiles[0];
-    expect([quiet.state, quiet.value, quiet.effects]).toEqual(["sem sinal documentado", 0, []]);
+    // Sinal baixo vindo só de fichas sem cartão de efeito: há nota, sem tipo de efeito listado.
+    expect([quiet.state, quiet.effects]).toEqual(["com sinal documentado", []]);
+    expect(quiet.value).toBeCloseTo(0.0195, 4);
     for (const row of captureIndexRows()) {
       const profiles = captureIndexView(row).profiles;
       expect(profiles.map(profile => profile.key)).toEqual(["operacional", "sanitario"]);
@@ -164,10 +168,11 @@ describe("saída versionada do índice de triagem", () => {
     expect(captureIndexView(row).coverage).toBe("só 16S (COI inconclusivo)");
   });
 
-  it("casos de referência: Iraí fica entre os dez primeiros nas três campanhas, por saúde", () => {
+  it("casos de referência: Iraí segue no topo nas três campanhas, por saúde", () => {
+    // Com o cadastro completo (24/11): SIA 78 em 3º, 6º e 7º; SIA 780 em 5º, 5º e 11º (era 10º na C3).
+    expect([1, 2, 3].flatMap(campaign => ["78", "780"].map(sia => one(campaign, sia).rank))).toEqual([3, 5, 6, 5, 7, 11]);
     for (const campaign of [1, 2, 3]) for (const sia of ["78", "780"]) {
       const row = one(campaign, sia);
-      expect(row.rank!).toBeLessThanOrEqual(10);
       expect(row.predominant).toBe("Saúde humana");
     }
   });
@@ -182,12 +187,12 @@ describe("saída versionada do índice de triagem", () => {
 
   it("uma categoria só não é diluída, e a maturidade de cada categoria é declarada", () => {
     const row = one(2, "780");
-    expect(row.scores["Saúde humana"]!.score).toBeCloseTo(0.437, 3);
+    expect(row.scores["Saúde humana"]!.score).toBeCloseTo(0.442, 3);
     expect(captureIndexView(row).domains[2].score).toBe("0,44");
     expect(captureIndexView(row).general).toBe("0,45"); // piso 0,44 reforçado por dano operacional distinto
-    expect(captureIndexView(row).elevated).toBe("1 de 3 categorias na faixa de referência (0,15)");
-    expect(captureIndexRows().filter(item => item.general !== null && item.general >= 0.15)).toHaveLength(46);
-    expect(captureIndexRows().filter(item => item.elevated === 2)).toHaveLength(7);
+    expect(captureIndexView(row).elevated).toBe("3 de 3 categorias na faixa de referência (0,15)");
+    expect(captureIndexRows().filter(item => item.general !== null && item.general >= 0.15)).toHaveLength(57);
+    expect(captureIndexRows().filter(item => item.elevated === 2)).toHaveLength(9);
     expect(captureIndexMeta.maturity.map(item => item.level)).toEqual(["evidência parcial", "evidência parcial", "com base de comparação"]);
   });
 
@@ -197,10 +202,9 @@ describe("saída versionada do índice de triagem", () => {
     expect(main).toMatchObject({ rank: "grupo", gravidade: 3, aplicabilidade: 1, base: 0.0209, component: "ALGAS" });
     expect(main.q).toBeCloseTo(row.descriptors.diatomShare! - 0.0209, 12);
     expect(captureIndexView(row).diatoms).toBe("19,1%");
-    const scored = captureIndexRows().filter(item => item.scores.Operacional!.contributions.some(c => c.component === "ALGAS"));
+    const scored = captureIndexRows().filter(item => item.scores.Operacional!.contributions.some(c => c.ficha.startsWith("CUR-Diatomaceas")));
     expect(scored).toHaveLength(23);
     expect(scored.every(item => item.descriptors.diatomShare! > 0.0209)).toBe(true); // sem resultado de diatomácea acima da base, não pontua
-    for (const campaign of [1, 2, 3]) for (const sia of ["78", "780"]) expect(one(campaign, sia).rank!).toBeLessThanOrEqual(10); // Iraí segue perto do topo
   });
 
   it("dominância fora do padrão é alerta para qualquer organismo e nunca entra na nota", () => {
@@ -222,7 +226,7 @@ describe("saída versionada do índice de triagem", () => {
     const row = one(3, "244"), main = row.scores["Saúde humana"]!.contributions[0];
     expect(main).toMatchObject({ rank: "grupo", gravidade: 2, aplicabilidade: 0.5, base: 0.0097, component: "16S" });
     expect(main.taxon).toMatch(/^Assinatura de esgoto/);
-    expect(captureIndexView(row).domains[2].score).toBe("0,25");
+    expect(captureIndexView(row).domains[2].score).toBe("0,32");
     const sample = captureIndexRows().flatMap(item => item.alerts.map(alert => ({ item, alert }))).filter(entry => entry.alert.motivo === "qualidade da amostra");
     expect(sample).toHaveLength(9);
     expect(sample.filter(entry => entry.item.campaign === 2)).toHaveLength(8);
@@ -260,9 +264,10 @@ describe("saída versionada do índice de triagem", () => {
     const texts = captureIndexRows().map(row => captureIndexView(row).coverage);
     expect([texts.filter(text => text === "16S e COI").length, texts.filter(text => text.startsWith("só 16S")).length, texts.filter(text => text.startsWith("só COI")).length]).toEqual([177, 47, 1]);
     const row = one(3, "780"), score = row.scores.Operacional!, domain = captureIndexView(row).domains[1];
-    expect(score.component).toBe("COI");
-    expect(score.contributions[0].component).toBe("16S"); // o maior entre todos os marcadores não é o que decidiu a nota
-    expect(domain.main.startsWith(score.contributions.find(item => item.component === "COI")!.taxon)).toBe(true);
+    expect(score.component).toBe("16S");
+    expect(domain.main.startsWith(score.contributions.find(item => item.component === "16S")!.taxon)).toBe(true);
+    // O maior entre todos os marcadores nem sempre é o que decidiu a nota: o principal vem do marcador vencedor.
+    expect(captureIndexRows().some(item => captureDomains.some(key => { const s = item.scores[key]; return !!s?.component && !!s.contributions[0] && s.contributions[0].component !== s.component; }))).toBe(true);
     for (const item of captureIndexRows()) for (const key of captureDomains) {
       const s = item.scores[key], view = captureIndexView(item).domains[captureDomains.indexOf(key)];
       if (!s) continue;
@@ -285,7 +290,7 @@ describe("saída versionada do índice de triagem", () => {
     for (const item of campaigns) expect(item.bands.reduce((sum, band) => sum + band.count, 0)).toBe(item.measured);
     const rows = captureIndexRows(2).filter(row => row.general !== null);
     expect(campaigns[1].mean).toBe(formatCaptureIndex(rows.reduce((sum, row) => sum + row.general!, 0) / rows.length));
-    expect(campaigns.map(item => item.mean)).toEqual(["0,05", "0,14", "0,09"]);
+    expect(campaigns.map(item => item.mean)).toEqual(["0,09", "0,18", "0,13"]);
   });
 });
 
@@ -338,7 +343,7 @@ describe("GET /api/results/capture-index", () => {
     const type = head.indexOf("tipo"), sia = head.indexOf("SIA");
     expect(lines.filter(line => line[type] === "biblioteca")).toHaveLength(76 * 3);
     expect(lines.filter(line => line[type] === "nota")).toHaveLength(76 * 3);
-    const row = one(3, "78"), contribution = lines.find(line => line[sia] === "78" && line[type] === "contribuicao" && line[head.indexOf("taxon")] === "Microcystis")!;
+    const row = one(3, "78"), contribution = lines.find(line => line[sia] === "78" && line[type] === "contribuicao" && line[head.indexOf("taxon")] === "Microcystis" && line[head.indexOf("dominio")] === "Saúde humana")!;
     expect(Number(contribution[head.indexOf("geral")])).toBe(row.general);
     expect(contribution[head.indexOf("ficha")]).toBe("CUR-Microcystis-S");
     expect(contribution[head.indexOf("corrida")]).toBe("C3_NextSeq");

@@ -50,7 +50,7 @@ describe("quadro de mecanismos",()=>{
       const c=result[2].effects.find(e=>e.id===id)!.counts!;
       expect(c.winning+c.other).toBe(n); // positiva, independentemente de o componente ter vencido
     }
-    expect(result.map(s=>[s.positiveContributions,s.unmappedContributions])).toEqual([[381,259],[471,195],[442,272],[0,0]]);
+    expect(result.map(s=>[s.positiveContributions,s.unmappedContributions])).toEqual([[3094,2972],[2926,2650],[3780,3610],[0,0]]);
     for(const s of result){
       expect(s.residualDomains.reduce((n,d)=>n+d.contributions,0)).toBe(s.unmappedContributions);
       for(const d of s.residualDomains)expect(d.points>0).toBe(d.contributions>0);

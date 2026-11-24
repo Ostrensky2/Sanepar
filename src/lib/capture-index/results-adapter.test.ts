@@ -44,8 +44,9 @@ describe("ponte do índice de captação para as telas de resultados", () => {
     expect([point.overall.value, point.overall.rank, point.completeness, point.estimateState]).toEqual([null, null, "unavailable", "sem estimativa"]);
     expect([point.domains.humanHealth.value, point.domains.environmental.value !== null, point.domains.operational.value !== null]).toEqual([null, true, true]);
     expect(point.conditionOfUse).toContain("Sem estimativa");
-    const zero = campaigns[0].points.find(item => item.siaCode === "17")!;
-    expect([zero.domains.operational.value, zero.estimateState]).toEqual([0, "estimado"]);
+    const low = campaigns[0].points.find(item => item.siaCode === "17")!;
+    expect(low.estimateState).toBe("estimado");
+    expect(low.domains.operational.value).toBeCloseTo(0.0195, 4);
   });
 
   it("localiza só os pontos com coordenada conhecida e não inventa posição", () => {

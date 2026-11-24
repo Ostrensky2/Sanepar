@@ -1,7 +1,7 @@
 // Reconciliação congelada de 22/11/2026, não é entrada do cálculo do índice.
 // Unidade: ocorrência de táxon em ponto-campanha, COI utilizável, corrida escolhida.
 // Apenas agregados: nenhum SIA, coordenada, itinerário ou nome de ponto.
-export const reconciliationIndexHash = "d0546cf4fddca15786761eda1785186f780c959987ad7a7465912f28fb00f4e3";
+export const reconciliationIndexHash = "4eeed7c086b661c72accce1c35d9e685883356dcff0a537ec58c5d789948be1f";
 export const sourceHashes: Readonly<Partial<Record<number, string>>> = {
   1: "0ded30b98668cd5b83ebf62f4c6ec68f7a2d0729c40b711e69da360b89cc58f5",
   2: "5baf5dfd2134e461665a2dcfac8809ebd3411968d3a0a5c1b446182f4819880b",

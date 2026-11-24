@@ -7,7 +7,7 @@ export const RESULTS_08_VERSION = "0.8" as const;
  */
 export const METHOD_LABEL = "3.0" as const;
 export const PREVIOUS_METHOD_LABEL = "2.0" as const;
-export const RESULTS_08_SOURCE_SHA256 = "c0d5f6d6ea58849385f1e9038bb87c769d6f14ccd9abebec162dc8c2802e56e9";
+export const RESULTS_08_SOURCE_SHA256 = "1ac2a5e8ff3b32f8196ffe632d0037ef5690a8401c652da5744a02ba31595a5c";
 export const RESULTS_08_POLICY = "sinal-documentado/1" as const;
 export const RESULTS_08_SCHEMA = "agregados-home-export/1" as const;
 /** Grupos do arquivo-fonte oficial. `total` existe só para conferir a integridade da fonte; nunca é exibido nem exportado. */

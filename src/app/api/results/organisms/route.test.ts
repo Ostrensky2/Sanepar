@@ -42,10 +42,12 @@ it("lista um nível por consulta e marca só os organismos com ficha que pontua"
   expect(data).toMatchObject({ campaign: 2, marker: "16S", level: "genero", source: "sintetica.xlsx" });
   expect(data.summary["16S"]).toMatchObject({ points: 2, usablePoints: 2 });
   expect(data.rows.map((row: { name: string }) => row.name)).toEqual(["Microcystis", "Cedecea"]);
-  expect(data.rows[0]).toMatchObject({ points: 2, reads: 50, sias: ["1", "2"], maxShare: 0.2, maxShareSia: "2", effects: [{ id: "CUR-Microcystis-S", domain: "Saúde humana" }] });
+  expect(data.rows[0]).toMatchObject({ points: 2, reads: 50, sias: ["1", "2"], maxShare: 0.2, maxShareSia: "2", });
+  expect(data.rows[0].effects).toContainEqual({ id: "CUR-Microcystis-S", domain: "Saúde humana" });
   expect(data.rows[1].effects).toEqual([]);                  // Cedecea: ficha contestada, não pontua
   const exotics = await (await GET(request("campaign=2&marker=COI&level=exoticas"))).json();
-  expect(exotics.rows[0]).toMatchObject({ name: "Limnoperna fortunei", category: "confirmada", effects: [{ id: "CUR-Limnoperna-O", domain: "Operacional" }] });
+  expect(exotics.rows[0]).toMatchObject({ name: "Limnoperna fortunei", category: "confirmada" });
+  expect(exotics.rows[0].effects).toContainEqual({ id: "CUR-Limnoperna-O", domain: "Operacional" });
   const where = await (await GET(request("campaign=2&marker=16S&level=genero&taxon=Microcystis"))).json();
   expect(where.rows).toEqual([{ sia: "2", reads: 40, total: 200, share: 0.2, run: "MiSeq", inconclusive: false }, { sia: "1", reads: 10, total: 100, share: 0.1, run: "MiSeq", inconclusive: false }]);
 });
