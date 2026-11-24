@@ -1,92 +1,186 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { scientificControl } from "./scientific-query-controls";
+import { useEffect, useMemo, useState } from "react";
+import { ExternalLink, Search } from "lucide-react";
+import { ResultsReviewDialog } from "@/components/results-review-dialog";
+import { effectTypeOf, effectTypes, type EffectTypeId } from "./ficha-effect-types";
+import styles from "./campaign-distribution.module.css";
 
 /** Ficha do cadastro, já com o tipo de efeito do quadro de Resultados quando ela pertence a um. */
-export type CatalogFicha = { id: string; taxon: string; level: string; domain: string; severity: number | null; applicability: number | null; contested: boolean;
+export type CatalogFicha = { id: string; taxon: string; level: string; domain: string; code: string; severity: number | null; applicability: number | null; contested: boolean;
   source: string; rationale: string; scores: boolean; note: string | null; used: boolean; theme: string | null; effect: { id: string; title: string } | null };
 
-const PAGE = 50;
 const levelLabels: Record<string, string> = { genus: "gênero", family: "família", clade: "grupo", species: "espécie exótica" };
-const domainLabels: Record<string, string> = { Ambiental: "Ambiental", Operacional: "Operacional", "Saúde humana": "Saúde" };
+/** As três categorias do índice, na ordem e nas cores usadas nos gráficos do Início. */
+const domains = [
+  { key: "Ambiental", label: "Ambiental", color: "#eb6834" },
+  { key: "Operacional", label: "Operacional", color: "#1baf7a" },
+  { key: "Saúde humana", label: "Saúde", color: "#eda100" },
+] as const;
+const domainOf = (key: string) => domains.find(domain => domain.key === key);
+const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
 const normalize = (value: string) => value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const severityLabels = ["", "1 de 3 · leve", "2 de 3 · moderada", "3 de 3 · grave"];
 function applicability(ficha: CatalogFicha) {
   if (!ficha.scores) return "não pontua";
   const value = ficha.applicability;
-  return value === 1 ? "todo o táxon (1)" : value === 0.5 ? "parte substancial (0,5)" : value === 0.1 ? "minoria (0,1)" : "sem efeito sustentado (0)";
+  return value === 1 ? "1 · todo o grupo carrega o efeito" : value === 0.5 ? "0,5 · parte grande do grupo" : value === 0.1 ? "0,1 · só uma minoria do grupo" : "0 · sem efeito sustentado";
 }
 
-/** Catálogo de impactos: o cadastro completo de fichas de efeito, a base das notas. Organismos em gênero, família ou grupo; espécie só para exóticas. */
+type Source = { label: string; href: string | null };
+/** Fontes da ficha: o endereço principal e as citadas na descrição (PMID, DOI ou URL), sem repetir. */
+export function fichaSources(ficha: Pick<CatalogFicha, "source" | "rationale">): Source[] {
+  const cited = ficha.rationale.match(/Fontes: (.*?)(?:\. Revisão bibliográfica|\.?$)/)?.[1] ?? "";
+  const seen = new Set<string>(), sources: Source[] = [];
+  for (const raw of [...ficha.source.split(/;\s*/), ...cited.split(/;\s*/)]) {
+    const text = raw.trim().replace(/\.$/, "");
+    if (!text || /^não informadas?$/i.test(text)) continue;
+    const pmid = text.match(/^PMID:\s*(\d+)$/i)?.[1] ?? text.match(/^https:\/\/pubmed\.ncbi\.nlm\.nih\.gov\/(\d+)\/?$/)?.[1];
+    const doi = text.match(/^DOI:\s*(10\.\S+)$/i)?.[1] ?? text.match(/^https:\/\/doi\.org\/(10\.\S+)$/)?.[1];
+    const url = text.replace(/^URL:\s*/i, "");
+    const source: Source = pmid ? { label: `PubMed ${pmid}`, href: `https://pubmed.ncbi.nlm.nih.gov/${pmid}` }
+      : doi ? { label: `DOI ${doi}`, href: `https://doi.org/${doi}` }
+      : /^https:\/\/[^\s]+$/.test(url) ? { label: url.replace(/^https:\/\/(www\.)?/, ""), href: url }
+      : { label: text, href: null };
+    const key = source.href ?? source.label;
+    if (!seen.has(key)) { seen.add(key); sources.push(source); }
+  }
+  return sources;
+}
+/** Descrição da ficha sem a lista de fontes, que aparece à parte como links. */
+const description = (rationale: string) => rationale.replace(/\s*Fontes: .*?(?=\. Revisão bibliográfica|\.?$)\.?/, "").trim();
+
+type Organism = { taxon: string; level: string; fichas: CatalogFicha[] };
+
+/**
+ * Catálogo de impactos: o cadastro de fichas de efeito, a base das notas do índice.
+ * Escolhe-se a categoria e o tipo de efeito; os organismos ligados aparecem em quadrinhos iguais, em ordem alfabética.
+ * O clique abre as fichas do organismo, com gravidade, aplicabilidade, descrição e fontes.
+ */
 export function EffectsCatalog({ fichas, initialQuery = "" }: { fichas: CatalogFicha[]; initialQuery?: string }) {
   const [domain, setDomain] = useState("");
+  const [type, setType] = useState<EffectTypeId | "">("");
+  const [query, setQuery] = useState(initialQuery);
   const [status, setStatus] = useState<"" | "pontua" | "registrada">("");
   const [onlyUsed, setOnlyUsed] = useState(false);
-  const [query, setQuery] = useState(initialQuery);
-  const [page, setPage] = useState(0);
-  const counts = useMemo(() => ({ total: fichas.length, organisms: new Set(fichas.map(ficha => ficha.taxon)).size, used: fichas.filter(ficha => ficha.used).length,
-    scoring: fichas.filter(ficha => ficha.scores).length }), [fichas]);
-  const filtered = useMemo(() => {
+  const [opened, setOpened] = useState<string | null>(null);
+
+  const typed = useMemo(() => fichas.map(ficha => ({ ficha, type: effectTypeOf(ficha.code, ficha.domain) })), [fichas]);
+  // Filtros que valem para tudo, antes de escolher o tipo de efeito: é sobre este conjunto que os efeitos são contados.
+  const base = useMemo(() => {
     const term = normalize(query.trim());
-    const found = fichas.filter(ficha => (!domain || ficha.domain === domain) && (!status || (status === "pontua") === ficha.scores) && (!onlyUsed || ficha.used)
-      && (!term || normalize(`${ficha.taxon} ${ficha.theme ?? ""} ${ficha.effect?.title ?? ""} ${ficha.rationale}`).includes(term)));
-    // Na busca, primeiro as fichas do próprio organismo; depois as que só o citam na justificativa.
-    return term ? [...found.filter(ficha => normalize(ficha.taxon).includes(term)), ...found.filter(ficha => !normalize(ficha.taxon).includes(term))] : found;
-  }, [fichas, domain, status, onlyUsed, query]);
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE)), current = Math.min(page, pages - 1);
-  const rows = filtered.slice(current * PAGE, current * PAGE + PAGE);
-  const change = <T,>(setter: (value: T) => void) => (value: T) => { setter(value); setPage(0); };
+    return typed.filter(({ ficha }) => (!domain || ficha.domain === domain) && (!status || (status === "pontua") === ficha.scores) && (!onlyUsed || ficha.used) && (!term || normalize(ficha.taxon).includes(term)));
+  }, [typed, domain, status, onlyUsed, query]);
+  const typeOptions = useMemo(() => {
+    const organisms = new Map<EffectTypeId, Set<string>>();
+    for (const item of base) (organisms.get(item.type) ?? organisms.set(item.type, new Set()).get(item.type)!).add(item.ficha.taxon);
+    return (Object.keys(effectTypes) as EffectTypeId[]).filter(id => organisms.has(id)).map(id => ({ id, label: effectTypes[id], count: organisms.get(id)!.size }))
+      .sort((a, b) => collator.compare(a.label, b.label));
+  }, [base]);
+  const activeType = type && typeOptions.some(option => option.id === type) ? type : "";
+  const organisms = useMemo(() => {
+    const groups = new Map<string, Organism>();
+    for (const { ficha, type: fichaType } of base) {
+      if (activeType && fichaType !== activeType) continue;
+      const group = groups.get(ficha.taxon) ?? { taxon: ficha.taxon, level: ficha.level, fichas: [] };
+      group.fichas.push(ficha); groups.set(ficha.taxon, group);
+    }
+    return [...groups.values()].sort((a, b) => collator.compare(a.taxon, b.taxon));
+  }, [base, activeType]);
+  const all = useMemo(() => new Set(base.map(item => item.ficha.taxon)).size, [base]);
+  // Na ficha aberta, primeiro o que corresponde ao filtro escolhido; depois as outras fichas do mesmo organismo.
+  const matches = (ficha: CatalogFicha) => (!domain || ficha.domain === domain) && (!activeType || effectTypeOf(ficha.code, ficha.domain) === activeType) ? 0 : 1;
+  const openedFichas = opened ? fichas.filter(ficha => ficha.taxon === opened).sort((a, b) => matches(a) - matches(b) || domains.findIndex(d => d.key === a.domain) - domains.findIndex(d => d.key === b.domain)) : [];
+  // A janela abre com o foco no botão de fechar, que fica no fim: volta ao começo para a ficha ser lida do início.
+  useEffect(() => {
+    if (!opened) return;
+    const frame = requestAnimationFrame(() => document.querySelectorAll("dialog[open], dialog[open] *").forEach(node => { if (node.scrollTop) node.scrollTop = 0; }));
+    return () => cancelAnimationFrame(frame);
+  }, [opened]);
+  const extras = (status ? 1 : 0) + (onlyUsed ? 1 : 0) + (query.trim() ? 1 : 0);
+  const chip = (active: boolean) => `inline-flex min-h-10 items-center gap-2 rounded-full border px-3.5 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)] ${active ? "border-[var(--brand-navy-strong)] bg-[var(--brand-navy-strong)] text-white" : "border-[var(--line-strong)] bg-white text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)]"}`;
 
   return <div className="min-w-0 space-y-4">
-    <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {([["Fichas no cadastro", counts.total], ["Organismos", counts.organisms], ["Entram na nota", counts.scoring], ["Usadas nas campanhas", counts.used]] as const).map(([label, value]) =>
-        <div key={label} className="app-card p-3"><dt className="type-metadata text-[var(--ink-soft)]">{label}</dt><dd className="heading-font text-2xl font-bold tabular-nums text-[var(--brand-navy-strong)]">{value.toLocaleString("pt-BR")}</dd></div>)}
-    </dl>
-    <div className="app-card flex flex-wrap items-end gap-3 p-3">
-      <label className="type-label flex min-w-[12rem] flex-1 flex-col gap-1">Pesquisar
-        <input type="search" className={`${scientificControl} w-full`} value={query} placeholder="Organismo, efeito ou termo da justificativa" onChange={event => change(setQuery)(event.target.value)} /></label>
-      <label className="type-label flex flex-col gap-1">Categoria
-        <select className={scientificControl} value={domain} onChange={event => change(setDomain)(event.target.value)}>
-          <option value="">Todas</option>{Object.entries(domainLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-      <label className="type-label flex flex-col gap-1">Situação
-        <select className={scientificControl} value={status} onChange={event => change(setStatus)(event.target.value as "" | "pontua" | "registrada")}>
-          <option value="">Todas</option><option value="pontua">Entram na nota</option><option value="registrada">Registradas, sem nota</option></select></label>
-      <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" className="size-4" checked={onlyUsed} onChange={event => change(setOnlyUsed)(event.target.checked)} />Só as usadas nas campanhas</label>
-    </div>
-    <p role="status" className="type-metadata">{filtered.length.toLocaleString("pt-BR")} {filtered.length === 1 ? "ficha" : "fichas"}</p>
-    <div className="overflow-x-auto rounded border border-[var(--line-ghost)]" role="region" aria-label="Catálogo de fichas: tabela com rolagem horizontal" tabIndex={0}>
-      <table className="w-full text-left text-sm">
-        <thead className="bg-[var(--surface-soft)]"><tr>
-          <th scope="col" className="px-3 py-3">Organismo</th>
-          <th scope="col" className="px-3 py-3">Categoria</th>
-          <th scope="col" className="px-3 py-3">Efeito</th>
-          <th scope="col" className="px-3 py-3 text-right">Gravidade</th>
-          <th scope="col" className="px-3 py-3">Aplicabilidade</th>
-          <th scope="col" className="px-3 py-3">Fonte</th>
-        </tr></thead>
-        <tbody>{rows.map(ficha => {
-          const href = /^https:\/\/[^\s;]+$/.test(ficha.source) ? ficha.source : null;
-          return <tr key={ficha.id} id={`ficha-${ficha.id}`} className="scroll-mt-24 border-t border-[var(--line-ghost)] align-top target:bg-[var(--surface-soft)]">
-            <th scope="row" className="px-3 py-2 font-semibold text-[var(--brand-navy-strong)]"><em>{ficha.taxon}</em>
-              <span className="block text-xs font-normal not-italic text-[var(--ink-soft)]">{levelLabels[ficha.level] ?? ficha.level}{ficha.used ? " · nas campanhas" : ""}</span></th>
-            <td className="px-3 py-2">{domainLabels[ficha.domain] ?? ficha.domain}</td>
-            <td className="max-w-[30rem] px-3 py-2">
-              {ficha.effect ? <Link className="font-semibold underline underline-offset-4" href={`/campanhas/resultados?vista=efeitos&effect=${ficha.effect.id}`}>{ficha.effect.title}</Link> : ficha.theme ? <span className="font-semibold">{ficha.theme}</span> : null}
-              <details className="mt-1"><summary className="min-h-11 cursor-pointer content-center text-[var(--ink-soft)]">Justificativa</summary><p className="break-words pb-2">{ficha.rationale}</p></details>
-            </td>
-            <td className="px-3 py-2 text-right tabular-nums">{ficha.severity ?? "—"}</td>
-            <td className="px-3 py-2">{applicability(ficha)}{!ficha.scores && ficha.note ? <span className="mt-1 block text-xs text-[var(--ink-soft)]">{ficha.note}</span> : null}</td>
-            <td className="max-w-[14rem] px-3 py-2">{href ? <a className="break-all underline underline-offset-4" href={href} target="_blank" rel="noreferrer">{href.replace(/^https?:\/\/(doi\.org\/|pubmed\.ncbi\.nlm\.nih\.gov\/)?/, "")}</a> : <span className="break-words">{ficha.source || "—"}</span>}</td>
-          </tr>;
-        })}</tbody>
-      </table>
-    </div>
-    {!filtered.length && <p role="status">Nenhuma ficha corresponde aos filtros.</p>}
-    {pages > 1 && <nav aria-label="Páginas do catálogo" className="flex items-center justify-between gap-2">
-      <button type="button" className={scientificControl} disabled={current === 0} onClick={() => setPage(current - 1)}>Anterior</button>
-      <span className="type-metadata">Página {current + 1} de {pages}</span>
-      <button type="button" className={scientificControl} disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>Próxima</button>
-    </nav>}
+    <section className="app-card space-y-4 p-4 sm:p-5" aria-label="Filtros do catálogo">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <span className="type-label w-28 shrink-0 text-[var(--ink-soft)]">Categoria</span>
+        <div role="group" aria-label="Categoria" className={styles.segmented}>
+          <button type="button" aria-pressed={!domain} onClick={() => setDomain("")}>Todas</button>
+          {domains.map(item => <button type="button" key={item.key} aria-pressed={domain === item.key} onClick={() => setDomain(item.key)}>
+            <span aria-hidden className="mr-1.5 inline-block size-2.5 rounded-full" style={{ backgroundColor: item.color }} />{item.label}</button>)}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+        <span className="type-label w-28 shrink-0 pt-2.5 text-[var(--ink-soft)]">Tipo de efeito</span>
+        <div role="group" aria-label="Tipo de efeito" className="flex min-w-0 flex-1 flex-wrap gap-2">
+          <button type="button" aria-pressed={!activeType} className={chip(!activeType)} onClick={() => setType("")}>Todos <span className="font-normal opacity-80">{all}</span></button>
+          {typeOptions.map(option => <button type="button" key={option.id} aria-pressed={activeType === option.id} className={chip(activeType === option.id)} onClick={() => setType(option.id)}>
+            {option.label} <span className="font-normal opacity-80">{option.count}</span></button>)}
+        </div>
+      </div>
+      <details className="disclosure" open={Boolean(initialQuery) || undefined}>
+        <summary className="inline-flex min-h-11 cursor-pointer items-center type-metadata font-semibold text-[var(--ink-soft)]">Mais filtros e busca por nome{extras ? ` (${extras} em uso)` : ""}</summary>
+        <div className="flex flex-wrap items-end gap-3 pt-1">
+          <label className="type-label flex min-w-[12rem] flex-col gap-1">Nome do organismo
+            <span className="flex min-h-11 items-center gap-2 rounded-lg border border-[var(--line-strong)] bg-white px-3"><Search aria-hidden className="size-4 text-[var(--ink-soft)]" />
+              <input type="search" className="min-w-0 flex-1 bg-transparent text-sm outline-none" value={query} placeholder="Ex.: Microcystis" onChange={event => setQuery(event.target.value)} /></span></label>
+          <label className="type-label flex flex-col gap-1">Situação
+            <select className="min-h-11 rounded-lg border border-[var(--line-strong)] bg-white px-3 text-sm" value={status} onChange={event => setStatus(event.target.value as "" | "pontua" | "registrada")}>
+              <option value="">Todas</option><option value="pontua">Entram na nota</option><option value="registrada">Registradas, sem nota</option></select></label>
+          <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" className="size-4" checked={onlyUsed} onChange={event => setOnlyUsed(event.target.checked)} />Só os detectados nas campanhas</label>
+          {extras > 0 && <button type="button" className="min-h-11 rounded-lg border border-[var(--line-strong)] bg-white px-3 text-sm font-semibold text-[var(--brand-navy-strong)]" onClick={() => { setQuery(""); setStatus(""); setOnlyUsed(false); }}>Limpar</button>}
+        </div>
+      </details>
+    </section>
+
+    <p role="status" className="type-metadata">
+      <strong className="text-[var(--ink)]">{organisms.length.toLocaleString("pt-BR")} {organisms.length === 1 ? "organismo" : "organismos"}</strong>
+      {activeType ? ` com efeito de ${effectTypes[activeType].toLocaleLowerCase("pt-BR")}` : ""}{domain ? ` na categoria ${domainOf(domain)?.label}` : ""}, em ordem alfabética. Clique em um quadrinho para abrir a ficha.
+    </p>
+
+    <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6" aria-label="Organismos do catálogo">
+      {organisms.map(organism => {
+        const shown = domains.filter(item => organism.fichas.some(ficha => ficha.domain === item.key));
+        return <li key={organism.taxon}>
+          <button type="button" aria-haspopup="dialog" onClick={() => setOpened(organism.taxon)}
+            className="flex h-[5.5rem] w-full flex-col justify-between rounded-xl border border-[var(--line-ghost)] bg-white p-3 text-left shadow-sm transition hover:border-[var(--brand-teal)] hover:shadow focus-visible:outline-2 focus-visible:outline-[var(--brand-teal)]">
+            <em className="line-clamp-2 break-words font-semibold leading-snug text-[var(--brand-navy-strong)]">{organism.taxon}</em>
+            <span className="flex items-center justify-between gap-2 text-xs text-[var(--ink-soft)]">
+              <span>{levelLabels[organism.level] ?? organism.level}{organism.fichas.length > 1 ? ` · ${organism.fichas.length} fichas` : ""}</span>
+              <span className="flex shrink-0 gap-1" aria-label={`Categorias: ${shown.map(item => item.label).join(", ")}`}>{shown.map(item => <span key={item.key} aria-hidden title={item.label} className="size-2.5 rounded-full" style={{ backgroundColor: item.color }} />)}</span>
+            </span>
+          </button>
+        </li>;
+      })}
+    </ul>
+    {!organisms.length && <p role="status" className="app-card p-4">Nenhum organismo corresponde aos filtros.</p>}
+
+    {opened && <ResultsReviewDialog title={opened} closeLabel="Fechar ficha" onClose={() => setOpened(null)}>
+      <p className="type-metadata text-[var(--ink-soft)]">{levelLabels[openedFichas[0]?.level] ?? ""} · {openedFichas.length} {openedFichas.length === 1 ? "ficha" : "fichas"}{openedFichas.some(ficha => ficha.used) ? " · detectado nas campanhas" : ""}</p>
+      <div className="mt-3 space-y-4">
+        {openedFichas.map(ficha => {
+          const item = domainOf(ficha.domain), sources = fichaSources(ficha), fichaType = effectTypeOf(ficha.code, ficha.domain);
+          return <article key={ficha.id} id={`ficha-${ficha.id}`} className="space-y-3 rounded-xl border border-[var(--line-ghost)] p-4">
+            <header className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--surface-soft)] px-2.5 py-0.5 text-sm font-semibold text-[var(--ink)]"><span aria-hidden className="size-2.5 rounded-full" style={{ backgroundColor: item?.color }} />{item?.label ?? ficha.domain}</span>
+              <h3 className="heading-font type-panel-title text-[var(--brand-navy-strong)]">{effectTypes[fichaType]}</h3>
+            </header>
+            <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-3">
+              <div><dt className="type-caption text-[var(--ink-soft)]">Gravidade</dt><dd className="font-semibold">{ficha.severity ? severityLabels[ficha.severity] ?? ficha.severity : "—"}</dd></div>
+              <div><dt className="type-caption text-[var(--ink-soft)]">Aplicabilidade</dt><dd className="font-semibold">{applicability(ficha)}</dd></div>
+              <div><dt className="type-caption text-[var(--ink-soft)]">Situação</dt><dd className="font-semibold">{ficha.scores ? "Entra na nota" : `Registrada, sem nota${ficha.note ? `: ${ficha.note}` : ""}`}</dd></div>
+            </dl>
+            <div><h4 className="type-caption text-[var(--ink-soft)]">Descrição</h4><p className="break-words">{description(ficha.rationale)}</p></div>
+            <div><h4 className="type-caption text-[var(--ink-soft)]">{sources.length === 1 ? "Fonte" : "Fontes"}</h4>
+              {sources.length ? <ul className="mt-1 flex flex-wrap gap-2">{sources.map(source => <li key={source.href ?? source.label}>
+                {source.href ? <a className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--line-strong)] bg-white px-2.5 text-sm font-semibold text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)]" href={source.href} target="_blank" rel="noreferrer"><span className="break-all">{source.label}</span><ExternalLink aria-hidden className="size-3.5 shrink-0" /></a> : <span className="text-sm">{source.label}</span>}
+              </li>)}</ul> : <p className="text-sm">Não informada.</p>}
+            </div>
+            {ficha.effect && <p className="type-metadata"><Link className="font-semibold underline underline-offset-4" href={`/campanhas/resultados?vista=efeitos&effect=${ficha.effect.id}`}>Ver “{ficha.effect.title}” nos resultados das campanhas</Link></p>}
+          </article>;
+        })}
+      </div>
+    </ResultsReviewDialog>}
   </div>;
 }
