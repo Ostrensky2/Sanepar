@@ -6,14 +6,11 @@ import { CircleDot, FlaskConical } from "lucide-react";
 import { CanonicalKpi, countOperationallyActiveCampaigns } from "@/components/home-canonical-kpis";
 import { ProjectStatusPanel } from "@/components/project-status-panel";
 import { RESULTS_08_CAMPAIGNS } from "@/lib/results-08-contract";
-import { CampaignRangeChart, HomeIndexMap, type ChartVariant } from "./home-overview";
+import { CampaignRangeChart, HomeIndexMap } from "./home-overview";
 import type { ResultsCampaign } from "@/modules/results";
 
 export function HomeResultsV2({ operationalKpis, projectSummary }: { operationalKpis?: React.ReactNode; projectSummary?: React.ReactNode }) {
   const [management, setManagement] = useState<CampaignManagementById | null>(null);
-  // Prévia: ?grafico=caixa mostra a versão em caixa do gráfico de índices; o padrão é linha.
-  const [variant, setVariant] = useState<ChartVariant>("linha");
-  useEffect(() => { if (new URLSearchParams(window.location.search).get("grafico") === "caixa") queueMicrotask(() => setVariant("caixa")); }, []);
   useEffect(() => {
     let active = true;
     void readCampaignManagement(defaultCampaigns).then(value => { if (active) setManagement(value); });
@@ -26,8 +23,11 @@ export function HomeResultsV2({ operationalKpis, projectSummary }: { operational
       {operationalKpis}
     </section>
     {/* Visão geral: um gráfico com todas as campanhas lado a lado e o mapa do índice geral. A distribuição detalhada fica em Resultados. */}
-    <CampaignRangeChart variant={variant} />
-    <HomeIndexMap />
+    {/* Gráfico e mapa dividem a largura no computador; no celular ficam um abaixo do outro. */}
+    <div className="grid items-stretch gap-4 xl:grid-cols-2">
+      <CampaignRangeChart />
+      <HomeIndexMap />
+    </div>
     <ProjectStatusPanel compact />{projectSummary}
   </>;
 }

@@ -48,16 +48,12 @@ function useDistribution() {
 }
 
 
-export type ChartVariant = "linha" | "caixa";
-
 /**
- * Um único gráfico para todas as campanhas, um índice por vez (Índice geral abre).
- * Em cada campanha: menor ponto, média e maior ponto, na escala fixa de 0 a 1.
- * - "linha": três linhas ligando as campanhas (máximo, média e mínimo), com a faixa entre mínimo e máximo sombreada.
- * - "caixa": uma caixa do mínimo ao máximo em cada campanha, com a média marcada (sem mediana).
+ * Um único gráfico de linhas para todas as campanhas, um índice por vez (Índice geral abre): maior ponto, média e
+ * menor ponto de cada campanha, com a faixa entre o menor e o maior sombreada, na escala fixa de 0 a 1.
  * As campanhas são independentes: o gráfico só as coloca lado a lado, sem total nem média entre elas.
  */
-export function CampaignRangeChart({ variant = "linha" }: { variant?: ChartVariant }) {
+export function CampaignRangeChart() {
   const { data, error } = useDistribution();
   const pointsByCampaign = useCampaignPoints();
   const [key, setKey] = useState<IndexKey>("geral");
@@ -74,20 +70,18 @@ export function CampaignRangeChart({ variant = "linha" }: { variant?: ChartVaria
   const position = (code: string) => campaigns.indexOf(code);
   const path = (pick: (row: (typeof rows)[number]) => number) => rows.map((row, i) => `${i ? "L" : "M"}${x(position(row.code))} ${y(pick(row))}`).join(" ");
   const band = rows.length ? `${path((row) => row.stat.max)} ${[...rows].reverse().map((row) => `L${x(position(row.code))} ${y(row.stat.min)}`).join(" ")} Z` : "";
-  const height = 300;
+  const height = 340;
   const peek = (row: (typeof rows)[number], which: "low" | "high", children: React.ReactNode, className: string, top: number) => (
     <SiaPeek title={`${row.code} · ${index.label} · ${which === "high" ? "maior" : "menor"} índice ${formatCaptureIndex(which === "high" ? row.stat.max : row.stat.min)}`} campaign={Number(row.code.slice(1))} points={row[which]} className={`absolute z-[2] -translate-x-1/2 -translate-y-1/2 [&[data-peek]]:cursor-pointer ${className}`} style={{ left: `${x(position(row.code))}%`, top: `${top}%` }}>{children}</SiaPeek>
   );
   const valueTag = (text: string, top: number, left: number, strong = false) => <span aria-hidden className={`pointer-events-none absolute z-[3] -translate-y-1/2 whitespace-nowrap rounded bg-white/90 px-1 text-[11px] tabular-nums leading-tight ${strong ? "font-bold text-[var(--ink)]" : "text-[var(--ink-soft)]"}`} style={{ left: `calc(${left}% + 14px)`, top: `${top}%` }}>{text}</span>;
-  return <section className="app-card min-w-0 space-y-4 p-4 sm:p-6" aria-labelledby="campaign-range-title">
+  return <section className="app-card flex min-w-0 flex-col gap-4 p-4 sm:p-6" aria-labelledby="campaign-range-title">
     <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
       <div className="min-w-0">
         <div className="flex items-center gap-1">
           <h2 id="campaign-range-title" className="heading-font type-section-title text-[var(--brand-navy-strong)]">Índices por campanha</h2>
           <ResultsInterpretationHelp title="Como ler o gráfico dos índices por campanha">
-            {variant === "linha"
-              ? <p>Cada campanha é uma posição no eixo horizontal. A linha de cima liga o maior índice entre os pontos de cada campanha, a do meio liga a média e a de baixo liga o menor índice. A área sombreada vai do menor ao maior.</p>
-              : <p>Cada campanha tem uma caixa que vai do menor ao maior índice entre os seus pontos. O traço grosso dentro da caixa é a média. Não há mediana nem quartis.</p>}
+            <p>Cada campanha é uma posição no eixo horizontal. A linha de cima liga o maior índice entre os pontos de cada campanha, a do meio (mais grossa) liga a média e a de baixo liga o menor índice. A área sombreada vai do menor ao maior.</p>
             <p>Use os botões para trocar o índice: geral, ambiental, operacional ou saúde. A escala é fixa, de 0 a 1, a mesma da metodologia 0.8; as linhas horizontais são os limites das faixas.</p>
             <p>Passe o mouse ou toque no maior ou no menor valor para ver quais SIAs o formam. Clicar fixa a lista, e cada SIA abre a ficha do ponto.</p>
             <p>As campanhas são independentes: não há total nem média juntando campanhas. As linhas só ajudam a comparar uma campanha com a outra. Ponto sem estimativa fica fora do mínimo, da média e do máximo.</p>
@@ -107,7 +101,7 @@ export function CampaignRangeChart({ variant = "linha" }: { variant?: ChartVaria
         </div>
         <div className="relative" style={{ height }}>
           {ticks.map((tick) => <span key={tick} aria-hidden className={`absolute inset-x-0 border-t ${tick === 0 ? "border-[var(--line-strong)]" : "border-dashed border-[var(--line-ghost)]"}`} style={{ top: `${y(tick)}%` }} />)}
-          {variant === "linha" ? <>
+          <>
             <svg aria-hidden viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full overflow-visible">
               <path d={band} fill={index.color} opacity="0.12" />
               <path d={path((row) => row.stat.max)} fill="none" stroke={index.color} strokeWidth="2" strokeOpacity="0.75" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
@@ -122,31 +116,22 @@ export function CampaignRangeChart({ variant = "linha" }: { variant?: ChartVaria
               {valueTag(`média ${formatCaptureIndex(row.stat.mean)}`, y(row.stat.mean), left, true)}
               {valueTag(`mín ${formatCaptureIndex(row.stat.min)}`, y(row.stat.min), left)}
             </div>; })}
-          </> : rows.map((row) => { const left = x(position(row.code)); return <div key={row.code}>
-            {/* Caixa do menor ao maior ponto; a média é o traço grosso */}
-            <span aria-hidden className="absolute z-[1] w-14 -translate-x-1/2 rounded-[4px] border-2" style={{ left: `${left}%`, top: `${y(row.stat.max)}%`, bottom: `${row.stat.min * 100}%`, minHeight: 4, borderColor: index.color, backgroundColor: `color-mix(in srgb, ${index.color} 16%, white)` }} />
-            <span aria-hidden className="absolute z-[2] h-1 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ left: `${left}%`, top: `${y(row.stat.mean)}%`, backgroundColor: index.color }} />
-            {peek(row, "high", <span aria-hidden className="block h-full w-full" />, "h-3 w-14", y(row.stat.max))}
-            {peek(row, "low", <span aria-hidden className="block h-full w-full" />, "h-3 w-14", y(row.stat.min))}
-            <span aria-hidden className="pointer-events-none absolute z-[3] -translate-y-1/2 whitespace-nowrap rounded bg-white/90 px-1 text-[11px] tabular-nums text-[var(--ink-soft)]" style={{ left: `calc(${left}% + 34px)`, top: `${y(row.stat.max)}%` }}>máx {formatCaptureIndex(row.stat.max)}</span>
-            <span aria-hidden className="pointer-events-none absolute z-[3] -translate-y-1/2 whitespace-nowrap rounded bg-white/90 px-1 text-[11px] font-bold tabular-nums text-[var(--ink)]" style={{ left: `calc(${left}% + 38px)`, top: `${y(row.stat.mean)}%` }}>média {formatCaptureIndex(row.stat.mean)}</span>
-            <span aria-hidden className="pointer-events-none absolute z-[3] -translate-y-1/2 whitespace-nowrap rounded bg-white/90 px-1 text-[11px] tabular-nums text-[var(--ink-soft)]" style={{ left: `calc(${left}% + 34px)`, top: `${y(row.stat.min)}%` }}>mín {formatCaptureIndex(row.stat.min)}</span>
-          </div>; })}
+          </>
         </div>
         <span />
         <ul className="relative h-12" aria-hidden>
           {campaigns.map((code, i) => <li key={code} className="absolute -translate-x-1/2 pt-2 text-center" style={{ left: `${x(i)}%` }}><strong className="block type-label text-[var(--brand-navy-strong)]">{code}</strong><span className="block whitespace-nowrap type-caption text-[var(--ink-soft)]">{season(code)}</span></li>)}
         </ul>
       </div>
-      <div className="flex flex-wrap items-start justify-between gap-3 border-t border-[var(--line-ghost)] pt-3">
+      <div className="mt-auto flex flex-wrap items-start justify-between gap-3 border-t border-[var(--line-ghost)] pt-3">
         <details className={`${styles.disclosure} min-w-0 max-sm:w-full sm:flex-1`}>
-          <summary className="inline-flex min-h-11 cursor-pointer items-center gap-2 font-semibold text-[var(--brand-navy-strong)]"><ChevronRight aria-hidden className="size-4" />Ver os números em tabela</summary>
+          <summary className="inline-flex min-h-11 cursor-pointer items-center gap-2 font-semibold text-[var(--brand-navy-strong)]"><ChevronRight aria-hidden className="size-4" />Ver em tabela</summary>
           <div className="mt-2 overflow-x-auto"><table className={styles.table}><caption className="sr-only">Mínimo, média e máximo por campanha e índice</caption>
             <thead><tr><th scope="col">Campanha · índice</th><th scope="col">Mínimo</th><th scope="col">Média</th><th scope="col">Máximo</th><th scope="col">Pontos</th></tr></thead>
             <tbody>{campaigns.flatMap((code) => indices.map((item) => { const stat = data.campanhas[code][item.key]; return <tr key={`${code}:${item.key}`}><th scope="row">{code} · {item.label}</th><td>{formatCaptureIndex(stat?.minimo ?? null)}</td><td>{formatCaptureIndex(stat?.media ?? null)}</td><td>{formatCaptureIndex(stat?.maximo ?? null)}</td><td>{stat?.n ?? "—"}</td></tr>; }))}</tbody>
           </table></div>
         </details>
-        <Link className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--line-strong)] bg-white px-4 font-semibold text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)] focus-visible:outline-2" href="/campanhas/resultados?vista=distribuicao">Ver a distribuição em Resultados<ArrowRight aria-hidden className="size-4" /></Link>
+        <Link className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--line-strong)] bg-white px-4 font-semibold text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)] focus-visible:outline-2" href="/campanhas/resultados?vista=distribuicao">Ver a distribuição<ArrowRight aria-hidden className="size-4" /></Link>
       </div>
     </>}
   </section>;
@@ -161,7 +146,7 @@ export function HomeIndexMap() {
   const mapPoints = (code ? buildResultMapPoints(pointsByCampaign[code], "overall", campaignLabels) : []).map((point) => point.captureReading ? { ...point, captureReading: { ...point.captureReading, grade: "A" } } : point);
   const empty = code ? pointsByCampaign[code].filter((point) => point.overall.value === null) : [];
   const withoutEstimate = empty.filter((point) => point.estimateState === "sem estimativa").length;
-  return <section className="app-card min-w-0 space-y-3 p-4 sm:p-6" aria-labelledby="home-index-map-title">
+  return <section className="app-card flex min-w-0 flex-col gap-3 p-4 sm:p-6" aria-labelledby="home-index-map-title">
     <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
       <div className="min-w-0">
         <div className="flex items-center gap-1">
@@ -182,7 +167,7 @@ export function HomeIndexMap() {
       {bands.map((band, i) => <li key={band.label} className="inline-flex items-center gap-1.5"><span aria-hidden className="size-2.5 rounded-full" style={{ backgroundColor: band.color }} /><strong className="text-[var(--ink)]">{bandNames[i]}</strong> {band.label}</li>)}
       {empty.length > 0 && <li className="inline-flex items-center gap-1.5"><span aria-hidden className="size-2.5 rounded-full border-2 border-[var(--ink-soft)]" /><strong className="text-[var(--ink)]">Vazado</strong> sem nota: {[withoutEstimate && `${withoutEstimate} sem estimativa`, empty.length - withoutEstimate && `${empty.length - withoutEstimate} sem medição`].filter(Boolean).join(" e ")}</li>}
     </ul>
-    <div className="relative h-[460px] overflow-hidden rounded-xl bg-[var(--surface-soft)] max-sm:h-[340px]">
+    <div className="relative min-h-[420px] flex-1 overflow-hidden rounded-xl bg-[var(--surface-soft)] max-sm:min-h-[340px]">
       {code ? <CampaignHydroMap
         key={code}
         points={mapPoints}
