@@ -43,7 +43,10 @@ type SupabaseClient = NonNullable<ReturnType<typeof createOptionalSupabaseClient
  * GET    lista todos (quem vê os dados). `available: false` quando o banco ainda não
  *        tem a tabela (migration 20261125120000 não aplicada).
  * POST   cria um evento (quem lança dados).
- * PATCH  altera um evento: `{ id, ...campos }` (quem lança dados).
+ * PATCH  altera um evento: `{ id, expectedUpdatedAt, ...campos }` (quem lança dados).
+ *        `expectedUpdatedAt` é o `updatedAt` do evento quando a tela o abriu: se
+ *        alguém gravou depois disso, nada é gravado e a resposta é 409 com o evento
+ *        atual, para a tela juntar as duas edições sem apagar a ida de ninguém.
  * DELETE `?id=` apaga um evento (quem pode excluir dados).
  */
 export async function GET(request: Request) {
@@ -107,6 +110,16 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Evento inválido." }, { status: 400 });
     }
 
+    const expectedUpdatedAt = typeof body.expectedUpdatedAt === "string" ? body.expectedUpdatedAt : "";
+
+    if (!expectedUpdatedAt) {
+      // Tela aberta antes desta versão: grava só quem sabe qual versão do evento editou.
+      return NextResponse.json(
+        { error: "Esta página está desatualizada. Recarregue a página e faça a alteração de novo.", conflict: true },
+        { status: 409 },
+      );
+    }
+
     const checked = normalizeEmergencyEventInput(body);
 
     if (!checked.ok) {
@@ -116,10 +129,13 @@ export async function PATCH(request: Request) {
       );
     }
 
+    // Só grava se o evento ainda está como esta tela o viu (mesmo updated_at): a troca
+    // da lista de idas nunca apaga, sem aviso, a ida que outra pessoa acabou de gravar.
     const updated = await supabase
       .from(TABLE)
       .update({ ...toRow(checked.event), updated_by: changedBy, updated_at: new Date().toISOString() })
       .eq("id", id)
+      .eq("updated_at", expectedUpdatedAt)
       .select("*")
       .returns<Row[]>();
 
@@ -128,6 +144,23 @@ export async function PATCH(request: Request) {
     }
 
     if (!updated.data?.[0]) {
+      const current = await supabase.from(TABLE).select("*").eq("id", id).returns<Row[]>();
+
+      if (current.error) {
+        return databaseFailure("alteração", current.error, "Não foi possível salvar a alteração do evento.");
+      }
+
+      if (current.data?.[0]) {
+        return NextResponse.json(
+          {
+            error: "Outra pessoa salvou este evento enquanto você editava.",
+            conflict: true,
+            event: fromRow(current.data[0]),
+          },
+          { status: 409, headers: NO_STORE },
+        );
+      }
+
       return NextResponse.json(
         { error: "Este evento não existe mais. Alguém pode tê-lo apagado. Recarregue a página." },
         { status: 404 },

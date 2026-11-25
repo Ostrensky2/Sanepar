@@ -402,3 +402,103 @@ export function sortEmergencyEvents<T extends Pick<EmergencyEvent, "reportedDate
       a.name.localeCompare(b.name, "pt-BR"),
   );
 }
+
+/** O evento como o formulário o edita. */
+export function emergencyEventToInput(event: EmergencyEvent): EmergencyEventInput {
+  return {
+    name: event.name,
+    reportedDate: event.reportedDate,
+    visits: event.visits.map((visit) => ({ ...visit, activities: [...visit.activities] })),
+    mainProblem: event.mainProblem,
+    mainProblemOther: event.mainProblemOther,
+    sia: event.sia,
+    location: event.location,
+    description: event.description,
+  };
+}
+
+const mergeableFields = [
+  ["name", "Nome do evento"],
+  ["reportedDate", "Data do evento"],
+  ["mainProblem", "Problema principal"],
+  ["mainProblemOther", "Problema principal"],
+  ["sia", "Ponto da campanha"],
+  ["location", "Local"],
+  ["description", "Descrição do fato"],
+] as const;
+
+function sameVisit(a: EmergencyVisit | undefined, b: EmergencyVisit | undefined) {
+  if (!a || !b) return a === b;
+  return (
+    a.date === b.date &&
+    a.objective === b.objective &&
+    a.activityOther === b.activityOther &&
+    a.notes === b.notes &&
+    [...a.activities].sort().join() === [...b.activities].sort().join()
+  );
+}
+
+export type EmergencyMergeResult = {
+  merged: EmergencyEventInput;
+  /** Campos (e idas) que as duas pessoas mudaram de jeito diferente: ficou a versão de quem está salvando. */
+  conflicts: string[];
+};
+
+/**
+ * Junta duas edições do mesmo evento feitas ao mesmo tempo (comparação em três vias):
+ * `base` é o evento como estava quando esta tela abriu, `mine` o que esta tela quer
+ * gravar e `theirs` o que outra pessoa gravou nesse meio-tempo.
+ *
+ * - Campo que só uma pessoa mudou fica com a mudança dela.
+ * - Ida acrescentada por qualquer uma das duas entra; ida apagada por uma e não
+ *   mexida pela outra sai; ida mexida por uma e apagada pela outra fica (nada some
+ *   sem aviso).
+ * - Quando as duas mudaram o mesmo campo ou a mesma ida, fica a versão desta tela e
+ *   o campo vai para `conflicts`, para a pessoa conferir antes de salvar.
+ */
+export function mergeEmergencyEventEdits(
+  base: EmergencyEventInput,
+  mine: EmergencyEventInput,
+  theirs: EmergencyEventInput,
+): EmergencyMergeResult {
+  const conflicts = new Set<string>();
+  const merged = { ...theirs } as EmergencyEventInput;
+  const target = merged as Record<string, unknown>;
+
+  for (const [field, label] of mergeableFields) {
+    const changedByMe = mine[field] !== base[field];
+    const changedByThem = theirs[field] !== base[field];
+
+    if (changedByMe) {
+      target[field] = mine[field];
+      if (changedByThem && theirs[field] !== mine[field]) conflicts.add(label);
+    }
+  }
+
+  const baseById = new Map(base.visits.map((visit) => [visit.id, visit]));
+  const mineById = new Map(mine.visits.map((visit) => [visit.id, visit]));
+  const theirsById = new Map(theirs.visits.map((visit) => [visit.id, visit]));
+  const ids = [...new Set([...theirs.visits, ...mine.visits, ...base.visits].map((visit) => visit.id))];
+  const visits: EmergencyVisit[] = [];
+
+  for (const id of ids) {
+    const original = baseById.get(id);
+    const mineVisit = mineById.get(id);
+    const theirVisit = theirsById.get(id);
+    const changedByMe = !sameVisit(original, mineVisit);
+    const changedByThem = !sameVisit(original, theirVisit);
+
+    // Quem mexeu decide; se os dois mexeram, fica a versão desta tela (ou a outra, se esta apagou).
+    const chosen = changedByMe ? mineVisit ?? (changedByThem ? theirVisit : undefined) : theirVisit;
+
+    if (changedByMe && changedByThem && !sameVisit(mineVisit, theirVisit)) {
+      const reference = mineVisit ?? theirVisit ?? original;
+      conflicts.add(`Ida de ${reference ? formatEmergencyDate(reference.date) || "data em branco" : "data em branco"}`);
+    }
+
+    if (chosen) visits.push({ ...chosen, activities: [...chosen.activities] });
+  }
+
+  merged.visits = sortEmergencyVisits(visits);
+  return { merged, conflicts: [...conflicts] };
+}

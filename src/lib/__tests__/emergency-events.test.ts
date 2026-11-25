@@ -7,6 +7,7 @@ import {
   formatEmergencyDate,
   isValidIsoDate,
   isBlankEmergencyVisit,
+  mergeEmergencyEventEdits,
   normalizeEmergencyEventInput,
   parseStoredEmergencyVisits,
   sortEmergencyEvents,
@@ -198,5 +199,59 @@ describe("eventos emergenciais: datas e ordem", () => {
       { name: "C", reportedDate: "2026-11-01", createdAt: "2026-11-02T10:00:00Z" },
     ]);
     expect(sorted.map((event) => event.name)).toEqual(["C", "A", "B"]);
+  });
+});
+
+describe("eventos emergenciais: duas pessoas editando o mesmo evento", () => {
+  const visit = (id: string, date: string, objective = "") => ({ id, date, objective, activities: [], activityOther: "", notes: "" });
+  const base = {
+    name: "Floração no Passaúna",
+    reportedDate: "2026-11-18",
+    visits: [visit("v1", "2026-11-19", "Primeira vistoria"), visit("v2", "2026-11-20", "Coleta")],
+    mainProblem: "algal_bloom" as const,
+    mainProblemOther: "",
+    sia: "",
+    location: "",
+    description: "Mancha verde.",
+  };
+
+  it("cada uma acrescenta uma ida: as duas ficam, sem conflito", () => {
+    const mine = { ...base, visits: [...base.visits, visit("eu", "2026-11-25", "Conferir")] };
+    const theirs = { ...base, visits: [...base.visits, visit("outra", "2026-11-24", "Nova coleta")] };
+    const { merged, conflicts } = mergeEmergencyEventEdits(base, mine, theirs);
+    expect(merged.visits.map((item) => item.id)).toEqual(["v1", "v2", "outra", "eu"]);
+    expect(conflicts).toEqual([]);
+  });
+
+  it("uma muda a descrição e a outra acrescenta ida: junta as duas", () => {
+    const mine = { ...base, description: "Mancha verde e cheiro." };
+    const theirs = { ...base, visits: [...base.visits, visit("outra", "2026-11-24")] };
+    const { merged, conflicts } = mergeEmergencyEventEdits(base, mine, theirs);
+    expect(merged.description).toBe("Mancha verde e cheiro.");
+    expect(merged.visits).toHaveLength(3);
+    expect(conflicts).toEqual([]);
+  });
+
+  it("as duas mudam o mesmo campo: fica a desta tela e o campo é apontado", () => {
+    const { merged, conflicts } = mergeEmergencyEventEdits(
+      base,
+      { ...base, description: "Minha versão." },
+      { ...base, description: "Versão da outra pessoa.", name: "Floração forte no Passaúna" },
+    );
+    expect(merged.description).toBe("Minha versão.");
+    expect(merged.name).toBe("Floração forte no Passaúna");
+    expect(conflicts).toEqual(["Descrição do fato"]);
+  });
+
+  it("ida apagada por uma e não mexida pela outra sai; mexida pela outra fica e é apontada", () => {
+    const removedByThem = mergeEmergencyEventEdits(base, base, { ...base, visits: [base.visits[0]] });
+    expect(removedByThem.merged.visits.map((item) => item.id)).toEqual(["v1"]);
+    expect(removedByThem.conflicts).toEqual([]);
+
+    const editedByThem = { ...base, visits: [base.visits[0], { ...base.visits[1], notes: "Amostra extra." }] };
+    const removedByMe = mergeEmergencyEventEdits(base, { ...base, visits: [base.visits[0]] }, editedByThem);
+    expect(removedByMe.merged.visits.map((item) => item.id)).toEqual(["v1", "v2"]);
+    expect(removedByMe.merged.visits[1].notes).toBe("Amostra extra.");
+    expect(removedByMe.conflicts).toEqual(["Ida de 20/11/2026"]);
   });
 });

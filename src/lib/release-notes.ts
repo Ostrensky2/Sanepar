@@ -84,6 +84,13 @@ export const MAJOR_RELEASES: MajorRelease[] = [
     ],
     updates: [
       {
+        version: "2.1.4",
+        date: "25/11/2026",
+        items: [
+          "Eventos emergenciais: quando duas pessoas editam o mesmo evento ao mesmo tempo, quem salva por último não apaga mais a ida registrada pela outra. O app junta as duas edições sozinho; se as duas mudaram o mesmo campo, ele avisa qual foi e mostra o formulário para conferir antes de salvar.",
+        ],
+      },
+      {
         version: "2.1.3",
         date: "25/11/2026",
         items: [

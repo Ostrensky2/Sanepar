@@ -27,7 +27,9 @@ import {
   emergencyVisitOrdinal,
   emptyEmergencyEventInput,
   emptyEmergencyVisit,
+  emergencyEventToInput,
   formatEmergencyDate,
+  mergeEmergencyEventEdits,
   normalizeEmergencyEventInput,
   sortEmergencyEvents,
   type EmergencyActivityId,
@@ -38,6 +40,15 @@ import {
 } from "@/lib/emergency-events";
 
 type Notice = { kind: "success" | "error"; text: string } | null;
+/** O evento como estava quando a tela abriu para editar (para não apagar o que outra pessoa gravar). */
+type EditingBase = { id: string; updatedAt: string; input: EmergencyEventInput };
+type SaveResponse = {
+  event?: EmergencyEvent;
+  error?: string;
+  conflict?: boolean;
+  field?: NonNullable<InvalidField>["field"];
+  visitIndex?: number;
+};
 type InvalidField = { field: Extract<EmergencyInputCheck, { ok: false }>["field"]; visitIndex?: number } | null;
 type PointOptionsResponse = { options?: Array<{ sia?: string; locationName?: string; municipality?: string }> };
 
@@ -56,7 +67,8 @@ export function EmergencyEventsPanel() {
   const [status, setStatus] = useState<"loading" | "ready" | "unavailable" | "error">("loading");
   const [points, setPoints] = useState<PointOption[]>([]);
   const [draft, setDraft] = useState<EmergencyEventInput>(emptyEmergencyEventInput);
-  const [editingId, setEditingId] = useState("");
+  const [editing, setEditing] = useState<EditingBase | null>(null);
+  const editingId = editing?.id ?? "";
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [invalid, setInvalid] = useState<InvalidField>(null);
@@ -166,17 +178,8 @@ export function EmergencyEventsPanel() {
       visits.push(emptyEmergencyVisit());
     }
 
-    setEditingId(event.id);
-    setDraft({
-      name: event.name,
-      reportedDate: event.reportedDate,
-      visits,
-      mainProblem: event.mainProblem,
-      mainProblemOther: event.mainProblemOther,
-      sia: event.sia,
-      location: event.location,
-      description: event.description,
-    });
+    setEditing({ id: event.id, updatedAt: event.updatedAt, input: emergencyEventToInput(event) });
+    setDraft({ ...emergencyEventToInput(event), visits });
     setNotice(null);
     setInvalid(null);
 
@@ -188,7 +191,7 @@ export function EmergencyEventsPanel() {
   }
 
   function resetForm() {
-    setEditingId("");
+    setEditing(null);
     setDraft(emptyEmergencyEventInput());
     setInvalid(null);
   }
@@ -208,14 +211,33 @@ export function EmergencyEventsPanel() {
     setNotice(null);
 
     try {
-      const response = await fetch("/api/emergency-events", {
-        method: editingId ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editingId ? { id: editingId, ...checked.event } : checked.event),
-      });
-      const payload = (await response.json().catch(() => null)) as
-        | { event?: EmergencyEvent; error?: string; field?: NonNullable<InvalidField>["field"]; visitIndex?: number }
-        | null;
+      let base = editing;
+      let input = checked.event;
+      let { response, payload } = await send(input, base);
+      let mergedNote = "";
+
+      // Outra pessoa salvou o mesmo evento enquanto esta tela editava: junta as duas
+      // edições. Sem campo mexido pelos dois, grava a junção na hora (uma vez só).
+      if (response.status === 409 && payload?.event && base) {
+        const current = payload.event;
+        const { merged, conflicts } = mergeEmergencyEventEdits(base.input, input, emergencyEventToInput(current));
+        setEvents((list) => sortEmergencyEvents([current, ...list.filter((item) => item.id !== current.id)]));
+        base = { id: current.id, updatedAt: current.updatedAt, input: emergencyEventToInput(current) };
+        setEditing(base);
+
+        if (conflicts.length) {
+          setDraft({ ...merged, visits: merged.visits.length ? merged.visits : [emptyEmergencyVisit()] });
+          setNotice({
+            kind: "error",
+            text: `Outra pessoa salvou este evento enquanto você editava. Juntei as duas versões no formulário, sem perder nenhuma ida. Vocês dois mudaram: ${conflicts.join(", ")}. Ficou a sua versão; confira e clique em Salvar alterações.`,
+          });
+          return;
+        }
+
+        input = merged;
+        mergedNote = " Outra pessoa tinha salvo este evento antes; as alterações das duas foram mantidas.";
+        ({ response, payload } = await send(input, base));
+      }
 
       if (!response.ok || !payload?.event) {
         setNotice({ kind: "error", text: payload?.error ?? "A nuvem não confirmou a gravação. O evento não foi salvo; tente de novo." });
@@ -225,13 +247,26 @@ export function EmergencyEventsPanel() {
 
       const saved = payload.event;
       setEvents((current) => sortEmergencyEvents([saved, ...current.filter((event) => event.id !== saved.id)]));
-      setNotice({ kind: "success", text: editingId ? `Evento “${saved.name}” atualizado.` : `Evento “${saved.name}” registrado.` });
+      setNotice({
+        kind: "success",
+        text: (editingId ? `Evento “${saved.name}” atualizado.` : `Evento “${saved.name}” registrado.`) + mergedNote,
+      });
       resetForm();
     } catch {
       setNotice({ kind: "error", text: "Sem conexão com a nuvem. O evento não foi salvo; confira a internet e tente de novo." });
     } finally {
       setIsSaving(false);
     }
+  }
+
+  async function send(input: EmergencyEventInput, base: EditingBase | null) {
+    const response = await fetch("/api/emergency-events", {
+      method: base ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(base ? { id: base.id, expectedUpdatedAt: base.updatedAt, ...input } : input),
+    });
+    const payload = (await response.json().catch(() => null)) as SaveResponse | null;
+    return { response, payload };
   }
 
   async function remove(event: EmergencyEvent) {
@@ -781,6 +816,10 @@ function FormHelp() {
       <p>
         <strong>Descrição do fato:</strong> o que foi informado, por quem, o que já se sabe e o que ficou de
         encaminhamento. O que a equipe viu em cada ida vai nas observações daquela ida.
+      </p>
+      <p>
+        <strong>Duas pessoas no mesmo evento:</strong> se alguém salvar o evento enquanto você edita, o app junta as duas
+        edições e nenhuma ida se perde. Se as duas mudaram o mesmo campo, ele avisa qual foi para você conferir.
       </p>
       <p>Por enquanto os eventos aparecem só aqui. Depois eles serão mostrados também em Campanhas.</p>
     </>
