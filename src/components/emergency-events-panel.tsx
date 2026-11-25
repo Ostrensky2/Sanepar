@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, PencilLine, Siren, Trash2 } from "lucide-react";
+import { Check, PencilLine, Plus, Siren, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { inputClassName, textareaClassName } from "@/components/field-diary/constants";
 import { PointSelect, pointOptionLabel, type PointOption } from "@/components/point-select";
@@ -12,31 +12,40 @@ import {
   type UserCategory,
 } from "@/lib/access-control";
 import {
+  EMERGENCY_ACTIVITY_OTHER_MAX,
   EMERGENCY_DESCRIPTION_MAX,
   EMERGENCY_LOCATION_MAX,
   EMERGENCY_NAME_MAX,
+  EMERGENCY_OBJECTIVE_MAX,
   EMERGENCY_OTHER_MAX,
+  EMERGENCY_VISIT_NOTES_MAX,
+  EMERGENCY_VISITS_MAX,
   emergencyActivities,
   emergencyActivitiesText,
   emergencyProblems,
   emergencyProblemText,
+  emergencyVisitOrdinal,
   emptyEmergencyEventInput,
+  emptyEmergencyVisit,
   formatEmergencyDate,
   normalizeEmergencyEventInput,
   sortEmergencyEvents,
   type EmergencyActivityId,
   type EmergencyEvent,
   type EmergencyEventInput,
+  type EmergencyInputCheck,
+  type EmergencyVisit,
 } from "@/lib/emergency-events";
 
 type Notice = { kind: "success" | "error"; text: string } | null;
+type InvalidField = { field: Extract<EmergencyInputCheck, { ok: false }>["field"]; visitIndex?: number } | null;
 type PointOptionsResponse = { options?: Array<{ sia?: string; locationName?: string; municipality?: string }> };
 
 const fieldClassName = `${inputClassName} w-full min-w-0`;
 
 /**
- * Central de dados › Eventos emergenciais: registrar e consultar idas a campo fora
- * da rotina das campanhas (regras em lib/emergency-events).
+ * Central de dados › Eventos emergenciais: registrar e consultar problemas comunicados
+ * fora da rotina das campanhas e cada ida da equipe ao local (regras em lib/emergency-events).
  */
 export function EmergencyEventsPanel() {
   const category = useActiveCategory();
@@ -50,7 +59,7 @@ export function EmergencyEventsPanel() {
   const [editingId, setEditingId] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
-  const [invalidField, setInvalidField] = useState<keyof EmergencyEventInput | "">("");
+  const [invalid, setInvalid] = useState<InvalidField>(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -91,18 +100,52 @@ export function EmergencyEventsPanel() {
     return () => controller.abort();
   }, [load]);
 
-  function update(patch: Partial<EmergencyEventInput>) {
-    setDraft((current) => ({ ...current, ...patch }));
-    setInvalidField("");
+  /** Quem volta a mexer no formulário depois de um aviso de erro não precisa mais ver o aviso. */
+  function clearError() {
+    setInvalid(null);
+    setNotice((current) => (current?.kind === "error" ? null : current));
   }
 
-  function toggleActivity(id: EmergencyActivityId) {
+  function update(patch: Partial<EmergencyEventInput>) {
+    setDraft((current) => ({ ...current, ...patch }));
+    clearError();
+  }
+
+  function updateVisit(visitId: string, patch: Partial<EmergencyVisit>) {
     setDraft((current) => ({
       ...current,
-      activities: current.activities.includes(id)
-        ? current.activities.filter((activity) => activity !== id)
-        : [...current.activities, id],
+      visits: current.visits.map((visit) => (visit.id === visitId ? { ...visit, ...patch } : visit)),
     }));
+    clearError();
+  }
+
+  function toggleActivity(visitId: string, id: EmergencyActivityId) {
+    setDraft((current) => ({
+      ...current,
+      visits: current.visits.map((visit) =>
+        visit.id === visitId
+          ? {
+              ...visit,
+              activities: visit.activities.includes(id)
+                ? visit.activities.filter((activity) => activity !== id)
+                : [...visit.activities, id],
+            }
+          : visit,
+      ),
+    }));
+    clearError();
+  }
+
+  function addVisit() {
+    const index = draft.visits.length;
+    setDraft((current) => ({ ...current, visits: [...current.visits, emptyEmergencyVisit()] }));
+    clearError();
+    focusVisit(index);
+  }
+
+  function removeVisit(visitId: string) {
+    setDraft((current) => ({ ...current, visits: current.visits.filter((visit) => visit.id !== visitId) }));
+    clearError();
   }
 
   function choosePoint(value: string) {
@@ -115,14 +158,19 @@ export function EmergencyEventsPanel() {
     });
   }
 
-  function startEditing(event: EmergencyEvent) {
+  /** Abre o evento no formulário. Com `withNewVisit`, já acrescenta uma ida em branco no fim. */
+  function startEditing(event: EmergencyEvent, { withNewVisit = false } = {}) {
+    const visits = event.visits.map((visit) => ({ ...visit, activities: [...visit.activities] }));
+
+    if (withNewVisit || !visits.length) {
+      visits.push(emptyEmergencyVisit());
+    }
+
     setEditingId(event.id);
     setDraft({
       name: event.name,
       reportedDate: event.reportedDate,
-      visitDate: event.visitDate,
-      activities: event.activities,
-      activityOther: event.activityOther,
+      visits,
       mainProblem: event.mainProblem,
       mainProblemOther: event.mainProblemOther,
       sia: event.sia,
@@ -130,14 +178,19 @@ export function EmergencyEventsPanel() {
       description: event.description,
     });
     setNotice(null);
-    setInvalidField("");
-    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setInvalid(null);
+
+    if (withNewVisit) {
+      focusVisit(visits.length - 1);
+    } else {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
 
   function resetForm() {
     setEditingId("");
     setDraft(emptyEmergencyEventInput());
-    setInvalidField("");
+    setInvalid(null);
   }
 
   async function save(formEvent: FormEvent) {
@@ -146,8 +199,8 @@ export function EmergencyEventsPanel() {
 
     if (!checked.ok) {
       setNotice({ kind: "error", text: checked.error });
-      setInvalidField(checked.field);
-      focusField(checked.field);
+      setInvalid({ field: checked.field, visitIndex: checked.visitIndex });
+      focusField(checked.field, checked.visitIndex);
       return;
     }
 
@@ -160,11 +213,13 @@ export function EmergencyEventsPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editingId ? { id: editingId, ...checked.event } : checked.event),
       });
-      const payload = (await response.json().catch(() => null)) as { event?: EmergencyEvent; error?: string; field?: keyof EmergencyEventInput } | null;
+      const payload = (await response.json().catch(() => null)) as
+        | { event?: EmergencyEvent; error?: string; field?: NonNullable<InvalidField>["field"]; visitIndex?: number }
+        | null;
 
       if (!response.ok || !payload?.event) {
         setNotice({ kind: "error", text: payload?.error ?? "A nuvem não confirmou a gravação. O evento não foi salvo; tente de novo." });
-        if (payload?.field) setInvalidField(payload.field);
+        if (payload?.field) setInvalid({ field: payload.field, visitIndex: payload.visitIndex });
         return;
       }
 
@@ -203,8 +258,8 @@ export function EmergencyEventsPanel() {
   const lastEvent = events[0];
   const summary = useMemo(() => {
     if (!events.length) return "Nenhum evento registrado ainda.";
-    const visited = events.filter((event) => event.visitDate).length;
-    return `${events.length} ${events.length === 1 ? "evento" : "eventos"} · ${visited} com ida a campo · mais recente em ${formatEmergencyDate(lastEvent.reportedDate)}`;
+    const visits = events.reduce((total, event) => total + event.visits.length, 0);
+    return `${events.length} ${events.length === 1 ? "evento" : "eventos"} · ${visits} ${visits === 1 ? "ida" : "idas"} ao local · mais recente em ${formatEmergencyDate(lastEvent.reportedDate)}`;
   }, [events, lastEvent]);
 
   return (
@@ -240,7 +295,7 @@ export function EmergencyEventsPanel() {
             ) : null}
           </div>
 
-          <Labeled label="Nome do evento" required invalid={invalidField === "name"}>
+          <Labeled label="Nome do evento" required invalid={isInvalid(invalid, "name")}>
             <input
               id="emergency-name"
               value={draft.name}
@@ -248,42 +303,28 @@ export function EmergencyEventsPanel() {
               placeholder="Ex.: Cheiro forte na captação do Iraí"
               onChange={(event) => update({ name: event.target.value })}
               className={fieldClassName}
-              aria-invalid={invalidField === "name"}
+              aria-invalid={isInvalid(invalid, "name")}
             />
           </Labeled>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Labeled label="Data do evento (informada)" required invalid={invalidField === "reportedDate"}>
+            <Labeled label="Data do evento (informada)" required invalid={isInvalid(invalid, "reportedDate")}>
               <input
                 id="emergency-reportedDate"
                 type="date"
                 value={draft.reportedDate}
                 onChange={(event) => update({ reportedDate: event.target.value })}
                 className={fieldClassName}
-                aria-invalid={invalidField === "reportedDate"}
+                aria-invalid={isInvalid(invalid, "reportedDate")}
               />
             </Labeled>
-            <Labeled label="Data de ida ao local" invalid={invalidField === "visitDate"}>
-              <input
-                id="emergency-visitDate"
-                type="date"
-                value={draft.visitDate}
-                min={draft.reportedDate || undefined}
-                onChange={(event) => update({ visitDate: event.target.value })}
-                className={fieldClassName}
-                aria-invalid={invalidField === "visitDate"}
-              />
-            </Labeled>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Labeled label="Problema principal" required invalid={invalidField === "mainProblem"}>
+            <Labeled label="Problema principal" required invalid={isInvalid(invalid, "mainProblem")}>
               <select
                 id="emergency-mainProblem"
                 value={draft.mainProblem}
                 onChange={(event) => update({ mainProblem: event.target.value as EmergencyEventInput["mainProblem"] })}
                 className={fieldClassName}
-                aria-invalid={invalidField === "mainProblem"}
+                aria-invalid={isInvalid(invalid, "mainProblem")}
               >
                 <option value="">Escolha o problema</option>
                 {emergencyProblems.map((problem) => (
@@ -293,19 +334,20 @@ export function EmergencyEventsPanel() {
                 ))}
               </select>
             </Labeled>
-            {draft.mainProblem === "other" ? (
-              <Labeled label="Qual problema?" required invalid={invalidField === "mainProblemOther"}>
-                <input
-                  id="emergency-mainProblemOther"
-                  value={draft.mainProblemOther}
-                  maxLength={EMERGENCY_OTHER_MAX}
-                  onChange={(event) => update({ mainProblemOther: event.target.value })}
-                  className={fieldClassName}
-                  aria-invalid={invalidField === "mainProblemOther"}
-                />
-              </Labeled>
-            ) : null}
           </div>
+
+          {draft.mainProblem === "other" ? (
+            <Labeled label="Qual problema?" required invalid={isInvalid(invalid, "mainProblemOther")}>
+              <input
+                id="emergency-mainProblemOther"
+                value={draft.mainProblemOther}
+                maxLength={EMERGENCY_OTHER_MAX}
+                onChange={(event) => update({ mainProblemOther: event.target.value })}
+                className={fieldClassName}
+                aria-invalid={isInvalid(invalid, "mainProblemOther")}
+              />
+            </Labeled>
+          ) : null}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <PointSelect
@@ -329,58 +371,50 @@ export function EmergencyEventsPanel() {
             </Labeled>
           </div>
 
-          <fieldset className="rounded-2xl border border-[var(--line-ghost)] p-4">
-            <legend className="type-label px-1 text-slate-500">Atividades realizadas em campo</legend>
-            <p className="type-metadata mb-3 text-[var(--ink-soft)]">Toque em todas as que foram feitas.</p>
-            <div className="flex flex-wrap gap-2">
-              {emergencyActivities.map((activity) => {
-                const selected = draft.activities.includes(activity.id);
-                return (
-                  <button
-                    key={activity.id}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => toggleActivity(activity.id)}
-                    className={`inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-sm font-bold transition ${
-                      selected
-                        ? "border-[var(--brand-navy-strong)] bg-[var(--brand-navy-strong)] text-white"
-                        : "border-[var(--line-strong)] bg-white text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)]"
-                    }`}
-                  >
-                    {selected ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
-                    {activity.label}
-                  </button>
-                );
-              })}
-            </div>
-            {draft.activities.includes("other") ? (
-              <div className="mt-3">
-                <Labeled label="Qual outra atividade?" required invalid={invalidField === "activityOther"}>
-                  <input
-                    id="emergency-activityOther"
-                    value={draft.activityOther}
-                    maxLength={EMERGENCY_OTHER_MAX}
-                    onChange={(event) => update({ activityOther: event.target.value })}
-                    className={fieldClassName}
-                    aria-invalid={invalidField === "activityOther"}
-                  />
-                </Labeled>
-              </div>
-            ) : null}
-          </fieldset>
-
-          <Labeled label="Descrição do fato" required invalid={invalidField === "description"}>
+          <Labeled label="Descrição do fato" required invalid={isInvalid(invalid, "description")}>
             <textarea
               id="emergency-description"
               value={draft.description}
               maxLength={EMERGENCY_DESCRIPTION_MAX}
               rows={5}
-              placeholder="O que foi informado, o que a equipe viu no local, quem acompanhou e o que ficou de encaminhamento."
+              placeholder="O que foi informado, por quem, o que já se sabe e o que ficou de encaminhamento."
               onChange={(event) => update({ description: event.target.value })}
               className={`${textareaClassName} w-full min-w-0`}
-              aria-invalid={invalidField === "description"}
+              aria-invalid={isInvalid(invalid, "description")}
             />
           </Labeled>
+
+          <fieldset className="space-y-3">
+            <legend className="type-label text-slate-500">Idas ao local</legend>
+            <p className="type-metadata text-[var(--ink-soft)]">
+              Uma ida para cada vez que a equipe foi ao local, cada uma com a data, o objetivo e o que foi feito. Se ainda
+              ninguém foi, deixe em branco e acrescente depois.
+            </p>
+
+            {draft.visits.map((visit, index) => (
+              <VisitFields
+                key={visit.id}
+                visit={visit}
+                index={index}
+                reportedDate={draft.reportedDate}
+                invalid={invalid?.visitIndex === index ? invalid.field : null}
+                onChange={(patch) => updateVisit(visit.id, patch)}
+                onToggleActivity={(id) => toggleActivity(visit.id, id)}
+                onRemove={() => removeVisit(visit.id)}
+              />
+            ))}
+
+            {draft.visits.length < EMERGENCY_VISITS_MAX ? (
+              <button
+                type="button"
+                onClick={addVisit}
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dashed border-[var(--brand-navy-strong)] px-4 text-sm font-bold text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)]"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                {draft.visits.length ? "Adicionar outra ida ao local" : "Adicionar ida ao local"}
+              </button>
+            ) : null}
+          </fieldset>
 
           <div role="status" aria-live="polite">
             {notice ? <NoticeBox notice={notice} /> : null}
@@ -439,7 +473,7 @@ export function EmergencyEventsPanel() {
                   <p className="type-metadata mt-1 text-[var(--ink-soft)]">
                     Evento em {formatEmergencyDate(event.reportedDate)}
                     {" · "}
-                    {event.visitDate ? `ida ao local em ${formatEmergencyDate(event.visitDate)}` : "sem ida ao local registrada"}
+                    {visitCountText(event.visits.length)}
                     {event.sia || event.location ? ` · ${placeText(event, points)}` : ""}
                   </p>
                 </div>
@@ -448,23 +482,55 @@ export function EmergencyEventsPanel() {
                 </span>
               </div>
 
-              {event.activities.length ? (
-                <ul aria-label="Atividades realizadas" className="mt-3 flex flex-wrap gap-1.5">
-                  {emergencyActivitiesText(event).map((label) => (
-                    <li key={label} className="rounded-full bg-[var(--surface-soft)] px-3 py-1 text-xs font-semibold text-[var(--brand-navy-strong)]">
-                      {label}
+              <p className="mt-3 whitespace-pre-line text-sm text-[var(--ink)]">{event.description}</p>
+
+              {event.visits.length ? (
+                <ol aria-label={`Idas ao local: ${event.name}`} className="mt-3 grid gap-2 border-l-2 border-[var(--line-strong)] pl-3">
+                  {event.visits.map((visit, index) => (
+                    <li key={visit.id} className="grid gap-1.5">
+                      <p className="text-sm font-bold text-[var(--brand-navy-strong)]">
+                        {emergencyVisitOrdinal(index)} · {formatEmergencyDate(visit.date)}
+                        {visit.objective ? <span className="font-semibold text-[var(--ink-soft)]"> · {visit.objective}</span> : null}
+                      </p>
+                      {visit.activities.some((activity) => activity !== "other") ? (
+                        <ul aria-label="Atividades realizadas" className="flex flex-wrap gap-1.5">
+                          {emergencyActivitiesText({
+                            activities: visit.activities.filter((activity) => activity !== "other"),
+                            activityOther: "",
+                          }).map((label) => (
+                            <li key={label} className="rounded-full bg-[var(--surface-soft)] px-3 py-1 text-xs font-semibold text-[var(--brand-navy-strong)]">
+                              {label}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {visit.activities.includes("other") && visit.activityOther ? (
+                        <p className="whitespace-pre-line break-words text-sm text-[var(--ink)]">
+                          <span className="font-semibold text-[var(--brand-navy-strong)]">Outras atividades: </span>
+                          {visit.activityOther}
+                        </p>
+                      ) : null}
+                      {visit.notes ? <p className="whitespace-pre-line text-sm text-[var(--ink)]">{visit.notes}</p> : null}
                     </li>
                   ))}
-                </ul>
+                </ol>
               ) : null}
-
-              <p className="mt-3 whitespace-pre-line text-sm text-[var(--ink)]">{event.description}</p>
 
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                 <p className="type-metadata text-[var(--ink-soft)]">
                   {event.updatedBy || event.createdBy ? `Registrado por ${event.updatedBy || event.createdBy}` : ""}
                 </p>
                 <div className="flex flex-wrap gap-2">
+                  {canEdit && event.visits.length < EMERGENCY_VISITS_MAX ? (
+                    <button
+                      type="button"
+                      onClick={() => startEditing(event, { withNewVisit: true })}
+                      className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--line-strong)] px-3 text-sm font-bold text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)]"
+                    >
+                      <Plus className="h-4 w-4" aria-hidden="true" />
+                      Nova ida
+                    </button>
+                  ) : null}
                   {canEdit ? (
                     <button
                       type="button"
@@ -514,8 +580,151 @@ function placeText(event: EmergencyEvent, points: PointOption[]) {
   return event.location ? `${code} · ${event.location}` : code;
 }
 
-function focusField(field: keyof EmergencyEventInput) {
-  window.requestAnimationFrame(() => document.getElementById(`emergency-${field}`)?.focus());
+function visitCountText(count: number) {
+  if (!count) return "ninguém foi ao local ainda";
+  return count === 1 ? "1 ida ao local" : `${count} idas ao local`;
+}
+
+function isInvalid(invalid: InvalidField, field: NonNullable<InvalidField>["field"], visitIndex?: number) {
+  return Boolean(invalid && invalid.field === field && invalid.visitIndex === visitIndex);
+}
+
+function fieldId(field: NonNullable<InvalidField>["field"], visitIndex?: number) {
+  return visitIndex === undefined ? `emergency-${field}` : `emergency-visit-${visitIndex}-${field.replace(/^visits\./, "")}`;
+}
+
+function focusField(field: NonNullable<InvalidField>["field"], visitIndex?: number) {
+  window.requestAnimationFrame(() => document.getElementById(fieldId(field, visitIndex))?.focus());
+}
+
+/** Leva a tela até a ida e põe o cursor na data (depois que o React desenhar a ida nova). */
+function focusVisit(index: number) {
+  window.setTimeout(() => {
+    const block = document.getElementById(`emergency-visit-${index}`);
+    block?.scrollIntoView({ behavior: "smooth", block: "center" });
+    document.getElementById(`emergency-visit-${index}-date`)?.focus({ preventScroll: true });
+  }, 60);
+}
+
+function VisitFields({
+  visit,
+  index,
+  reportedDate,
+  invalid,
+  onChange,
+  onToggleActivity,
+  onRemove,
+}: {
+  visit: EmergencyVisit;
+  index: number;
+  reportedDate: string;
+  /** Campo desta ida que a conferência recusou. */
+  invalid: NonNullable<InvalidField>["field"] | null;
+  onChange: (patch: Partial<EmergencyVisit>) => void;
+  onToggleActivity: (id: EmergencyActivityId) => void;
+  onRemove: () => void;
+}) {
+  const title = `${emergencyVisitOrdinal(index)} ao local`;
+  const id = (field: keyof EmergencyVisit) => `emergency-visit-${index}-${field}`;
+
+  return (
+    <section
+      id={`emergency-visit-${index}`}
+      aria-label={title}
+      className="scroll-mt-24 space-y-4 rounded-2xl border border-[var(--line-ghost)] bg-[var(--surface-soft)]/40 p-4"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-black text-[var(--brand-navy-strong)]">{title}</h3>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-bold text-[var(--ink-soft)] hover:bg-white hover:text-[#a50f15]"
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+          Remover esta ida
+        </button>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Labeled label="Data da ida" required invalid={invalid === "visits.date"}>
+          <input
+            id={id("date")}
+            type="date"
+            value={visit.date}
+            min={reportedDate || undefined}
+            onChange={(event) => onChange({ date: event.target.value })}
+            className={fieldClassName}
+            aria-invalid={invalid === "visits.date"}
+          />
+        </Labeled>
+        <Labeled label="Objetivo desta ida">
+          <input
+            id={id("objective")}
+            value={visit.objective}
+            maxLength={EMERGENCY_OBJECTIVE_MAX}
+            placeholder="Ex.: primeira vistoria, nova coleta, conferir se melhorou"
+            onChange={(event) => onChange({ objective: event.target.value })}
+            className={fieldClassName}
+          />
+        </Labeled>
+      </div>
+
+      <div role="group" aria-labelledby={`${id("activities")}-label`}>
+        <p id={`${id("activities")}-label`} className="text-sm font-semibold text-[var(--ink-soft)]">
+          Atividades realizadas nesta ida
+        </p>
+        <p className="type-metadata mb-2 text-[var(--ink-soft)]">Toque em todas as que foram feitas.</p>
+        <div className="flex flex-wrap gap-2">
+          {emergencyActivities.map((activity) => {
+            const selected = visit.activities.includes(activity.id);
+            return (
+              <button
+                key={activity.id}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => onToggleActivity(activity.id)}
+                className={`inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-sm font-bold transition ${
+                  selected
+                    ? "border-[var(--brand-navy-strong)] bg-[var(--brand-navy-strong)] text-white"
+                    : "border-[var(--line-strong)] bg-white text-[var(--brand-navy-strong)] hover:bg-[var(--surface-soft)]"
+                }`}
+              >
+                {selected ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
+                {activity.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {visit.activities.includes("other") ? (
+        <Labeled label="Descreva a outra atividade (ou as outras)" required invalid={invalid === "visits.activityOther"}>
+          <textarea
+            id={id("activityOther")}
+            value={visit.activityOther}
+            maxLength={EMERGENCY_ACTIVITY_OTHER_MAX}
+            rows={3}
+            placeholder="Ex.: batimetria; coleta de macrófitas; reunião com a operação da ETA"
+            onChange={(event) => onChange({ activityOther: event.target.value })}
+            className={`${textareaClassName} min-h-20 w-full min-w-0`}
+            aria-invalid={invalid === "visits.activityOther"}
+          />
+        </Labeled>
+      ) : null}
+
+      <Labeled label="Observações desta ida">
+        <textarea
+          id={id("notes")}
+          value={visit.notes}
+          maxLength={EMERGENCY_VISIT_NOTES_MAX}
+          rows={3}
+          placeholder="O que a equipe viu, quem acompanhou, o que ficou para a próxima ida."
+          onChange={(event) => onChange({ notes: event.target.value })}
+          className={`${textareaClassName} min-h-20 w-full min-w-0`}
+        />
+      </Labeled>
+    </section>
+  );
 }
 
 function Labeled({ label, required, invalid, children }: { label: string; required?: boolean; invalid?: boolean; children: ReactNode }) {
@@ -546,28 +755,32 @@ function FormHelp() {
   return (
     <>
       <p>
-        <strong>Para que serve:</strong> guardar as idas a campo que não são das campanhas, quando alguém avisa de um
-        problema na água: filtro entupindo, cheiro ou gosto, floração de algas, peixes mortos.
+        <strong>Para que serve:</strong> guardar os problemas na água que levam a equipe a campo fora das campanhas
+        (filtro entupindo, cheiro ou gosto, floração de algas, peixes mortos) e cada ida ao local por causa deles.
       </p>
       <p>
         <strong>Data do evento (informada):</strong> o dia em que o problema aconteceu ou foi comunicado à equipe.
-        <br />
-        <strong>Data de ida ao local:</strong> o dia em que a equipe foi lá. Pode ficar em branco e ser preenchida depois.
+      </p>
+      <p>
+        <strong>Idas ao local:</strong> uma para cada vez que a equipe foi lá, com a data, o objetivo (primeira vistoria,
+        nova coleta, conferir se melhorou…) e as atividades feitas. Se ninguém foi ainda, deixe em branco. Para voltar
+        ao local outro dia, use <strong>Nova ida</strong> no evento já registrado, ou{" "}
+        <strong>Adicionar outra ida ao local</strong> no formulário.
       </p>
       <p>
         <strong>Problema principal:</strong> escolha o que mais pesou. Se nenhum servir, use “Outro problema” e escreva qual.
       </p>
       <p>
-        <strong>Atividades realizadas:</strong> toque em todas as que foram feitas (dá para marcar várias). Toque de novo
-        para desmarcar.
+        <strong>Atividades realizadas:</strong> em cada ida, toque em todas as que foram feitas (dá para marcar várias).
+        Toque de novo para desmarcar. Se marcar “Outra atividade”, abre um campo para descrever qual (ou quais).
       </p>
       <p>
         <strong>Ponto e local:</strong> se o evento foi num ponto das campanhas, escolha o SIA e o local é preenchido
         sozinho. Se foi em outro lugar, deixe “Fora dos pontos da campanha” e escreva o local.
       </p>
       <p>
-        <strong>Descrição do fato:</strong> o que foi informado, o que a equipe viu, quem acompanhou e o que ficou de
-        encaminhamento.
+        <strong>Descrição do fato:</strong> o que foi informado, por quem, o que já se sabe e o que ficou de
+        encaminhamento. O que a equipe viu em cada ida vai nas observações daquela ida.
       </p>
       <p>Por enquanto os eventos aparecem só aqui. Depois eles serão mostrados também em Campanhas.</p>
     </>

@@ -1,10 +1,13 @@
 -- Eventos emergenciais (Central de dados › Eventos emergenciais).
 --
--- Uma linha por evento: ida a campo fora da rotina das campanhas por causa de um
--- problema comunicado (entupimento de filtros, cheiro ou gosto, floração…).
+-- Uma linha por evento: problema comunicado fora da rotina das campanhas
+-- (entupimento de filtros, cheiro ou gosto, floração…). As idas da equipe ao local
+-- ficam na coluna `visits` (lista jsonb): um evento pode ter várias idas, cada uma
+-- com data, objetivo, atividades feitas e observações.
 -- As listas de atividades e de problemas ficam no aplicativo
 -- (src/lib/emergency-events.ts), para poderem crescer sem nova migration; aqui o
--- banco só garante tamanhos e datas coerentes.
+-- banco só garante tamanhos coerentes. As datas das idas (nunca antes da data do
+-- evento) são conferidas pelo aplicativo, no servidor.
 --
 -- Só acrescenta: nenhuma tabela existente muda. Idempotente.
 
@@ -12,9 +15,7 @@ create table if not exists public.emergency_events (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   reported_date date not null,
-  visit_date date,
-  activities text[] not null default '{}',
-  activity_other text,
+  visits jsonb not null default '[]'::jsonb,
   main_problem text not null,
   main_problem_other text,
   sia text,
@@ -26,12 +27,8 @@ create table if not exists public.emergency_events (
   updated_at timestamptz not null default now(),
   constraint emergency_events_name_ck
     check (char_length(btrim(name)) between 1 and 160),
-  constraint emergency_events_dates_ck
-    check (visit_date is null or visit_date >= reported_date),
-  constraint emergency_events_activities_ck
-    check (cardinality(activities) <= 30),
-  constraint emergency_events_activity_other_ck
-    check (activity_other is null or char_length(activity_other) <= 160),
+  constraint emergency_events_visits_ck
+    check (jsonb_typeof(visits) = 'array' and jsonb_array_length(visits) <= 50),
   constraint emergency_events_main_problem_ck
     check (char_length(main_problem) between 1 and 40),
   constraint emergency_events_main_problem_other_ck
@@ -48,13 +45,11 @@ create index if not exists emergency_events_reported_date_idx
   on public.emergency_events (reported_date desc);
 
 comment on table public.emergency_events is
-  'Eventos emergenciais: idas a campo fora da rotina das campanhas, com o problema principal e as atividades feitas.';
+  'Eventos emergenciais: problemas comunicados fora da rotina das campanhas, com o problema principal e cada ida da equipe ao local.';
 comment on column public.emergency_events.reported_date is
   'Data do evento, como foi informada à equipe.';
-comment on column public.emergency_events.visit_date is
-  'Dia em que a equipe foi ao local. Vazio enquanto ninguém foi.';
-comment on column public.emergency_events.activities is
-  'Códigos das atividades feitas em campo (lista em src/lib/emergency-events.ts).';
+comment on column public.emergency_events.visits is
+  'Idas ao local: lista de {id, date AAAA-MM-DD, objective, activities [códigos de src/lib/emergency-events.ts], activityOther, notes}. Vazia enquanto ninguém foi.';
 comment on column public.emergency_events.main_problem is
   'Código do problema principal (lista em src/lib/emergency-events.ts).';
 

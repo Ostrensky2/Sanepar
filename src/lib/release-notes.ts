@@ -87,7 +87,7 @@ export const MAJOR_RELEASES: MajorRelease[] = [
         version: "2.1.3",
         date: "25/11/2026",
         items: [
-          "Nova aba Central de dados › Eventos emergenciais: registra as idas a campo fora da rotina (nome do evento, data informada, data de ida ao local, problema principal, ponto ou local, atividades feitas, que se marcam com um toque, e a descrição do fato). Dá para editar e apagar.",
+          "Nova aba Central de dados › Eventos emergenciais: registra os problemas comunicados fora da rotina das campanhas (nome do evento, data informada, problema principal, ponto ou local e a descrição do fato) e cada ida da equipe ao local. Um evento pode ter várias idas, cada uma com data, objetivo, atividades feitas (marcadas com um toque; “Outra atividade” abre um campo para descrever) e observações. O botão “Nova ida” acrescenta uma ida a um evento já registrado. Dá para editar e apagar.",
           "Registro de campo: o dia de hoje é o de Curitiba também à noite (depois das 21h o app já sugeria o dia seguinte), e o registro novo já vem com o dia da campanha certo, em vez de sempre “Dia 1”.",
           "Campanhas abre na campanha que está em campo quando o aparelho ainda não tinha escolhido nenhuma.",
           "Atividades complementares: salvar uma atividade não apaga mais as que outra pessoa registrou com a página aberta ao mesmo tempo, e o aviso diz qual campo falta.",

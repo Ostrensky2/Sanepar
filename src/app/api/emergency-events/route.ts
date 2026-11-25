@@ -2,9 +2,9 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/api-auth";
 import {
-  isEmergencyActivityId,
   isEmergencyProblemId,
   normalizeEmergencyEventInput,
+  parseStoredEmergencyVisits,
   sortEmergencyEvents,
   type EmergencyEvent,
   type EmergencyEventInput,
@@ -23,9 +23,7 @@ type Row = {
   id: string;
   name: string;
   reported_date: string;
-  visit_date: string | null;
-  activities: string[] | null;
-  activity_other: string | null;
+  visits: unknown;
   main_problem: string;
   main_problem_other: string | null;
   sia: string | null;
@@ -80,7 +78,10 @@ export async function POST(request: Request) {
     const checked = normalizeEmergencyEventInput(body);
 
     if (!checked.ok) {
-      return NextResponse.json({ error: checked.error, field: checked.field }, { status: 400 });
+      return NextResponse.json(
+        { error: checked.error, field: checked.field, visitIndex: checked.visitIndex },
+        { status: 400 },
+      );
     }
 
     const now = new Date().toISOString();
@@ -109,7 +110,10 @@ export async function PATCH(request: Request) {
     const checked = normalizeEmergencyEventInput(body);
 
     if (!checked.ok) {
-      return NextResponse.json({ error: checked.error, field: checked.field }, { status: 400 });
+      return NextResponse.json(
+        { error: checked.error, field: checked.field, visitIndex: checked.visitIndex },
+        { status: 400 },
+      );
     }
 
     const updated = await supabase
@@ -210,9 +214,7 @@ function toRow(event: EmergencyEventInput) {
   return {
     name: event.name,
     reported_date: event.reportedDate,
-    visit_date: event.visitDate || null,
-    activities: event.activities,
-    activity_other: event.activityOther || null,
+    visits: event.visits,
     main_problem: event.mainProblem,
     main_problem_other: event.mainProblemOther || null,
     sia: event.sia || null,
@@ -226,9 +228,7 @@ function fromRow(row: Row): EmergencyEvent {
     id: row.id,
     name: row.name,
     reportedDate: String(row.reported_date ?? "").slice(0, 10),
-    visitDate: row.visit_date ? String(row.visit_date).slice(0, 10) : "",
-    activities: (row.activities ?? []).filter(isEmergencyActivityId),
-    activityOther: row.activity_other ?? "",
+    visits: parseStoredEmergencyVisits(row.visits),
     // Código que saiu da lista do app continua visível como "Outro problema".
     mainProblem: isEmergencyProblemId(row.main_problem) ? row.main_problem : "other",
     mainProblemOther: isEmergencyProblemId(row.main_problem) ? row.main_problem_other ?? "" : row.main_problem,

@@ -20,8 +20,9 @@ const ID = "4f0f3c1e-8a55-4c55-9d3e-1d1a2b3c4d5e";
 const input = {
   name: "Filtros entupindo na ETA Iraí",
   reportedDate: "2026-11-20",
-  visitDate: "2026-11-21",
-  activities: ["water", "edna", "photos"],
+  visits: [
+    { id: "ida-1", date: "2026-11-21", objective: "Primeira vistoria", activities: ["water", "edna", "photos"], notes: "" },
+  ],
   mainProblem: "filter_clogging",
   sia: "780",
   location: "Captação ETA Iraí · Pinhais",
@@ -53,8 +54,16 @@ describe("/api/emergency-events", () => {
     expect(event).toMatchObject({
       name: input.name,
       reportedDate: "2026-11-20",
-      visitDate: "2026-11-21",
-      activities: ["edna", "water", "photos"],
+      visits: [
+        {
+          id: "ida-1",
+          date: "2026-11-21",
+          objective: "Primeira vistoria",
+          activities: ["edna", "water", "photos"],
+          activityOther: "",
+          notes: "",
+        },
+      ],
       mainProblem: "filter_clogging",
       sia: "780",
       createdBy: "Vilmar",
@@ -67,10 +76,22 @@ describe("/api/emergency-events", () => {
     expect(listed.events).toHaveLength(1);
     expect(auth).toHaveBeenLastCalledWith(expect.any(Request), "data.view");
 
-    const updated = await send(PATCH, "PATCH", { ...input, id: event.id, visitDate: "", mainProblem: "other", mainProblemOther: "Rompimento de adutora" });
+    // Nova ida ao local, outro dia e com outro objetivo.
+    const secondVisit = { id: "ida-2", date: "2026-11-25", objective: "Nova coleta", activities: ["plankton", "other"], activityOther: "Coleta de macrófitas" };
+    const updated = await send(PATCH, "PATCH", {
+      ...input,
+      id: event.id,
+      visits: [...input.visits, secondVisit],
+      mainProblem: "other",
+      mainProblemOther: "Rompimento de adutora",
+    });
     expect(updated.status).toBe(200);
-    expect((await updated.json()).event).toMatchObject({ visitDate: "", mainProblem: "other", mainProblemOther: "Rompimento de adutora" });
-    expect(fakeSupabase.rows(TABLE)[0]).toMatchObject({ visit_date: null, updated_by: "Vilmar" });
+    const saved = (await updated.json()).event;
+    expect(saved).toMatchObject({ mainProblem: "other", mainProblemOther: "Rompimento de adutora" });
+    expect(saved.visits.map((visit: { id: string }) => visit.id)).toEqual(["ida-1", "ida-2"]);
+    expect(saved.visits[1]).toMatchObject({ activities: ["plankton", "other"], activityOther: "Coleta de macrófitas" });
+    expect(fakeSupabase.rows(TABLE)[0]).toMatchObject({ updated_by: "Vilmar" });
+    expect((fakeSupabase.rows(TABLE)[0] as { visits: unknown[] }).visits).toHaveLength(2);
 
     const removed = await send(DELETE, "DELETE", undefined, `?id=${event.id}`);
     expect(removed.status).toBe(200);
@@ -82,6 +103,9 @@ describe("/api/emergency-events", () => {
     const response = await send(POST, "POST", { ...input, description: " " });
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ field: "description" });
+    const visit = await send(POST, "POST", { ...input, visits: [{ objective: "Sem data" }] });
+    expect(visit.status).toBe(400);
+    expect(await visit.json()).toMatchObject({ field: "visits.date", visitIndex: 0 });
     expect(fakeSupabase.rows(TABLE)).toHaveLength(0);
   });
 
@@ -107,11 +131,12 @@ describe("/api/emergency-events", () => {
 
   it("um problema que saiu da lista continua visível como 'Outro problema'", async () => {
     fakeSupabase.seed(TABLE, [{
-      id: ID, name: "Antigo", reported_date: "2026-10-01", visit_date: null, activities: ["edna", "sumiu"],
-      activity_other: null, main_problem: "problema_antigo", main_problem_other: null, sia: null, location: null,
+      id: ID, name: "Antigo", reported_date: "2026-10-01", visits: [{ id: "v1", date: "2026-10-02", activities: ["edna", "sumiu"] }],
+      main_problem: "problema_antigo", main_problem_other: null, sia: null, location: null,
       description: "x", created_by: null, updated_by: null, created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z",
     }]);
     const { events } = await (await GET(new Request(URL))).json();
-    expect(events[0]).toMatchObject({ activities: ["edna"], mainProblem: "other", mainProblemOther: "problema_antigo" });
+    expect(events[0]).toMatchObject({ mainProblem: "other", mainProblemOther: "problema_antigo" });
+    expect(events[0].visits).toEqual([{ id: "v1", date: "2026-10-02", objective: "", activities: ["edna"], activityOther: "", notes: "" }]);
   });
 });

@@ -1,8 +1,9 @@
 /**
  * Eventos emergenciais (Central de dados › Eventos emergenciais).
  *
- * Registro de uma ida a campo fora da rotina das campanhas, por causa de um problema
- * comunicado: entupimento de filtros, cheiro ou gosto na água, floração de algas…
+ * Registro de um problema comunicado fora da rotina das campanhas (entupimento de
+ * filtros, cheiro ou gosto na água, floração de algas…) e de cada ida da equipe ao
+ * local por causa dele. Um evento pode ter várias idas, com objetivos diferentes.
  *
  * Aqui ficam só as regras: listas de opções, rótulos e a conferência do que a tela
  * envia. Nada fala com banco ou tela, para poder ser testado.
@@ -46,18 +47,37 @@ export type EmergencyProblemId = (typeof emergencyProblems)[number]["id"];
 
 export const EMERGENCY_NAME_MAX = 160;
 export const EMERGENCY_OTHER_MAX = 160;
+/** "Outra atividade": cabe a descrição de várias atividades. */
+export const EMERGENCY_ACTIVITY_OTHER_MAX = 1000;
+export const EMERGENCY_OBJECTIVE_MAX = 200;
+export const EMERGENCY_VISIT_NOTES_MAX = 4000;
+export const EMERGENCY_VISITS_MAX = 50;
 export const EMERGENCY_LOCATION_MAX = 200;
 export const EMERGENCY_DESCRIPTION_MAX = 8000;
+
+/**
+ * Uma ida da equipe ao local. Um mesmo evento pode ter várias idas, cada uma com
+ * o seu objetivo (primeira vistoria, nova coleta, conferir a melhora…).
+ */
+export type EmergencyVisit = {
+  /** Identificador da ida dentro do evento (só para a tela saber qual é qual). */
+  id: string;
+  /** Dia da ida (AAAA-MM-DD). */
+  date: string;
+  objective: string;
+  activities: EmergencyActivityId[];
+  /** Descrição livre quando "Outra atividade" está marcada (pode ser mais de uma). */
+  activityOther: string;
+  notes: string;
+};
 
 export type EmergencyEvent = {
   id: string;
   name: string;
   /** Data do evento, como foi informada (AAAA-MM-DD). */
   reportedDate: string;
-  /** Dia em que a equipe foi ao local (AAAA-MM-DD); vazio quando ainda não foi. */
-  visitDate: string;
-  activities: EmergencyActivityId[];
-  activityOther: string;
+  /** Idas ao local, da mais antiga para a mais recente. Vazio enquanto ninguém foi. */
+  visits: EmergencyVisit[];
   mainProblem: EmergencyProblemId;
   mainProblemOther: string;
   /** Ponto da campanha (SIA), quando o evento foi num ponto da lista. */
@@ -74,31 +94,48 @@ export type EmergencyEvent = {
 /** O que a tela envia para gravar. */
 export type EmergencyEventInput = Pick<
   EmergencyEvent,
-  | "name"
-  | "reportedDate"
-  | "visitDate"
-  | "activities"
-  | "activityOther"
-  | "mainProblem"
-  | "mainProblemOther"
-  | "sia"
-  | "location"
-  | "description"
+  "name" | "reportedDate" | "visits" | "mainProblem" | "mainProblemOther" | "sia" | "location" | "description"
 >;
+
+/** Identificador novo para uma ida (no navegador ou no servidor). */
+export function newEmergencyVisitId() {
+  const cryptoApi = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+
+  if (cryptoApi?.randomUUID) {
+    return cryptoApi.randomUUID();
+  }
+
+  return `ida-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function emptyEmergencyVisit(): EmergencyVisit {
+  return { id: newEmergencyVisitId(), date: "", objective: "", activities: [], activityOther: "", notes: "" };
+}
 
 export function emptyEmergencyEventInput(): EmergencyEventInput {
   return {
     name: "",
     reportedDate: "",
-    visitDate: "",
-    activities: [],
-    activityOther: "",
+    visits: [emptyEmergencyVisit()],
     mainProblem: "" as EmergencyProblemId,
     mainProblemOther: "",
     sia: "",
     location: "",
     description: "",
   };
+}
+
+/** Ida sem nada preenchido: a tela mostra um bloco vazio e ele não conta como ida. */
+export function isBlankEmergencyVisit(visit: Partial<Record<keyof EmergencyVisit, unknown>>) {
+  const filled = (value: unknown) => typeof value === "string" && value.trim() !== "";
+
+  return (
+    !filled(visit.date) &&
+    !filled(visit.objective) &&
+    !filled(visit.notes) &&
+    !filled(visit.activityOther) &&
+    !(Array.isArray(visit.activities) && visit.activities.some(isEmergencyActivityId))
+  );
 }
 
 const activityIds = new Set<string>(emergencyActivities.map((activity) => activity.id));
@@ -128,10 +165,15 @@ export function emergencyProblemText(event: Pick<EmergencyEvent, "mainProblem" |
 }
 
 /** Atividades como aparecem na lista, na ordem das opções; "Outra atividade" mostra o que foi digitado. */
-export function emergencyActivitiesText(event: Pick<EmergencyEvent, "activities" | "activityOther">) {
+export function emergencyActivitiesText(visit: Pick<EmergencyVisit, "activities" | "activityOther">) {
   return emergencyActivities
-    .filter((activity) => event.activities.includes(activity.id))
-    .map((activity) => (activity.id === "other" && event.activityOther ? event.activityOther : activity.label));
+    .filter((activity) => visit.activities.includes(activity.id))
+    .map((activity) => (activity.id === "other" && visit.activityOther ? visit.activityOther : activity.label));
+}
+
+/** "1ª ida", "2ª ida"… */
+export function emergencyVisitOrdinal(index: number) {
+  return `${index + 1}ª ida`;
 }
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -173,7 +215,69 @@ function cleanLongText(value: unknown, max: number) {
 
 export type EmergencyInputCheck =
   | { ok: true; event: EmergencyEventInput }
-  | { ok: false; error: string; field: keyof EmergencyEventInput };
+  | {
+      ok: false;
+      error: string;
+      field: keyof EmergencyEventInput | `visits.${keyof EmergencyVisit}`;
+      /** Posição da ida com problema, na ordem em que a tela mostrou (começa em 0). */
+      visitIndex?: number;
+    };
+
+type VisitCheck =
+  | { ok: true; visit: EmergencyVisit }
+  | { ok: false; error: string; field: `visits.${keyof EmergencyVisit}` };
+
+const VISIT_ID = /^[A-Za-z0-9-]{1,64}$/;
+
+function normalizeVisit(value: unknown, reportedDate: string, label: string): VisitCheck {
+  const raw = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  const id = typeof raw.id === "string" && VISIT_ID.test(raw.id) ? raw.id : newEmergencyVisitId();
+  const date = typeof raw.date === "string" ? raw.date.trim() : "";
+  const activities = Array.isArray(raw.activities)
+    ? emergencyActivities.map((activity) => activity.id).filter((activityId) => (raw.activities as unknown[]).includes(activityId))
+    : [];
+  const activityOther = activities.includes("other") ? cleanLongText(raw.activityOther, EMERGENCY_ACTIVITY_OTHER_MAX) : "";
+
+  if (!date) {
+    return { ok: false, field: "visits.date", error: `${label}: informe a data da ida ao local.` };
+  }
+
+  if (!isValidIsoDate(date)) {
+    return { ok: false, field: "visits.date", error: `${label}: a data da ida ao local não é uma data válida.` };
+  }
+
+  if (date < reportedDate) {
+    return {
+      ok: false,
+      field: "visits.date",
+      error: `${label}: a ida ao local ficou antes da data do evento. Confira as duas datas.`,
+    };
+  }
+
+  if (activities.includes("other") && !activityOther) {
+    return { ok: false, field: "visits.activityOther", error: `${label}: descreva a outra atividade feita.` };
+  }
+
+  return {
+    ok: true,
+    visit: {
+      id,
+      date,
+      objective: cleanText(raw.objective, EMERGENCY_OBJECTIVE_MAX),
+      activities,
+      activityOther,
+      notes: cleanLongText(raw.notes, EMERGENCY_VISIT_NOTES_MAX),
+    },
+  };
+}
+
+/** Idas da mais antiga para a mais recente; no mesmo dia, mantém a ordem em que foram lançadas. */
+export function sortEmergencyVisits<T extends Pick<EmergencyVisit, "date">>(visits: T[]) {
+  return visits
+    .map((visit, index) => ({ visit, index }))
+    .sort((a, b) => a.visit.date.localeCompare(b.visit.date) || a.index - b.index)
+    .map(({ visit }) => visit);
+}
 
 /**
  * Confere e limpa o que veio da tela. As mesmas regras valem na tela (para avisar
@@ -183,16 +287,12 @@ export function normalizeEmergencyEventInput(value: unknown): EmergencyInputChec
   const raw = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
   const name = cleanText(raw.name, EMERGENCY_NAME_MAX);
   const reportedDate = typeof raw.reportedDate === "string" ? raw.reportedDate.trim() : "";
-  const visitDate = typeof raw.visitDate === "string" ? raw.visitDate.trim() : "";
-  const activities = Array.isArray(raw.activities)
-    ? emergencyActivities.map((activity) => activity.id).filter((id) => (raw.activities as unknown[]).includes(id))
-    : [];
   const mainProblem = raw.mainProblem;
   const description = cleanLongText(raw.description, EMERGENCY_DESCRIPTION_MAX);
-  const activityOther = activities.includes("other") ? cleanText(raw.activityOther, EMERGENCY_OTHER_MAX) : "";
   const mainProblemOther = mainProblem === "other" ? cleanText(raw.mainProblemOther, EMERGENCY_OTHER_MAX) : "";
   const sia = cleanText(raw.sia, 40);
   const location = cleanText(raw.location, EMERGENCY_LOCATION_MAX);
+  const rawVisits = Array.isArray(raw.visits) ? (raw.visits as unknown[]) : [];
 
   if (!name) {
     return { ok: false, field: "name", error: "Informe o nome do evento." };
@@ -206,18 +306,6 @@ export function normalizeEmergencyEventInput(value: unknown): EmergencyInputChec
     return { ok: false, field: "reportedDate", error: "A data do evento não é uma data válida." };
   }
 
-  if (visitDate && !isValidIsoDate(visitDate)) {
-    return { ok: false, field: "visitDate", error: "A data de ida ao local não é uma data válida." };
-  }
-
-  if (visitDate && visitDate < reportedDate) {
-    return {
-      ok: false,
-      field: "visitDate",
-      error: "A ida ao local ficou antes da data do evento. Confira as duas datas.",
-    };
-  }
-
   if (!isEmergencyProblemId(mainProblem)) {
     return { ok: false, field: "mainProblem", error: "Escolha o problema principal." };
   }
@@ -226,8 +314,28 @@ export function normalizeEmergencyEventInput(value: unknown): EmergencyInputChec
     return { ok: false, field: "mainProblemOther", error: "Escreva qual foi o problema principal." };
   }
 
-  if (activities.includes("other") && !activityOther) {
-    return { ok: false, field: "activityOther", error: "Escreva qual foi a outra atividade." };
+  const visits: EmergencyVisit[] = [];
+  const usedIds = new Set<string>();
+
+  for (const [index, rawVisit] of rawVisits.entries()) {
+    if (isBlankEmergencyVisit((rawVisit ?? {}) as Record<string, unknown>)) {
+      continue;
+    }
+
+    const checked = normalizeVisit(rawVisit, reportedDate, emergencyVisitOrdinal(index));
+
+    if (!checked.ok) {
+      return { ...checked, visitIndex: index };
+    }
+
+    // Duas idas com o mesmo identificador (cópia malfeita): a segunda ganha um novo.
+    const visit = usedIds.has(checked.visit.id) ? { ...checked.visit, id: newEmergencyVisitId() } : checked.visit;
+    usedIds.add(visit.id);
+    visits.push(visit);
+  }
+
+  if (visits.length > EMERGENCY_VISITS_MAX) {
+    return { ok: false, field: "visits", error: `Um evento pode ter até ${EMERGENCY_VISITS_MAX} idas ao local.` };
   }
 
   if (!description) {
@@ -239,9 +347,7 @@ export function normalizeEmergencyEventInput(value: unknown): EmergencyInputChec
     event: {
       name,
       reportedDate,
-      visitDate,
-      activities,
-      activityOther,
+      visits: sortEmergencyVisits(visits),
       mainProblem,
       mainProblemOther,
       sia,
@@ -249,6 +355,42 @@ export function normalizeEmergencyEventInput(value: unknown): EmergencyInputChec
       description,
     },
   };
+}
+
+/**
+ * Lê as idas gravadas no banco (coluna jsonb). O que não tem data válida é descartado,
+ * atividade que saiu da lista some, e o resto fica como foi gravado.
+ */
+export function parseStoredEmergencyVisits(value: unknown): EmergencyVisit[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const visits = value.flatMap((item): EmergencyVisit[] => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return [];
+    }
+
+    const raw = item as Record<string, unknown>;
+    const date = typeof raw.date === "string" ? raw.date.slice(0, 10) : "";
+
+    if (!isValidIsoDate(date)) {
+      return [];
+    }
+
+    const activities = Array.isArray(raw.activities) ? raw.activities.filter(isEmergencyActivityId) : [];
+
+    return [{
+      id: typeof raw.id === "string" && VISIT_ID.test(raw.id) ? raw.id : `ida-${date}`,
+      date,
+      objective: typeof raw.objective === "string" ? raw.objective : "",
+      activities: emergencyActivities.map((activity) => activity.id).filter((id) => activities.includes(id)),
+      activityOther: typeof raw.activityOther === "string" ? raw.activityOther : "",
+      notes: typeof raw.notes === "string" ? raw.notes : "",
+    }];
+  });
+
+  return sortEmergencyVisits(visits);
 }
 
 /** Mais recentes primeiro (data do evento), e depois pelo nome. */
