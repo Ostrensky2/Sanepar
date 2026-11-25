@@ -69,9 +69,9 @@ export async function PUT(request: Request) {
     );
   }
 
-  const payload = (await request.json()) as { actions?: unknown };
-  const actions = Array.isArray(payload.actions)
-    ? payload.actions.filter(isPointActionEvent)
+  const payload = (await request.json().catch(() => null)) as { actions?: unknown } | null;
+  const actions = Array.isArray(payload?.actions)
+    ? (payload.actions as unknown[]).filter(isPointActionEvent)
     : null;
 
   if (!actions) {
@@ -81,37 +81,10 @@ export async function PUT(request: Request) {
     );
   }
 
-  const { data: existingRows, error: readError } = await supabase
-    .from("point_actions")
-    .select("id")
-    .returns<{ id: string }[]>();
-
-  if (readError) {
-    return NextResponse.json(
-      { error: "Não foi possível ler as ações pontuais na nuvem." },
-      { status: 500 },
-    );
-  }
-
-  const nextIds = new Set(actions.map((action) => action.id));
-  const removedIds = (existingRows ?? [])
-    .map((row) => row.id)
-    .filter((id) => !nextIds.has(id));
-
-  if (removedIds.length) {
-    const { error: deleteError } = await supabase
-      .from("point_actions")
-      .delete()
-      .in("id", removedIds);
-
-    if (deleteError) {
-      return NextResponse.json(
-        { error: "Não foi possível remover ações pontuais na nuvem." },
-        { status: 500 },
-      );
-    }
-  }
-
+  // Só acrescenta e atualiza. Esta rota apagava da nuvem tudo o que não viesse na
+  // lista: quem estava com a página aberta desde antes apagava, sem saber, as
+  // atividades que outra pessoa registrou nesse meio tempo. A tela não tem
+  // "apagar atividade"; se um dia tiver, será um pedido próprio, por id.
   if (actions.length) {
     const { error: upsertError } = await supabase.from("point_actions").upsert(
       actions.map((action) => ({

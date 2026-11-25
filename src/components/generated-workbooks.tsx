@@ -102,7 +102,7 @@ export function GeneratedWorkbookList({owner}:{owner:string}){
     void refresh();window.addEventListener(changed,refresh);
     return ()=>{controller.abort();window.removeEventListener(changed,refresh)};
   },[owner,attempt]);
-  async function useFile(item:Artifact,action:"preview" | "download" | "count"){
+  async function openFile(item:Artifact,action:"preview" | "download" | "count"){
     try{
       if (action === "count") setCounts(prev => ({...prev, [item.id]: "loading"}));
       else setError("");
@@ -141,10 +141,10 @@ export function GeneratedWorkbookList({owner}:{owner:string}){
       <p className="type-metadata">{current && "Versão atual · "}<time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString("pt-BR")}</time></p>
       <p className="type-body">{item.filename}</p>
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" className={current ? "min-h-11 rounded-lg bg-[var(--brand-navy-strong)] px-4 font-semibold text-white" : "min-h-11 underline"} onClick={()=>void useFile(item,"download")}>
+        <button type="button" className={current ? "min-h-11 rounded-lg bg-[var(--brand-navy-strong)] px-4 font-semibold text-white" : "min-h-11 underline"} onClick={()=>void openFile(item,"download")}>
           {current ? "Baixar Excel unificado" : "Baixar esta versão"}
         </button>
-        <button type="button" className="min-h-11 underline" onClick={()=>void useFile(item,"preview")}>Reabrir</button>
+        <button type="button" className="min-h-11 underline" onClick={()=>void openFile(item,"preview")}>Reabrir</button>
       </div>
       <div className="type-metadata">
         <span role="status">{typeof counts[item.id] === "number" ? `${counts[item.id]} pontos`
@@ -152,7 +152,7 @@ export function GeneratedWorkbookList({owner}:{owner:string}){
           : counts[item.id] === "error" ? "Não foi possível conferir os pontos desta versão."
           : "Quantidade de pontos ainda não conferida."}</span>
         {typeof counts[item.id] !== "number" && <button type="button" disabled={counts[item.id] === "loading"}
-          className="ms-2 min-h-11 underline" onClick={()=>void useFile(item,"count")}>Conferir pontos</button>}
+          className="ms-2 min-h-11 underline" onClick={()=>void openFile(item,"count")}>Conferir pontos</button>}
       </div>
       <details><summary className="cursor-pointer">Recibo de geração</summary>
         <p className="break-all">SHA-256 {item.version}</p>

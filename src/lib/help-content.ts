@@ -534,6 +534,17 @@ export const helpModules: HelpModule[] = [
         ],
       },
       {
+        title: "Registrar um evento emergencial",
+        steps: [
+          "Abra Central de dados › Eventos emergenciais.",
+          "Escreva o nome do evento e a data em que ele foi informado. A data de ida ao local pode ficar para depois.",
+          "Escolha o problema principal na lista (entupimento de filtros, contaminação, cheiro ou gosto, eutrofização, floração…). Se nenhum servir, escolha Outro problema e escreva qual.",
+          "Se foi num ponto das campanhas, escolha o SIA: o local é preenchido sozinho. Se não, escreva o local.",
+          "Toque em todas as atividades feitas em campo (coleta de eDNA, de água, de plâncton, fotos, parâmetros de qualidade da água…). Tocar de novo desmarca.",
+          "Descreva o fato e clique em Registrar evento. Para corrigir depois, use Editar no evento da lista.",
+        ],
+      },
+      {
         title: "Definir os padrões de coleta da campanha",
         steps: [
           "Abra Fase e etapas, escolha a campanha e desça até Padrões de coleta.",
@@ -551,6 +562,7 @@ export const helpModules: HelpModule[] = [
       { label: "Diário de campo", detail: "Registros de campo, um a um ou pela planilha (importador único)." },
       { label: "Planilhas de resultados", detail: "Preparo de matrizes e download da planilha de trabalho por campanha." },
       { label: "Pendências", detail: "Conflitos de importação à espera de decisão." },
+      { label: "Eventos emergenciais", detail: "Idas a campo fora da rotina das campanhas, com o problema principal, as atividades feitas e a descrição do fato." },
     ],
     notes: [
       "Somente categorias autorizadas podem importar, publicar ou excluir dados.",
@@ -569,7 +581,7 @@ export const helpModules: HelpModule[] = [
         action: "O mapa da campanha usa só os registros do Diário. Confira se a importação foi confirmada (não só pré-visualizada) e se o ponto tem coordenada.",
       },
     ],
-    keywords: ["dados", "importar", "publicar", "planilha", "xlsx", "csv", "padroes de coleta", "conservante", "preservante", "replicas", "branco"],
+    keywords: ["dados", "importar", "publicar", "planilha", "xlsx", "csv", "padroes de coleta", "conservante", "preservante", "replicas", "branco", "evento emergencial", "emergencia", "entupimento", "floracao", "cheiro", "gosto"],
   },
   {
     title: "Documentos",

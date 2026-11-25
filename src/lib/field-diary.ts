@@ -1,3 +1,4 @@
+import { brazilIsoDate } from "@/lib/brazil-time";
 import { canUseBrowserOnlyPersistence } from "@/lib/browser-persistence";
 import { campaignIdentityKey } from "@/lib/campaign-identity";
 import {
@@ -150,8 +151,9 @@ export type FieldDiaryPayload = Omit<FieldDiaryEntry, "id" | "createdAt" | "upda
   id?: string;
 };
 
+/** Hoje em Curitiba (AAAA-MM-DD). Em UTC, depois das 21h já seria o dia seguinte. */
 export function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10);
+  return brazilIsoDate();
 }
 
 export function createEmptyFieldDiaryPayload(): FieldDiaryPayload {

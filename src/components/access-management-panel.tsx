@@ -283,7 +283,7 @@ export function useAccessManagement() {
     }
 
     if (duplicatedEmail) {
-      setNotice({ kind: "error", text: "Ja existe um usuário autorizado com este email." });
+      setNotice({ kind: "error", text: "Já existe um usuário autorizado com este e-mail." });
       return;
     }
 
@@ -359,7 +359,7 @@ export function useAccessManagement() {
     }
 
     if (users.some((user) => user.email.toLowerCase() === email)) {
-      setNotice({ kind: "error", text: "Ja existe um usuário autorizado com este email." });
+      setNotice({ kind: "error", text: "Já existe um usuário autorizado com este e-mail." });
       return;
     }
 

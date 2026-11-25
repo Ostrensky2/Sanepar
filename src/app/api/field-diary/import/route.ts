@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { brazilIsoDate } from "@/lib/brazil-time";
 import { NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/api-auth";
 import {
@@ -212,7 +213,7 @@ export async function POST(request: Request) {
       if (!hasAnyCellData(row)) return;
 
       const rawDate = cellText(row, COL.entryDate);
-      const entryDate = parseDate(rawDate) || new Date().toISOString().slice(0, 10);
+      const entryDate = parseDate(rawDate) || brazilIsoDate();
 
       const rawDay = cellText(row, COL.campaignDay);
       const campaignDay = parseInt(rawDay, 10) || 1;

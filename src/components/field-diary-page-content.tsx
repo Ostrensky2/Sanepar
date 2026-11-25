@@ -478,6 +478,11 @@ export function FieldDiaryPageContent({
       ...payload,
       campaignId: "",
       campaignName: "",
+      // Dia da campanha de hoje (ou do dia pedido), contado pelos dias que já têm
+      // registro. Antes vinha sempre 1, e o registro novo caía no "D1" do calendário.
+      campaignDay: activeCampaignId
+        ? getCollectionDayForDate(scopedEntries, normalizedDefaults.entryDate || payload.entryDate)
+        : payload.campaignDay,
       ...normalizedDefaults,
       ...scopedCampaign,
       createdBy: session?.userId ?? "",

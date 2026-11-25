@@ -1,7 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
-import { hasPrivilege, normalizeUserCategory, type PrivilegeKey, type UserCategory } from "@/lib/access-control";
+import { hasPrivilege, parseUserCategory, type PrivilegeKey, type UserCategory } from "@/lib/access-control";
 import { createAuthAdminClient, createRequestAuthClient, opaqueRateLimitKey } from "@/lib/supabase-auth";
 
 export type ApiSession = { userId: string; authUserId: string; email: string; name: string; role: UserCategory; localDirect?: true };
@@ -21,7 +21,8 @@ export async function requireApiSession(request: Request, privilege?: PrivilegeK
     if (error) return denied(503, "Não foi possível validar a autorização local.");
     if (!data || data.length !== 1) return denied(403, "Acesso local sem Admin único e ativo.");
     const profile = data[0] as ProfileRow;
-    const role = normalizeUserCategory(profile.role);
+    const role = parseUserCategory(profile.role);
+    if (!role) return denied(403, "Este acesso está sem categoria válida. Peça ao administrador para corrigir o cadastro.");
     if (privilege && !hasPrivilege(role, privilege)) return denied(403, "Seu perfil não tem permissão para esta operação.");
     return { ok: true, session: { userId: profile.id, authUserId: profile.auth_user_id ?? "00000000-0000-0000-0000-000000000000", email: profile.email, name: profile.name, role, localDirect: true } };
   }
@@ -41,7 +42,8 @@ export async function requireApiSession(request: Request, privilege?: PrivilegeK
   if (profileError) return denied(503, "Não foi possível validar a autorização atual.");
   if (!profile || profile.status !== "ativo") return denied(403, "Este acesso está inativo ou sem perfil autorizado.");
 
-  const role = normalizeUserCategory(profile.role);
+  const role = parseUserCategory(profile.role);
+  if (!role) return denied(403, "Este acesso está sem categoria válida. Peça ao administrador para corrigir o cadastro.");
   if (privilege) {
     const { data: allowed, error: permissionError } = await auth.client.rpc("has_current_permission", { p_permission: privilege });
     if (permissionError) return denied(503, "Não foi possível validar a permissão atual.");

@@ -84,6 +84,18 @@ export const MAJOR_RELEASES: MajorRelease[] = [
     ],
     updates: [
       {
+        version: "2.1.3",
+        date: "25/11/2026",
+        items: [
+          "Nova aba Central de dados › Eventos emergenciais: registra as idas a campo fora da rotina (nome do evento, data informada, data de ida ao local, problema principal, ponto ou local, atividades feitas, que se marcam com um toque, e a descrição do fato). Dá para editar e apagar.",
+          "Registro de campo: o dia de hoje é o de Curitiba também à noite (depois das 21h o app já sugeria o dia seguinte), e o registro novo já vem com o dia da campanha certo, em vez de sempre “Dia 1”.",
+          "Campanhas abre na campanha que está em campo quando o aparelho ainda não tinha escolhido nenhuma.",
+          "Atividades complementares: salvar uma atividade não apaga mais as que outra pessoa registrou com a página aberta ao mesmo tempo, e o aviso diz qual campo falta.",
+          "Segurança: cadastro de usuário com categoria em branco ou desconhecida não vale mais como Admin.",
+          "Também desde a 2.1.2: resultados pelo método 3.0 por campanha e por ponto, Início com gráfico de índices por campanha, mapa, 10 pontos com maior índice e pontos que pedem atenção; Resultados com Distribuição e Organismos; Ciência e método com catálogo de fichas, Acervo científico dentro de cada ficha, Metodologia científica e explicação em linguagem simples; fotos de campo nos mapas.",
+        ],
+      },
+      {
         version: "2.0.9",
         date: "13/11/2026",
         items: [

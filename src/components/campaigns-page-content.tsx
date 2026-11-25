@@ -5,7 +5,7 @@ import {
   Download,
   FileSpreadsheet,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { readSelectedCampaignId, writeSelectedCampaignId } from "@/lib/selected-campaign";
 import { BiologExportDialog } from "@/components/biolog-export-dialog";
 import { CampaignMapSection } from "@/components/campaign-map-section";
@@ -127,6 +127,13 @@ export function CampaignsPageContent({
   emptyMapTitle?: string;
   emptyMapDescription?: string;
 }) {
+  // Sem campanha pedida no endereço nem escolhida antes neste aparelho, a tela abre
+  // na campanha que está em campo (e não na 1ª, já concluída).
+  const [hasExplicitCampaignChoice] = useState(
+    () =>
+      campaigns.some((campaign) => campaign.id === initialCampaignId) ||
+      (typeof window !== "undefined" && campaigns.some((campaign) => campaign.id === readSelectedCampaignId())),
+  );
   const [selectedCampaignId, setSelectedCampaignId] = useState(() => {
     const requestedCampaign = campaigns.find((campaign) => campaign.id === initialCampaignId);
     if (requestedCampaign) return requestedCampaign.id;
@@ -160,6 +167,7 @@ export function CampaignsPageContent({
   const [dismissedUnavailableResultsNoticeCampaignId, setDismissedUnavailableResultsNoticeCampaignId] =
     useState<string | null>(null);
   const [mapEditEntry, setMapEditEntry] = useState<FieldDiaryPayload | null>(null);
+  const hasAppliedFieldCampaignRef = useRef(false);
   const [mapEditMessage, setMapEditMessage] = useState("");
 
   useEffect(() => {
@@ -210,6 +218,13 @@ export function CampaignsPageContent({
       void readCampaignManagement(campaigns).then((management) => {
         setCampaignManagement(management);
         setHasLoadedCampaignManagement(true);
+        if (!hasExplicitCampaignChoice && !hasAppliedFieldCampaignRef.current) {
+          hasAppliedFieldCampaignRef.current = true;
+          const inField = campaigns.find(
+            (campaign) => campaignPhaseLabel(management[campaign.id]?.status ?? campaign.status) === "Em campo",
+          );
+          if (inField) setSelectedCampaignId(inField.id);
+        }
       });
     }
 
@@ -226,7 +241,7 @@ export function CampaignsPageContent({
       window.removeEventListener(CAMPAIGN_MANAGEMENT_UPDATED_EVENT, syncCampaignManagement);
       window.removeEventListener("storage", handleStorage);
     };
-  }, [campaigns]);
+  }, [campaigns, hasExplicitCampaignChoice]);
 
   useEffect(() => {
     let isMounted = true;

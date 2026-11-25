@@ -1,6 +1,7 @@
 import type { ComponentType, SVGProps } from "react";
 import {
   AlertTriangle,
+  Siren,
   BookOpen,
   Calculator,
   CarFront,
@@ -191,6 +192,13 @@ export const navigationItems: NavigationItem[] = [
         summary: "conflitos de importação a decidir",
         headerTitle: "Pendências de importação",
         icon: AlertTriangle,
+      },
+      {
+        href: "/dados/eventos-emergenciais",
+        label: "Eventos emergenciais",
+        summary: "idas a campo fora da rotina, por problema informado",
+        headerTitle: "Eventos emergenciais",
+        icon: Siren,
       },
     ],
   },

@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { navigationItems } from "@/lib/navigation";
 import { countLabel } from "@/lib/number-format";
@@ -48,8 +48,11 @@ describe("4ª rodada — Ajuda › Versões e versão 2.0.0", () => {
     expect(read("src/components/results-review-dialog.tsx")).toContain('href="/ajuda?secao=versoes"');
   });
 
-  it("o próximo deploy está programado para 2.0.0", () => {
-    expect(JSON.parse(read("release-plan.json")).nextVersion).toBe("2.0.0");
+  it("o plano de versão (salto para 2.0.0) já foi usado e não fica no repositório", () => {
+    // scripts/update-app-version.mjs apaga release-plan.json depois de usá-lo; as
+    // releases seguintes sobem de 2.0.0 em diante pelo incremento normal.
+    expect(existsSync(join(process.cwd(), "release-plan.json"))).toBe(false);
+    expect(read("src/lib/app-version.ts")).toMatch(/APP_VERSION = "2\.\d+\.\d+"/);
   });
 });
 

@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { BRAZIL_TIME_ZONE } from "@/lib/brazil-time";
 import { NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/api-auth";
 import type {
@@ -43,6 +44,7 @@ function todayLabel(): string {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    timeZone: BRAZIL_TIME_ZONE,
   }).format(new Date());
 }
 
