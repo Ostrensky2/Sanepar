@@ -81,6 +81,7 @@ describe("/api/emergency-events", () => {
     const updated = await send(PATCH, "PATCH", {
       ...input,
       id: event.id,
+      expectedUpdatedAt: event.updatedAt,
       visits: [...input.visits, secondVisit],
       mainProblem: "other",
       mainProblemOther: "Rompimento de adutora",
@@ -124,7 +125,7 @@ describe("/api/emergency-events", () => {
   });
 
   it("responde 404 ao alterar ou apagar evento que não existe mais", async () => {
-    expect((await send(PATCH, "PATCH", { ...input, id: ID })).status).toBe(404);
+    expect((await send(PATCH, "PATCH", { ...input, id: ID, expectedUpdatedAt: "2026-11-25T10:00:00.000Z" })).status).toBe(404);
     expect((await send(DELETE, "DELETE", undefined, `?id=${ID}`)).status).toBe(404);
     expect((await send(DELETE, "DELETE", undefined, "?id=nao-e-id")).status).toBe(400);
   });
@@ -138,5 +139,55 @@ describe("/api/emergency-events", () => {
     const { events } = await (await GET(new Request(URL))).json();
     expect(events[0]).toMatchObject({ mainProblem: "other", mainProblemOther: "problema_antigo" });
     expect(events[0].visits).toEqual([{ id: "v1", date: "2026-10-02", objective: "", activities: ["edna"], activityOther: "", notes: "" }]);
+  });
+
+  it("não deixa uma edição antiga apagar a ida que outra pessoa acabou de gravar", async () => {
+    const created = (await (await send(POST, "POST", input)).json()).event as { id: string; updatedAt: string };
+    // Duas telas abriram o evento na mesma versão.
+    const opened = created.updatedAt;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    // A primeira acrescenta uma ida e salva.
+    const first = await send(PATCH, "PATCH", {
+      ...input,
+      id: created.id,
+      expectedUpdatedAt: opened,
+      visits: [...input.visits, { id: "ida-a", date: "2026-11-24", objective: "Nova coleta", activities: ["water"] }],
+    });
+    expect(first.status).toBe(200);
+    const afterFirst = (await first.json()).event as { updatedAt: string };
+    expect(afterFirst.updatedAt).not.toBe(opened);
+
+    // A segunda, ainda com a versão antiga, tenta gravar a sua lista de idas.
+    const second = await send(PATCH, "PATCH", {
+      ...input,
+      id: created.id,
+      expectedUpdatedAt: opened,
+      visits: [...input.visits, { id: "ida-b", date: "2026-11-25", objective: "Vistoria", activities: ["inspection"] }],
+    });
+    expect(second.status).toBe(409);
+    const conflict = await second.json();
+    expect(conflict).toMatchObject({ conflict: true });
+    expect(conflict.event.visits.map((visit: { id: string }) => visit.id)).toEqual(["ida-1", "ida-a"]);
+    // Nada foi gravado pela segunda: a ida da primeira continua lá.
+    const stored = fakeSupabase.rows(TABLE)[0] as { visits: Array<{ id: string }> };
+    expect(stored.visits.map((visit) => visit.id)).toEqual(["ida-1", "ida-a"]);
+
+    // Com a versão nova, a segunda grava.
+    const retry = await send(PATCH, "PATCH", {
+      ...input,
+      id: created.id,
+      expectedUpdatedAt: conflict.event.updatedAt,
+      visits: [...conflict.event.visits, { id: "ida-b", date: "2026-11-25", objective: "Vistoria", activities: ["inspection"] }],
+    });
+    expect(retry.status).toBe(200);
+    expect((await retry.json()).event.visits).toHaveLength(3);
+  });
+
+  it("recusa alteração de página aberta antes desta versão (sem a versão do evento)", async () => {
+    const created = (await (await send(POST, "POST", input)).json()).event as { id: string };
+    const response = await send(PATCH, "PATCH", { ...input, id: created.id, visits: [] });
+    expect(response.status).toBe(409);
+    expect((fakeSupabase.rows(TABLE)[0] as { visits: unknown[] }).visits).toHaveLength(1);
   });
 });
