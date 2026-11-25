@@ -1,4 +1,5 @@
 import "server-only";
+import { BRAZIL_TIME_ZONE } from "@/lib/brazil-time";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { filterTabs, type DocumentType, type StoredDocument } from "@/lib/app-documents";
@@ -50,7 +51,7 @@ export async function prepareDocumentUpload(client: SupabaseClient, actor: strin
   const document: StoredDocument = {
     id, title: text(input.title, name), campaign: text(input.campaign, "Documento inserido"),
     point: text(input.point, "Repositório oficial"), type: (input.type as DocumentType) ?? "Relatórios",
-    date: new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric" }).format(now),
+    date: new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric", timeZone: BRAZIL_TIME_ZONE }).format(now),
     updatedAt: now.toISOString(), status: "INSERIDO", source: "storage", originalName: name,
     mimeType: input.mimeType, size: input.size, storageBucket: BUCKET,
     storagePath: `uploads/${actorPath}/${id}.${extension}`,

@@ -110,8 +110,13 @@ function cachePointActionsInStorage(actions: PointActionEvent[]) {
   window.localStorage.setItem(POINT_ACTIONS_STORAGE_KEY, JSON.stringify(actions));
 }
 
-export async function writePointActions(actions: PointActionEvent[]) {
-  const savedInCloud = await writePointActionsToCloud(actions);
+/**
+ * Grava na nuvem só as atividades que mudaram (`changed`); a lista inteira fica no
+ * cache deste navegador. Mandar a lista inteira regravava, com a versão antiga desta
+ * tela, o que outra pessoa tinha acabado de editar.
+ */
+export async function writePointActions(actions: PointActionEvent[], changed: PointActionEvent[] = actions) {
+  const savedInCloud = await writePointActionsToCloud(changed);
 
   if (savedInCloud || canUseBrowserOnlyPersistence()) {
     writePointActionsToStorage(actions);

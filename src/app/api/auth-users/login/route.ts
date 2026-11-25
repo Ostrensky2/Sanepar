@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { checkRateLimit, requireTrustedOrigin } from "@/lib/api-auth";
 import { createAuthAdminClient, createRequestAuthClient } from "@/lib/supabase-auth";
-import { normalizeUserCategory } from "@/lib/access-control";
+import { parseUserCategory } from "@/lib/access-control";
 import { AUTH_PURPOSE_COOKIE } from "@/lib/auth-purpose";
 import { migrateLegacyLogin } from "@/lib/legacy-auth-migration";
 
@@ -34,11 +34,13 @@ export async function POST(request: Request) {
     .eq("auth_user_id", data.user.id).maybeSingle();
   if (profileError || !profile) { await auth.client.auth.signOut(); return NextResponse.json({ error: "Perfil autorizado não encontrado." }, { status: 403 }); }
   if (profile.status !== "ativo") { await auth.client.auth.signOut(); return NextResponse.json({ error: "Este acesso está inativo." }, { status: 403 }); }
+  const role = parseUserCategory(profile.role);
+  if (!role) { await auth.client.auth.signOut(); return NextResponse.json({ error: "Este acesso está sem categoria válida. Peça ao administrador para corrigir o cadastro." }, { status: 403 }); }
 
   const lastAccess = new Date().toISOString();
   await admin.from("auth_users").update({ last_access: lastAccess, updated_at: lastAccess }).eq("id", profile.id);
   const response = NextResponse.json({
-    session: { userId: profile.id, name: profile.name, email: profile.email, role: normalizeUserCategory(profile.role) },
+    session: { userId: profile.id, name: profile.name, email: profile.email, role },
     mustChangePassword: Boolean(profile.must_change_password),
   }, { headers: { "Cache-Control": "no-store" } });
   response.cookies.set(AUTH_PURPOSE_COOKIE, "", { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 0 });

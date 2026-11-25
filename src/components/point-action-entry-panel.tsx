@@ -184,7 +184,7 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
 
   async function handleImported(imported: PointActionEvent[]) {
     const nextActions = [...imported, ...actions];
-    const savedInCloud = await writePointActions(nextActions);
+    const savedInCloud = await writePointActions(nextActions, imported);
 
     if (!savedInCloud && !canUseBrowserOnlyPersistence()) {
       setError("A nuvem não confirmou a importação. Os eventos não foram publicados para outros usuários.");
@@ -294,15 +294,18 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
         })
         .filter((photo): photo is PointActionPhoto => photo !== null);
 
-      if (
-        !point.waterBody.trim() ||
-        !point.dates.trim() ||
-        !point.municipality.trim() ||
-        effectiveLat === null ||
-        effectiveLon === null ||
-        !point.results.trim()
-      ) {
-        setError(`Preencha todos os campos obrigatórios do ponto ${index + 1}.`);
+      // Diz o que falta: antes a mensagem era só "preencha os campos obrigatórios".
+      const missing = [
+        !point.waterBody.trim() && "Manancial",
+        !point.dates.trim() && "Datas",
+        !point.municipality.trim() && "Município",
+        effectiveLat === null && "Latitude (ex.: -25,43)",
+        effectiveLon === null && "Longitude (ex.: -49,12)",
+        !point.results.trim() && "Resultados",
+      ].filter(Boolean);
+
+      if (missing.length || effectiveLat === null || effectiveLon === null) {
+        setError(`Falta preencher no ponto ${index + 1}: ${missing.join(", ")}.`);
         return;
       }
 
@@ -344,7 +347,7 @@ export function PointActionEntryPanel({ canImport }: { canImport: boolean }) {
       ? actions.map((action) => (action.id === editingActionId ? actionPayload : action))
       : [actionPayload, ...actions];
 
-    const savedInCloud = await writePointActions(nextActions);
+    const savedInCloud = await writePointActions(nextActions, [actionPayload]);
 
     if (!savedInCloud && !canUseBrowserOnlyPersistence()) {
       setError("A nuvem não confirmou a gravação. A atividade complementar não foi publicada para outros usuários.");

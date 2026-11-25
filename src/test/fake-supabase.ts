@@ -78,6 +78,7 @@ function buildQuery(table: string) {
   let limit: number | null = null;
   let range: [number, number] | null = null;
   let conflictColumn = "id";
+  let selectAfterWrite = false;
   let done: FakeResult | null = null;
 
   const run = (): FakeResult => {
@@ -109,9 +110,11 @@ function buildQuery(table: string) {
     }
 
     if (operation === "delete") {
+      const removed = rows.filter(matches);
       const kept = rows.filter((row) => !matches(row));
       rows.splice(0, rows.length, ...kept);
-      return { data: null, error: null };
+      // Como o PostgREST: as linhas apagadas só voltam quando a consulta pede (.select()).
+      return { data: selectAfterWrite ? removed.map((row) => ({ ...row })) : null, error: null };
     }
 
     if (operation === "update") {
@@ -152,7 +155,10 @@ function buildQuery(table: string) {
   };
 
   const query = {
-    select: () => query,
+    select: () => {
+      if (operation !== "select") selectAfterWrite = true;
+      return query;
+    },
     eq: (column: string, value: unknown) => {
       filters.push((row) => row[column] === value);
       return query;

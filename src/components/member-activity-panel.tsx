@@ -1,5 +1,6 @@
 "use client";
 
+import { brazilIsoDate } from "@/lib/brazil-time";
 import { useEffect, useMemo, useState } from "react";
 import { FileClock, LogIn, MousePointerClick, Search, TrendingUp, UsersRound } from "lucide-react";
 import { readStoredDocumentsFromStorage } from "@/lib/app-documents";
@@ -13,7 +14,7 @@ export function MemberActivityPanel() {
   const [users, setUsers] = useState<ManagedAuthUser[]>([]);
   const [documents, setDocuments] = useState(() => readStoredDocumentsFromStorage().slice(0, 10));
   const [period, setPeriod] = useState<Period>("day");
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => brazilIsoDate());
   const [filter, setFilter] = useState("");
 
   useEffect(() => {

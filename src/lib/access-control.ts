@@ -265,6 +265,18 @@ export function persistAccessCategory(category: UserCategory) {
   window.dispatchEvent(new Event("yvae:access-category-updated"));
 }
 
+/**
+ * Categoria gravada no perfil, ou null quando não é uma categoria conhecida.
+ * No servidor vale esta: perfil com categoria vazia ou digitada errado não pode
+ * virar Admin (é o que normalizeUserCategory faz, para a tela não travar antes
+ * de saber quem entrou).
+ */
+export function parseUserCategory(value: string | null | undefined): UserCategory | null {
+  if (!value) return null;
+  const category = normalizeUserCategory(value);
+  return category === "Admin" && !["Administradores", "Adm Master", "Admin"].includes(value) ? null : category;
+}
+
 export function normalizeUserCategory(value: string | null | undefined): UserCategory {
   if (value === "Administradores" || value === "Adm Master" || value === "Admin") {
     return "Admin";

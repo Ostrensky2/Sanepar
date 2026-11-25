@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { requireApiSession, requireTrustedOrigin } from "@/lib/api-auth";
 import { createAuthAdminClient } from "@/lib/supabase-auth";
-import { normalizeUserCategory, userCategories } from "@/lib/access-control";
+import { normalizeUserCategory, parseUserCategory, userCategories } from "@/lib/access-control";
 
 export const runtime = "nodejs";
 type Command =
@@ -81,8 +81,8 @@ export async function PUT(request: Request) {
 function validateUser(value: unknown, actorRole: string) {
   if (!value || typeof value !== "object") return null; const v = value as Record<string, unknown>;
   const email = typeof v.email === "string" ? v.email.trim().toLowerCase() : ""; const name = typeof v.name === "string" ? v.name.trim() : "";
-  const requestedRole = normalizeUserCategory(typeof v.role === "string" ? v.role : ""); const role = actorRole === "Admin" ? requestedRole : normalizeUserCategory(actorRole);
-  if (!email || email.length > 254 || !name || name.length > 160 || !userCategories.includes(role)) return null;
+  const requestedRole = parseUserCategory(typeof v.role === "string" ? v.role : ""); const role = actorRole === "Admin" ? requestedRole : parseUserCategory(actorRole);
+  if (!email || email.length > 254 || !name || name.length > 160 || !role || !userCategories.includes(role)) return null;
   return { email, name, role, status: v.status === "inativo" ? "inativo" : "ativo" } as const;
 }
 function validatePatch(value: unknown, actorRole: string) {
@@ -90,7 +90,7 @@ function validatePatch(value: unknown, actorRole: string) {
   if (typeof v.name === "string" && v.name.trim()) patch.name = v.name.trim().slice(0, 160);
   if (typeof v.email === "string" && v.email.includes("@")) patch.email = v.email.trim().toLowerCase().slice(0, 254);
   if (v.status === "ativo" || v.status === "inativo") patch.status = v.status;
-  if (actorRole === "Admin" && typeof v.role === "string") { const role = normalizeUserCategory(v.role); patch.role = role; patch.institution = role; }
+  if (actorRole === "Admin" && typeof v.role === "string") { const role = parseUserCategory(v.role); if (!role) return null; patch.role = role; patch.institution = role; }
   return Object.keys(patch).length ? patch : null;
 }
 function toManagedUser(row: Record<string, unknown>) { return { id: row.id, name: row.name, email: row.email, institution: row.institution,
