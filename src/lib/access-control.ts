@@ -27,7 +27,8 @@ export type PrivilegeKey =
   | "settings.buildSync"
   | "settings.activity"
   | "settings.rules"
-  | "settings.diagnostics";
+  | "settings.diagnostics"
+  | "integrations.delegate";
 
 export const ACCESS_CATEGORY_STORAGE_KEY = "yvae:access-category";
 export const ACCESS_PRIVILEGE_MATRIX_STORAGE_KEY = "yvae:access-privilege-matrix";
@@ -77,6 +78,7 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "settings.activity",
     "settings.rules",
     "settings.diagnostics",
+    "integrations.delegate",
   ],
   Sanepar: [
     "nav.home",
@@ -135,6 +137,7 @@ export const categoryPrivileges: Record<UserCategory, PrivilegeKey[]> = {
     "documents.view",
     "documents.manage",
     "users.manage",
+    "integrations.delegate",
   ],
 };
 
@@ -174,6 +177,7 @@ export const privilegeLabels: Record<PrivilegeKey, string> = {
   "settings.activity": "Atividade dos membros",
   "settings.rules": "Regras operacionais",
   "settings.diagnostics": "Diagnóstico",
+  "integrations.delegate": "Autorizar a leitura dos dados de campo pelo Tape",
 };
 
 export function hasPrivilege(category: UserCategory, privilege: PrivilegeKey) {
