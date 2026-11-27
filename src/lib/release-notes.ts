@@ -84,6 +84,13 @@ export const MAJOR_RELEASES: MajorRelease[] = [
     ],
     updates: [
       {
+        version: "2.1.5",
+        date: "27/11/2026",
+        items: [
+          "Conexão com o Tape: quem tem a permissão “Autorizar a leitura dos dados de campo pelo Tape” pode autorizar, na tela “Conectar o Yva'e ao Tape”, que o Tape copie os dados de campo lançados aqui: pontos, campanhas, planejamento, registros do diário, amostras, medições, ações pontuais, fotos e documentos de campo. O Tape só lê. Nada daqui é alterado, a sua senha não é compartilhada, a autorização vale por no máximo 8 horas e pode ser encerrada na mesma tela. Resultados de laboratório e índices de risco não saem.",
+        ],
+      },
+      {
         version: "2.1.4",
         date: "25/11/2026",
         items: [
