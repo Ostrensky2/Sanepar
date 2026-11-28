@@ -84,6 +84,13 @@ export const MAJOR_RELEASES: MajorRelease[] = [
     ],
     updates: [
       {
+        version: "2.1.6",
+        date: "28/11/2026",
+        items: [
+          "Conexão com o Tape: o nome de cada ponto enviado ao Tape passa a vir do corpo hídrico da planilha de campanha (ou do local do diário de campo), e não mais da coluna que guarda o horário da coleta. O ponto é identificado pelo código SIA: “SIA-0048” e “48” são o mesmo ponto. Nada muda nas telas nem nos dados do Yva'e.",
+        ],
+      },
+      {
         version: "2.1.5",
         date: "27/11/2026",
         items: [

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canonical, digest } from "./canonical";
-import { buildItems, listObjects, pointKey, type ObjectRef, type Source } from "./export";
+import { buildItems, listObjects, placeName, pointKey, type ObjectRef, type Source } from "./export";
 import { FIELDS, totalsOf, type WireItem } from "./protocol";
 
 const C1 = "1ª Campanha - Verão 2026";
@@ -87,6 +87,62 @@ describe("identidade do ponto na origem", () => {
   });
 });
 
+// Formato real das planilhas de campanha (produção, 28/11/2026): a coluna "point"
+// guarda o horário da coleta numa campanha e fica vazia nas outras, o nome está
+// no corpo hídrico, e o código vem como "SIA-0048" na planilha e "48" no diário.
+describe("ponto com os dados como eles são na origem", () => {
+  const real = () => buildItems(source({
+    entries: [
+      { id: "r1", campaign_id: null, campaign_name: C1, entry_date: "2026-03-11", location_name: "Rio São João", sia: "48", municipality: "Carambeí", photos: [] },
+      { id: "r2", campaign_id: null, campaign_name: C2, entry_date: "2026-06-12", location_name: "48 - Rio São João", sia: "SIA-0048", municipality: "Carambeí", photos: [] },
+      { id: "r3", campaign_id: null, campaign_name: C2, entry_date: "2026-06-13", location_name: "300 - S - Res. PII - Tulipa", sia: "SIA-0562", municipality: "Cascavel", photos: [] },
+    ],
+    samples: [], readings: [], documents: [], pointActions: [],
+    campaignImports: [
+      { id: "imp-a", campaign_key: "campanha-2-outono-2026", created_at: "2026-05-20T12:00:00Z", points: [
+        { code: "SIA-0048", point: "1899-12-30T10:40:00.000Z", campaign: C2, date: "12/06/2026", municipality: "Carambeí", waterBody: "48 - Rio São João", original: { lat: -24.9, lon: -50.1 } },
+        { code: "SIA-0771", point: "1899-12-30T07:51:00.000Z", campaign: C2, date: "01/06/2026", municipality: "São José dos Pinhais", waterBody: "117- Rio Pequeno", original: { lat: -25.5, lon: -49.1 } },
+      ] },
+      { id: "imp-b", campaign_key: "campanha-3-inverno-2026", created_at: "2026-08-20T12:00:00Z", points: [
+        { code: "SIA-0048", point: "", campaign: "3ª Campanha - Inverno 2026", date: "12/09/2026", municipality: "Carambeí", waterBody: "48 - Rio São João", original: { lat: -24.9, lon: -50.1 } },
+        { code: "SIA-0771", point: "", campaign: "3ª Campanha - Inverno 2026", date: "01/09/2026", municipality: "Piraquara", waterBody: "117 - Rio Pequeno (captação)", original: { lat: -25.5, lon: -49.1 } },
+      ] },
+    ],
+    campaignImportRevisions: [{ id: "imp-a", campaignKey: "campanha-2-outono-2026" }, { id: "imp-b", campaignKey: "campanha-3-inverno-2026" }],
+  }), []);
+
+  it("horário não é nome de lugar", () => {
+    expect(placeName("1899-12-30T11:10:00.000Z")).toBeNull();
+    expect(placeName("11:10")).toBeNull();
+    expect(placeName("  ")).toBeNull();
+    expect(placeName(" Rio São João ")).toBe("Rio São João");
+    expect(JSON.stringify(real())).not.toContain("1899-12-30");
+  });
+
+  it("o nome vem do corpo hídrico da planilha; SIA-0048 da planilha e 48 do diário são o mesmo ponto", () => {
+    const items = real();
+    expect(items.filter((i) => i.entityType === "point").map((i) => i.sourceId)).toEqual(["sia:0048", "sia:0562", "sia:0771"]);
+    expect(find(items, "point", "sia:0048")).toMatchObject({
+      payload: { name: "48 - Rio São João", municipality: "Carambeí", lat: -24.9, lon: -50.1, nameVariants: null },
+      provenance: { identityStatus: "authoritative" },
+    });
+    // Ponto que só existe no diário: o nome é o local digitado lá.
+    expect(find(items, "point", "sia:0562")).toMatchObject({ payload: { code: "SIA-0562", name: "300 - S - Res. PII - Tulipa" }, provenance: { identityStatus: "authoritative" } });
+    // Os registros do diário e os itens do planejamento apontam para o mesmo ponto.
+    expect(find(items, "entry", "r1").payload.pointId).toBe("sia:0048");
+    expect(find(items, "entry", "r2").payload.pointId).toBe("sia:0048");
+    expect(items.filter((i) => i.entityType === "plannedPoint" && i.payload.pointId === "sia:0048")).toHaveLength(2);
+  });
+
+  it("nome que muda entre campanhas: vale o da planilha mais recente; município que muda deixa o ponto pendente", () => {
+    const pequeno = find(real(), "point", "sia:0771");
+    expect(pequeno.payload).toMatchObject({
+      name: "117 - Rio Pequeno (captação)", nameVariants: ["117 - Rio Pequeno (captação)", "117- Rio Pequeno"], municipality: null,
+    });
+    expect(pequeno.provenance.identityStatus).toBe("derived-pending");
+  });
+});
+
 describe("arquivos do retrato", () => {
   const objects = listObjects(source());
   it("um objeto por arquivo do Storage, mesmo com dois vínculos", () => {
@@ -123,15 +179,17 @@ describe("projeção dos dados de campo", () => {
     expect(entry.provenance.derivations.some((d) => d.field === "authorName" && d.rule.includes("não indica executor"))).toBe(true);
   });
 
-  it("ponto: coordenada que varia entre campanhas não é escolhida; nomes divergentes ficam pendentes", () => {
+  it("ponto: coordenada que varia entre campanhas não é escolhida; com nomes diferentes vale o mais recente, sem pôr a identidade em dúvida", () => {
     expect(find(items, "point", "sia:9001")).toMatchObject({
       payload: { code: "9001", name: "Represa Alfa", lat: null, lon: null, coordinateSource: null },
       provenance: { identityStatus: "authoritative" },
     });
-    expect(find(items, "point", "sia:9004")).toMatchObject({
-      payload: { name: null, nameVariants: ["Córrego Delta", "Córrego Delta - montante"] },
-      provenance: { identityStatus: "derived-pending" },
+    const delta = find(items, "point", "sia:9004");
+    expect(delta).toMatchObject({
+      payload: { name: "Córrego Delta - montante", nameVariants: ["Córrego Delta", "Córrego Delta - montante"] },
+      provenance: { identityStatus: "authoritative" },
     });
+    expect(delta.provenance.derivations.find((d) => d.field === "name")).toMatchObject({ status: "derived" });
     expect(find(items, "point", "local:ponto de apoio")).toMatchObject({ payload: { code: null, name: "Ponto de apoio" }, provenance: { identityStatus: "derived" } });
   });
 

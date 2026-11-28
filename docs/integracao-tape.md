@@ -1,6 +1,6 @@
 # Conexão Yva'e → Tape (leitura dos dados de campo)
 
-Atualizado em 27/11/2026. Permite que o Tape copie, para o contrato Yva´E, os dados de campo lançados aqui: pontos, campanhas, planejamento, registros do diário, amostras, parâmetros e medições, ações pontuais, fotos e documentos de campo. É **somente leitura**: nada do Yva'e é alterado pelo Tape. Ensaiada apenas em ambiente sintético isolado; **não está publicada nem ligada em produção**.
+Atualizado em 28/11/2026. Permite que o Tape copie, para o contrato Yva´E, os dados de campo lançados aqui: pontos, campanhas, planejamento, registros do diário, amostras, parâmetros e medições, ações pontuais, fotos e documentos de campo. É **somente leitura**: nada do Yva'e é alterado pelo Tape. **Publicada e ligada em produção em 27/11/2026** (versão 2.1.5; cliente `tape-tec-br`, com retorno em `https://tape.tec.br/api/yvae/callback`). A primeira leitura de dados reais pelo Tape foi a prévia de 28/11/2026, que não grava nada; ela mostrou dois defeitos da projeção dos pontos, corrigidos na 2.1.6.
 
 ## O que foi acrescentado
 
@@ -24,7 +24,7 @@ Atualizado em 27/11/2026. Permite que o Tape copie, para o contrato Yva´E, os d
 
 A cada chamada a API revalida o token, a concessão, o cliente e a permissão **atual** de quem autorizou. A pessoa encerra a conexão quando quiser, em `/integrations/tape/consent`.
 
-## Para ligar (não feito; exige aprovação própria)
+## Para ligar (feito em produção em 27/11/2026; vale para outro ambiente)
 
 1. Aplicar a migração.
 2. Definir `TAPE_INTEGRATION_ENABLED=true` e `TAPE_INTEGRATION_SECRET` (32 caracteres ou mais, aleatório). `APP_ORIGIN` já existe. Sem a primeira variável a API responde como desligada.
@@ -45,7 +45,7 @@ Para desligar: `update private.tape_clients set active = false` (as concessões 
 
 ## Regras que valem registrar
 
-- Ponto: a origem não tem cadastro mestre. A identidade exportada é o código SIA normalizado (a mesma regra de unicidade do diário); sem código, o nome do local. Nomes diferentes para o mesmo código saem marcados, sem escolher um.
+- Ponto: a origem não tem cadastro mestre. A identidade exportada é o código SIA normalizado (a mesma regra de unicidade do diário: “SIA-0048”, “sia 48” e “48” são o mesmo ponto); sem código, o nome do local. O nome sai da coluna `point` da planilha de campanha quando ela traz um nome; nas planilhas reais essa coluna guarda o horário da coleta (lido do Excel como `1899-12-30T11:10:00.000Z`) ou fica vazia, e horário não é aceito como nome: nesse caso o nome vem do corpo hídrico (`waterBody`) e, na falta dele, do local digitado no diário. Com mais de um nome para o mesmo ponto, vale o mais recente e os demais seguem em `nameVariants`; nome que varia não põe a identidade em dúvida. Município que varia, sim: o ponto sai marcado como pendente.
 - Planejamento: só a planilha vigente de cada campanha; as anteriores são contadas.
 - Documento de campo: sai como de campo o documento anexado a um registro de campo (ação pontual) e o das categorias Plano de trabalho e Mapas quando ligado a uma campanha ou a um ponto. Resultados e Laudos ficam de fora, mesmo ligados a campanha ou ponto, e o arquivo nem é lido. A categoria Relatórios, sozinha, não comprova relatório de atividade de campo: sem o anexo a um registro de campo, o documento sai como indeterminado, com o motivo, e fica pendente no Tape. O título do arquivo nunca entra na decisão.
 - Quem lançou o registro sai como autor do lançamento, com a ressalva de que não indica executor nem coletor.
