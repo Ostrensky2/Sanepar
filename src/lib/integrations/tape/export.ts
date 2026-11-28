@@ -59,6 +59,20 @@ const rows = (value: unknown): Row[] =>
 const norm = (value: unknown) =>
   String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
 
+/**
+ * Nome de lugar digitado numa célula. Nas planilhas de campanha reais a coluna
+ * "point" já guardou o horário da coleta (lido do Excel como "1899-12-30T11:10:00.000Z")
+ * e depois ficou vazia; horário não é nome.
+ */
+export function placeName(value: unknown): string | null {
+  const cleaned = text(value)?.trim();
+  if (!cleaned) return null;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(cleaned) || /^\d{1,2}:\d{2}(:\d{2})?$/.test(cleaned)) return null;
+  return cleaned;
+}
+/** Nome do ponto numa linha de planilha de campanha: a coluna do ponto, se for nome; senão, o corpo hídrico. */
+const plannedName = (row: Row) => placeName(row.point) ?? placeName(row.waterBody);
+
 /** Identidade do ponto na origem: o código SIA quando existe; sem ele, o nome do local. */
 export function pointKey(code: unknown, name: unknown): string | null {
   const byCode = norm(code);
@@ -180,7 +194,7 @@ function planningRows(source: Source) {
       // Só linhas de ponto planejado. Linhas de documentos, eventos e resultados
       // que já viveram nesta tabela ficam de fora.
       if ("results" in row || "risk" in row || "taxa" in row || "eventName" in row || "title" in row) return;
-      if (!text(row.code)?.trim() && !text(row.point)?.trim()) return;
+      if (!text(row.code)?.trim() && !plannedName(row)) return;
       const campaignId = campaignKey(text(row.campaign) ?? imported.campaign_key, text(row.campaign) ?? imported.campaign_key);
       if (!campaignId) return;
       out.push({ importId: String(imported.id), importedAt: text(imported.created_at), campaignId, index, row });
@@ -200,7 +214,7 @@ function knownIds(source: Source) {
   }
   for (const planned of planningRows(source)) {
     campaigns.add(planned.campaignId);
-    const point = pointKey(planned.row.code, planned.row.point);
+    const point = pointKey(planned.row.code, plannedName(planned.row));
     if (point) points.add(point);
   }
   for (const key of Object.keys(source.campaignManagement ?? {})) {
@@ -256,14 +270,16 @@ const provenance = (
 const unique = <T,>(values: T[]) => [...new Set(values)];
 
 function buildPoints(source: Source): WireItem[] {
+  /** Nome com a data de onde veio, para escolher o mais recente quando houver mais de um. */
+  type Dated = { value: string; at: string };
   type Acc = {
-    codes: string[]; planNames: string[]; entryNames: string[]; planMunicipalities: string[];
+    codes: string[]; planNames: Dated[]; waterNames: Dated[]; entryNames: Dated[]; planMunicipalities: string[];
     entryMunicipalities: string[]; waterBodies: string[]; coordinates: string[]; missingCoordinates: boolean;
   };
   const points = new Map<string, Acc>();
   const acc = (key: string) => {
     if (!points.has(key)) {
-      points.set(key, { codes: [], planNames: [], entryNames: [], planMunicipalities: [], entryMunicipalities: [], waterBodies: [], coordinates: [], missingCoordinates: false });
+      points.set(key, { codes: [], planNames: [], waterNames: [], entryNames: [], planMunicipalities: [], entryMunicipalities: [], waterBodies: [], coordinates: [], missingCoordinates: false });
     }
     return points.get(key)!;
   };
@@ -271,12 +287,17 @@ function buildPoints(source: Source): WireItem[] {
     const cleaned = text(value)?.trim();
     if (cleaned) target.push(cleaned);
   };
+  const addName = (target: Dated[], value: unknown, at: string | null) => {
+    const cleaned = placeName(value);
+    if (cleaned) target.push({ value: cleaned, at: at ?? "" });
+  };
   for (const planned of planningRows(source)) {
-    const key = pointKey(planned.row.code, planned.row.point);
+    const key = pointKey(planned.row.code, plannedName(planned.row));
     if (!key) continue;
     const a = acc(key);
     add(a.codes, planned.row.code);
-    add(a.planNames, planned.row.point);
+    addName(a.planNames, planned.row.point, planned.importedAt);
+    addName(a.waterNames, planned.row.waterBody, planned.importedAt);
     add(a.planMunicipalities, planned.row.municipality);
     add(a.waterBodies, planned.row.waterBody);
     const original = planned.row.original as Row | null;
@@ -289,7 +310,7 @@ function buildPoints(source: Source): WireItem[] {
     if (!key) continue;
     const a = acc(key);
     add(a.codes, entry.sia);
-    add(a.entryNames, entry.location_name);
+    addName(a.entryNames, entry.location_name, text(entry.entry_date));
     add(a.entryMunicipalities, entry.municipality);
   }
   const distinct = (values: string[]) => {
@@ -303,12 +324,18 @@ function buildPoints(source: Source): WireItem[] {
       rule: key.startsWith("sia:") ? "Código SIA normalizado; a origem não tem cadastro mestre de pontos." : "Nome do local normalizado; ponto sem código SIA na origem.",
       status: "derived",
     }];
-    const fromPlanning = a.planNames.length > 0;
-    const names = distinct(fromPlanning ? a.planNames : a.entryNames);
+    // Nome: a coluna do ponto na planilha, quando é nome de verdade; senão o
+    // corpo hídrico da planilha; senão o local digitado no diário de campo.
+    const nameSource = a.planNames.length ? "point" : a.waterNames.length ? "waterBody" : "location_name";
+    const dated = nameSource === "point" ? a.planNames : nameSource === "waterBody" ? a.waterNames : a.entryNames;
+    const names = distinct(dated.map((item) => item.value));
+    // Com mais de um nome para o mesmo ponto, vale o mais recente; os demais seguem em nameVariants.
+    const latest = [...dated].sort((x, y) => y.at.localeCompare(x.at) || x.value.localeCompare(y.value))[0]?.value ?? null;
+    const fromPlanning = nameSource !== "location_name";
     const municipalities = distinct(fromPlanning && a.planMunicipalities.length ? a.planMunicipalities : a.entryMunicipalities);
     const waterBodies = distinct(a.waterBodies);
     const coordinates = unique(a.coordinates);
-    if (names.length > 1) derivations.push({ field: "name", rule: "Nomes diferentes para o mesmo código na origem; nenhum escolhido.", status: "pending" });
+    if (names.length > 1) derivations.push({ field: "name", rule: "Nomes diferentes para o mesmo ponto na origem; usado o mais recente, os demais em nameVariants.", status: "derived" });
     if (municipalities.length > 1) derivations.push({ field: "municipality", rule: "Municípios diferentes para o mesmo ponto na origem.", status: "pending" });
     if (municipalities.length === 0) derivations.push({ field: "municipality", rule: "Município não informado na origem.", status: "missing" });
     if (waterBodies.length !== 1) derivations.push({ field: "waterBody", rule: waterBodies.length ? "Corpos hídricos diferentes entre campanhas." : "Corpo hídrico não informado na origem.", status: waterBodies.length ? "pending" : "missing" });
@@ -323,13 +350,14 @@ function buildPoints(source: Source): WireItem[] {
     const [lat, lon] = fixed ? coordinates[0].split(",").map(Number) : [null, null];
     const code = key.startsWith("sia:") ? distinct(a.codes)[0] ?? null : null;
     return makeItem("point", key, {
-      code, name: names.length === 1 ? names[0] : null, municipality: municipalities.length === 1 ? municipalities[0] : null,
+      code, name: latest, municipality: municipalities.length === 1 ? municipalities[0] : null,
       waterBody: waterBodies.length === 1 ? waterBodies[0] : null, lat, lon,
       coordinateSource: fixed ? "planned" : null, nameVariants: names.length > 1 ? names : null,
     }, provenance(
       fromPlanning ? "campaign_imports.points" : "field_diary_entries",
       fromPlanning ? ["code", "point", "municipality", "waterBody", "original"] : ["sia", "location_name", "municipality"],
-      names.length === 1 ? (key.startsWith("sia:") ? "authoritative" : "derived") : "derived-pending", derivations,
+      // A identidade do ponto é o código SIA; nome que varia não a põe em dúvida. Município que varia, sim.
+      municipalities.length > 1 ? "derived-pending" : key.startsWith("sia:") ? "authoritative" : "derived", derivations,
     ), null);
   });
 }
@@ -389,7 +417,7 @@ function buildCampaigns(source: Source): WireItem[] {
 function buildPlanned(source: Source): WireItem[] {
   const used = new Map<string, number>();
   return planningRows(source).flatMap(({ importId, campaignId, index, row }) => {
-    const point = pointKey(row.code, row.point);
+    const point = pointKey(row.code, plannedName(row));
     if (!point) return [];
     const base = `${campaignId}|${point}|${text(row.date)?.trim() || "sem-data"}`;
     const count = (used.get(base) ?? 0) + 1;
